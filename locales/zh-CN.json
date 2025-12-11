@@ -24,6 +24,7 @@
   "home.usedTotal": "已用 / 总量",
   "home.monthlyUsage": "本月用量",
   "home.daysUntilReset": "天后重置",
+  "home.resetToday": "今日重置",
   "home.refreshAccount": "刷新账号",
   "home.subscriptionDetails": "订阅详情",
   "home.accountInfo": "账户信息",

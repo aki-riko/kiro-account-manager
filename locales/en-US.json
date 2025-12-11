@@ -24,6 +24,7 @@
   "home.usedTotal": "Used / Total",
   "home.monthlyUsage": "Monthly Usage",
   "home.daysUntilReset": "days until reset",
+  "home.resetToday": "Resets today",
   "home.refreshAccount": "Refresh Account",
   "home.subscriptionDetails": "Subscription",
   "home.accountInfo": "Account Info",

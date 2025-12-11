@@ -339,8 +339,25 @@ function Home() {
           const mainUsed = breakdown?.currentUsage ?? 0
           const mainLimit = breakdown?.usageLimit ?? 0
           const mainPercent = mainLimit > 0 ? Math.round((mainUsed / mainLimit) * 100) : 0
-          const daysUntilReset = usageData?.daysUntilReset ?? 0
           const nextDateReset = usageData?.nextDateReset
+          const isTrial = subInfo?.subscriptionTitle?.toLowerCase()?.includes('trial') || subInfo?.subscriptionTitle?.toLowerCase()?.includes('free')
+          
+          // 计算剩余天数：试用账号用 freeTrialExpiry，正式账号用 nextDateReset
+          let daysUntilReset = null
+          let resetTimestamp = null
+          
+          if (isTrial && freeTrial?.freeTrialExpiry) {
+            resetTimestamp = freeTrial.freeTrialExpiry
+          } else if (nextDateReset) {
+            resetTimestamp = nextDateReset
+          }
+          
+          if (resetTimestamp) {
+            const resetDate = new Date(resetTimestamp * 1000)
+            const now = new Date()
+            const diffTime = resetDate.getTime() - now.getTime()
+            daysUntilReset = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
+          }
           
           return (
             <div className={`card-glow ${colors.card} rounded-2xl shadow-sm border ${colors.cardBorder} overflow-hidden animate-scale-in delay-500`}>
@@ -366,7 +383,10 @@ function Home() {
                       </span>
                     )}
                   </div>
-                  <div className={`text-xs ${colors.textMuted} mt-0.5`}>{currentAccount.provider} · {daysUntilReset} {t('home.daysUntilReset')}</div>
+                  <div className={`text-xs ${colors.textMuted} mt-0.5`}>
+                    {currentAccount.provider}
+                    {daysUntilReset != null && ` · ${daysUntilReset === 0 ? t('home.resetToday') : `${daysUntilReset} ${t('home.daysUntilReset')}`}`}
+                  </div>
                 </div>
                 <button 
                   onClick={handleRefreshCurrentAccount}
@@ -497,7 +517,7 @@ function Home() {
                         <div className={`flex-1 h-1.5 ${isDark ? 'bg-amber-500/20' : 'bg-amber-100'} rounded-full overflow-hidden`}>
                           <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${bonus.usageLimit > 0 ? ((bonus.currentUsage ?? 0) / bonus.usageLimit * 100) : 0}%` }} />
                         </div>
-                        <span className={`text-[10px] text-amber-600 w-16 text-right shrink-0`}>{bonus.currentUsage ?? 0}/{bonus.usageLimit ?? 0}</span>
+                        <span className={`text-[10px] text-amber-600 w-16 text-right shrink-0`}>{Math.round(bonus.currentUsage ?? 0)}/{Math.round(bonus.usageLimit ?? 0)}</span>
                       </div>
                     ))}
                   </div>
