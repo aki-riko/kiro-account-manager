@@ -12,11 +12,10 @@ pub struct AppSettings {
     pub locked_model: Option<String>,
     pub auto_refresh: Option<bool>,
     pub auto_refresh_interval: Option<i32>,
-    pub auto_change_machine_id: Option<bool>,
+    pub auto_change_machine_id: Option<bool>,  // 切换账号时是否更换机器码（默认 true）
     pub browser_path: Option<String>,
     // 账户机器码绑定功能
-    pub bind_machine_id_to_account: Option<bool>,  // 是否启用账户绑定机器码
-    pub use_bound_machine_id: Option<bool>,        // 切换时使用绑定的机器码（否则随机生成）
+    pub bind_machine_id_to_account: Option<bool>,  // true=绑定模式（每个账号固定机器码），false=随机模式
     pub account_machine_ids: Option<std::collections::HashMap<String, String>>,  // 账户ID -> 机器码映射
 }
 
@@ -29,10 +28,9 @@ impl Default for AppSettings {
             locked_model: Some("claude-opus-4.5".to_string()),
             auto_refresh: Some(true),
             auto_refresh_interval: Some(50),
-            auto_change_machine_id: Some(true),
+            auto_change_machine_id: Some(true),  // 默认开启
             browser_path: None,
             bind_machine_id_to_account: Some(true),
-            use_bound_machine_id: Some(true),
             account_machine_ids: None,
         }
     }
@@ -81,7 +79,6 @@ fn save_app_settings_inner(updates: AppSettings) -> Result<(), String> {
     if updates.auto_change_machine_id.is_some() { current.auto_change_machine_id = updates.auto_change_machine_id; }
     if updates.browser_path.is_some() { current.browser_path = updates.browser_path; }
     if updates.bind_machine_id_to_account.is_some() { current.bind_machine_id_to_account = updates.bind_machine_id_to_account; }
-    if updates.use_bound_machine_id.is_some() { current.use_bound_machine_id = updates.use_bound_machine_id; }
     if updates.account_machine_ids.is_some() { current.account_machine_ids = updates.account_machine_ids; }
     
     let content = serde_json::to_string_pretty(&current)

@@ -113,48 +113,46 @@ function AccountManager() {
     setSwitchingId(account.id)
     
     try {
-      // 读取设置，判断是否自动更换机器码
+      // 读取设置
       const appSettings = await invoke('get_app_settings').catch(() => ({}))
-      const autoChangeMachineId = appSettings.autoChangeMachineId === true
-      const bindMachineIdToAccount = appSettings.bindMachineIdToAccount === true
-      const useBoundMachineId = appSettings.useBoundMachineId !== false
+      const autoChangeMachineId = appSettings.autoChangeMachineId !== false // 默认 true
+      const bindMachineIdToAccount = appSettings.bindMachineIdToAccount !== false // 默认 true
       
-      // 处理账号绑定机器码逻辑
-      if (autoChangeMachineId && bindMachineIdToAccount) {
+      // 处理 Windows MachineGuid
+      if (autoChangeMachineId) {
         try {
-          // 获取账号绑定的机器码
-          let boundMachineId = await invoke('get_bound_machine_id', { accountId: account.id }).catch(() => null)
-          
-          if (!boundMachineId) {
-            // 没有绑定机器码，生成一个新的并绑定
-            boundMachineId = await invoke('generate_machine_guid')
-            await invoke('bind_machine_id_to_account', { accountId: account.id, machineId: boundMachineId })
-            console.log(`[MachineId] Generated and bound new machine ID for account: ${account.email}`)
-          }
-          
-          if (useBoundMachineId) {
-            // 使用绑定的机器码
+          if (bindMachineIdToAccount) {
+            // 绑定模式：使用账号绑定的机器码
+            let boundMachineId = await invoke('get_bound_machine_id', { accountId: account.id }).catch(() => null)
+            
+            if (!boundMachineId) {
+              // 首次切换，生成新的并绑定
+              boundMachineId = await invoke('generate_machine_guid')
+              await invoke('bind_machine_id_to_account', { accountId: account.id, machineId: boundMachineId })
+              console.log(`[MachineGuid] 首次切换，生成并绑定: ${account.email}`)
+            }
+            
             await invoke('set_custom_machine_guid', { newGuid: boundMachineId })
-            console.log(`[MachineId] Switched to bound machine ID for account: ${account.email}`)
+            console.log(`[MachineGuid] 使用绑定的机器码: ${account.email}`)
+          } else {
+            // 随机模式：每次生成新的机器码
+            const newMachineId = await invoke('generate_machine_guid')
+            await invoke('set_custom_machine_guid', { newGuid: newMachineId })
+            console.log(`[MachineGuid] 随机生成新机器码: ${account.email}`)
           }
-          // 如果不使用绑定的机器码，后面的 resetMachineId 会随机生成
         } catch (e) {
-          console.error('[MachineId] Failed to handle bound machine ID:', e)
+          console.error('[MachineGuid] 设置机器码失败:', e)
         }
       }
       
       const isIdC = account.provider === 'BuilderId' || account.provider === 'Enterprise' || account.clientIdHash
       const authMethod = isIdC ? 'IdC' : 'social'
       
-      // 直接使用账号中的 token 进行切换，不再刷新
-      // 如果启用了绑定机器码且使用绑定的，不需要再 resetMachineId
-      const shouldResetMachineId = autoChangeMachineId && !(bindMachineIdToAccount && useBoundMachineId)
       const params = {
         accessToken: account.accessToken,
         refreshToken: account.refreshToken,
         provider: account.provider || 'Google',
         authMethod,
-        resetMachineId: shouldResetMachineId,
         autoRestart: false
       }
       

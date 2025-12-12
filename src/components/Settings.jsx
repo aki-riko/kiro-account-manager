@@ -14,7 +14,7 @@ function Settings() {
   const [lockModel, setLockModel] = useState(true)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [autoRefreshInterval, setAutoRefreshInterval] = useState(50) // 分钟
-  const [autoChangeMachineId, setAutoChangeMachineId] = useState(true)
+  const [autoChangeMachineId, setAutoChangeMachineId] = useState(true) // 默认开启
   const [machineIdMode, setMachineIdMode] = useState('bind') // 'random' | 'bind'
   const [httpProxy, setHttpProxy] = useState('')
   const [originalProxy, setOriginalProxy] = useState('') // 原始代理值，用于判断是否修改
@@ -37,12 +37,16 @@ function Settings() {
   const [machineGuidLoading, setMachineGuidLoading] = useState(false)
   const [machineGuidAction, setMachineGuidAction] = useState(null) // 'backup' | 'restore' | 'reset'
   
+  // 设备指纹
+  const [deviceFingerprint, setDeviceFingerprint] = useState('')
+  
 
 
-  // 加载设置
+  // 加载设置（指纹延迟加载，不阻塞页面）
   const loadSettings = async () => {
     setLoading(true)
     try {
+      // 先加载核心设置（快速）
       const [kiroSettings, appSettings, sysMachine] = await Promise.all([
         invoke('get_kiro_settings').catch(() => null),
         invoke('get_app_settings').catch(() => null),
@@ -50,9 +54,11 @@ function Settings() {
       ])
       setSystemMachineInfo(sysMachine)
       if (sysMachine?.backupExists) {
-        const backup = await invoke('get_machine_guid_backup').catch(() => null)
-        setMachineGuidBackup(backup)
+        invoke('get_machine_guid_backup').then(setMachineGuidBackup).catch(() => {})
       }
+      
+      // 延迟加载设备指纹（不阻塞页面）
+      invoke('get_full_hardware_fingerprint').then(fp => setDeviceFingerprint(fp || '')).catch(() => {})
       // 从 Kiro IDE 设置读取
       if (kiroSettings) {
         const proxy = kiroSettings.httpProxy || ''
@@ -66,8 +72,8 @@ function Settings() {
         setLockModel(appSettings.lockModel ?? true)
         setAutoRefresh(appSettings.autoRefresh ?? true)
         setAutoRefreshInterval(appSettings.autoRefreshInterval ?? 50)
-        setAutoChangeMachineId(appSettings.autoChangeMachineId ?? true)
-        setMachineIdMode(appSettings.bindMachineIdToAccount ?? true ? 'bind' : 'random')
+        setAutoChangeMachineId(appSettings.autoChangeMachineId !== false) // 默认 true
+        setMachineIdMode(appSettings.bindMachineIdToAccount !== false ? 'bind' : 'random')
         const browser = appSettings.browserPath || ''
         setBrowserPath(browser)
         setOriginalBrowserPath(browser)
@@ -590,8 +596,8 @@ function Settings() {
                 disabled={!autoChangeMachineId}
                 className={`w-full px-4 py-3 border rounded-xl ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 appearance-none ${!autoChangeMachineId ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} transition-all`}
               >
-                <option value="random">{t('settings.machineIdRandom')}</option>
                 <option value="bind">{t('settings.machineIdBind')} ({t('common.recommended')})</option>
+                <option value="random">{t('settings.machineIdRandom')}</option>
               </select>
               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -858,6 +864,39 @@ function Settings() {
               </button>
             </div>
           )}
+        </section>
+
+        {/* 设备指纹 */}
+        <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-700`}>
+          <div className="flex items-center gap-2 mb-1">
+            <Shield size={18} className="text-purple-500" />
+            <h2 className={`text-lg font-semibold ${colors.text}`}>{t('settings.deviceFingerprint')}</h2>
+          </div>
+          <p className={`text-sm ${colors.textMuted} mb-5`}>{t('settings.deviceFingerprintDesc')}</p>
+
+          <div className={`${isDark ? 'bg-white/5' : 'bg-gray-50'} rounded-xl p-4`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-sm font-medium ${colors.text}`}>{t('settings.fullFingerprint')}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <code className={`flex-1 text-xs ${isDark ? 'bg-white/10' : 'bg-gray-100'} px-3 py-2 rounded-lg font-mono ${colors.text} break-all`}>
+                {deviceFingerprint || t('common.loading')}
+              </code>
+              {deviceFingerprint && (
+                <button 
+                  onClick={() => copyToClipboard(deviceFingerprint, 'deviceFingerprint')}
+                  className={`btn-icon p-2 rounded-lg ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-colors flex-shrink-0`}
+                >
+                  {copiedField === 'deviceFingerprint' ? (
+                    <Check size={16} className="text-green-500" />
+                  ) : (
+                    <Copy size={16} className={colors.textMuted} />
+                  )}
+                </button>
+              )}
+            </div>
+            <p className={`text-xs ${colors.textMuted} mt-3`}>{t('settings.fingerprintTip')}</p>
+          </div>
         </section>
       </div>
     </div>

@@ -62,6 +62,14 @@ pub fn generate_random_machine_id() -> String {
     Uuid::new_v4().to_string().to_lowercase()
 }
 
+/// 获取当前系统机器码（供其他模块使用）
+pub fn get_machine_id() -> String {
+    get_system_machine_guid_inner()
+        .ok()
+        .and_then(|info| info.machine_guid)
+        .unwrap_or_else(generate_random_machine_id)
+}
+
 /// 验证机器码格式
 fn is_valid_machine_id(machine_id: &str) -> bool {
     // UUID 格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx

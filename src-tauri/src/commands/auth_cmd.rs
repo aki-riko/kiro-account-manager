@@ -7,7 +7,7 @@ use crate::auth::{User, get_usage_limits_desktop};
 use crate::auth_social;
 use crate::codewhisperer_client::CodeWhispererClient;
 use crate::providers::{AuthMethod, AuthProvider, get_provider_config, create_social_provider, create_idc_provider};
-use crate::kiro::get_machine_id;
+use crate::commands::machine_guid_cmd::get_machine_id;
 
 #[tauri::command]
 pub fn get_current_user(state: State<AppState>) -> Option<User> {

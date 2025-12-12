@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 use crate::state::AppState;
 use crate::account::Account;
-use crate::kiro::get_machine_id;
+use crate::commands::machine_guid_cmd::get_machine_id;
 use crate::codewhisperer_client::CodeWhispererClient;
 
 const PORTAL_BASE: &str = "https://portal.sso.us-east-1.amazonaws.com";

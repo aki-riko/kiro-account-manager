@@ -149,7 +149,18 @@ impl CodeWhispererClient {
 
         if !status.is_success() {
             println!("Error: {}", text);
-            // 解析错误响应，提取 reason 字段
+            
+            // 403 Forbidden = TEMPORARILY_SUSPENDED = 账号被封禁
+            if status.as_u16() == 403 {
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(msg) = parsed.get("message").and_then(|m| m.as_str()) {
+                        return Err(format!("BANNED: {}", msg));
+                    }
+                }
+                return Err("BANNED: 账号已被封禁".to_string());
+            }
+            
+            // 解析错误响应，提取 reason 字段（其他封禁情况）
             if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&text) {
                 if let Some(reason) = error_json.get("reason").and_then(|r| r.as_str()) {
                     // 返回特殊格式: "BANNED:REASON" 便于上层识别

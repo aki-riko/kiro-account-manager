@@ -497,8 +497,9 @@ impl KiroWebPortalClient {
             };
             println!("[WebOAuth] RefreshToken Error: {}", serde_json::to_string_pretty(&serde_json::json!({"status": status.to_string(), "error": error_msg})).unwrap_or_default());
             
+            // 403 Forbidden = TEMPORARILY_SUSPENDED = 账号被封禁
             // 423 Locked = AccountSuspendedException = 账号被封禁
-            if status.as_u16() == 423 || error_msg.contains("AccountSuspendedException") {
+            if status.as_u16() == 403 || status.as_u16() == 423 || error_msg.contains("AccountSuspendedException") || error_msg.contains("TEMPORARILY_SUSPENDED") {
                 // 尝试提取 AWS 返回的详细消息
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&error_msg) {
                     if let Some(msg) = parsed.get("message").and_then(|m| m.as_str()) {
@@ -576,8 +577,9 @@ impl KiroWebPortalClient {
             };
             println!("[WebOAuth] GetUserInfo Error: {}", serde_json::to_string_pretty(&serde_json::json!({"status": status.to_string(), "error": error_msg})).unwrap_or_default());
             
+            // 403 Forbidden = TEMPORARILY_SUSPENDED = 账号被封禁
             // 423 Locked = AccountSuspendedException = 账号被封禁
-            if status.as_u16() == 423 || error_msg.contains("AccountSuspendedException") {
+            if status.as_u16() == 403 || status.as_u16() == 423 || error_msg.contains("AccountSuspendedException") || error_msg.contains("TEMPORARILY_SUSPENDED") {
                 // 尝试提取 AWS 返回的详细消息
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&error_msg) {
                     if let Some(msg) = parsed.get("message").and_then(|m| m.as_str()) {
@@ -652,8 +654,9 @@ impl KiroWebPortalClient {
             };
             println!("[WebOAuth] GetUserUsageAndLimits Error: {}", serde_json::to_string_pretty(&serde_json::json!({"status": status.to_string(), "error": error_msg})).unwrap_or_default());
             
+            // 403 Forbidden = TEMPORARILY_SUSPENDED = 账号被封禁
             // 423 Locked = AccountSuspendedException = 账号被封禁
-            if status.as_u16() == 423 || error_msg.contains("AccountSuspendedException") {
+            if status.as_u16() == 403 || status.as_u16() == 423 || error_msg.contains("AccountSuspendedException") || error_msg.contains("TEMPORARILY_SUSPENDED") {
                 // 尝试提取 AWS 返回的详细消息
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&error_msg) {
                     if let Some(msg) = parsed.get("message").and_then(|m| m.as_str()) {

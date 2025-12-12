@@ -546,6 +546,11 @@
   "steering.unknownTime": "Unknown time",
   "steering.contentPlaceholder": "Enter Markdown content...",
 
+  "settings.deviceFingerprint": "Device Fingerprint",
+  "settings.deviceFingerprintDesc": "Unique identifier generated from hardware info for device identification",
+  "settings.fullFingerprint": "Full Fingerprint",
+  "settings.fingerprintTip": "Generated from motherboard, BIOS, disk serial numbers. Unique per device",
+
   "callback.processing": "Processing login callback...",
   "callback.missingParams": "Missing required callback parameters",
   "callback.exchangingToken": "Exchanging access token...",

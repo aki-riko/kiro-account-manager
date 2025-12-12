@@ -546,6 +546,11 @@
   "steering.unknownTime": "Неизвестно",
   "steering.contentPlaceholder": "Введите Markdown...",
 
+  "settings.deviceFingerprint": "Отпечаток устройства",
+  "settings.deviceFingerprintDesc": "Уникальный идентификатор на основе аппаратной информации",
+  "settings.fullFingerprint": "Полный отпечаток",
+  "settings.fingerprintTip": "Генерируется из серийных номеров материнской платы, BIOS, диска. Уникален для каждого устройства",
+
   "callback.processing": "Обработка входа...",
   "callback.missingParams": "Отсутствуют параметры",
   "callback.exchangingToken": "Обмен токена...",

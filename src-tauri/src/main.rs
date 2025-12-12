@@ -42,8 +42,9 @@ use commands::sso_import_cmd::*;
 use commands::update_cmd::*;
 use commands::web_oauth_cmd::*;
 use commands::steering_cmd::*;
+use commands::fingerprint_cmd::*;
 use kiro::{
-    get_kiro_local_token, get_kiro_telemetry_info, reset_kiro_machine_id, switch_kiro_account,
+    get_kiro_local_token, switch_kiro_account,
 };
 use process::{close_kiro_ide, is_kiro_ide_running, start_kiro_ide};
 
@@ -108,8 +109,6 @@ fn main() {
             // Kiro IDE 命令
             get_kiro_local_token,
             switch_kiro_account,
-            get_kiro_telemetry_info,
-            reset_kiro_machine_id,
             // 进程管理命令
             close_kiro_ide,
             start_kiro_ide,
@@ -166,7 +165,10 @@ fn main() {
             get_steering_file,
             save_steering_file,
             delete_steering_file,
-            create_steering_file
+            create_steering_file,
+            // 硬件指纹命令
+            get_hardware_fingerprint,
+            get_full_hardware_fingerprint
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

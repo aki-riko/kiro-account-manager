@@ -6,7 +6,7 @@ use crate::account::Account;
 use crate::auth::{User, refresh_token_desktop, get_usage_limits_desktop};
 use crate::codewhisperer_client::CodeWhispererClient;
 use crate::providers::{AuthProvider, SocialProvider, IdcProvider, RefreshMetadata};
-use crate::kiro::get_machine_id;
+use crate::commands::machine_guid_cmd::get_machine_id;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

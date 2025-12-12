@@ -2,6 +2,13 @@
   "name": "kiro-account-manager",
   "private": true,
   "version": "1.5.1",
+  "description": "Kiro Account Manager - 管理 Kiro IDE 账号，支持多账号切换和配额监控",
+  "author": "hj01857655",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hj01857655/kiro-account-manager"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

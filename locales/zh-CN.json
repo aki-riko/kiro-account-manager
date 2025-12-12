@@ -552,6 +552,11 @@
   "steering.unknownTime": "未知时间",
   "steering.contentPlaceholder": "输入 Markdown 内容...",
 
+  "settings.deviceFingerprint": "设备指纹",
+  "settings.deviceFingerprintDesc": "基于硬件信息生成的唯一标识，用于设备识别",
+  "settings.fullFingerprint": "完整指纹",
+  "settings.fingerprintTip": "此指纹基于主板、BIOS、硬盘等硬件信息生成，每台设备唯一",
+
   "callback.processing": "正在处理登录回调...",
   "callback.missingParams": "缺少必要的回调参数",
   "callback.exchangingToken": "正在交换访问令牌...",
