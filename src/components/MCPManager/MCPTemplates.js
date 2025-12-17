@@ -1,76 +1,71 @@
 // MCP 服务器预设模板
 
-export const MCP_TEMPLATES = [
-  {
-    name: 'fetch',
-    label: 'Fetch',
-    description: '网页内容抓取',
-    config: {
-      command: 'uvx',
-      args: ['mcp-server-fetch'],
-      env: {},
-      disabled: false,
-      autoApprove: []
-    }
+export const MCP_TEMPLATES = {
+  fetch: {
+    command: 'uvx',
+    args: ['mcp-server-fetch'],
+    env: {},
+    disabled: false,
+    autoApprove: ['fetch']
   },
-  {
-    name: 'acetool',
-    label: 'Acetool',
-    description: '代码语义搜索',
-    config: {
-      command: 'uvx',
-      args: ['acetool'],
-      env: {},
-      disabled: false,
-      autoApprove: []
-    }
+  memory: {
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-memory'],
+    env: {},
+    disabled: false,
+    autoApprove: []
   },
-  {
-    name: 'aws-docs',
-    label: 'AWS Docs',
-    description: 'AWS 文档查询',
-    config: {
-      command: 'uvx',
-      args: ['awslabs.aws-documentation-mcp-server@latest'],
-      env: { FASTMCP_LOG_LEVEL: 'ERROR' },
-      disabled: false,
-      autoApprove: []
-    }
+  context7: {
+    command: 'npx',
+    args: ['-y', '@upstash/context7-mcp@latest'],
+    env: {},
+    disabled: false,
+    autoApprove: []
   },
-  {
-    name: 'filesystem',
-    label: 'Filesystem',
-    description: '文件系统操作',
-    config: {
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-filesystem', '/path/to/allowed/dir'],
-      env: {},
-      disabled: false,
-      autoApprove: []
-    }
+  thinking: {
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-sequential-thinking'],
+    env: {},
+    disabled: false,
+    autoApprove: ['sequentialthinking']
   },
-  {
-    name: 'github',
-    label: 'GitHub',
-    description: 'GitHub API',
-    config: {
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-github'],
-      env: { GITHUB_PERSONAL_ACCESS_TOKEN: '' },
-      disabled: false,
-      autoApprove: []
-    }
-  },
-  {
-    name: 'sqlite',
-    label: 'SQLite',
-    description: 'SQLite 数据库',
-    config: {
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-sqlite', '/path/to/database.db'],
-      env: {},
-      disabled: false,
-      autoApprove: []
-    }
+  'chrome-devtools': {
+    command: 'npx',
+    args: [
+      '-y',
+      'chrome-devtools-mcp@latest',
+      '--channel=stable',
+      '--headless=false',
+      '--isolated=true',
+      '--viewport=1920x1080',
+      '--chromeArg=--incognito'
+    ],
+    env: {
+      SystemRoot: 'C:\\Windows',
+      PROGRAMFILES: 'C:\\Program Files'
+    },
+    disabled: false,
+    autoApprove: [
+      'take_snapshot',
+      'take_screenshot',
+      'list_pages',
+      'new_page',
+      'select_page',
+      'close_page',
+      'navigate_page',
+      'click',
+      'fill',
+      'fill_form',
+      'hover',
+      'drag',
+      'press_key',
+      'wait_for',
+      'handle_dialog',
+      'evaluate_script',
+      'list_console_messages',
+      'get_console_message',
+      'list_network_requests',
+      'get_network_request'
+    ]
   }
-]
+}
