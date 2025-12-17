@@ -14,6 +14,7 @@
   "home.subtitle": "管理你的 Kiro IDE 账号，智能切换，配额监控",
   "home.totalAccounts": "总账号数",
   "home.activeAccounts": "正常账号",
+  "home.activeVsBanned": "正常/封禁",
   "home.proAccounts": "PRO 账号",
   "home.usagePercent": "配额使用率",
   "home.currentAccount": "当前登录账号",

@@ -1,4 +1,4 @@
-import { Search, Download, Upload, RefreshCw, Trash2, Plus, Sparkles, Tag } from 'lucide-react'
+import { Search, Download, Upload, RefreshCw, Trash2, Plus, Sparkles, Tag, Filter } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 
 function AccountHeader({
@@ -16,6 +16,8 @@ function AccountHeader({
   allTags = [],
   selectedTag,
   onTagFilter,
+  selectedStatus,
+  onStatusFilter,
 }) {
   const { t, theme, colors } = useApp()
   const isDark = theme === 'dark'
@@ -52,6 +54,24 @@ function AccountHeader({
               className={`pl-9 pr-4 py-2 ${isDark ? 'bg-white/5' : 'bg-gray-50'} border-0 rounded-xl text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${colors.text} transition-all focus:w-56`}
             />
           </div>
+          {/* 状态筛选 */}
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+            <select
+              value={selectedStatus || ''}
+              onChange={(e) => onStatusFilter(e.target.value || null)}
+              className={`pl-8 pr-8 py-2 ${colors.input} ${colors.inputFocus} border rounded-xl text-sm focus:outline-none focus:ring-2 ${colors.text} appearance-none cursor-pointer`}
+            >
+              <option value="">{t('common.all')}</option>
+              <option value="active">{t('accounts.active')}</option>
+              <option value="banned">{t('accounts.banned')}</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
           {/* 标签筛选 */}
           {allTags.length > 0 && (
             <div className="relative">
@@ -66,7 +86,6 @@ function AccountHeader({
                   <option key={tag} value={tag}>{tag}</option>
                 ))}
               </select>
-              {/* 下拉箭头 */}
               <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                 <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />

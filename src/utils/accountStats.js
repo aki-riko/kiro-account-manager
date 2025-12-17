@@ -36,6 +36,7 @@ const getSubPlan = (a) => a.usageData?.subscriptionInfo?.subscriptionTitle ?? a.
 export function calcAccountStats(accounts) {
   const total = accounts.length
   const active = accounts.filter(a => a.status === 'active' || a.status === '正常' || a.status === '有效').length
+  const banned = accounts.filter(a => a.status === 'banned' || a.status === '封禁' || a.status === '已封禁').length
   // 使用 Math.round 避免浮点数精度问题
   const totalQuota = Math.round(accounts.reduce((sum, a) => sum + getQuota(a), 0))
   const totalUsed = Math.round(accounts.reduce((sum, a) => sum + getUsed(a), 0))
@@ -46,7 +47,7 @@ export function calcAccountStats(accounts) {
   ).length
   const usagePercent = totalQuota > 0 ? (totalUsed / totalQuota * 100).toFixed(1) : 0
 
-  return { total, active, totalQuota, totalUsed, proPlus, pro, usagePercent, remaining: totalQuota - totalUsed }
+  return { total, active, banned, totalQuota, totalUsed, proPlus, pro, usagePercent, remaining: totalQuota - totalUsed }
 }
 
 export function getUsagePercent(used, quota) {

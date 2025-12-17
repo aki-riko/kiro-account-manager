@@ -141,7 +141,7 @@ function Home() {
 
   const statCards = [
     { icon: Users, iconBg: isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600', value: stats.total, label: t('home.totalAccounts'), delay: 'delay-100' },
-    { icon: Shield, iconBg: isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-600', value: stats.active, label: t('home.activeAccounts'), delay: 'delay-200' },
+    { icon: Shield, iconBg: isDark ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-600', value: `${stats.active}/${stats.banned}`, label: t('home.activeVsBanned'), delay: 'delay-200' },
     { icon: Zap, iconBg: isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600', value: stats.proPlus + stats.pro, label: t('home.proAccounts'), delay: 'delay-300' },
     { icon: TrendingUp, iconBg: isDark ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-600', value: `${stats.usagePercent}%`, label: t('home.usagePercent'), delay: 'delay-400' },
   ]

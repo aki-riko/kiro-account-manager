@@ -14,6 +14,7 @@
   "home.subtitle": "Manage your Kiro IDE accounts, smart switching, quota monitoring",
   "home.totalAccounts": "Total Accounts",
   "home.activeAccounts": "Active Accounts",
+  "home.activeVsBanned": "Active/Banned",
   "home.proAccounts": "PRO Accounts",
   "home.usagePercent": "Usage Rate",
   "home.currentAccount": "Current Account",

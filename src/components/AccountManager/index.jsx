@@ -28,6 +28,7 @@ function AccountManager() {
   const [showImportModal, setShowImportModal] = useState(false)
   const [copiedId, setCopiedId] = useState(null)
   const [selectedTag, setSelectedTag] = useState(null)
+  const [selectedStatus, setSelectedStatus] = useState(null)
   
   // 切换账号弹窗状态
   const [switchDialog, setSwitchDialog] = useState(null) // { type, title, message, account }
@@ -78,9 +79,13 @@ function AccountManager() {
         (a.tags && a.tags.some(tag => tag.toLowerCase().includes(term)))
       // 标签过滤
       const matchTag = !selectedTag || (a.tags && a.tags.includes(selectedTag))
-      return matchSearch && matchTag
+      // 状态过滤
+      const matchStatus = !selectedStatus || 
+        (selectedStatus === 'active' && (a.status === 'active' || a.status === '正常' || a.status === '有效')) ||
+        (selectedStatus === 'banned' && (a.status === 'banned' || a.status === '封禁' || a.status === '已封禁'))
+      return matchSearch && matchTag && matchStatus
     }),
-    [accounts, searchTerm, selectedTag]
+    [accounts, searchTerm, selectedTag, selectedStatus]
   )
 
   const totalPages = Math.ceil(filteredAccounts.length / pageSize) || 1
@@ -91,6 +96,7 @@ function AccountManager() {
 
   const handleSearchChange = useCallback((term) => { setSearchTerm(term); setCurrentPage(1) }, [])
   const handleTagFilter = useCallback((tag) => { setSelectedTag(tag); setCurrentPage(1) }, [])
+  const handleStatusFilter = useCallback((status) => { setSelectedStatus(status); setCurrentPage(1) }, [])
   const handlePageSizeChange = useCallback((size) => { setPageSize(size); setCurrentPage(1) }, [])
   const handleSelectAll = useCallback((checked) => { setSelectedIds(checked ? filteredAccounts.map(a => a.id) : []) }, [filteredAccounts])
   const handleSelectOne = useCallback((id, checked) => { setSelectedIds(prev => checked ? [...prev, id] : prev.filter(i => i !== id)) }, [])
@@ -238,6 +244,8 @@ function AccountManager() {
         allTags={allTags}
         selectedTag={selectedTag}
         onTagFilter={handleTagFilter}
+        selectedStatus={selectedStatus}
+        onStatusFilter={handleStatusFilter}
       />
       <div className="flex-1 overflow-auto">
       <AccountTable
