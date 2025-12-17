@@ -235,42 +235,6 @@ function Settings() {
     setShowBrowserList(false)
   }
 
-  const [kiroRunning, setKiroRunning] = useState(false)
-
-  // 检查 Kiro IDE 运行状态
-  const checkKiroStatus = async () => {
-    try {
-      const running = await invoke('is_kiro_ide_running')
-      setKiroRunning(running)
-    } catch (err) {
-      console.error('Failed to check Kiro status:', err)
-    }
-  }
-
-  useEffect(() => {
-    checkKiroStatus()
-    // 每30秒检查一次，页面不可见时跳过
-    const interval = setInterval(() => {
-      if (!document.hidden) checkKiroStatus()
-    }, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // 手动关闭/启动 Kiro IDE
-  const handleToggleKiro = async () => {
-    try {
-      if (kiroRunning) {
-        await invoke('close_kiro_ide')
-      } else {
-        await invoke('start_kiro_ide')
-      }
-      await new Promise(r => setTimeout(r, 500))
-      checkKiroStatus()
-    } catch (err) {
-      await showError(t('common.error'), err.toString())
-    }
-  }
-
   // 系统机器码操作
   const handleBackupMachineGuid = async () => {
     setMachineGuidAction('backup')
@@ -695,47 +659,6 @@ function Settings() {
           <p className={`text-xs ${colors.textMuted} mt-3`}>
             {t('settings.browserTip')}
           </p>
-        </section>
-
-        {/* Kiro IDE 状态 */}
-        <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-500`}>
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.kiroInfo')}</h2>
-              <p className={`text-sm ${colors.textMuted}`}>{t('settings.kiroInfoDesc')}</p>
-            </div>
-            <button
-              onClick={loadSettings}
-              disabled={loading}
-              className={`btn-icon p-2 rounded-xl ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'} transition-colors`}
-            >
-              <RefreshCw size={18} className={`${colors.textMuted} ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-
-          <div className={`flex items-center justify-between ${isDark ? 'bg-white/5' : 'bg-gray-50'} rounded-xl p-4`}>
-            <div className="flex items-center gap-3">
-              <div className={`w-2.5 h-2.5 rounded-full ${kiroRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-              <span className={`text-sm ${colors.text}`}>Kiro IDE</span>
-              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                kiroRunning 
-                  ? 'bg-green-500/20 text-green-500' 
-                  : `${isDark ? 'bg-white/10 text-gray-400' : 'bg-gray-200 text-gray-500'}`
-              }`}>
-                {kiroRunning ? t('settings.running') : t('settings.notRunning')}
-              </span>
-            </div>
-            <button
-              onClick={handleToggleKiro}
-              className={`btn-icon px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                kiroRunning
-                  ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30'
-                  : 'bg-green-500/20 text-green-500 hover:bg-green-500/30'
-              }`}
-            >
-              {kiroRunning ? t('settings.stop') : t('settings.start')}
-            </button>
-          </div>
         </section>
 
         {/* 系统机器码管理 */}

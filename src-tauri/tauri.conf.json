@@ -44,7 +44,10 @@
       "endpoints": [
         "https://github.com/hj01857655/kiro-account-manager/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVGOUFCNTE3RkIwREY5QTcKUldTbitRMzdGN1dhWDhaWi95UGxLSTkrNXZPTEZsWnd1bUtIS3dSOHlLb2Y1SWNBWVUxK3FjK2QK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVGOUFCNTE3RkIwREY5QTcKUldTbitRMzdGN1dhWDhaWi95UGxLSTkrNXZPTEZsWnd1bUtIS3dSOHlLb2Y1SWNBWVUxK3FjK2QK",
+      "windows": {
+        "installMode": "passive"
+      }
     }
   },
   "bundle": {
@@ -59,13 +62,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "targets": "all",
+    "targets": ["msi", "app", "dmg"],
     "windows": {
-      "nsis": {
-        "installMode": "perMachine",
-        "installerIcon": "icons/icon.ico",
-        "displayLanguageSelector": true,
-        "languages": ["SimpChinese", "English"]
+      "wix": {
+        "language": ["zh-CN", "en-US", "ru-RU"]
       }
     },
     "macOS": {

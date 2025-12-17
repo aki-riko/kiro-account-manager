@@ -11,7 +11,7 @@ import Login from './components/Login'
 import WebOAuthLogin from './components/WebOAuthLogin'
 import AuthCallback from './components/AuthCallback'
 import UpdateChecker from './components/UpdateChecker'
-import Watermark from './components/Watermark'
+
 
 import { useApp } from './hooks/useApp'
 import { useAppSettings } from './contexts/AppSettingsContext'
@@ -303,7 +303,6 @@ function App() {
         </main>
         
         <UpdateChecker />
-        <Watermark />
       </div>
     </AccountProvider>
   )
