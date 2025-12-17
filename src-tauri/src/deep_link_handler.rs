@@ -5,11 +5,10 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// OAuth 回调结果
+/// OAuth 回调结果（state 已在 handle_deep_link 中验证）
 #[derive(Debug, Clone)]
 pub struct OAuthCallbackResult {
     pub code: String,
-    pub state: String,
 }
 
 /// Deep Link OAuth 回调等待器
@@ -130,6 +129,6 @@ pub fn handle_deep_link(url: &str) -> bool {
     }
 
     println!("[DeepLink] Callback success, code: {}...", &code[..20.min(code.len())]);
-    let _ = tx.send(Ok(OAuthCallbackResult { code, state }));
+    let _ = tx.send(Ok(OAuthCallbackResult { code }));
     true
 }
