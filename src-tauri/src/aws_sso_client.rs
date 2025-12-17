@@ -7,7 +7,6 @@ use std::time::Duration;
 
 /// AWS SSO OIDC 客户端
 pub struct AWSSSOClient {
-    region: String,
     base_url: String,
     client: Client,
 }
@@ -59,7 +58,6 @@ impl AWSSSOClient {
             .expect("Failed to create HTTP client");
 
         Self {
-            region: region.to_string(),
             base_url,
             client,
         }
@@ -128,7 +126,7 @@ impl AWSSSOClient {
         });
 
         #[cfg(debug_assertions)]
-        println!("[AWS SSO] Register Device Client (region: {})", self.region);
+        println!("[AWS SSO] Register Device Client");
 
         let resp = self.client
             .post(&url)
