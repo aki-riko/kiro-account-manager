@@ -211,18 +211,30 @@ function App() {
       return
     }
     
-    // 监听登录成功事件
-    const unlisten = listen('login-success', (event) => {
-      console.log('Login success in App:', event.payload)
-      checkAuth()
-      setActiveMenu('token')
-    })
-    
-    // 监听设置变化，重启定时器
-    const unlistenSettings = listen('settings-changed', () => {
-      console.log('[AutoRefresh] 设置已变化，重启定时器')
-      startAutoRefreshTimer()
-    })
+    let unlisten, unlistenSettings, unlistenAppSettings
+
+    const setupListeners = async () => {
+      // 监听登录成功事件
+      unlisten = await listen('login-success', (event) => {
+        console.log('Login success in App:', event.payload)
+        checkAuth()
+        setActiveMenu('token')
+      })
+      
+      // 监听设置变化，重启定时器
+      unlistenSettings = await listen('settings-changed', () => {
+        console.log('[AutoRefresh] 设置已变化，重启定时器')
+        startAutoRefreshTimer()
+      })
+      
+      // 监听设置变化，重启模型锁定检查
+      unlistenAppSettings = await listen('app-settings-changed', () => {
+        console.log('[ModelLock] 设置已变化，重新检查模型')
+        checkAndRestoreLockedModel()
+      })
+    }
+
+    setupListeners()
     
     // 启动自动刷新定时器
     startAutoRefreshTimer()
@@ -230,16 +242,10 @@ function App() {
     // 启动模型锁定检查定时器
     startModelLockTimer()
     
-    // 监听设置变化，重启模型锁定检查
-    const unlistenAppSettings = listen('app-settings-changed', () => {
-      console.log('[ModelLock] 设置已变化，重新检查模型')
-      checkAndRestoreLockedModel()
-    })
-    
     return () => { 
-      unlisten.then(fn => fn())
-      unlistenSettings.then(fn => fn())
-      unlistenAppSettings.then(fn => fn())
+      if (unlisten) unlisten()
+      if (unlistenSettings) unlistenSettings()
+      if (unlistenAppSettings) unlistenAppSettings()
       if (refreshTimerRef.current) {
         clearInterval(refreshTimerRef.current)
       }

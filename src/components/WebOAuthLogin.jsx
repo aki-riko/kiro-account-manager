@@ -16,44 +16,50 @@ function WebOAuthLogin({ onLogin }) {
   const [windowLabel, setWindowLabel] = useState(null)
 
   useEffect(() => {
-    const unlistenSuccess = listen('login-success', (event) => {
-      console.log('Web OAuth login success:', event.payload)
-      setStep('idle')
-      setLoadingProvider(null)
-      setCallbackUrl('')
-      setWindowLabel(null)
-      onLogin?.(event.payload)
-    })
+    let unlistenSuccess, unlistenCallback
 
-    const unlistenCallback = listen('web-oauth-callback', async (event) => {
-      console.log('web-oauth-callback:', event.payload)
-      setStep('completing')
-      try {
-        await invoke('web_oauth_complete', { callbackUrl: event.payload })
-      } catch (e) {
-        console.error('Auto complete failed:', e)
-        const errorMsg = typeof e === 'string' ? e : e.message || t('login.failed')
-        // 如果是账号被封禁，用弹窗显示并回到 idle 状态
-        if (errorMsg.includes('BANNED')) {
-          setStep('idle')
-          setLoadingProvider(null)
-          setCallbackUrl('')
-          setWindowLabel(null)
-          setError('')
-          // 显示错误弹窗
-          showError(t('detail.accountBanned'), errorMsg.replace('BANNED: ', ''))
-        } else {
-          // 其他错误允许手动重试
-          setError(errorMsg)
-          setCallbackUrl(event.payload)
-          setStep('webview')
+    const setupListeners = async () => {
+      unlistenSuccess = await listen('login-success', (event) => {
+        console.log('Web OAuth login success:', event.payload)
+        setStep('idle')
+        setLoadingProvider(null)
+        setCallbackUrl('')
+        setWindowLabel(null)
+        onLogin?.(event.payload)
+      })
+
+      unlistenCallback = await listen('web-oauth-callback', async (event) => {
+        console.log('web-oauth-callback:', event.payload)
+        setStep('completing')
+        try {
+          await invoke('web_oauth_complete', { callbackUrl: event.payload })
+        } catch (e) {
+          console.error('Auto complete failed:', e)
+          const errorMsg = typeof e === 'string' ? e : e.message || t('login.failed')
+          // 如果是账号被封禁，用弹窗显示并回到 idle 状态
+          if (errorMsg.includes('BANNED')) {
+            setStep('idle')
+            setLoadingProvider(null)
+            setCallbackUrl('')
+            setWindowLabel(null)
+            setError('')
+            // 显示错误弹窗
+            showError(t('detail.accountBanned'), errorMsg.replace('BANNED: ', ''))
+          } else {
+            // 其他错误允许手动重试
+            setError(errorMsg)
+            setCallbackUrl(event.payload)
+            setStep('webview')
+          }
         }
-      }
-    })
+      })
+    }
+
+    setupListeners()
 
     return () => {
-      unlistenSuccess.then(fn => fn())
-      unlistenCallback.then(fn => fn())
+      if (unlistenSuccess) unlistenSuccess()
+      if (unlistenCallback) unlistenCallback()
     }
   }, [onLogin, showError, t])
 

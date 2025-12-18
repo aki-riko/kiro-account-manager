@@ -11,12 +11,21 @@ function Login({ onLogin }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const unlistenSuccess = listen('login-success', (event) => {
-      console.log('Login success event:', event.payload)
-      setLoadingProvider(null)
-      onLogin?.(event.payload)
-    })
-    return () => { unlistenSuccess.then(fn => fn()) }
+    let unlistenSuccess
+
+    const setupListener = async () => {
+      unlistenSuccess = await listen('login-success', (event) => {
+        console.log('Login success event:', event.payload)
+        setLoadingProvider(null)
+        onLogin?.(event.payload)
+      })
+    }
+
+    setupListener()
+
+    return () => { 
+      if (unlistenSuccess) unlistenSuccess()
+    }
   }, [onLogin])
 
   const handleLogin = async (provider) => {

@@ -128,33 +128,39 @@ export function useAccounts() {
   useEffect(() => {
     loadAccounts()
     
-    const unlistenLoginSuccess = listen('login-success', () => loadAccounts())
-    // 监听账号数据更新事件（来自 App.jsx 自动刷新或其他地方）
-    const unlistenAccountsUpdated = listen('accounts-updated', () => loadAccounts())
-    const unlistenKiroLoginData = listen('kiro-login-data', async (event) => {
-      try {
-        const data = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload
-        if (data?.accessToken && data?.refreshToken) {
-          await invoke('add_kiro_account', {
-            email: data.email || 'unknown@kiro.dev',
-            accessToken: data.accessToken,
-            refreshToken: data.refreshToken,
-            csrfToken: data.csrfToken || '',
-            idp: data.idp || 'Google',
-            quota: data.quota ?? null,
-            used: data.used ?? null
-          })
-          loadAccounts()
+    let unlistenLoginSuccess, unlistenAccountsUpdated, unlistenKiroLoginData
+
+    const setupListeners = async () => {
+      unlistenLoginSuccess = await listen('login-success', () => loadAccounts())
+      // 监听账号数据更新事件（来自 App.jsx 自动刷新或其他地方）
+      unlistenAccountsUpdated = await listen('accounts-updated', () => loadAccounts())
+      unlistenKiroLoginData = await listen('kiro-login-data', async (event) => {
+        try {
+          const data = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload
+          if (data?.accessToken && data?.refreshToken) {
+            await invoke('add_kiro_account', {
+              email: data.email || 'unknown@kiro.dev',
+              accessToken: data.accessToken,
+              refreshToken: data.refreshToken,
+              csrfToken: data.csrfToken || '',
+              idp: data.idp || 'Google',
+              quota: data.quota ?? null,
+              used: data.used ?? null
+            })
+            loadAccounts()
+          }
+        } catch (e) {
+          console.error('Failed to handle kiro-login-data:', e)
         }
-      } catch (e) {
-        console.error('Failed to handle kiro-login-data:', e)
-      }
-    })
+      })
+    }
+
+    setupListeners()
 
     return () => {
-      unlistenLoginSuccess.then(fn => fn())
-      unlistenAccountsUpdated.then(fn => fn())
-      unlistenKiroLoginData.then(fn => fn())
+      if (unlistenLoginSuccess) unlistenLoginSuccess()
+      if (unlistenAccountsUpdated) unlistenAccountsUpdated()
+      if (unlistenKiroLoginData) unlistenKiroLoginData()
     }
   }, [loadAccounts])
 
