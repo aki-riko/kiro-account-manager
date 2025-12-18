@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { X, Key, Copy, Check, Shield, ChevronDown, ChevronUp, Clock, Tag, Plus } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
@@ -23,16 +23,29 @@ function EditAccountModal({ account, onClose, onSuccess }) {
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(null)
   const [showTokens, setShowTokens] = useState(true)
+  const copiedTimerRef = useRef(null)
 
   // 加载所有标签
   useEffect(() => {
     invoke('get_all_tags').then(setAllTags).catch(() => {})
   }, [])
 
+  // 清理timer
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current)
+      }
+    }
+  }, [])
+
   const handleCopy = (text, field) => {
-    navigator.clipboard.writeText(text)
+    navigator.clipboard.writeText(text).catch(e => console.error('Copy failed:', e))
     setCopied(field)
-    setTimeout(() => setCopied(null), 1500)
+    if (copiedTimerRef.current) {
+      clearTimeout(copiedTimerRef.current)
+    }
+    copiedTimerRef.current = setTimeout(() => setCopied(null), 1500)
   }
 
   const handleAddTag = () => {

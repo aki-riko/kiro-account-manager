@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, emit } from '@tauri-apps/api/event'
 
@@ -9,6 +9,7 @@ export function useAccounts() {
   const [lastRefreshTime, setLastRefreshTime] = useState(null)
   const [refreshingId, setRefreshingId] = useState(null)
   const [switchingId, setSwitchingId] = useState(null)
+  const refreshTimerRef = useRef(null)
 
   // 判断账号是否即将过期（5分钟内）
   const isExpiringSoon = useCallback((account) => {
@@ -70,7 +71,10 @@ export function useAccounts() {
     setLastRefreshTime(new Date().toLocaleTimeString())
     // 通知其他组件数据已更新
     emit('accounts-updated')
-    setTimeout(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current)
+    }
+    refreshTimerRef.current = setTimeout(() => {
       setAutoRefreshing(false)
       setRefreshProgress({ current: 0, total: 0, currentEmail: '', results: [] })
     }, 1500)
@@ -163,6 +167,15 @@ export function useAccounts() {
       if (unlistenKiroLoginData) unlistenKiroLoginData()
     }
   }, [loadAccounts])
+
+  // 清理刷新timer
+  useEffect(() => {
+    return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current)
+      }
+    }
+  }, [])
 
   return {
     accounts,

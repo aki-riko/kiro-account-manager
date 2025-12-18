@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../hooks/useApp'
 import { useDialog } from '../../contexts/DialogContext'
@@ -36,8 +36,20 @@ function AccountManager() {
   // 当前登录的本地 token
   const [localToken, setLocalToken] = useState(null)
   
+  // 用于管理复制提示的timer
+  const copiedTimerRef = useRef(null)
+  
   useEffect(() => {
     invoke('get_kiro_local_token').then(setLocalToken).catch(() => setLocalToken(null))
+  }, [])
+
+  // 清理timer
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current)
+      }
+    }
   }, [])
 
   const {
@@ -100,7 +112,14 @@ function AccountManager() {
   const handlePageSizeChange = useCallback((size) => { setPageSize(size); setCurrentPage(1) }, [])
   const handleSelectAll = useCallback((checked) => { setSelectedIds(checked ? filteredAccounts.map(a => a.id) : []) }, [filteredAccounts])
   const handleSelectOne = useCallback((id, checked) => { setSelectedIds(prev => checked ? [...prev, id] : prev.filter(i => i !== id)) }, [])
-  const handleCopy = useCallback((text, id) => { navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 1500) }, [])
+  const handleCopy = useCallback((text, id) => { 
+    navigator.clipboard.writeText(text).catch(e => console.error('Copy failed:', e))
+    setCopiedId(id)
+    if (copiedTimerRef.current) {
+      clearTimeout(copiedTimerRef.current)
+    }
+    copiedTimerRef.current = setTimeout(() => setCopiedId(null), 1500)
+  }, [])
   
   // 删除单个账号
   const handleDelete = useCallback(async (id) => {
