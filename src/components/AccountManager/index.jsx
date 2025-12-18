@@ -271,7 +271,7 @@ function AccountManager() {
         onImport={() => setShowImportModal(true)}
         onExport={() => handleExport(selectedIds)}
         onRefresh={loadAccounts}
-        onRefreshAll={() => autoRefreshAll(accounts, true)}
+        onRefreshAll={() => autoRefreshAll(accounts)}
         autoRefreshing={autoRefreshing}
         lastRefreshTime={lastRefreshTime}
         refreshProgress={refreshProgress}

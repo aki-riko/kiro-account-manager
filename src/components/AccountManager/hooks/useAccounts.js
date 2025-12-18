@@ -35,11 +35,11 @@ export function useAccounts() {
     }
   }, [])
 
-  const autoRefreshAll = useCallback(async (accountList, forceAll = false) => {
+  const autoRefreshAll = useCallback(async (accountList) => {
     if (autoRefreshing || accountList.length === 0) return
-    // 过滤掉封禁账号，forceAll 时刷新所有非封禁账号
+    // 智能刷新：只刷新即将过期（5分钟内）的账号，节省API配额
     const validAccounts = accountList.filter(acc => acc.status !== 'banned')
-    const accountsToRefresh = forceAll ? validAccounts : validAccounts.filter(isExpiringSoon)
+    const accountsToRefresh = validAccounts.filter(isExpiringSoon)
     if (accountsToRefresh.length === 0) return
 
     setAutoRefreshing(true)
