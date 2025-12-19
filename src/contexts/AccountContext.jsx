@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { calcAccountStats, getQuota, getUsed } from '../utils/accountStats'
@@ -11,7 +11,6 @@ export function AccountProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
-  const refreshTimerRef = useRef(null)
 
   // 加载数据
   const loadData = useCallback(async () => {
