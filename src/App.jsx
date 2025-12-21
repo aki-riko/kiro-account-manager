@@ -27,34 +27,38 @@ function App() {
   // 使用 ref 保持最新的设置引用，避免闭包捕获旧值
   const appSettingsRef = useRef(appSettings)
 
-  // 判断账号是否需要刷新（已过期或5分钟内过期）
+  // 常量（与 Kiro 官方一致）
+  const REFRESH_BEFORE_EXPIRY_SECONDS = 10 * 60
+
+  // 判断 token 是否在指定秒数内过期（与 Kiro isAuthTokenExpiredWithinSeconds 完全一致）
+  const isAuthTokenExpiredWithinSeconds = (acc, seconds) => {
+    if (!acc.expiresAt || !acc.accessToken) {
+      return true
+    }
+    const expiresAt = new Date(acc.expiresAt.replace(/\//g, '-'))
+    const now = new Date()
+    return expiresAt.valueOf() < now.valueOf() + seconds * 1000
+  }
+
+  // 判断账号是否需要刷新
   const isExpiringSoon = (acc) => {
     // 跳过已封禁账号
     if (acc.status === 'banned') {
       console.log(`[AutoRefresh] 跳过封禁账号: ${acc.email}`)
       return false
     }
-    // 没有过期时间的不刷新
-    if (!acc.expiresAt) {
-      console.log(`[AutoRefresh] 跳过无过期时间: ${acc.email}`)
+    // 没有过期时间或 accessToken 的不刷新
+    if (!acc.expiresAt || !acc.accessToken) {
+      console.log(`[AutoRefresh] 跳过无过期时间或 token: ${acc.email}`)
       return false
     }
-    try {
+    const needRefresh = isAuthTokenExpiredWithinSeconds(acc, REFRESH_BEFORE_EXPIRY_SECONDS)
+    if (needRefresh) {
       const expiresAt = new Date(acc.expiresAt.replace(/\//g, '-'))
-      // 检查日期是否有效
-      if (isNaN(expiresAt.getTime())) {
-        console.log(`[AutoRefresh] 跳过无效日期: ${acc.email}`)
-        return false
-      }
-      const timeLeft = expiresAt.getTime() - Date.now()
-      const needRefresh = timeLeft < 5 * 60 * 1000
-      if (needRefresh) {
-        console.log(`[AutoRefresh] 需要刷新: ${acc.email}, 剩余 ${Math.round(timeLeft / 1000)}秒`)
-      }
-      return needRefresh
-    } catch {
-      return false
+      const timeLeft = Math.round((expiresAt.getTime() - Date.now()) / 1000)
+      console.log(`[AutoRefresh] 需要刷新: ${acc.email}, 剩余 ${timeLeft}秒`)
     }
+    return needRefresh
   }
 
   // 启动时只刷新 token（不获取 usage，快速启动）

@@ -5,8 +5,9 @@ use crate::state::AppState;
 use crate::account::Account;
 use crate::auth::{User, refresh_token_desktop, get_usage_limits_desktop};
 use crate::codewhisperer_client::CodeWhispererClient;
-use crate::providers::{AuthProvider, SocialProvider, IdcProvider, RefreshMetadata};
+use crate::providers::{AuthProvider, IdcProvider, RefreshMetadata};
 use crate::commands::machine_guid_cmd::get_machine_id;
+use crate::commands::common::{refresh_token_by_provider, get_usage_by_provider, calc_expires_at};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,80 +63,37 @@ pub async fn sync_account(state: State<'_, AppState>, id: String) -> Result<Acco
     }.ok_or("Account not found")?;
 
     let provider_str = account.provider.as_deref().unwrap_or("Google");
-    let refresh_token_str = account.refresh_token.as_ref().ok_or("No refresh token")?;
     
     #[cfg(debug_assertions)]
     println!("[sync_account] Refreshing {} account", provider_str);
     
-    // 根据 provider 选择刷新接口
-    // 注意：Web OAuth 的 refresh_token 也是 aor 开头的 RefreshToken Cookie，可以用 Desktop API
-    let (new_access_token, new_refresh_token, expires_in, new_profile_arn, new_id_token, new_sso_session_id) = 
-        if provider_str == "BuilderId" {
-            // BuilderId -> AWS OIDC
-            let metadata = RefreshMetadata {
-                client_id: account.client_id.clone(),
-                client_secret: account.client_secret.clone(),
-                region: account.region.clone(),
-                ..Default::default()
-            };
-            let idc_provider = IdcProvider::new("BuilderId", metadata.region.as_deref().unwrap_or("us-east-1"), None);
-            let auth_result = idc_provider.refresh_token(refresh_token_str, metadata).await?;
-            (auth_result.access_token, Some(auth_result.refresh_token), auth_result.expires_in, None, auth_result.id_token, auth_result.sso_session_id)
-        } else {
-            // Google/Github (Desktop OAuth 或 Web OAuth) -> Desktop API
-            // Web OAuth 的 refresh_token 是 RefreshToken Cookie (aor开头)，跟 Desktop OAuth 相同
-            let metadata = RefreshMetadata {
-                profile_arn: account.profile_arn.clone(),
-                ..Default::default()
-            };
-            let social_provider = SocialProvider::new(provider_str);
-            let auth_result = social_provider.refresh_token(refresh_token_str, metadata).await?;
-            (auth_result.access_token, Some(auth_result.refresh_token), auth_result.expires_in, auth_result.profile_arn, None, None)
-        };
+    // 使用公共函数刷新 token
+    let refresh_result = refresh_token_by_provider(&account).await?;
     
-    // 获取 usage 数据
-    let (usage_data, is_banned): (serde_json::Value, bool) = if provider_str == "BuilderId" {
-        let machine_id = get_machine_id();
-        let cw_client = CodeWhispererClient::new(&machine_id);
-        let usage_call = cw_client.get_usage_limits(&new_access_token).await;
-        let (usage, banned) = match &usage_call {
-            Ok(u) => (Some(u.clone()), false),
-            Err(e) if e.starts_with("BANNED:") => (None, true),
-            Err(_) => (None, false),
-        };
-        (serde_json::to_value(&usage).unwrap_or(serde_json::Value::Null), banned)
-    } else {
-        let usage_call = get_usage_limits_desktop(&new_access_token).await;
-        let (usage, banned) = match &usage_call {
-            Ok(u) => (Some(u.clone()), false),
-            Err(e) if e.starts_with("BANNED:") => (None, true),
-            Err(_) => (None, false),
-        };
-        (serde_json::to_value(&usage).unwrap_or(serde_json::Value::Null), banned)
-    };
-
-    let expires_at = chrono::Local::now() + chrono::Duration::seconds(expires_in);
-    let expires_at_str = expires_at.format("%Y/%m/%d %H:%M:%S").to_string();
+    // 使用公共函数获取 usage
+    let usage_result = get_usage_by_provider(provider_str, &refresh_result.access_token).await;
+    
+    let expires_at_str = calc_expires_at(refresh_result.expires_in);
 
     // 更新账号
     let mut store = state.store.lock().unwrap();
     if let Some(a) = store.accounts.iter_mut().find(|a| a.id == id) {
-        a.access_token = Some(new_access_token);
-        if let Some(rt) = new_refresh_token {
+        a.access_token = Some(refresh_result.access_token);
+        if let Some(rt) = refresh_result.refresh_token {
             a.refresh_token = Some(rt);
         }
-        if let Some(arn) = new_profile_arn {
+        if let Some(arn) = refresh_result.profile_arn {
             a.profile_arn = Some(arn);
         }
-        if let Some(id_token) = new_id_token {
+        if let Some(id_token) = refresh_result.id_token {
             a.id_token = Some(id_token);
         }
-        if let Some(session_id) = new_sso_session_id {
+        if let Some(session_id) = refresh_result.sso_session_id {
             a.sso_session_id = Some(session_id);
         }
         a.expires_at = Some(expires_at_str);
-        a.usage_data = Some(usage_data);
-        a.status = if is_banned { "banned".to_string() } else { "active".to_string() };
+        a.usage_data = Some(usage_result.usage_data);
+        a.status = if usage_result.is_banned { "banned".to_string() } else { "active".to_string() };
         
         let result = a.clone();
         store.save_to_file();
@@ -154,39 +112,18 @@ pub async fn refresh_account_token(state: State<'_, AppState>, id: String) -> Re
     }.ok_or("Account not found")?;
 
     let provider_str = account.provider.as_deref().unwrap_or("Google");
-    let refresh_token_str = account.refresh_token.as_ref().ok_or("No refresh token")?;
     
     #[cfg(debug_assertions)]
     println!("[refresh_token] Refreshing {} token", provider_str);
     
-    let (new_access_token, new_refresh_token, expires_in) = 
-        if provider_str == "BuilderId" {
-            let metadata = RefreshMetadata {
-                client_id: account.client_id.clone(),
-                client_secret: account.client_secret.clone(),
-                region: account.region.clone(),
-                ..Default::default()
-            };
-            let idc_provider = IdcProvider::new("BuilderId", metadata.region.as_deref().unwrap_or("us-east-1"), None);
-            let auth_result = idc_provider.refresh_token(refresh_token_str, metadata).await?;
-            (auth_result.access_token, Some(auth_result.refresh_token), auth_result.expires_in)
-        } else {
-            let metadata = RefreshMetadata {
-                profile_arn: account.profile_arn.clone(),
-                ..Default::default()
-            };
-            let social_provider = SocialProvider::new(provider_str);
-            let auth_result = social_provider.refresh_token(refresh_token_str, metadata).await?;
-            (auth_result.access_token, Some(auth_result.refresh_token), auth_result.expires_in)
-        };
-
-    let expires_at = chrono::Local::now() + chrono::Duration::seconds(expires_in);
-    let expires_at_str = expires_at.format("%Y/%m/%d %H:%M:%S").to_string();
+    // 使用公共函数刷新 token
+    let refresh_result = refresh_token_by_provider(&account).await?;
+    let expires_at_str = calc_expires_at(refresh_result.expires_in);
 
     let mut store = state.store.lock().unwrap();
     if let Some(a) = store.accounts.iter_mut().find(|a| a.id == id) {
-        a.access_token = Some(new_access_token);
-        if let Some(rt) = new_refresh_token {
+        a.access_token = Some(refresh_result.access_token);
+        if let Some(rt) = refresh_result.refresh_token {
             a.refresh_token = Some(rt);
         }
         a.expires_at = Some(expires_at_str);
@@ -616,4 +553,41 @@ pub fn update_account_tags(
     } else {
         Err("账号不存在".to_string())
     }
+}
+
+/// 从 AWS 服务端删除账号（注销账号）
+/// 支持 Google、Github、BuilderId，不支持 Enterprise
+#[tauri::command]
+pub async fn delete_account_remote(
+    state: State<'_, AppState>,
+    id: String,
+    delete_local: bool,
+) -> Result<String, String> {
+    use crate::auth::delete_account_desktop;
+    
+    // 获取账号信息
+    let account = {
+        let store = state.store.lock().unwrap();
+        store.accounts.iter().find(|a| a.id == id).cloned()
+    }.ok_or("账号不存在")?;
+    
+    // 检查 provider，Enterprise 不支持删除
+    let provider = account.provider.as_deref().unwrap_or("Google");
+    if provider == "Enterprise" {
+        return Err("Enterprise 账号不支持远程删除".to_string());
+    }
+    
+    let access_token = account.access_token.as_ref()
+        .ok_or("账号缺少 access_token，请先刷新")?;
+    
+    // 调用 Desktop API 删除账号（Google/Github/BuilderId 都用同一个端点）
+    delete_account_desktop(access_token).await?;
+    
+    // 如果需要同时删除本地记录
+    if delete_local {
+        let mut store = state.store.lock().unwrap();
+        store.delete(&id);
+    }
+    
+    Ok(format!("账号 {} 已从服务端删除", account.email))
 }

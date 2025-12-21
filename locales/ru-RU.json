@@ -424,6 +424,10 @@
   "accountCard.viewDetails": "Подробности",
   "accountCard.editRemark": "Редактировать заметку",
   "accountCard.delete": "Удалить",
+  "accountCard.deleteRemote": "Удалить аккаунт",
+  "accountCard.deleteRemoteConfirm": "Вы уверены, что хотите удалить этот аккаунт с сервера AWS?\n\n⚠️ Это действие необратимо!",
+  "accountCard.deleteRemoteSuccess": "Аккаунт удалён с сервера",
+  "accountCard.deleteRemoteFailed": "Ошибка удаления",
   "accountCard.tokenExpired": "Истёк",
   "accountCard.rightClickTip": "ПКМ для действий",
 

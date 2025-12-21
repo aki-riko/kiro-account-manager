@@ -424,6 +424,10 @@
   "accountCard.viewDetails": "查看详情",
   "accountCard.editRemark": "编辑备注",
   "accountCard.delete": "删除",
+  "accountCard.deleteRemote": "注销账号",
+  "accountCard.deleteRemoteConfirm": "确定要从 AWS 服务端注销此账号吗？\n\n⚠️ 此操作不可逆，账号将被永久删除！",
+  "accountCard.deleteRemoteSuccess": "账号已从服务端注销",
+  "accountCard.deleteRemoteFailed": "注销失败",
   "accountCard.tokenExpired": "已过期",
   "accountCard.rightClickTip": "右键查看更多操作",
 

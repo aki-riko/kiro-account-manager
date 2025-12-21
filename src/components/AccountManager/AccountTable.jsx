@@ -25,6 +25,7 @@ function AccountTable({
   onEdit,
   onEditLabel,
   onDelete,
+  onDeleteRemote,
   onAdd,
   refreshingId,
   switchingId,
@@ -58,11 +59,11 @@ function AccountTable({
     return result
   }, [accounts, columns])
 
-  // 虚拟化配置
+  // 虚拟化配置 - 增加行高估算，包含日期信息等动态内容
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 296, // 卡片高度 280 + gap 16
+    estimateSize: () => 340, // 卡片最小高度 280 + 日期信息 40 + gap 16 + 余量
     overscan: 2,
   })
 
@@ -87,6 +88,7 @@ function AccountTable({
         onEdit={onEdit}
         onEditLabel={onEditLabel}
         onDelete={onDelete}
+        onDeleteRemote={onDeleteRemote}
         refreshingId={refreshingId}
         switchingId={switchingId}
         isCurrentAccount={localToken?.refreshToken && item.refreshToken === localToken.refreshToken}
@@ -149,8 +151,14 @@ function AccountTable({
           ))}
         </div>
       ) : (
-        /* 普通网格 */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        /* 普通网格 - 使用动态计算的列数保持一致 */
+        <div 
+          className="gap-4 items-stretch" 
+          style={{ 
+            display: 'grid', 
+            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` 
+          }}
+        >
           {accounts.map(renderCard)}
           <AddButton onClick={onAdd} isDark={isDark} colors={colors} t={t} />
         </div>
@@ -164,7 +172,7 @@ function AddButton({ onClick, isDark, colors, t }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-2xl border-2 border-dashed transition-all duration-200 min-h-[280px] flex flex-col items-center justify-center gap-3 ${
+      className={`rounded-2xl border-2 border-dashed transition-all duration-200 min-h-[320px] flex flex-col items-center justify-center gap-3 ${
         isDark
           ? 'border-gray-700 hover:border-gray-500 hover:bg-white/5'
           : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'

@@ -248,3 +248,37 @@ pub async fn get_usage_limits_desktop(access_token: &str) -> Result<DesktopUsage
     
     Err(last_error)
 }
+
+
+/// 使用桌面端 API 删除账号（从 AWS 服务端删除）
+pub async fn delete_account_desktop(access_token: &str) -> Result<(), String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create client: {}", e))?;
+    
+    let url = format!("{}/deleteAccount", DESKTOP_AUTH_API);
+    
+    #[cfg(debug_assertions)]
+    println!("[Desktop] DeleteAccount request");
+    
+    let response = client
+        .delete(&url)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("网络错误: {}", e))?;
+    
+    let status = response.status();
+    
+    #[cfg(debug_assertions)]
+    println!("[Desktop] DeleteAccount Status: {}", status);
+    
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!("删除账号失败 ({}): {}", status, text));
+    }
+    
+    Ok(())
+}

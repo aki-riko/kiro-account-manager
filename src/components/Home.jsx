@@ -472,11 +472,11 @@ function Home() {
                     {freeTrial && freeTrial.usageLimit > 0 && (
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
-                        <span className={`text-xs text-purple-500 w-14 shrink-0`}>{t('home.trial')}</span>
+                        <span className={`text-xs text-purple-500 w-14 shrink-0`} title={freeTrial.freeTrialExpiry ? `${new Date(freeTrial.freeTrialExpiry * 1000).toLocaleDateString()} ${t('home.expires')}` : ''}>{t('home.trial')}</span>
                         <div className={`flex-1 h-1.5 ${isDark ? 'bg-purple-500/20' : 'bg-purple-100'} rounded-full overflow-hidden`}>
                           <div className="h-full rounded-full bg-purple-500 transition-all" style={{ width: `${freeTrial.usageLimit > 0 ? ((freeTrial.currentUsage ?? 0) / freeTrial.usageLimit * 100) : 0}%` }} />
                         </div>
-                        <span className={`text-[10px] text-purple-500 w-16 text-right shrink-0`}>{freeTrial.currentUsage ?? 0}/{freeTrial.usageLimit}</span>
+                        <span className={`text-[10px] text-purple-500 w-24 text-right shrink-0`}>{freeTrial.currentUsage ?? 0}/{freeTrial.usageLimit}{freeTrial.freeTrialExpiry ? ` · ${new Date(freeTrial.freeTrialExpiry * 1000).toLocaleDateString()}` : ''}</span>
                       </div>
                     )}
 
@@ -484,11 +484,11 @@ function Home() {
                     {bonuses.map((bonus, idx) => (
                       <div key={idx} className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                        <span className={`text-xs text-amber-600 w-14 shrink-0 truncate`} title={bonus.displayName}>{bonus.displayName?.substring(0, 4) || `奖励${idx+1}`}</span>
+                        <span className={`text-xs text-amber-600 w-14 shrink-0 truncate`} title={`${bonus.displayName}${bonus.expiresAt ? ` · ${new Date(bonus.expiresAt * 1000).toLocaleDateString()} ${t('home.expires')}` : ''}`}>{bonus.displayName?.substring(0, 4) || `奖励${idx+1}`}</span>
                         <div className={`flex-1 h-1.5 ${isDark ? 'bg-amber-500/20' : 'bg-amber-100'} rounded-full overflow-hidden`}>
                           <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${bonus.usageLimit > 0 ? ((bonus.currentUsage ?? 0) / bonus.usageLimit * 100) : 0}%` }} />
                         </div>
-                        <span className={`text-[10px] text-amber-600 w-16 text-right shrink-0`}>{Math.round(bonus.currentUsage ?? 0)}/{Math.round(bonus.usageLimit ?? 0)}</span>
+                        <span className={`text-[10px] text-amber-600 w-24 text-right shrink-0`}>{Math.round(bonus.currentUsage ?? 0)}/{Math.round(bonus.usageLimit ?? 0)}{bonus.expiresAt ? ` · ${new Date(bonus.expiresAt * 1000).toLocaleDateString()}` : ''}</span>
                       </div>
                     ))}
                   </div>

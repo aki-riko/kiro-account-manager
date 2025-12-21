@@ -1,6 +1,6 @@
 import { memo, useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { RefreshCw, Eye, Trash2, Copy, Check, Clock, Repeat, Edit2 } from 'lucide-react'
+import { RefreshCw, Eye, Trash2, Copy, Check, Clock, Repeat, Edit2, UserX } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import { getUsagePercent, getProgressBarColor } from './hooks/useAccountStats'
 import { getQuota, getUsed, getSubType, getSubPlan } from '../../utils/accountStats'
@@ -89,6 +89,7 @@ const AccountCard = memo(function AccountCard({
   onEdit,
   onEditLabel,
   onDelete,
+  onDeleteRemote,
   refreshingId,
   switchingId,
   isCurrentAccount,
@@ -113,13 +114,19 @@ const AccountCard = memo(function AccountCard({
     { icon: Copy, label: t('common.copy') + ' Email', onClick: () => onCopy(account.email, account.id) },
     { divider: true },
     { icon: Trash2, label: t('accountCard.delete'), onClick: () => onDelete(account.id), danger: true },
+    // Google/Github/BuilderId 支持远程注销，Enterprise 不支持
+    ...(account.provider !== 'Enterprise' && onDeleteRemote ? [
+      { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
+    ] : []),
   ]
 
   const quota = getQuota(account)
   const used = getUsed(account)
   const subType = getSubType(account)
   const subPlan = getSubPlan(account)
-  const breakdown = account.usageData?.usageBreakdownList?.[0]
+  const usageData = account.usageData
+  const breakdown = usageData?.usageBreakdownList?.[0]
+  const nextDateReset = usageData?.nextDateReset
   const percent = getUsagePercent(used, quota)
   const isExpired = account.expiresAt && new Date(account.expiresAt.replace(/\//g, '-')) < new Date()
   // 统一状态判断：后端只设置 'active' 或 'banned'，兼容旧数据的中文状态
@@ -138,7 +145,7 @@ const AccountCard = memo(function AccountCard({
   return (
     <div
       onContextMenu={handleContextMenu}
-      className={`relative rounded-2xl border transition-all duration-200 hover:shadow-lg flex flex-col ${glowColor} ${
+      className={`relative rounded-2xl border transition-all duration-200 hover:shadow-lg flex flex-col min-h-[320px] ${glowColor} ${
       isSelected 
         ? (isDark ? 'border-purple-500 bg-purple-500/10' : 'border-purple-400 bg-purple-50') 
         : isCurrentAccount
@@ -257,10 +264,19 @@ const AccountCard = memo(function AccountCard({
             <span className={`font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{Math.round(used * 100) / 100} / {quota}</span>
             <span className={colors.textMuted}>{t('common.remaining')} {Math.round((quota - used) * 100) / 100}</span>
           </div>
-          {breakdown?.nextDateReset && (
-            <div className={`text-xs ${colors.textMuted} mt-1 flex items-center gap-1`}>
-              <Clock size={10} />
-              {new Date(breakdown.nextDateReset * 1000).toLocaleDateString()} {t('common.reset')}
+          {/* 日期信息 - 单行紧凑显示 */}
+          {(nextDateReset || (breakdown?.freeTrialInfo?.freeTrialExpiry && breakdown.freeTrialInfo.freeTrialStatus === 'ACTIVE') || breakdown?.bonuses?.some(b => b.status === 'ACTIVE' && b.expiresAt)) && (
+            <div className={`mt-2 pt-2 border-t ${isDark ? 'border-white/10' : 'border-gray-200'} flex items-center gap-2 flex-wrap text-[10px]`}>
+              <Clock size={10} className={colors.textMuted} />
+              {nextDateReset && (
+                <span className={colors.textMuted}>{t('common.reset')} {new Date(nextDateReset * 1000).toLocaleDateString()}</span>
+              )}
+              {breakdown?.freeTrialInfo?.freeTrialExpiry && breakdown.freeTrialInfo.freeTrialStatus === 'ACTIVE' && (
+                <span className="text-purple-500">· {t('home.trial')} {new Date(breakdown.freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString()}</span>
+              )}
+              {breakdown?.bonuses?.filter(b => b.status === 'ACTIVE' && b.expiresAt).slice(0, 1).map((bonus, idx) => (
+                <span key={idx} className="text-amber-500">· {t('detail.bonusTotal')} {new Date(bonus.expiresAt * 1000).toLocaleDateString()}</span>
+              ))}
             </div>
           )}
         </div>

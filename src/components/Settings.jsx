@@ -109,7 +109,7 @@ function Settings() {
         if (!url) return true // 允许空值（清除代理）
         try {
             const urlObj = new URL(url)
-            return urlObj.protocol === 'http:' || urlObj.protocol === 'https:' || urlObj.protocol === 'socks5:'
+            return ['http:', 'https:', 'socks5:', 'socks5h:', 'socks4:'].includes(urlObj.protocol)
         } catch {
             return false
         }

@@ -418,6 +418,10 @@
   "accountCard.viewDetails": "View Details",
   "accountCard.editRemark": "Edit Remark",
   "accountCard.delete": "Delete",
+  "accountCard.deleteRemote": "Delete Account",
+  "accountCard.deleteRemoteConfirm": "Are you sure you want to delete this account from AWS?\n\n⚠️ This action is irreversible!",
+  "accountCard.deleteRemoteSuccess": "Account deleted from server",
+  "accountCard.deleteRemoteFailed": "Delete failed",
   "accountCard.tokenExpired": "Expired",
   "accountCard.rightClickTip": "Right-click for more",
 

@@ -1,5 +1,7 @@
 // 命令模块
 
+pub mod common;
+
 /// 生成随机邮箱（用于被封禁账号无法获取真实邮箱时）
 pub fn generate_random_email(provider: &str) -> String {
     use rand::Rng;

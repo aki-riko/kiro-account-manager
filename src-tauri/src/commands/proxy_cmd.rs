@@ -44,12 +44,9 @@ fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
             proxy_server.clone()
         };
         
-        // 确保有 http:// 前缀
-        if proxy.starts_with("http://") || proxy.starts_with("https://") {
-            Some(proxy)
-        } else {
-            Some(format!("http://{}", proxy))
-        }
+        // 保留原始格式，不自动添加协议前缀
+        // 用户可以在设置页面手动输入完整地址（http://、https://、socks5://）
+        Some(proxy)
     } else {
         None
     };
@@ -113,7 +110,8 @@ fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
     }
     
     let http_proxy = if enabled && !server.is_empty() && server != "0" {
-        Some(format!("http://{}:{}", server, port))
+        // 保留原始格式，不自动添加协议前缀
+        Some(format!("{}:{}", server, port))
     } else {
         None
     };

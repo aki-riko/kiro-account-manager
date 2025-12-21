@@ -136,6 +136,35 @@ function AccountManager() {
     }
   }, [showConfirm, loadAccounts, t])
 
+  // 远程删除账号（从 AWS 服务端注销）
+  const handleDeleteRemote = useCallback(async (account) => {
+    const confirmed = await showConfirm(
+      t('accountCard.deleteRemote'),
+      t('accountCard.deleteRemoteConfirm')
+    )
+    if (confirmed) {
+      try {
+        await invoke('delete_account_remote', { id: account.id, deleteLocal: true })
+        // 清理绑定的机器码
+        await invoke('unbind_machine_id_from_account', { accountId: account.id }).catch(() => {})
+        loadAccounts()
+        setSwitchDialog({
+          type: 'success',
+          title: t('accountCard.deleteRemoteSuccess'),
+          message: account.email,
+          account: null,
+        })
+      } catch (e) {
+        setSwitchDialog({
+          type: 'error',
+          title: t('accountCard.deleteRemoteFailed'),
+          message: String(e),
+          account: null,
+        })
+      }
+    }
+  }, [showConfirm, loadAccounts, t])
+
   // 批量删除
   const onBatchDelete = useCallback(async () => {
     if (selectedIds.length === 0) return
@@ -295,6 +324,7 @@ function AccountManager() {
         onEdit={setEditingAccount}
         onEditLabel={setEditingLabelAccount}
         onDelete={handleDelete}
+        onDeleteRemote={handleDeleteRemote}
         onAdd={() => setShowAddModal(true)}
         refreshingId={refreshingId}
         switchingId={switchingId}
