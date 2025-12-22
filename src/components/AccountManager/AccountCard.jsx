@@ -104,6 +104,9 @@ const AccountCard = memo(function AccountCard({
     setContextMenu({ x: e.clientX, y: e.clientY })
   }, [])
 
+  // 判断是否被封禁
+  const isBannedAccount = account.status === 'banned' || account.status === '封禁' || account.status === '已封禁'
+
   // 右键菜单项
   const menuItems = [
     { icon: Repeat, label: t('accountCard.switchAccount'), onClick: () => onSwitch(account), disabled: switchingId === account.id },
@@ -114,8 +117,8 @@ const AccountCard = memo(function AccountCard({
     { icon: Copy, label: t('common.copy') + ' Email', onClick: () => onCopy(account.email, account.id) },
     { divider: true },
     { icon: Trash2, label: t('accountCard.delete'), onClick: () => onDelete(account.id), danger: true },
-    // Google/Github/BuilderId 支持远程注销，Enterprise 不支持
-    ...(account.provider !== 'Enterprise' && onDeleteRemote ? [
+    // Google/Github/BuilderId 支持远程注销，Enterprise 不支持，封禁账号不支持
+    ...(account.provider !== 'Enterprise' && !isBannedAccount && onDeleteRemote ? [
       { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
     ] : []),
   ]
