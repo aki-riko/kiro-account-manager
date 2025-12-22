@@ -92,7 +92,7 @@ pub async fn import_from_sso_token(
     ];
     
     let reg_body = serde_json::json!({
-        "clientName": "Kiro Account Manager",
+        "clientName": "Amazon Q Developer for command line",
         "clientType": "public",
         "scopes": scopes,
         "grantTypes": ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
