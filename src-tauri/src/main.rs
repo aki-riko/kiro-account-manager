@@ -144,6 +144,8 @@ fn main() {
             web_oauth_refresh,
             web_oauth_login,
             web_oauth_close_window,
+            web_oauth_builderid_login,
+            web_oauth_builderid_complete,
             // 浏览器检测
             detect_installed_browsers,
             // MCP 管理命令

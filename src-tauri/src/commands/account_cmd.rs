@@ -111,10 +111,10 @@ pub async fn refresh_account_token(state: State<'_, AppState>, id: String) -> Re
         store.accounts.iter().find(|a| a.id == id).cloned()
     }.ok_or("Account not found")?;
 
-    let provider_str = account.provider.as_deref().unwrap_or("Google");
+    let _provider_str = account.provider.as_deref().unwrap_or("Google");
     
     #[cfg(debug_assertions)]
-    println!("[refresh_token] Refreshing {} token", provider_str);
+    println!("[refresh_token] Refreshing {} token", _provider_str);
     
     // 使用公共函数刷新 token
     let refresh_result = refresh_token_by_provider(&account).await?;
@@ -131,7 +131,7 @@ pub async fn refresh_account_token(state: State<'_, AppState>, id: String) -> Re
         let result = a.clone();
         store.save_to_file();
         #[cfg(debug_assertions)]
-        println!("[refresh_token] {} token refreshed", provider_str);
+        println!("[refresh_token] {} token refreshed", _provider_str);
         return Ok(result);
     }
 

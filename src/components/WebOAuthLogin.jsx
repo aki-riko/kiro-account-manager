@@ -16,7 +16,7 @@ function WebOAuthLogin({ onLogin }) {
   const [windowLabel, setWindowLabel] = useState(null)
 
   useEffect(() => {
-    let unlistenSuccess, unlistenCallback
+    let unlistenSuccess, unlistenCallback, unlistenBuilderIdCallback, unlistenBuilderIdError
 
     const setupListeners = async () => {
       unlistenSuccess = await listen('login-success', (event) => {
@@ -53,6 +53,28 @@ function WebOAuthLogin({ onLogin }) {
           }
         }
       })
+
+      // BuilderId 专用回调
+      unlistenBuilderIdCallback = await listen('builderid-oauth-callback', async (event) => {
+        console.log('builderid-oauth-callback:', event.payload)
+        setStep('completing')
+        try {
+          await invoke('web_oauth_builderid_complete', { code: event.payload })
+        } catch (e) {
+          console.error('BuilderId complete failed:', e)
+          const errorMsg = typeof e === 'string' ? e : e.message || t('login.failed')
+          setError(errorMsg)
+          setStep('idle')
+          setLoadingProvider(null)
+        }
+      })
+
+      unlistenBuilderIdError = await listen('builderid-oauth-error', (event) => {
+        console.error('BuilderId OAuth error:', event.payload)
+        setError(event.payload)
+        setStep('idle')
+        setLoadingProvider(null)
+      })
     }
 
     setupListeners()
@@ -60,6 +82,8 @@ function WebOAuthLogin({ onLogin }) {
     return () => {
       if (unlistenSuccess) unlistenSuccess()
       if (unlistenCallback) unlistenCallback()
+      if (unlistenBuilderIdCallback) unlistenBuilderIdCallback()
+      if (unlistenBuilderIdError) unlistenBuilderIdError()
     }
   }, [onLogin, showError, t])
 
@@ -69,6 +93,14 @@ function WebOAuthLogin({ onLogin }) {
     setStep('webview')
     
     try {
+      // BuilderId 使用专用的 Authorization Code Flow (也是 WebView)
+      if (provider === 'BuilderId') {
+        const result = await invoke('web_oauth_builderid_login')
+        setWindowLabel(result.windowLabel)
+        return
+      }
+      
+      // Google/Github 使用 WebView 登录
       const result = await invoke('web_oauth_login', { provider })
       setWindowLabel(result.windowLabel)
     } catch (e) {
