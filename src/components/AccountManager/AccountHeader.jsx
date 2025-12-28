@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Search, Download, Upload, RefreshCw, Trash2, Plus, Sparkles, MoreHorizontal, ShoppingCart, LayoutGrid, List } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
+import FilterDropdown from './FilterDropdown'
 
 function AccountHeader({
   searchTerm,
@@ -21,6 +22,8 @@ function AccountHeader({
   onStatusFilter,
   viewMode = 'card',
   onViewModeChange,
+  advancedFilters = {},
+  onAdvancedFiltersChange,
 }) {
   const { t, theme, colors } = useApp()
   const isDark = theme === 'dark'
@@ -85,7 +88,7 @@ function AccountHeader({
               className={`px-3 py-2 ${colors.input} border rounded-xl text-sm focus:outline-none ${colors.text} cursor-pointer max-w-[120px]`}
             >
               <option value="">{t('tags.all')}</option>
-              {allTags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+              {allTags.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
             </select>
           )}
 
@@ -106,6 +109,12 @@ function AccountHeader({
               <List size={16} />
             </button>
           </div>
+
+          {/* 高级筛选 */}
+          <FilterDropdown
+            filters={advancedFilters}
+            onFiltersChange={onAdvancedFiltersChange}
+          />
 
           {/* 批量删除 */}
           {selectedCount > 0 && (

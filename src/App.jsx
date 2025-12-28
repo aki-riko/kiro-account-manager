@@ -17,13 +17,14 @@ import AnnouncementModal from './components/AnnouncementModal'
 import { useApp } from './hooks/useApp'
 import { useAppSettings } from './contexts/AppSettingsContext'
 import { AccountProvider } from './contexts/AccountContext'
+import { PrivacyProvider } from './contexts/PrivacyContext'
 
 function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeMenu, setActiveMenu] = useState('home')
   const { colors } = useApp()
-  const { settings: appSettings } = useAppSettings()
+  const { settings: appSettings, loading: settingsLoading } = useAppSettings()
   const refreshTimerRef = useRef(null)
   // 使用 ref 保持最新的设置引用，避免闭包捕获旧值
   const appSettingsRef = useRef(appSettings)
@@ -69,7 +70,8 @@ function App() {
       // 使用 ref 获取最新设置，避免闭包捕获旧值
       const settings = appSettingsRef.current || {}
       const autoRefreshEnabled = settings.autoRefresh !== false
-      console.log('[AutoRefresh] 设置:', { autoRefresh: autoRefreshEnabled, interval: settings.autoRefreshInterval })
+      const interval = settings.autoRefreshInterval ?? DEFAULT_REFRESH_INTERVAL
+      console.log('[AutoRefresh] 设置:', { autoRefresh: autoRefreshEnabled, interval })
       
       const accounts = await invoke('get_accounts')
       console.log('[AutoRefresh] 账号数量:', accounts?.length || 0)
@@ -169,6 +171,9 @@ function App() {
     }
   }
 
+  // 默认刷新间隔（分钟）
+  const DEFAULT_REFRESH_INTERVAL = 50
+
   // 启动自动刷新定时器
   const startAutoRefreshTimer = () => {
     if (refreshTimerRef.current) {
@@ -180,9 +185,10 @@ function App() {
     
     // 使用 ref 获取最新设置读取刷新间隔
     const settings = appSettingsRef.current || {}
-    const intervalMs = (settings.autoRefreshInterval || 50) * 60 * 1000
+    const interval = settings.autoRefreshInterval ?? DEFAULT_REFRESH_INTERVAL
+    const intervalMs = interval * 60 * 1000
     
-    console.log(`[AutoRefresh] 定时器间隔: ${settings.autoRefreshInterval || 50} 分钟`)
+    console.log(`[AutoRefresh] 定时器间隔: ${interval} 分钟`)
     refreshTimerRef.current = setInterval(checkAndRefreshExpiringTokens, intervalMs)
   }
 
@@ -193,6 +199,24 @@ function App() {
   useEffect(() => {
     appSettingsRef.current = appSettings
   }, [appSettings])
+
+  // 设置加载完成后启动定时器
+  useEffect(() => {
+    if (settingsLoading) return
+    
+    console.log('[AutoRefresh] 设置加载完成，启动定时器')
+    startAutoRefreshTimer()
+    startModelLockTimer()
+    
+    return () => {
+      if (refreshTimerRef.current) {
+        clearInterval(refreshTimerRef.current)
+      }
+      if (modelLockTimerRef.current) {
+        clearInterval(modelLockTimerRef.current)
+      }
+    }
+  }, [settingsLoading])
   
   const startModelLockTimer = async () => {
     if (modelLockTimerRef.current) {
@@ -247,23 +271,11 @@ function App() {
 
     setupListeners()
     
-    // 启动自动刷新定时器
-    startAutoRefreshTimer()
-    
-    // 启动模型锁定检查定时器
-    startModelLockTimer()
-    
     return () => { 
       mounted = false
       if (unlisten) unlisten()
       if (unlistenSettings) unlistenSettings()
       if (unlistenAppSettings) unlistenAppSettings()
-      if (refreshTimerRef.current) {
-        clearInterval(refreshTimerRef.current)
-      }
-      if (modelLockTimerRef.current) {
-        clearInterval(modelLockTimerRef.current)
-      }
     }
   }, [])
 
@@ -313,22 +325,24 @@ function App() {
   }
 
   return (
-    <AccountProvider>
-      <div className={`flex h-screen ${colors.main}`}>
-        <Sidebar 
-          activeMenu={activeMenu} 
-          onMenuChange={setActiveMenu}
-          user={user}
-          onLogout={handleLogout}
-        />
-        <main className="flex-1 overflow-hidden">
-          {renderContent()}
-        </main>
-        
-        <UpdateChecker />
-        <AnnouncementModal />
-      </div>
-    </AccountProvider>
+    <PrivacyProvider>
+      <AccountProvider>
+        <div className={`flex h-screen ${colors.main}`}>
+          <Sidebar 
+            activeMenu={activeMenu} 
+            onMenuChange={setActiveMenu}
+            user={user}
+            onLogout={handleLogout}
+          />
+          <main className="flex-1 overflow-hidden">
+            {renderContent()}
+          </main>
+          
+          <UpdateChecker />
+          <AnnouncementModal />
+        </div>
+      </AccountProvider>
+    </PrivacyProvider>
   )
 }
 

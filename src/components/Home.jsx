@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { RefreshCw, Users, Zap, Shield, Clock, TrendingUp, Sparkles } from 'lucide-react'
+import { RefreshCw, Users, Zap, Shield, Clock, TrendingUp, Sparkles, BarChart2, PieChart } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { useDialog } from '../contexts/DialogContext'
 import { useAccount } from '../contexts/AccountContext'
+import { usePrivacy } from '../contexts/PrivacyContext'
+import QuotaPieChart from './Home/QuotaPieChart'
+import UsageTrendChart from './Home/UsageTrendChart'
 
 // 骨架屏组件
 function Skeleton({ className }) {
@@ -103,6 +106,7 @@ function StatCard({ icon: Icon, iconBg, value, label, delay, isDark }) {
 function Home() {
   const { t, theme, colors } = useApp()
   const { showError } = useDialog()
+  const { maskEmail } = usePrivacy()
   const { 
     accounts: tokens, 
     localToken, 
@@ -172,8 +176,8 @@ function Home() {
         </div>
 
         <div className="grid grid-cols-2 gap-6 mb-6">
-          {/* 本地 Kiro 账号 */}
-          <div className={`card-glow ${colors.card} rounded-2xl shadow-sm border ${colors.cardBorder} overflow-hidden animate-scale-in delay-300`}>
+          {/* 当前账号（合并：登录信息 + 配额总览） */}
+          <div className={`card-glow ${colors.card} rounded-2xl shadow-sm border ${colors.cardBorder} animate-scale-in delay-300`}>
             <div className={`px-6 py-4 border-b ${colors.cardBorder} flex items-center justify-between`}>
               <h2 className={`font-semibold ${colors.text}`}>{t('home.currentAccount')}</h2>
               <button 
@@ -186,8 +190,8 @@ function Home() {
             <div className="p-6">
               {localToken ? (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-2xl shadow-lg transition-transform hover:scale-105 ${
+                  <div className="flex items-center gap-4 group relative">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg transition-transform hover:scale-105 ${
                       localToken.provider === 'Google' ? 'bg-gradient-to-br from-red-500 to-orange-500 shadow-red-500/25' :
                       localToken.provider === 'Github' ? 'bg-gradient-to-br from-gray-700 to-gray-900 shadow-gray-500/25' :
                       'bg-gradient-to-br from-blue-500 to-purple-600 shadow-blue-500/25'
@@ -201,57 +205,55 @@ function Home() {
                       </div>
                       <div className={`text-sm ${colors.textMuted} mt-1`}>{localToken.authMethod || 'social'}</div>
                     </div>
-                  </div>
-                  
-                  <div className={`${isDark ? 'bg-white/5' : 'bg-gray-50'} rounded-xl p-4 space-y-3`}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className={colors.textMuted}>Access Token</span>
-                      <span title={localToken.accessToken} className={`font-mono text-xs ${colors.textMuted} truncate max-w-[180px] cursor-help`}>
-                        {localToken.accessToken?.substring(0, 20)}...
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className={colors.textMuted}>Refresh Token</span>
-                      <span title={localToken.refreshToken} className={`font-mono text-xs ${colors.textMuted} truncate max-w-[180px] cursor-help`}>
-                        {localToken.refreshToken?.substring(0, 20)}...
-                      </span>
-                    </div>
-                    {localToken.authMethod === 'IdC' ? (
-                      <>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className={colors.textMuted}>Client ID Hash</span>
-                          <span title={localToken.clientIdHash} className={`font-mono text-xs ${colors.textMuted} truncate max-w-[180px] cursor-help`}>
-                            {localToken.clientIdHash || '-'}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className={colors.textMuted}>Region</span>
-                          <span className={`font-mono text-xs ${colors.textMuted}`}>
-                            {localToken.region || '-'}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className={colors.textMuted}>Profile ARN</span>
-                        <span title={localToken.profileArn} className={`font-mono text-xs ${colors.textMuted} truncate max-w-[180px] cursor-help`}>
-                          {localToken.profileArn || '-'}
+                    {/* Hover 显示 Token 详情 */}
+                    <div className={`absolute left-16 top-0 w-72 ${isDark ? 'bg-[#1a1a2e]' : 'bg-white'} rounded-xl shadow-2xl border ${colors.cardBorder} p-3 space-y-2 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none`}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={colors.textMuted}>Access Token</span>
+                        <span title={localToken.accessToken} className={`font-mono ${colors.textMuted} truncate max-w-[140px]`}>
+                          {localToken.accessToken?.substring(0, 12)}...
                         </span>
                       </div>
-                    )}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className={colors.textMuted}>{t('home.expiresAt')}</span>
-                      <span className={`${colors.text} flex items-center gap-1`}>
-                        <Clock size={12} />
-                        {localToken.expiresAt ? new Date(localToken.expiresAt).toLocaleString() : t('home.unknown')}
-                      </span>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={colors.textMuted}>Refresh Token</span>
+                        <span title={localToken.refreshToken} className={`font-mono ${colors.textMuted} truncate max-w-[140px]`}>
+                          {localToken.refreshToken?.substring(0, 12)}...
+                        </span>
+                      </div>
+                      {localToken.authMethod === 'IdC' ? (
+                        <>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className={colors.textMuted}>Client ID Hash</span>
+                            <span className={`font-mono ${colors.textMuted} truncate max-w-[140px]`}>
+                              {localToken.clientIdHash || '-'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className={colors.textMuted}>Region</span>
+                            <span className={`font-mono ${colors.textMuted}`}>{localToken.region || '-'}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className={colors.textMuted}>Profile ARN</span>
+                          <span title={localToken.profileArn} className={`font-mono ${colors.textMuted} truncate max-w-[140px]`}>
+                            {localToken.profileArn || '-'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={colors.textMuted}>{t('home.expiresAt')}</span>
+                        <span className={`${colors.text} flex items-center gap-1`}>
+                          <Clock size={10} />
+                          {localToken.expiresAt ? new Date(localToken.expiresAt).toLocaleString() : t('home.unknown')}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-10">
-                  <div className={`w-20 h-20 ${isDark ? 'bg-white/10' : 'bg-gray-100'} rounded-full flex items-center justify-center mx-auto mb-4 animate-float`}>
-                    <Users size={32} className={colors.textMuted} />
+                <div className="text-center py-8">
+                  <div className={`w-16 h-16 ${isDark ? 'bg-white/10' : 'bg-gray-100'} rounded-full flex items-center justify-center mx-auto mb-3 animate-float`}>
+                    <Users size={28} className={colors.textMuted} />
                   </div>
                   <div className={`${colors.textMuted} mb-1 font-medium`}>{t('home.notLoggedIn')}</div>
                   <div className={`text-sm ${colors.textMuted}`}>{t('home.clickToSwitch')}</div>
@@ -260,7 +262,7 @@ function Home() {
             </div>
           </div>
 
-          {/* 配额总览 - 紧凑版 */}
+          {/* 配额总览 */}
           <div className={`card-glow ${colors.card} rounded-2xl shadow-sm border ${colors.cardBorder} p-5 animate-scale-in delay-400`}>
             <div className="flex items-center gap-3 mb-4">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-100'}`}>
@@ -343,7 +345,7 @@ function Home() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`font-semibold ${colors.text} truncate`}>{userInfo?.email || currentAccount.email}</span>
+                    <span className={`font-semibold ${colors.text} truncate`}>{maskEmail(userInfo?.email || currentAccount.email)}</span>
                     {subInfo?.type && (
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0 ${
                         subInfo.type.includes('PRO+') ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' :
@@ -497,6 +499,100 @@ function Home() {
             </div>
           )
         })()}
+
+        {/* 使用率分布统计 */}
+        {tokens.length > 0 && (() => {
+          // 计算使用率分组
+          const getUsagePercent = (account) => {
+            const breakdown = account.usageData?.usageBreakdownList?.[0] || account.usageData?.usageBreakdown
+            const used = breakdown?.currentUsage ?? 0
+            const limit = breakdown?.usageLimit ?? 50
+            return limit > 0 ? (used / limit) * 100 : 0
+          }
+          
+          const usageGroups = {
+            low: tokens.filter(a => getUsagePercent(a) < 30).length,
+            medium: tokens.filter(a => { const p = getUsagePercent(a); return p >= 30 && p < 70 }).length,
+            high: tokens.filter(a => getUsagePercent(a) >= 70).length
+          }
+          
+          // 账号使用率排行（前5）
+          const topAccounts = [...tokens]
+            .map(a => {
+              const breakdown = a.usageData?.usageBreakdownList?.[0] || a.usageData?.usageBreakdown
+              const used = breakdown?.currentUsage ?? 0
+              const limit = breakdown?.usageLimit ?? 50
+              return { email: a.email, used, limit, percent: limit > 0 ? Math.round((used / limit) * 100) : 0 }
+            })
+            .sort((a, b) => b.limit - a.limit)
+            .slice(0, 5)
+          
+          return (
+            <div className="grid grid-cols-2 gap-6 mt-6">
+              {/* 使用率分布 */}
+              <div className={`card-glow ${colors.card} rounded-2xl shadow-sm border ${colors.cardBorder} p-5 animate-scale-in`}>
+                <div className="flex items-center gap-2 mb-4">
+                  <PieChart size={18} className="text-blue-500" />
+                  <h3 className={`font-semibold ${colors.text}`}>{t('stats.usageDistribution')}</h3>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { label: t('stats.lowUsage'), value: usageGroups.low, color: 'bg-green-500', desc: '< 30%' },
+                    { label: t('stats.mediumUsage'), value: usageGroups.medium, color: 'bg-yellow-500', desc: '30-70%' },
+                    { label: t('stats.highUsage'), value: usageGroups.high, color: 'bg-red-500', desc: '> 70%' }
+                  ].map((item, i) => {
+                    const percent = tokens.length > 0 ? (item.value / tokens.length * 100) : 0
+                    return (
+                      <div key={i}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-sm ${colors.text}`}>{item.label} <span className={colors.textMuted}>({item.desc})</span></span>
+                          <span className={`text-sm font-medium ${colors.text}`}>{item.value} {t('stats.accounts')}</span>
+                        </div>
+                        <div className={`h-3 rounded-full ${isDark ? 'bg-white/10' : 'bg-gray-100'} overflow-hidden`}>
+                          <div className={`h-full ${item.color} rounded-full transition-all duration-500`} style={{ width: `${percent}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* 账号配额排行 */}
+              <div className={`card-glow ${colors.card} rounded-2xl shadow-sm border ${colors.cardBorder} p-5 animate-scale-in`}>
+                <div className="flex items-center gap-2 mb-4">
+                  <BarChart2 size={18} className="text-indigo-500" />
+                  <h3 className={`font-semibold ${colors.text}`}>{t('stats.accountUsage')}</h3>
+                </div>
+                <div className="space-y-2.5">
+                  {topAccounts.map((account, i) => {
+                    const usageColor = account.percent < 30 ? 'from-green-400 to-green-500'
+                      : account.percent < 70 ? 'from-yellow-400 to-yellow-500'
+                      : 'from-red-400 to-red-500'
+                    return (
+                      <div key={i}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-xs ${colors.text} truncate max-w-[140px]`}>{account.email.split('@')[0]}</span>
+                          <span className={`text-xs ${colors.textMuted}`}>{account.used}/{account.limit} ({account.percent}%)</span>
+                        </div>
+                        <div className={`h-2 rounded-full ${isDark ? 'bg-white/10' : 'bg-gray-100'} overflow-hidden`}>
+                          <div className={`h-full bg-gradient-to-r ${usageColor} rounded-full transition-all duration-500`} style={{ width: `${account.percent}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* 配额分布饼图 + 使用量趋势图 */}
+        {tokens.length > 0 && (
+          <div className="grid grid-cols-2 gap-6 mt-6">
+            <QuotaPieChart accounts={tokens} />
+            <UsageTrendChart accounts={tokens} stats={stats} />
+          </div>
+        )}
 
       </div>
     </div>

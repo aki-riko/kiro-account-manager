@@ -51,7 +51,7 @@ pub fn detect_browsers() -> Vec<DetectedBrowser> {
     detected
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
 pub fn detect_browsers() -> Vec<DetectedBrowser> {
     use std::path::Path;
     
@@ -74,6 +74,40 @@ pub fn detect_browsers() -> Vec<DetectedBrowser> {
         }
     }
     detected
+}
+
+#[cfg(target_os = "linux")]
+pub fn detect_browsers() -> Vec<DetectedBrowser> {
+    use std::path::Path;
+    
+    let browsers = vec![
+        ("Chrome", "/usr/bin/google-chrome", "--incognito"),
+        ("Chrome", "/usr/bin/google-chrome-stable", "--incognito"),
+        ("Chromium", "/usr/bin/chromium", "--incognito"),
+        ("Chromium", "/usr/bin/chromium-browser", "--incognito"),
+        ("Firefox", "/usr/bin/firefox", "-private-window"),
+        ("Edge", "/usr/bin/microsoft-edge", "--inprivate"),
+        ("Edge", "/usr/bin/microsoft-edge-stable", "--inprivate"),
+        ("Brave", "/usr/bin/brave-browser", "--incognito"),
+        ("Brave", "/usr/bin/brave", "--incognito"),
+    ];
+    
+    let mut detected = Vec::new();
+    for (name, path, incognito_arg) in browsers {
+        if Path::new(path).exists() {
+            detected.push(DetectedBrowser {
+                name: name.to_string(),
+                path: path.to_string(),
+                incognito_arg: incognito_arg.to_string(),
+            });
+        }
+    }
+    detected
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+pub fn detect_browsers() -> Vec<DetectedBrowser> {
+    Vec::new()
 }
 
 /// 使用自定义浏览器打开 URL

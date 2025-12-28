@@ -8,11 +8,64 @@ pub struct SystemProxyInfo {
     pub enabled: bool,
     pub proxy_server: Option<String>,
     pub http_proxy: Option<String>,
+    pub tun_mode: bool,
+    pub tun_interface: Option<String>,
 }
 
 // ============================================================
 // Windows: 从注册表读取系统代理
 // ============================================================
+
+#[cfg(target_os = "windows")]
+fn detect_tun_mode() -> (bool, Option<String>) {
+    use std::process::Command;
+    
+    // 方法1：使用 Get-NetAdapter 检测 TUN 类型网卡（更可靠）
+    let output = Command::new("powershell")
+        .args(["-Command", "Get-NetAdapter | Where-Object {$_.InterfaceDescription -like '*TAP*' -or $_.InterfaceDescription -like '*TUN*' -or $_.InterfaceDescription -like '*WireGuard*' -or $_.InterfaceDescription -like '*Wintun*'} | Where-Object {$_.Status -eq 'Up'} | Select-Object -ExpandProperty Name"])
+        .output();
+    
+    if let Ok(output) = output {
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !stdout.is_empty() {
+            // 取第一个活跃的 TUN 网卡
+            if let Some(name) = stdout.lines().next() {
+                return (true, Some(name.to_string()));
+            }
+        }
+    }
+    
+    // 方法2：使用 netsh 检查已连接的非物理网卡
+    let output = Command::new("netsh")
+        .args(["interface", "show", "interface"])
+        .output();
+    
+    if let Ok(output) = output {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        
+        // 排除常见物理网卡名
+        let physical_names = ["以太网", "ethernet", "wlan", "wi-fi", "bluetooth", "蓝牙", "本地连接"];
+        
+        for line in stdout.lines() {
+            let line_lower = line.to_lowercase();
+            // 检查是否已连接
+            if line.contains("已连接") || line.contains("Connected") {
+                // 排除物理网卡
+                let is_physical = physical_names.iter().any(|p| line_lower.contains(p));
+                if !is_physical {
+                    // 提取网卡名（最后一列）
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 4 {
+                        let name = parts[parts.len() - 1];
+                        return (true, Some(name.to_string()));
+                    }
+                }
+            }
+        }
+    }
+    
+    (false, None)
+}
 
 #[cfg(target_os = "windows")]
 fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
@@ -51,16 +104,61 @@ fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
         None
     };
     
+    let (tun_mode, tun_interface) = detect_tun_mode();
+    
     Ok(SystemProxyInfo {
         enabled,
         proxy_server: if proxy_server.is_empty() { None } else { Some(proxy_server) },
         http_proxy,
+        tun_mode,
+        tun_interface,
     })
 }
 
 // ============================================================
 // macOS: 从系统偏好设置读取代理
 // ============================================================
+
+#[cfg(target_os = "macos")]
+fn detect_tun_mode() -> (bool, Option<String>) {
+    use std::process::Command;
+    
+    // macOS 上 TUN 设备都是 utun 开头
+    let output = Command::new("ifconfig")
+        .output();
+    
+    if let Ok(output) = output {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        
+        // 查找 utun 开头且有 inet 地址的网卡（活跃的 TUN）
+        let mut current_iface: Option<String> = None;
+        let mut has_inet = false;
+        
+        for line in stdout.lines() {
+            if line.starts_with("utun") && line.contains(": flags=") {
+                // 新的 utun 接口
+                if let Some(ref iface) = current_iface {
+                    if has_inet {
+                        return (true, Some(iface.clone()));
+                    }
+                }
+                current_iface = line.split(':').next().map(|s| s.to_string());
+                has_inet = false;
+            } else if current_iface.is_some() && line.contains("inet ") && !line.contains("inet6") {
+                has_inet = true;
+            }
+        }
+        
+        // 检查最后一个接口
+        if let Some(iface) = current_iface {
+            if has_inet {
+                return (true, Some(iface));
+            }
+        }
+    }
+    
+    (false, None)
+}
 
 #[cfg(target_os = "macos")]
 fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
@@ -122,11 +220,90 @@ fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
         None
     };
     
+    let (tun_mode, tun_interface) = detect_tun_mode();
+    
     Ok(SystemProxyInfo {
         enabled,
         proxy_server,
         http_proxy,
+        tun_mode,
+        tun_interface,
     })
+}
+
+#[cfg(target_os = "linux")]
+fn detect_tun_mode() -> (bool, Option<String>) {
+    use std::fs;
+    use std::path::Path;
+    use std::process::Command;
+    
+    // 方法1：使用 ip tuntap show 列出所有 TUN/TAP 设备（最可靠）
+    if let Ok(output) = Command::new("ip").args(["tuntap", "show"]).output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            // 格式: "tun0: tun" 或 "tap0: tap"
+            if let Some(name) = line.split(':').next() {
+                let name = name.trim();
+                // 检查是否有 IP 地址（活跃状态）
+                if let Ok(addr_output) = Command::new("ip")
+                    .args(["addr", "show", name])
+                    .output()
+                {
+                    let addr_stdout = String::from_utf8_lossy(&addr_output.stdout);
+                    if addr_stdout.contains("inet ") {
+                        return (true, Some(name.to_string()));
+                    }
+                }
+            }
+        }
+    }
+    
+    // 方法2：检查 /sys/class/net/ 下的 TUN/TAP 设备
+    if let Ok(entries) = fs::read_dir("/sys/class/net") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            
+            // 跳过常见物理网卡
+            if name.starts_with("eth") || name.starts_with("en") || 
+               name.starts_with("wl") || name == "lo" {
+                continue;
+            }
+            
+            // 检查 tun_flags 文件（TUN/TAP 设备特有）
+            let tun_flags_path = format!("/sys/class/net/{}/tun_flags", name);
+            if Path::new(&tun_flags_path).exists() {
+                if let Ok(output) = Command::new("ip")
+                    .args(["addr", "show", &name])
+                    .output()
+                {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    if stdout.contains("inet ") {
+                        return (true, Some(name));
+                    }
+                }
+            }
+            
+            // 检查设备类型（65534 = NONE/TUN 点对点设备）
+            let type_path = format!("/sys/class/net/{}/type", name);
+            if let Ok(type_content) = fs::read_to_string(&type_path) {
+                let dev_type = type_content.trim();
+                // 65534 = ARPHRD_NONE (TUN), 1 = ARPHRD_ETHER (TAP/物理)
+                if dev_type == "65534" {
+                    if let Ok(output) = Command::new("ip")
+                        .args(["addr", "show", &name])
+                        .output()
+                    {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        if stdout.contains("inet ") {
+                            return (true, Some(name));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    (false, None)
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
@@ -136,10 +313,14 @@ fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
         .or_else(|_| std::env::var("HTTP_PROXY"))
         .ok();
     
+    let (tun_mode, tun_interface) = detect_tun_mode();
+    
     Ok(SystemProxyInfo {
         enabled: http_proxy.is_some(),
         proxy_server: http_proxy.clone(),
         http_proxy,
+        tun_mode,
+        tun_interface,
     })
 }
 

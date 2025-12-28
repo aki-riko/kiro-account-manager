@@ -133,7 +133,7 @@ function About() {
               <ExternalLink size={14} className="text-white/50 ml-auto group-hover:text-white" />
             </a>
             <a 
-              href="https://qm.qq.com/q/Vh7mUrNpa8" 
+              href="https://qm.qq.com/q/T9L311vb2s" 
               target="_blank" 
               rel="noopener noreferrer"
               className={`flex items-center gap-3 ${isDark ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-500 hover:bg-blue-600'} rounded-xl p-3 transition-colors group`}

@@ -557,28 +557,6 @@ pub fn update_account(
     }
 }
 
-/// 获取所有标签（去重）
-#[tauri::command]
-pub fn get_all_tags(state: State<AppState>) -> Vec<String> {
-    state.store.lock().unwrap().get_all_tags()
-}
-
-/// 更新账号标签
-#[tauri::command]
-pub fn update_account_tags(
-    state: State<AppState>,
-    id: String,
-    tags: Vec<String>,
-) -> Result<Account, String> {
-    let mut store = state.store.lock().unwrap();
-    if store.update_tags(&id, tags) {
-        store.accounts.iter().find(|a| a.id == id).cloned()
-            .ok_or_else(|| "账号不存在".to_string())
-    } else {
-        Err("账号不存在".to_string())
-    }
-}
-
 /// 从 AWS 服务端删除账号（注销账号）
 /// 仅支持 Google、Github，不支持 BuilderId 和 Enterprise
 #[tauri::command]
@@ -619,4 +597,30 @@ pub async fn delete_account_remote(
     }
     
     Ok(format!("账号 {} 已从服务端删除", account.email))
+}
+
+
+// ============================================================
+// 筛选查询命令
+// ============================================================
+
+/// 获取可用账号列表（用于自动换号）
+#[tauri::command]
+pub fn get_available_accounts(state: State<AppState>) -> Vec<Account> {
+    let store = state.store.lock().unwrap();
+    store.get_available_accounts().into_iter().cloned().collect()
+}
+
+/// 按分组筛选账号
+#[tauri::command]
+pub fn get_accounts_by_group(state: State<AppState>, group_id: String) -> Vec<Account> {
+    let store = state.store.lock().unwrap();
+    store.get_accounts_by_group(&group_id).into_iter().cloned().collect()
+}
+
+/// 按标签筛选账号
+#[tauri::command]
+pub fn get_accounts_by_tag(state: State<AppState>, tag_id: String) -> Vec<Account> {
+    let store = state.store.lock().unwrap();
+    store.get_accounts_by_tag(&tag_id).into_iter().cloned().collect()
 }

@@ -1,7 +1,112 @@
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 use std::path::PathBuf;
+
+// 自定义反序列化：处理 null 值转为空 Vec
+fn deserialize_tags<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<Vec<String>> = Option::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
+}
+
+// ============================================================
+// 分组与标签系统
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountGroup {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub order: i32,
+    pub created_at: String,
+}
+
+impl AccountGroup {
+    pub fn new(name: String, color: Option<String>) -> Self {
+        let now: DateTime<Local> = Local::now();
+        Self {
+            id: Uuid::new_v4().to_string(),
+            name,
+            color,
+            order: 0,
+            created_at: now.format("%Y/%m/%d %H:%M:%S").to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountTag {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
+impl AccountTag {
+    pub fn new(name: String, color: String) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            name,
+            color,
+        }
+    }
+}
+
+// ============================================================
+// 详细额度分解
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BonusUsage {
+    pub code: String,
+    pub name: String,
+    pub current: i32,
+    pub limit: i32,
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageBreakdown {
+    pub base_limit: i32,
+    pub base_current: i32,
+    pub free_trial_limit: Option<i32>,
+    pub free_trial_current: Option<i32>,
+    pub free_trial_expiry: Option<String>,
+    pub bonuses: Vec<BonusUsage>,
+    pub next_reset_date: Option<String>,
+}
+
+impl UsageBreakdown {
+    /// 计算总额度
+    pub fn total_limit(&self) -> i32 {
+        self.base_limit
+            + self.free_trial_limit.unwrap_or(0)
+            + self.bonuses.iter().map(|b| b.limit).sum::<i32>()
+    }
+
+    /// 计算总使用量
+    pub fn total_current(&self) -> i32 {
+        self.base_current
+            + self.free_trial_current.unwrap_or(0)
+            + self.bonuses.iter().map(|b| b.current).sum::<i32>()
+    }
+
+    /// 剩余配额
+    pub fn remaining(&self) -> i32 {
+        self.total_limit() - self.total_current()
+    }
+}
+
+// ============================================================
+// 账号实体
+// ============================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -31,11 +136,15 @@ pub struct Account {
     pub profile_arn: Option<String>,
     // 原始 usage API 响应
     pub usage_data: Option<serde_json::Value>,
-    // 标签/分组
+    // 分组与标签
     #[serde(default)]
-    pub tags: Option<Vec<String>>,
+    pub group_id: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_tags")]
+    pub tags: Vec<String>,
+    // 详细额度分解
+    #[serde(default)]
+    pub usage_breakdown: Option<UsageBreakdown>,
 }
-
 
 impl Account {
     pub fn new(email: String, label: String) -> Self {
@@ -61,8 +170,26 @@ impl Account {
             id_token: None,
             profile_arn: None,
             usage_data: None,
-            tags: None,
+            group_id: None,
+            tags: Vec::new(),
+            usage_breakdown: None,
         }
+    }
+
+    /// 判断账号是否可用（未封禁且有剩余配额）
+    pub fn is_available(&self) -> bool {
+        if self.status == "banned" {
+            return false;
+        }
+        if let Some(ref breakdown) = self.usage_breakdown {
+            return breakdown.remaining() > 0;
+        }
+        true
+    }
+
+    /// 获取剩余配额
+    pub fn remaining_quota(&self) -> Option<i32> {
+        self.usage_breakdown.as_ref().map(|b| b.remaining())
     }
 }
 
@@ -96,7 +223,6 @@ impl AccountStore {
         }
     }
 
-    /// 保存账号数据到文件，返回是否成功
     pub fn save_to_file(&self) -> bool {
         if let Some(parent) = self.file_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
@@ -123,7 +249,6 @@ impl AccountStore {
         self.accounts.clone()
     }
 
-    /// 重新从文件加载数据（用于外部修改后刷新）
     pub fn reload(&mut self) {
         self.accounts = Self::load_from_file(&self.file_path);
     }
@@ -132,9 +257,7 @@ impl AccountStore {
         let len_before = self.accounts.len();
         self.accounts.retain(|a| a.id != id);
         let deleted = self.accounts.len() < len_before;
-        if deleted {
-            let _ = self.save_to_file();
-        }
+        if deleted { let _ = self.save_to_file(); }
         deleted
     }
 
@@ -142,9 +265,7 @@ impl AccountStore {
         let len_before = self.accounts.len();
         self.accounts.retain(|a| !ids.contains(&a.id));
         let deleted = len_before - self.accounts.len();
-        if deleted > 0 {
-            let _ = self.save_to_file();
-        }
+        if deleted > 0 { let _ = self.save_to_file(); }
         deleted
     }
 
@@ -153,7 +274,6 @@ impl AccountStore {
             Ok(imported) => {
                 let mut added = 0;
                 for account in imported {
-                    // 按 id 或 email+provider 去重，避免重复导入
                     let exists = self.accounts.iter().any(|a| {
                         a.id == account.id || 
                         (a.email == account.email && a.provider == account.provider)
@@ -176,27 +296,147 @@ impl AccountStore {
         serde_json::to_string_pretty(&self.accounts).unwrap_or_default()
     }
 
-    // 获取所有标签（去重）
-    pub fn get_all_tags(&self) -> Vec<String> {
-        let mut tags: Vec<String> = self.accounts
-            .iter()
-            .filter_map(|a| a.tags.as_ref())
-            .flatten()
-            .cloned()
-            .collect();
-        tags.sort();
-        tags.dedup();
-        tags
+    /// 获取可用账号列表（用于自动换号）
+    pub fn get_available_accounts(&self) -> Vec<&Account> {
+        self.accounts.iter().filter(|a| a.is_available()).collect()
     }
 
-    // 更新账号标签
-    pub fn update_tags(&mut self, id: &str, tags: Vec<String>) -> bool {
-        if let Some(account) = self.accounts.iter_mut().find(|a| a.id == id) {
-            account.tags = if tags.is_empty() { None } else { Some(tags) };
-            let _ = self.save_to_file();
-            true
+    /// 按分组筛选账号
+    pub fn get_accounts_by_group(&self, group_id: &str) -> Vec<&Account> {
+        self.accounts.iter()
+            .filter(|a| a.group_id.as_deref() == Some(group_id))
+            .collect()
+    }
+
+    /// 按标签筛选账号
+    pub fn get_accounts_by_tag(&self, tag_id: &str) -> Vec<&Account> {
+        self.accounts.iter()
+            .filter(|a| a.tags.contains(&tag_id.to_string()))
+            .collect()
+    }
+}
+
+// ============================================================
+// 分组与标签存储
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupTagData {
+    pub groups: Vec<AccountGroup>,
+    pub tags: Vec<AccountTag>,
+}
+
+pub struct GroupTagStore {
+    data: GroupTagData,
+    file_path: PathBuf,
+}
+
+impl GroupTagStore {
+    pub fn new() -> Self {
+        let file_path = Self::get_storage_path();
+        let data = Self::load_from_file(&file_path);
+        Self { data, file_path }
+    }
+
+    fn get_storage_path() -> PathBuf {
+        let data_dir = dirs::data_dir().unwrap_or_else(|| {
+            let home = std::env::var("USERPROFILE")
+                .or_else(|_| std::env::var("HOME"))
+                .unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home)
+        });
+        data_dir.join(".kiro-account-manager").join("groups-tags.json")
+    }
+
+    fn load_from_file(path: &PathBuf) -> GroupTagData {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            serde_json::from_str(&content).unwrap_or_default()
         } else {
-            false
+            GroupTagData::default()
         }
+    }
+
+    pub fn save_to_file(&self) {
+        if let Some(parent) = self.file_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(json) = serde_json::to_string_pretty(&self.data) {
+            let _ = std::fs::write(&self.file_path, json);
+        }
+    }
+
+    // 分组操作
+    pub fn get_groups(&self) -> Vec<AccountGroup> {
+        self.data.groups.clone()
+    }
+
+    pub fn add_group(&mut self, name: String, color: Option<String>) -> AccountGroup {
+        let order = self.data.groups.len() as i32;
+        let mut group = AccountGroup::new(name, color);
+        group.order = order;
+        self.data.groups.push(group.clone());
+        self.save_to_file();
+        group
+    }
+
+    pub fn update_group(&mut self, id: &str, name: Option<String>, color: Option<String>) -> Option<AccountGroup> {
+        if let Some(group) = self.data.groups.iter_mut().find(|g| g.id == id) {
+            if let Some(n) = name { group.name = n; }
+            if let Some(c) = color { group.color = Some(c); }
+            let result = group.clone();
+            self.save_to_file();
+            return Some(result);
+        }
+        None
+    }
+
+    pub fn delete_group(&mut self, id: &str) -> bool {
+        let len_before = self.data.groups.len();
+        self.data.groups.retain(|g| g.id != id);
+        let deleted = self.data.groups.len() < len_before;
+        if deleted { self.save_to_file(); }
+        deleted
+    }
+
+    pub fn reorder_groups(&mut self, ids: Vec<String>) {
+        for (order, id) in ids.iter().enumerate() {
+            if let Some(group) = self.data.groups.iter_mut().find(|g| &g.id == id) {
+                group.order = order as i32;
+            }
+        }
+        self.data.groups.sort_by_key(|g| g.order);
+        self.save_to_file();
+    }
+
+    // 标签操作
+    pub fn get_tags(&self) -> Vec<AccountTag> {
+        self.data.tags.clone()
+    }
+
+    pub fn add_tag(&mut self, name: String, color: String) -> AccountTag {
+        let tag = AccountTag::new(name, color);
+        self.data.tags.push(tag.clone());
+        self.save_to_file();
+        tag
+    }
+
+    pub fn update_tag(&mut self, id: &str, name: Option<String>, color: Option<String>) -> Option<AccountTag> {
+        if let Some(tag) = self.data.tags.iter_mut().find(|t| t.id == id) {
+            if let Some(n) = name { tag.name = n; }
+            if let Some(c) = color { tag.color = c; }
+            let result = tag.clone();
+            self.save_to_file();
+            return Some(result);
+        }
+        None
+    }
+
+    pub fn delete_tag(&mut self, id: &str) -> bool {
+        let len_before = self.data.tags.len();
+        self.data.tags.retain(|t| t.id != id);
+        let deleted = self.data.tags.len() < len_before;
+        if deleted { self.save_to_file(); }
+        deleted
     }
 }

@@ -2,7 +2,7 @@
 
 use std::sync::Mutex;
 use crate::auth::AuthState;
-use crate::account::AccountStore;
+use crate::account::{AccountStore, GroupTagStore};
 
 #[derive(Clone)]
 pub struct PendingLogin {
@@ -14,6 +14,7 @@ pub struct PendingLogin {
 
 pub struct AppState {
     pub store: Mutex<AccountStore>,
+    pub group_tag_store: Mutex<GroupTagStore>,
     pub auth: AuthState,
     pub pending_login: Mutex<Option<PendingLogin>>,
 }

@@ -1,7 +1,8 @@
 import { useRef, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Users, Plus, RefreshCw, ArrowRightLeft, Eye, Edit2, Copy, Check } from 'lucide-react'
+import { Users, Plus, RefreshCw, ArrowRightLeft, Eye, Edit2, Trash2 } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
+import { usePrivacy } from '../../contexts/PrivacyContext'
 import { getQuota, getUsed } from '../../utils/accountStats'
 
 function AccountListView({
@@ -10,8 +11,6 @@ function AccountListView({
   selectedIds,
   onSelectAll,
   onSelectOne,
-  copiedId,
-  onCopy,
   onSwitch,
   onRefresh,
   onEdit,
@@ -21,8 +20,10 @@ function AccountListView({
   refreshingId,
   switchingId,
   localToken,
+  tagDefinitions = [],
 }) {
   const { t, theme, colors } = useApp()
+  const { maskEmail } = usePrivacy()
   const isDark = theme === 'dark'
   const scrollRef = useRef(null)
 
@@ -52,6 +53,10 @@ function AccountListView({
     const { isBanned, isActive } = getStatus(account)
     const isRefreshing = refreshingId === account.id
     const isSwitching = switchingId === account.id
+    const hasTags = account.tags && account.tags.length > 0
+
+    // 获取标签信息
+    const getTagInfo = (tagId) => tagDefinitions.find(t => t.id === tagId)
 
     return (
       <div className={`flex items-center gap-3 px-4 py-2.5 border-b ${colors.cardBorder} ${isCurrent ? (isDark ? 'bg-blue-500/10' : 'bg-blue-50') : ''} ${isDark ? 'hover:bg-white/5' : 'hover:bg-gray-50'} transition-colors`}>
@@ -66,10 +71,32 @@ function AccountListView({
         {/* 邮箱 */}
         <div className="w-52 shrink-0">
           <div className="flex items-center gap-2">
-            <span className={`text-sm font-medium truncate ${colors.text}`}>{account.email}</span>
+            <span className={`text-sm font-medium truncate ${colors.text}`}>{maskEmail(account.email)}</span>
             {isCurrent && <span className="text-xs px-1.5 py-0.5 bg-blue-500 text-white rounded shrink-0">当前</span>}
           </div>
-          {account.label && <span className={`text-xs ${colors.textMuted} truncate block`}>{account.label}</span>}
+          <div className="flex items-center gap-1">
+            {account.label && <span className={`text-xs ${colors.textMuted} truncate`}>{account.label}</span>}
+            {hasTags && (
+              <div className="flex items-center gap-1 ml-1">
+                {account.tags.slice(0, 2).map(tagId => {
+                  const tag = getTagInfo(tagId)
+                  if (!tag) return null
+                  return (
+                    <span 
+                      key={tagId} 
+                      className="text-[10px] px-1.5 py-0.5 rounded-full text-white"
+                      style={{ backgroundColor: tag.color || '#8b5cf6' }}
+                    >
+                      {tag.name}
+                    </span>
+                  )
+                })}
+                {account.tags.length > 2 && (
+                  <span className={`text-[10px] ${colors.textMuted}`}>+{account.tags.length - 2}</span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 提供商 */}
@@ -119,7 +146,7 @@ function AccountListView({
         </span>
 
         {/* 操作按钮 */}
-        <div className="flex items-center gap-1 w-28 justify-center ml-auto">
+        <div className="flex items-center gap-1 w-32 justify-center ml-auto">
           <button
             onClick={() => onEdit(account)}
             className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
@@ -150,10 +177,17 @@ function AccountListView({
           >
             {isSwitching ? <RefreshCw size={14} className="animate-spin text-blue-500" /> : <ArrowRightLeft size={14} className={colors.textMuted} />}
           </button>
+          <button
+            onClick={() => onDelete(account.id)}
+            className={`p-1.5 rounded-lg ${isDark ? 'hover:bg-red-500/20' : 'hover:bg-red-50'}`}
+            title={t('common.delete')}
+          >
+            <Trash2 size={14} className="text-red-500" />
+          </button>
         </div>
       </div>
     )
-  }, [colors, isDark, t, refreshingId, switchingId, getQuotaInfo, getStatus, onSelectOne, onSwitch, onRefresh, onEdit, onEditLabel])
+  }, [colors, isDark, t, refreshingId, switchingId, getQuotaInfo, getStatus, onSelectOne, onSwitch, onRefresh, onEdit, onEditLabel, onDelete, tagDefinitions, maskEmail])
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden p-6">
@@ -186,7 +220,7 @@ function AccountListView({
           <div className="w-20">配额</div>
           <div className="w-14 text-center">状态</div>
           <div className="w-24 text-center">过期时间</div>
-          <div className="w-28 text-center ml-auto">操作</div>
+          <div className="w-32 text-center ml-auto">操作</div>
         </div>
       )}
 

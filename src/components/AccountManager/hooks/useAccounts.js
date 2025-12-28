@@ -4,6 +4,7 @@ import { listen, emit } from '@tauri-apps/api/event'
 
 export function useAccounts() {
   const [accounts, setAccounts] = useState([])
+  const [loading, setLoading] = useState(true)
   const [autoRefreshing, setAutoRefreshing] = useState(false)
   const [refreshProgress, setRefreshProgress] = useState({ current: 0, total: 0, currentEmail: '', results: [] })
   const [lastRefreshTime, setLastRefreshTime] = useState(null)
@@ -29,17 +30,27 @@ export function useAccounts() {
 
   const loadAccounts = useCallback(async () => {
     try {
+      setLoading(true)
       setAccounts(await invoke('get_accounts'))
     } catch (e) {
       console.error(e)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
-  const autoRefreshAll = useCallback(async (accountList) => {
+  // 批量刷新账号
+  // accountIds: 指定要刷新的账号ID列表，为空则刷新所有即将过期的账号
+  // accountList: 所有账号列表
+  const batchRefreshAccounts = useCallback(async (accountIds, accountList) => {
     if (autoRefreshing || accountList.length === 0) return
-    // 智能刷新：只刷新即将过期（5分钟内）的账号，节省API配额
+    
     const validAccounts = accountList.filter(acc => acc.status !== 'banned')
-    const accountsToRefresh = validAccounts.filter(isExpiringSoon)
+    // 如果指定了账号ID，强制刷新这些账号；否则只刷新即将过期的
+    const accountsToRefresh = accountIds.length > 0
+      ? validAccounts.filter(acc => accountIds.includes(acc.id))
+      : validAccounts.filter(isExpiringSoon)
+    
     if (accountsToRefresh.length === 0) return
 
     setAutoRefreshing(true)
@@ -53,7 +64,6 @@ export function useAccounts() {
       setRefreshProgress(prev => ({ ...prev, currentEmail: account.email }))
       let success = false, message = ''
       try {
-        // 完整同步：刷新 token + 获取 usage
         const updated = await invoke('sync_account', { id: account.id })
         const idx = updatedAccounts.findIndex(a => a.id === account.id)
         if (idx !== -1) updatedAccounts[idx] = updated
@@ -69,7 +79,6 @@ export function useAccounts() {
 
     setAccounts(updatedAccounts)
     setLastRefreshTime(new Date().toLocaleTimeString())
-    // 通知其他组件数据已更新
     emit('accounts-updated')
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current)
@@ -79,49 +88,6 @@ export function useAccounts() {
       setRefreshProgress({ current: 0, total: 0, currentEmail: '', results: [] })
     }, 1500)
   }, [autoRefreshing, isExpiringSoon])
-
-  // 批量刷新指定账号（强制刷新，不检查过期时间）
-  const batchRefreshAccounts = useCallback(async (accountIds, allAccounts) => {
-    if (autoRefreshing || accountIds.length === 0) return
-    
-    const accountsToRefresh = allAccounts.filter(acc => accountIds.includes(acc.id) && acc.status !== 'banned')
-    if (accountsToRefresh.length === 0) return
-
-    setAutoRefreshing(true)
-    setRefreshProgress({ current: 0, total: accountsToRefresh.length, currentEmail: '', results: [] })
-
-    const updatedAccounts = [...allAccounts]
-    const results = []
-
-    for (let i = 0; i < accountsToRefresh.length; i++) {
-      const account = accountsToRefresh[i]
-      setRefreshProgress(prev => ({ ...prev, currentEmail: account.email }))
-      let success = false, message = ''
-      try {
-        const updated = await invoke('sync_account', { id: account.id })
-        const idx = updatedAccounts.findIndex(a => a.id === account.id)
-        if (idx !== -1) updatedAccounts[idx] = updated
-        success = true
-        message = '同步成功'
-      } catch (e) {
-        message = String(e).slice(0, 30)
-      }
-      results.push({ email: account.email, success, message })
-      setRefreshProgress({ current: i + 1, total: accountsToRefresh.length, currentEmail: '', results: [...results] })
-      if (i < accountsToRefresh.length - 1) await new Promise(r => setTimeout(r, 500))
-    }
-
-    setAccounts(updatedAccounts)
-    setLastRefreshTime(new Date().toLocaleTimeString())
-    emit('accounts-updated')
-    if (refreshTimerRef.current) {
-      clearTimeout(refreshTimerRef.current)
-    }
-    refreshTimerRef.current = setTimeout(() => {
-      setAutoRefreshing(false)
-      setRefreshProgress({ current: 0, total: 0, currentEmail: '', results: [] })
-    }, 1500)
-  }, [autoRefreshing])
 
 
   const handleRefreshStatus = useCallback(async (id) => {
@@ -230,6 +196,7 @@ export function useAccounts() {
 
   return {
     accounts,
+    loading,
     loadAccounts,
     autoRefreshing,
     refreshProgress,
@@ -237,7 +204,6 @@ export function useAccounts() {
     refreshingId,
     switchingId,
     setSwitchingId,
-    autoRefreshAll,
     batchRefreshAccounts,
     handleRefreshStatus,
     handleExport,

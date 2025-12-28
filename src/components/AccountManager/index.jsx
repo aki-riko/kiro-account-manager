@@ -4,6 +4,8 @@ import { useApp } from '../../hooks/useApp'
 import { useDialog } from '../../contexts/DialogContext'
 import { useAppSettings } from '../../contexts/AppSettingsContext'
 import { useAccounts } from './hooks/useAccounts'
+import { getTags } from '../../api/groupTag'
+import { applyFilters } from './utils/filterUtils'
 import AccountHeader from './AccountHeader'
 import AccountTable from './AccountTable'
 import AccountListView from './AccountListView'
@@ -13,6 +15,7 @@ import RefreshProgressModal from './RefreshProgressModal'
 import AccountDetailModal from '../AccountDetailModal'
 import EditAccountModal from './EditAccountModal'
 import ConfirmDialog from './ConfirmDialog'
+import { AccountListSkeleton } from '../Skeleton'
 
 function AccountManager() {
   const { t, colors } = useApp()
@@ -28,6 +31,13 @@ function AccountManager() {
   const [selectedTag, setSelectedTag] = useState(null)
   const [selectedStatus, setSelectedStatus] = useState(null)
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('accountViewMode') || 'card')
+  const [tagDefinitions, setTagDefinitions] = useState([])
+  const [advancedFilters, setAdvancedFilters] = useState({
+    subscriptions: [],
+    statuses: [],
+    providers: [],
+    usageRange: null
+  })
   
   // 切换账号弹窗状态
   const [switchDialog, setSwitchDialog] = useState(null) // { type, title, message, account }
@@ -42,6 +52,15 @@ function AccountManager() {
     invoke('get_kiro_local_token').then(setLocalToken).catch(() => setLocalToken(null))
   }, [])
 
+  // 加载标签定义
+  const loadTagDefinitions = useCallback(() => {
+    getTags().then(setTagDefinitions).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadTagDefinitions()
+  }, [])
+
   // 清理timer
   useEffect(() => {
     return () => {
@@ -53,6 +72,7 @@ function AccountManager() {
 
   const {
     accounts,
+    loading,
     loadAccounts,
     autoRefreshing,
     refreshProgress,
@@ -60,45 +80,48 @@ function AccountManager() {
     refreshingId,
     switchingId,
     setSwitchingId,
-    autoRefreshAll,
     batchRefreshAccounts,
     handleRefreshStatus,
     handleExport,
   } = useAccounts()
 
-  // 获取所有标签
+  // 获取所有标签（从标签定义中获取）
   const allTags = useMemo(() => {
-    const tags = new Set()
+    // 收集账号中使用的标签 ID
+    const usedTagIds = new Set()
     accounts.forEach(a => {
-      if (a.tags) a.tags.forEach(t => tags.add(t))
+      if (a.tags) a.tags.forEach(id => usedTagIds.add(id))
     })
-    return Array.from(tags).sort()
-  }, [accounts])
+    // 返回被使用的标签定义
+    return tagDefinitions.filter(t => usedTagIds.has(t.id))
+  }, [accounts, tagDefinitions])
 
   // 当选中的标签不存在时，重置筛选
   useEffect(() => {
-    if (selectedTag && !allTags.includes(selectedTag)) {
+    if (selectedTag && !allTags.find(t => t.id === selectedTag)) {
       setSelectedTag(null)
     }
   }, [allTags, selectedTag])
 
-  const filteredAccounts = useMemo(() =>
-    accounts.filter(a => {
+  const filteredAccounts = useMemo(() => {
+    let result = accounts.filter(a => {
       const term = searchTerm.toLowerCase()
-      // 搜索过滤：邮箱、备注、标签
+      // 搜索过滤：邮箱、备注、标签名称
+      const tagNames = (a.tags || []).map(id => tagDefinitions.find(t => t.id === id)?.name || '').join(' ').toLowerCase()
       const matchSearch = a.email.toLowerCase().includes(term) ||
         a.label.toLowerCase().includes(term) ||
-        (a.tags && a.tags.some(tag => tag.toLowerCase().includes(term)))
-      // 标签过滤
+        tagNames.includes(term)
+      // 标签过滤（按 ID）
       const matchTag = !selectedTag || (a.tags && a.tags.includes(selectedTag))
       // 状态过滤
       const matchStatus = !selectedStatus || 
         (selectedStatus === 'active' && (a.status === 'active' || a.status === '正常' || a.status === '有效')) ||
         (selectedStatus === 'banned' && (a.status === 'banned' || a.status === '封禁' || a.status === '已封禁'))
       return matchSearch && matchTag && matchStatus
-    }),
-    [accounts, searchTerm, selectedTag, selectedStatus]
-  )
+    })
+    // 应用高级筛选
+    return applyFilters(result, advancedFilters)
+  }, [accounts, searchTerm, selectedTag, selectedStatus, tagDefinitions, advancedFilters])
 
   const handleSearchChange = useCallback((term) => { setSearchTerm(term) }, [])
   const handleTagFilter = useCallback((tag) => { setSelectedTag(tag) }, [])
@@ -297,13 +320,7 @@ function AccountManager() {
         onImport={() => setShowImportModal(true)}
         onExport={() => handleExport(selectedIds)}
         onRefresh={loadAccounts}
-        onRefreshAll={() => {
-          if (selectedIds.length > 0) {
-            batchRefreshAccounts(selectedIds, accounts)
-          } else {
-            autoRefreshAll(accounts)
-          }
-        }}
+        onRefreshAll={() => batchRefreshAccounts(selectedIds, accounts)}
         autoRefreshing={autoRefreshing}
         lastRefreshTime={lastRefreshTime}
         refreshProgress={refreshProgress}
@@ -314,9 +331,13 @@ function AccountManager() {
         onStatusFilter={handleStatusFilter}
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
+        advancedFilters={advancedFilters}
+        onAdvancedFiltersChange={setAdvancedFilters}
       />
       <div className="flex-1 overflow-auto">
-      {viewMode === 'card' ? (
+      {loading ? (
+        <AccountListSkeleton count={8} />
+      ) : viewMode === 'card' ? (
         <AccountTable
           accounts={filteredAccounts}
           totalCount={accounts.length}
@@ -335,6 +356,7 @@ function AccountManager() {
           refreshingId={refreshingId}
           switchingId={switchingId}
           localToken={localToken}
+          tagDefinitions={tagDefinitions}
         />
       ) : (
         <AccountListView
@@ -343,8 +365,6 @@ function AccountManager() {
           selectedIds={selectedIds}
           onSelectAll={handleSelectAll}
           onSelectOne={handleSelectOne}
-          copiedId={copiedId}
-          onCopy={handleCopy}
           onSwitch={handleSwitchAccount}
           onRefresh={handleRefreshStatus}
           onEdit={setEditingAccount}
@@ -354,6 +374,7 @@ function AccountManager() {
           refreshingId={refreshingId}
           switchingId={switchingId}
           localToken={localToken}
+          tagDefinitions={tagDefinitions}
         />
       )}
       </div>
@@ -364,7 +385,7 @@ function AccountManager() {
         />
       )}
       {showAddModal && (<AddAccountModal onClose={() => setShowAddModal(false)} onSuccess={loadAccounts} />)}
-      {editingLabelAccount && (<EditAccountModal account={editingLabelAccount} onClose={() => setEditingLabelAccount(null)} onSuccess={loadAccounts} />)}
+      {editingLabelAccount && (<EditAccountModal account={editingLabelAccount} onClose={() => setEditingLabelAccount(null)} onSuccess={() => { loadAccounts(); loadTagDefinitions() }} />)}
       {showImportModal && (<ImportAccountModal onClose={() => setShowImportModal(false)} onSuccess={loadAccounts} />)}
       {autoRefreshing && (<RefreshProgressModal refreshProgress={refreshProgress} />)}
       

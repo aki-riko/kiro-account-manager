@@ -17,6 +17,8 @@ pub struct AppSettings {
     // 账户机器码绑定功能
     pub bind_machine_id_to_account: Option<bool>,  // true=绑定模式（每个账号固定机器码），false=随机模式
     pub account_machine_ids: Option<std::collections::HashMap<String, String>>,  // 账户ID -> 机器码映射
+    // 隐私模式：脱敏显示邮箱
+    pub privacy_mode: Option<bool>,
 }
 
 impl Default for AppSettings {
@@ -32,6 +34,7 @@ impl Default for AppSettings {
             browser_path: None,
             bind_machine_id_to_account: Some(true),
             account_machine_ids: None,
+            privacy_mode: Some(false),  // 默认关闭
         }
     }
 }
@@ -80,6 +83,7 @@ fn save_app_settings_inner(updates: AppSettings) -> Result<(), String> {
     if updates.browser_path.is_some() { current.browser_path = updates.browser_path; }
     if updates.bind_machine_id_to_account.is_some() { current.bind_machine_id_to_account = updates.bind_machine_id_to_account; }
     if updates.account_machine_ids.is_some() { current.account_machine_ids = updates.account_machine_ids; }
+    if updates.privacy_mode.is_some() { current.privacy_mode = updates.privacy_mode; }
     
     let content = serde_json::to_string_pretty(&current)
         .map_err(|e| format!("序列化失败: {}", e))?;
@@ -192,6 +196,95 @@ pub async fn get_bound_machine_id(account_id: String) -> Result<Option<String>, 
 #[tauri::command]
 pub async fn get_all_bound_machine_ids() -> Result<std::collections::HashMap<String, String>, String> {
     tokio::task::spawn_blocking(get_all_bound_machine_ids_inner)
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
+}
+
+
+// ============================================================
+// 使用量历史记录功能
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistoryEntry {
+    pub date: String,           // YYYY-MM-DD
+    pub total_quota: i32,
+    pub total_used: i32,
+    pub account_count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistory {
+    pub entries: Vec<UsageHistoryEntry>,
+}
+
+fn get_usage_history_path() -> PathBuf {
+    let data_dir = dirs::data_dir()
+        .unwrap_or_else(|| {
+            let home = std::env::var("USERPROFILE")
+                .or_else(|_| std::env::var("HOME"))
+                .unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home)
+        });
+    data_dir
+        .join(".kiro-account-manager")
+        .join("usage-history.json")
+}
+
+fn get_usage_history_inner() -> Result<UsageHistory, String> {
+    let path = get_usage_history_path();
+    if !path.exists() {
+        return Ok(UsageHistory::default());
+    }
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("读取历史记录失败: {}", e))?;
+    serde_json::from_str(&content)
+        .map_err(|e| format!("解析历史记录失败: {}", e))
+}
+
+fn save_usage_history_entry_inner(entry: UsageHistoryEntry) -> Result<(), String> {
+    let path = get_usage_history_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    let mut history = get_usage_history_inner().unwrap_or_default();
+
+    // 如果当天已有记录，则更新；否则添加新记录
+    if let Some(existing) = history.entries.iter_mut().find(|e| e.date == entry.date) {
+        existing.total_quota = entry.total_quota;
+        existing.total_used = entry.total_used;
+        existing.account_count = entry.account_count;
+    } else {
+        history.entries.push(entry);
+    }
+
+    // 只保留最近 30 天的记录
+    history.entries.sort_by(|a, b| a.date.cmp(&b.date));
+    if history.entries.len() > 30 {
+        let skip_count = history.entries.len() - 30;
+        history.entries = history.entries.into_iter().skip(skip_count).collect();
+    }
+
+    let content = serde_json::to_string_pretty(&history)
+        .map_err(|e| format!("序列化失败: {}", e))?;
+    std::fs::write(&path, content)
+        .map_err(|e| format!("写入失败: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_usage_history() -> Result<UsageHistory, String> {
+    tokio::task::spawn_blocking(get_usage_history_inner)
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+pub async fn save_usage_history_entry(entry: UsageHistoryEntry) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || save_usage_history_entry_inner(entry))
         .await
         .map_err(|e| format!("Task failed: {}", e))?
 }

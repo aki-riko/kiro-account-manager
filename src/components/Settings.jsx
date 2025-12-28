@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
-import { Lock, Copy, Sun, Moon, Palette, Check, RefreshCw, Settings as SettingsIcon, Clock, Globe, Search, Shield, Download, Upload, Shuffle, AlertTriangle } from 'lucide-react'
+import { Lock, Copy, Sun, Moon, Palette, Check, RefreshCw, Settings as SettingsIcon, Clock, Globe, Search, Shield, Download, Upload, Shuffle, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 import { useDialog } from '../contexts/DialogContext'
 import { useAppSettings } from '../contexts/AppSettingsContext'
+import { usePrivacy } from '../contexts/PrivacyContext'
 
 function Settings() {
     const { t, theme, colors, setTheme } = useApp()
     const { showConfirm, showError, showSuccess } = useDialog()
     const { updateSettings: updateAppSettings } = useAppSettings()
+    const { privacyMode, setPrivacyMode } = usePrivacy()
     const isDark = theme === 'dark'
 
     const [aiModel, setAiModel] = useState('claude-sonnet-4.5')
@@ -249,6 +251,14 @@ function Settings() {
         setDetectingProxy(true)
         try {
             const proxyInfo = await invoke('detect_system_proxy')
+            
+            // 检测到 TUN 模式
+            if (proxyInfo.tunMode) {
+                const tunInfo = proxyInfo.tunInterface ? ` (${proxyInfo.tunInterface})` : ''
+                await showSuccess(t('settings.tunModeDetected'), `${t('settings.tunModeEnabled')}${tunInfo}\n\n${t('settings.tunModeHint')}`)
+                return
+            }
+            
             if (proxyInfo.enabled && proxyInfo.httpProxy) {
                 setHttpProxy(proxyInfo.httpProxy)
                 await showSuccess(t('settings.detectSuccess'), `${t('settings.systemProxyDetected')}: ${proxyInfo.httpProxy}`)
@@ -567,7 +577,7 @@ function Settings() {
                     </div>
 
                     {/* 机器码设置 - 勾选框 + 二选一下拉框 */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 mb-4">
                         <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border transition-all flex-shrink-0 ${autoChangeMachineId
                             ? 'bg-blue-500/20 border-blue-500/50 text-blue-500'
                             : `${isDark ? 'border-gray-700 hover:bg-white/5' : 'border-gray-200 hover:bg-gray-50'} ${colors.text}`
@@ -598,6 +608,22 @@ function Settings() {
                             </div>
                         </div>
                     </div>
+
+                    {/* 隐私模式 */}
+                    <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border transition-all ${privacyMode
+                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-500'
+                        : `${isDark ? 'border-gray-700 hover:bg-white/5' : 'border-gray-200 hover:bg-gray-50'} ${colors.text}`
+                        }`} title={t('settings.privacyModeDesc')}>
+                        <input
+                            type="checkbox"
+                            checked={privacyMode}
+                            onChange={(e) => setPrivacyMode(e.target.checked)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                        />
+                        {privacyMode ? <EyeOff size={16} /> : <Eye size={16} />}
+                        <span className="text-sm font-medium whitespace-nowrap">{t('settings.privacyMode')}</span>
+                        <span className={`text-xs ${colors.textMuted} ml-1`}>({t('settings.privacyModeHint')})</span>
+                    </label>
                 </section>
 
                 {/* 浏览器设置 */}

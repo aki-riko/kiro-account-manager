@@ -2,6 +2,7 @@
 
 mod auth;
 mod auth_social;
+mod auto_switch;
 mod aws_sso_client;
 mod browser;
 mod commands;
@@ -17,7 +18,7 @@ mod state;
 mod steering;
 mod account;
 
-use account::AccountStore;
+use account::{AccountStore, GroupTagStore};
 use auth::AuthState;
 use state::AppState;
 use std::sync::Mutex;
@@ -28,7 +29,13 @@ use browser::detect_installed_browsers;
 use commands::account_cmd::{
     get_accounts, delete_account, delete_accounts, delete_account_remote, update_account, sync_account,
     refresh_account_token, verify_account, add_account_by_social, add_local_kiro_account,
-    add_account_by_idc, import_accounts, export_accounts, get_all_tags, update_account_tags
+    add_account_by_idc, import_accounts, export_accounts,
+    get_available_accounts, get_accounts_by_group, get_accounts_by_tag
+};
+use commands::group_tag_cmd::{
+    get_groups, add_group, update_group, delete_group, reorder_groups,
+    get_tags, add_tag, update_tag, delete_tag,
+    set_account_group, add_tag_to_account, remove_tag_from_account, set_account_tags
 };
 use commands::app_settings_cmd::*;
 use commands::auth_cmd::*;
@@ -80,6 +87,7 @@ fn main() {
         })
         .manage(AppState {
             store: Mutex::new(AccountStore::new()),
+            group_tag_store: Mutex::new(GroupTagStore::new()),
             auth: AuthState::new(),
             pending_login: Mutex::new(None),
         })
@@ -98,8 +106,23 @@ fn main() {
             add_account_by_idc,
             import_accounts,
             export_accounts,
-            get_all_tags,
-            update_account_tags,
+            get_available_accounts,
+            get_accounts_by_group,
+            get_accounts_by_tag,
+            // 分组与标签命令
+            get_groups,
+            add_group,
+            update_group,
+            delete_group,
+            reorder_groups,
+            get_tags,
+            add_tag,
+            update_tag,
+            delete_tag,
+            set_account_group,
+            add_tag_to_account,
+            remove_tag_from_account,
+            set_account_tags,
             // Auth 命令
             get_current_user,
             logout,
@@ -123,6 +146,9 @@ fn main() {
             // 应用设置命令
             get_app_settings,
             save_app_settings,
+            // 使用量历史记录命令
+            get_usage_history,
+            save_usage_history_entry,
             // 账号绑定机器码命令
             bind_machine_id_to_account,
             unbind_machine_id_from_account,

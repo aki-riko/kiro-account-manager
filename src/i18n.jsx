@@ -1,19 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import i18n from 'i18next'
-import { initReactI18next, I18nextProvider, useTranslation } from 'react-i18next'
-import { invoke } from '@tauri-apps/api/core'
+import { initReactI18next, I18nextProvider } from 'react-i18next'
+import { locales, loadLocaleFromSettings, changeLanguage } from './utils/i18nUtils'
 
 // 从 JSON 文件导入翻译
 import zhCN from '../locales/zh-CN.json'
 import enUS from '../locales/en-US.json'
 import ruRU from '../locales/ru-RU.json'
-
-// 支持的语言
-const locales = {
-  'zh-CN': '简体中文',
-  'en-US': 'English',
-  'ru-RU': 'Русский',
-}
 
 // 初始化 i18n（默认中文，后续从设置加载）
 i18n
@@ -38,52 +31,6 @@ i18n
     },
   })
 
-// 从 app-settings.json 加载语言设置
-const loadLocaleFromSettings = async () => {
-  try {
-    const settings = await invoke('get_app_settings')
-    if (settings?.locale && locales[settings.locale]) {
-      await i18n.changeLanguage(settings.locale)
-    }
-  } catch (e) {
-    console.error('[i18n] Failed to load locale from settings:', e)
-  }
-}
-
-// 切换语言（保存到 app-settings.json）
-const changeLanguage = async (lng) => {
-  await i18n.changeLanguage(lng)
-  try {
-    await invoke('save_app_settings', { settings: { locale: lng } })
-  } catch (e) {
-    console.error('[i18n] Failed to save locale:', e)
-  }
-}
-
-// 兼容旧的 useI18n hook
-function useI18n() {
-  const { t, i18n: i18nInstance } = useTranslation()
-  const [loading, setLoading] = useState(false)
-  const [, forceUpdate] = React.useReducer(x => x + 1, 0)
-  
-  const setLocale = async (lng) => {
-    setLoading(true)
-    try {
-      await changeLanguage(lng)
-      forceUpdate()
-    } finally {
-      setLoading(false)
-    }
-  }
-  
-  return {
-    t,
-    locale: i18nInstance.language,
-    setLocale,
-    loading,
-  }
-}
-
 // I18nProvider 组件
 function I18nProvider({ children }) {
   const [loaded, setLoaded] = useState(false)
@@ -104,5 +51,5 @@ function I18nProvider({ children }) {
   return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
 }
 
-export { locales, useI18n, I18nProvider, changeLanguage, loadLocaleFromSettings }
+export { locales, I18nProvider, changeLanguage, loadLocaleFromSettings }
 export default i18n

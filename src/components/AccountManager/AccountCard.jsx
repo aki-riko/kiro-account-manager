@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { RefreshCw, Eye, Trash2, Copy, Check, Clock, Repeat, Edit2, UserX } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
+import { usePrivacy } from '../../contexts/PrivacyContext'
 import { getUsagePercent, getProgressBarColor } from './hooks/useAccountStats'
 import { getQuota, getUsed, getSubType, getSubPlan } from '../../utils/accountStats'
 
@@ -94,8 +95,10 @@ const AccountCard = memo(function AccountCard({
   refreshingId,
   switchingId,
   isCurrentAccount,
+  tagDefinitions = [],
 }) {
   const { t, theme, colors } = useApp()
+  const { maskEmail } = usePrivacy()
   const isDark = theme === 'dark'
   const [contextMenu, setContextMenu] = useState(null)
 
@@ -220,7 +223,7 @@ const AccountCard = memo(function AccountCard({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
-              <span className={`font-medium ${colors.text} text-sm truncate`}>{account.email}</span>
+              <span className={`font-medium ${colors.text} text-sm truncate`}>{maskEmail(account.email)}</span>
               <button 
                 onClick={() => onCopy(account.email, account.id)} 
                 className="btn-icon p-1 rounded hover:bg-gray-100 dark:hover:bg-white/10 flex-shrink-0"
@@ -261,14 +264,19 @@ const AccountCard = memo(function AccountCard({
         {/* 标签 */}
         {account.tags && account.tags.length > 0 && (
           <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-            {account.tags.map(tag => (
-              <span 
-                key={tag} 
-                className={`text-xs px-2 py-0.5 rounded-full ${isDark ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-600'}`}
-              >
-                {tag}
-              </span>
-            ))}
+            {account.tags.map(tagId => {
+              const tag = tagDefinitions.find(t => t.id === tagId)
+              if (!tag) return null
+              return (
+                <span 
+                  key={tagId} 
+                  className="text-xs px-2 py-0.5 rounded-full text-white"
+                  style={{ backgroundColor: tag.color || '#8b5cf6' }}
+                >
+                  {tag.name}
+                </span>
+              )
+            })}
           </div>
         )}
 

@@ -1,5 +1,5 @@
 import { useTheme } from '../contexts/ThemeContext'
-import { useI18n } from '../i18n.jsx'
+import { useI18n } from './useI18n'
 
 /**
  * 全局应用 hook，整合主题和国际化功能

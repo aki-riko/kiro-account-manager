@@ -30,6 +30,7 @@ function AccountTable({
   refreshingId,
   switchingId,
   localToken,
+  tagDefinitions = [],
 }) {
   const { t, theme, colors } = useApp()
   const isDark = theme === 'dark'
@@ -86,9 +87,10 @@ function AccountTable({
         refreshingId={refreshingId}
         switchingId={switchingId}
         isCurrentAccount={localToken?.refreshToken && item.refreshToken === localToken.refreshToken}
+        tagDefinitions={tagDefinitions}
       />
     )
-  }, [selectedIds, copiedId, onCopy, onSwitch, onRefresh, onEdit, onEditLabel, onDelete, onDeleteRemote, onAdd, refreshingId, switchingId, localToken, isDark, colors, t, onSelectOne])
+  }, [selectedIds, copiedId, onCopy, onSwitch, onRefresh, onEdit, onEditLabel, onDelete, onDeleteRemote, onAdd, refreshingId, switchingId, localToken, isDark, colors, t, onSelectOne, tagDefinitions])
 
   return (
     <div ref={containerRef} className="flex-1 flex flex-col overflow-hidden p-6">
