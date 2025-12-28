@@ -62,7 +62,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "targets": ["msi", "app", "dmg"],
+    "targets": ["msi", "app", "dmg", "deb", "appimage"],
     "windows": {
       "wix": {
         "language": ["zh-CN", "en-US", "ru-RU"]
