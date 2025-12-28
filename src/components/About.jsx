@@ -113,7 +113,7 @@ function About() {
           <h3 className={`text-sm font-medium ${colors.text} mb-4 text-center`}>{t('about.links')}</h3>
           <div className="grid grid-cols-2 gap-3">
             <a 
-              href="https://www.kdocs.cn/l/cv2n0PViyD7a" 
+              href="https://xcn46cm1l4ir.feishu.cn/wiki/YfaAw3qnoixFJgkzTSmcgtPfntc" 
               target="_blank" 
               rel="noopener noreferrer"
               className={`flex items-center gap-3 ${isDark ? 'bg-purple-600 hover:bg-purple-500' : 'bg-purple-500 hover:bg-purple-600'} rounded-xl p-3 transition-colors group`}

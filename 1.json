@@ -1,0 +1,52 @@
+{
+    "mcpServers": {
+        "fetch": {
+            "command": "uvx",
+            "args": [
+                "mcp-server-fetch"
+            ],
+            "env": {},
+            "disabled": false,
+            "autoApprove": [
+                "fetch"
+            ]
+        },
+        "memory": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-memory"
+            ],
+            "env": {},
+            "disabled": false,
+            "autoApprove": [
+                "create_entities"
+            ]
+        },
+        "context7": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@upstash/context7-mcp@latest"
+            ],
+            "env": {},
+            "disabled": false,
+            "autoApprove": [
+                "resolve-library-id",
+                "get-library-docs"
+            ]
+        },
+        "thinking": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-sequential-thinking"
+            ],
+            "env": {},
+            "disabled": false,
+            "autoApprove": [
+                "sequentialthinking"
+            ]
+        }
+    }
+}
