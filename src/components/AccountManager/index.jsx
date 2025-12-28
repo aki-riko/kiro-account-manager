@@ -61,6 +61,7 @@ function AccountManager() {
     switchingId,
     setSwitchingId,
     autoRefreshAll,
+    batchRefreshAccounts,
     handleRefreshStatus,
     handleExport,
   } = useAccounts()
@@ -296,7 +297,13 @@ function AccountManager() {
         onImport={() => setShowImportModal(true)}
         onExport={() => handleExport(selectedIds)}
         onRefresh={loadAccounts}
-        onRefreshAll={() => autoRefreshAll(accounts)}
+        onRefreshAll={() => {
+          if (selectedIds.length > 0) {
+            batchRefreshAccounts(selectedIds, accounts)
+          } else {
+            autoRefreshAll(accounts)
+          }
+        }}
         autoRefreshing={autoRefreshing}
         lastRefreshTime={lastRefreshTime}
         refreshProgress={refreshProgress}

@@ -80,6 +80,49 @@ export function useAccounts() {
     }, 1500)
   }, [autoRefreshing, isExpiringSoon])
 
+  // 批量刷新指定账号（强制刷新，不检查过期时间）
+  const batchRefreshAccounts = useCallback(async (accountIds, allAccounts) => {
+    if (autoRefreshing || accountIds.length === 0) return
+    
+    const accountsToRefresh = allAccounts.filter(acc => accountIds.includes(acc.id) && acc.status !== 'banned')
+    if (accountsToRefresh.length === 0) return
+
+    setAutoRefreshing(true)
+    setRefreshProgress({ current: 0, total: accountsToRefresh.length, currentEmail: '', results: [] })
+
+    const updatedAccounts = [...allAccounts]
+    const results = []
+
+    for (let i = 0; i < accountsToRefresh.length; i++) {
+      const account = accountsToRefresh[i]
+      setRefreshProgress(prev => ({ ...prev, currentEmail: account.email }))
+      let success = false, message = ''
+      try {
+        const updated = await invoke('sync_account', { id: account.id })
+        const idx = updatedAccounts.findIndex(a => a.id === account.id)
+        if (idx !== -1) updatedAccounts[idx] = updated
+        success = true
+        message = '同步成功'
+      } catch (e) {
+        message = String(e).slice(0, 30)
+      }
+      results.push({ email: account.email, success, message })
+      setRefreshProgress({ current: i + 1, total: accountsToRefresh.length, currentEmail: '', results: [...results] })
+      if (i < accountsToRefresh.length - 1) await new Promise(r => setTimeout(r, 500))
+    }
+
+    setAccounts(updatedAccounts)
+    setLastRefreshTime(new Date().toLocaleTimeString())
+    emit('accounts-updated')
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current)
+    }
+    refreshTimerRef.current = setTimeout(() => {
+      setAutoRefreshing(false)
+      setRefreshProgress({ current: 0, total: 0, currentEmail: '', results: [] })
+    }, 1500)
+  }, [autoRefreshing])
+
 
   const handleRefreshStatus = useCallback(async (id) => {
     setRefreshingId(id)
@@ -195,6 +238,7 @@ export function useAccounts() {
     switchingId,
     setSwitchingId,
     autoRefreshAll,
+    batchRefreshAccounts,
     handleRefreshStatus,
     handleExport,
   }
