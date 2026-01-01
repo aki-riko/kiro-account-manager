@@ -16,7 +16,7 @@ import AccountDetailModal from '../AccountDetailModal'
 import EditAccountModal from './EditAccountModal'
 import BatchTagModal from './BatchTagModal'
 import ConfirmDialog from './ConfirmDialog'
-import { AccountListSkeleton } from '../Skeleton'
+import { AccountListSkeleton, AccountTableSkeleton } from '../Skeleton'
 
 function AccountManager() {
   const { t, colors } = useApp()
@@ -259,7 +259,7 @@ function AccountManager() {
       />
       <div className="flex-1 overflow-auto">
       {loading ? (
-        <AccountListSkeleton count={8} />
+        viewMode === 'card' ? <AccountListSkeleton count={8} /> : <AccountTableSkeleton count={8} />
       ) : viewMode === 'card' ? (
         <AccountTable
           accounts={filteredAccounts}

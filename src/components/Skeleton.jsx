@@ -69,6 +69,95 @@ export function AccountListSkeleton({ count = 8 }) {
   )
 }
 
+// 表格行骨架屏
+export function AccountTableRowSkeleton() {
+  const { colors, theme } = useTheme()
+  const isLightTheme = theme === 'light'
+
+  return (
+    <div className={`flex items-center gap-3 px-4 py-2.5 border-b ${colors.cardBorder}`}>
+      {/* 选择框 */}
+      <SkeletonBox className="w-4 h-4 rounded shrink-0" />
+      {/* 邮箱 */}
+      <div className="w-44 shrink-0">
+        <SkeletonBox className="h-4 w-32 mb-1" />
+        <SkeletonBox className="h-3 w-20" />
+      </div>
+      {/* 标签 */}
+      <div className="w-28 shrink-0 flex gap-1">
+        <SkeletonBox className="h-5 w-12 rounded" />
+        <SkeletonBox className="h-5 w-10 rounded" />
+      </div>
+      {/* 提供商 */}
+      <SkeletonBox className="w-20 h-6 rounded shrink-0" />
+      {/* 订阅类型 */}
+      <SkeletonBox className="w-20 h-6 rounded shrink-0" />
+      {/* 配额 */}
+      <div className="w-20 shrink-0">
+        <SkeletonBox className="h-3 w-12 mb-1" />
+        <SkeletonBox className="h-1 w-full rounded-full" />
+      </div>
+      {/* 状态 */}
+      <SkeletonBox className="w-14 h-6 rounded shrink-0" />
+      {/* 机器码 */}
+      <SkeletonBox className="w-20 h-4 shrink-0" />
+      {/* 过期时间 */}
+      <SkeletonBox className="w-24 h-4 shrink-0" />
+      {/* 试用到期 */}
+      <SkeletonBox className="w-20 h-4 shrink-0" />
+      {/* 操作按钮 */}
+      <div className="flex items-center gap-1 w-32 justify-center ml-auto">
+        <SkeletonBox className="w-7 h-7 rounded-lg" />
+        <SkeletonBox className="w-7 h-7 rounded-lg" />
+        <SkeletonBox className="w-7 h-7 rounded-lg" />
+        <SkeletonBox className="w-7 h-7 rounded-lg" />
+        <SkeletonBox className="w-7 h-7 rounded-lg" />
+      </div>
+    </div>
+  )
+}
+
+// 表格视图骨架屏
+export function AccountTableSkeleton({ count = 8 }) {
+  const { colors, theme } = useTheme()
+  const isLightTheme = theme === 'light'
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden p-6">
+      {/* 顶部信息栏 */}
+      <div className="flex items-center justify-between mb-2 px-1 shrink-0">
+        <div className="flex items-center gap-2">
+          <SkeletonBox className="w-4 h-4 rounded" />
+          <SkeletonBox className="h-4 w-16" />
+        </div>
+        <SkeletonBox className="h-4 w-24" />
+      </div>
+
+      {/* 表头 */}
+      <div className={`flex items-center gap-3 px-4 py-3 ${isLightTheme ? 'bg-gray-50' : 'bg-white/5'} border ${colors.cardBorder} rounded-t-xl`}>
+        <SkeletonBox className="w-4 h-4" />
+        <SkeletonBox className="w-44 h-3" />
+        <SkeletonBox className="w-28 h-3" />
+        <SkeletonBox className="w-20 h-3" />
+        <SkeletonBox className="w-20 h-3" />
+        <SkeletonBox className="w-20 h-3" />
+        <SkeletonBox className="w-14 h-3" />
+        <SkeletonBox className="w-20 h-3" />
+        <SkeletonBox className="w-24 h-3" />
+        <SkeletonBox className="w-20 h-3" />
+        <SkeletonBox className="w-32 h-3 ml-auto" />
+      </div>
+
+      {/* 表格行 */}
+      <div className={`flex-1 overflow-hidden border border-t-0 ${colors.cardBorder} rounded-b-xl`}>
+        {[...Array(count)].map((_, i) => (
+          <AccountTableRowSkeleton key={i} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // 首页统计卡片骨架屏
 export function StatCardSkeleton() {
   const { colors } = useTheme()
@@ -84,4 +173,4 @@ export function StatCardSkeleton() {
   )
 }
 
-export default { SkeletonBox, AccountCardSkeleton, AccountListSkeleton, StatCardSkeleton }
+export default { SkeletonBox, AccountCardSkeleton, AccountListSkeleton, AccountTableRowSkeleton, AccountTableSkeleton, StatCardSkeleton }
