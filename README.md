@@ -32,7 +32,7 @@
 - 两种方式互补，确保登录成功率
 
 ### 📊 账号展示
-- 卡片网格布局，一目了然
+- 🆕 卡片/列表双视图切换
 - 配额进度条（主配额/试用/奖励）
 - 订阅类型标识（Free/PRO/PRO+）
 - Token 过期倒计时
@@ -44,10 +44,21 @@
 - 切换进度实时显示
 
 ### 📦 批量操作
-- 批量刷新 / 批量删除
+- 🆕 批量刷新 / 批量删除 / 批量打标签
 - JSON 导入导出（Social / IdC 格式）
 - SSO Token 批量导入
 - 关键词搜索过滤
+
+### 🏷️ 标签管理 🆕
+- 自定义标签（名称/颜色）
+- 批量设置标签
+- 按标签筛选账号
+
+### 🔍 高级筛选与排序 🆕
+- 按订阅类型筛选（Free/PRO/PRO+）
+- 按状态筛选（正常/封禁）
+- 按使用率/添加时间/试用到期排序
+- 三态排序（降序→升序→取消）
 
 ### 🔌 Kiro 配置
 - **MCP 服务器** - 增删改查、启用/禁用
@@ -56,8 +67,11 @@
 ### ⚙️ 系统设置
 - 四种主题（浅色/深色/紫色/绿色）
 - AI 模型选择与锁定
+- 🆕 代码库索引开关
+- 🆕 信任所有命令开关
 - Token 自动刷新（可配置间隔）
 - 切号自动重置机器 ID
+- 🆕 隐私模式（隐藏敏感信息）
 
 ### 🌐 浏览器与代理
 - 自定义浏览器 / 自动检测
@@ -65,8 +79,8 @@
 - HTTP 代理配置 / 自动检测
 
 ### 🔑 机器码管理
-- 查看 / 备份 / 恢复 / 重置
-- 支持 Windows / macOS
+- 查看 / 复制 / 重置
+- 支持 Windows / macOS / Linux
 
 ### 🖥️ IDE 集成
 - 检测 Kiro IDE 运行状态
@@ -138,7 +152,7 @@
 - Two methods complement each other for reliable login
 
 ### 📊 Account Display
-- Card grid layout, clear at a glance
+- 🆕 Card/List dual view toggle
 - Quota progress bar (main/trial/bonus)
 - Subscription type badge (Free/PRO/PRO+)
 - Token expiration countdown
@@ -150,20 +164,34 @@
 - Real-time switch progress
 
 ### 📦 Batch Operations
-- Batch refresh / batch delete
+- 🆕 Batch refresh / batch delete / batch tagging
 - JSON import/export (Social & IdC formats)
 - SSO Token batch import
 - Keyword search filter
 
-### � Kiro Config
+### 🏷️ Tag Management 🆕
+- Custom tags (name/color)
+- Batch tag assignment
+- Filter accounts by tag
+
+### 🔍 Advanced Filter & Sort 🆕
+- Filter by subscription (Free/PRO/PRO+)
+- Filter by status (normal/banned)
+- Sort by usage/added time/trial expiry
+- Tri-state sorting (desc→asc→cancel)
+
+### 🔌 Kiro Config
 - **MCP Servers** - CRUD, enable/disable
 - **Steering Rules** - View, edit
 
 ### ⚙️ System Settings
 - Four themes (light/dark/purple/green)
 - AI model selection & lock
+- 🆕 Codebase indexing toggle
+- 🆕 Trust all commands toggle
 - Auto token refresh (configurable interval)
 - Auto reset machine ID on switch
+- 🆕 Privacy mode (hide sensitive info)
 
 ### 🌐 Browser & Proxy
 - Custom browser / auto detect
@@ -171,8 +199,8 @@
 - HTTP proxy config / auto detect
 
 ### 🔑 Machine Code
-- View / backup / restore / reset
-- Windows / macOS support
+- View / copy / reset
+- Windows / macOS / Linux support
 
 ### 🖥️ IDE Integration
 - Detect Kiro IDE running status
@@ -240,7 +268,7 @@ If this project helps you, consider buying me a coffee ☕
 - Два метода дополняют друг друга для надёжного входа
 
 ### 📊 Отображение аккаунтов
-- Карточный интерфейс, всё наглядно
+- Переключение между карточками и списком
 - Прогресс-бар квот (основные/пробные/бонусные)
 - Значок типа подписки (Free/PRO/PRO+)
 - Обратный отсчёт истечения токена
@@ -252,10 +280,21 @@ If this project helps you, consider buying me a coffee ☕
 - Отображение прогресса в реальном времени
 
 ### 📦 Пакетные операции
-- Массовое обновление / удаление
+- Массовое обновление / удаление / присвоение тегов
 - Импорт/экспорт JSON (Social / IdC форматы)
 - Массовый импорт SSO Token
 - Поиск по ключевым словам
+
+### 🏷️ Управление тегами
+- Пользовательские теги (название/цвет)
+- Массовое присвоение тегов
+- Фильтрация аккаунтов по тегам
+
+### 🔍 Расширенная фильтрация и сортировка
+- Фильтр по подписке (Free/PRO/PRO+)
+- Фильтр по статусу (активен/заблокирован)
+- Сортировка по использованию/дате добавления/истечению пробного периода
+- Трёхрежимная сортировка (убыв→возр→отмена)
 
 ### 🔌 Конфигурация Kiro
 - **MCP серверы** - CRUD, включение/отключение
@@ -264,8 +303,11 @@ If this project helps you, consider buying me a coffee ☕
 ### ⚙️ Системные настройки
 - Четыре темы (светлая/тёмная/фиолетовая/зелёная)
 - Выбор и блокировка AI модели
+- 🆕 Переключатель индексации кодовой базы
+- 🆕 Переключатель доверия всем командам
 - Автообновление токенов (настраиваемый интервал)
 - Автосброс Machine ID при переключении
+- 🆕 Режим конфиденциальности (скрытие данных)
 
 ### 🌐 Браузер и прокси
 - Пользовательский браузер / автоопределение
@@ -273,8 +315,8 @@ If this project helps you, consider buying me a coffee ☕
 - Настройка HTTP прокси / автоопределение
 
 ### 🔑 Управление Machine Code
-- Просмотр / резервное копирование / восстановление / сброс
-- Поддержка Windows / macOS
+- Просмотр / копирование / сброс
+- Поддержка Windows / macOS / Linux
 
 ### 🖥️ Интеграция с IDE
 - Определение статуса работы Kiro IDE

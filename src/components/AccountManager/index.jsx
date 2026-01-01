@@ -112,21 +112,23 @@ function AccountManager() {
 
   // 获取试用到期时间戳
   const getTrialExpiry = (account) => {
-    const expiry = account.quota_breakdown?.freeTrialInfo?.freeTrialExpiry
+    const expiry = account.usageData?.usageBreakdownList?.[0]?.freeTrialInfo?.freeTrialExpiry
     if (!expiry) return Infinity // 没有试用的排最后
     return expiry
   }
 
   // 获取使用率
   const getUsagePercent = (account) => {
-    const breakdown = account.quota_breakdown
+    const breakdown = account.usageData?.usageBreakdownList?.[0]
     if (!breakdown) return 0
-    const total = (breakdown.mainQuota?.usageLimit || 0) + 
-                  (breakdown.freeTrialInfo?.usageLimit || 0) +
-                  (breakdown.bonuses?.reduce((sum, b) => sum + (b.usageLimit || 0), 0) || 0)
-    const used = (breakdown.mainQuota?.currentUsage || 0) + 
-                 (breakdown.freeTrialInfo?.currentUsage || 0) +
-                 (breakdown.bonuses?.reduce((sum, b) => sum + (b.currentUsage || 0), 0) || 0)
+    const mainUsed = breakdown.currentUsage || 0
+    const mainLimit = breakdown.usageLimit || 50
+    const trialUsed = breakdown.freeTrialInfo?.currentUsage || 0
+    const trialLimit = breakdown.freeTrialInfo?.usageLimit || 0
+    const bonusUsed = (breakdown.bonuses || []).reduce((sum, b) => sum + (b.currentUsage || 0), 0)
+    const bonusLimit = (breakdown.bonuses || []).reduce((sum, b) => sum + (b.usageLimit || 0), 0)
+    const total = mainLimit + trialLimit + bonusLimit
+    const used = mainUsed + trialUsed + bonusUsed
     return total > 0 ? (used / total) : 0
   }
 
@@ -153,16 +155,18 @@ function AccountManager() {
     if (sortBy !== 'default') {
       result = [...result].sort((a, b) => {
         switch (sortBy) {
-          case 'trialExpiry':
+          case 'trialAsc':
             return getTrialExpiry(a) - getTrialExpiry(b)
+          case 'trialDesc':
+            return getTrialExpiry(b) - getTrialExpiry(a)
           case 'usageAsc':
             return getUsagePercent(a) - getUsagePercent(b)
           case 'usageDesc':
             return getUsagePercent(b) - getUsagePercent(a)
           case 'addedAsc':
-            return new Date(a.added_at || 0) - new Date(b.added_at || 0)
+            return new Date(a.addedAt || 0) - new Date(b.addedAt || 0)
           case 'addedDesc':
-            return new Date(b.added_at || 0) - new Date(a.added_at || 0)
+            return new Date(b.addedAt || 0) - new Date(a.addedAt || 0)
           default:
             return 0
         }

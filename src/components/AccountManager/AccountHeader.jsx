@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Download, Upload, RefreshCw, Trash2, Plus, Sparkles, MoreHorizontal, ShoppingCart, LayoutGrid, List, Tag } from 'lucide-react'
+import { Search, Download, Upload, RefreshCw, Trash2, Plus, Sparkles, MoreHorizontal, ShoppingCart, LayoutGrid, List, Tag, ArrowUp, ArrowDown } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import FilterDropdown from './FilterDropdown'
 
@@ -31,18 +31,24 @@ function AccountHeader({
   const { t, theme, colors } = useApp()
   const isLightTheme = theme === 'light'
   const [showMore, setShowMore] = useState(false)
+  const [searchExpanded, setSearchExpanded] = useState(false)
   const moreRef = useRef(null)
+  const searchRef = useRef(null)
 
-  // 点击外部关闭下拉菜单
+  // 点击外部关闭下拉菜单和搜索框
   useEffect(() => {
     const handleClick = (e) => {
       if (moreRef.current && !moreRef.current.contains(e.target)) {
         setShowMore(false)
       }
+      // 只在搜索框已展开且点击外部时关闭
+      if (searchExpanded && searchRef.current && !searchRef.current.contains(e.target) && !searchTerm) {
+        setSearchExpanded(false)
+      }
     }
-    document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
-  }, [])
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [searchTerm, searchExpanded])
 
   return (
     <div className={`${colors.card} border-b ${colors.cardBorder} px-6 py-4`}>
@@ -60,54 +66,69 @@ function AccountHeader({
 
         {/* 右侧：搜索和操作 */}
         <div className="flex items-center gap-2">
-          {/* 搜索框 */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder={t('accounts.search')}
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className={`pl-9 pr-3 py-2 ${isLightTheme ? 'bg-gray-50' : 'bg-white/5'} border-0 rounded-xl text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${colors.text}`}
-            />
+          {/* 搜索框 - 可收缩 */}
+          <div ref={searchRef} className="relative">
+            {searchExpanded || searchTerm ? (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder={t('accounts.search')}
+                  value={searchTerm}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  autoFocus
+                  className={`pl-9 pr-3 py-2 ${isLightTheme ? 'bg-gray-50' : 'bg-white/5'} border-0 rounded-xl text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${colors.text}`}
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setSearchExpanded(true)}
+                className={`p-2 ${colors.card} border ${colors.cardBorder} rounded-xl ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'}`}
+                title={t('accounts.search')}
+              >
+                <Search size={18} className={colors.textMuted} />
+              </button>
+            )}
           </div>
 
-          {/* 状态筛选 */}
-          <select
-            value={selectedStatus || ''}
-            onChange={(e) => onStatusFilter(e.target.value || null)}
-            className={`px-3 py-2 ${colors.input} border rounded-xl text-sm focus:outline-none ${colors.text} cursor-pointer`}
-          >
-            <option value="">{t('common.all')}</option>
-            <option value="active">{t('accounts.active')}</option>
-            <option value="banned">{t('accounts.banned')}</option>
-          </select>
-
-          {/* 标签筛选 */}
-          {allTags.length > 0 && (
-            <select
-              value={selectedTag || ''}
-              onChange={(e) => onTagFilter(e.target.value || null)}
-              className={`px-3 py-2 ${colors.input} border rounded-xl text-sm focus:outline-none ${colors.text} cursor-pointer max-w-[120px]`}
-            >
-              <option value="">{t('tags.all')}</option>
-              {allTags.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
-            </select>
-          )}
-
-          {/* 排序 */}
-          <select
-            value={sortBy}
-            onChange={(e) => onSortChange(e.target.value)}
-            className={`px-3 py-2 ${colors.input} border rounded-xl text-sm focus:outline-none ${colors.text} cursor-pointer`}
-          >
-            <option value="default">{t('sort.default')}</option>
-            <option value="trialExpiry">{t('sort.trialExpiry')}</option>
-            <option value="usageAsc">{t('sort.usageAsc')}</option>
-            <option value="usageDesc">{t('sort.usageDesc')}</option>
-            <option value="addedAsc">{t('sort.addedAsc')}</option>
-            <option value="addedDesc">{t('sort.addedDesc')}</option>
-          </select>
+          {/* 排序按钮组 */}
+          <div className={`flex rounded-xl border ${colors.cardBorder} overflow-hidden`}>
+            {[
+              { key: 'usage', label: t('sort.usage') },
+              { key: 'added', label: t('sort.added') },
+              { key: 'trial', label: t('sort.trial') },
+            ].map(({ key, label }) => {
+              const isActive = sortBy.startsWith(key)
+              const isDesc = sortBy.endsWith('Desc')
+              return (
+                <button
+                  key={key}
+                  onClick={() => {
+                    if (isActive) {
+                      // 已激活：降序 → 升序 → 取消
+                      if (isDesc) {
+                        onSortChange(`${key}Asc`)
+                      } else {
+                        onSortChange('default')
+                      }
+                    } else {
+                      // 未激活：默认降序
+                      onSortChange(`${key}Desc`)
+                    }
+                  }}
+                  className={`px-2 py-1.5 text-xs flex items-center gap-1 ${
+                    isActive 
+                      ? 'bg-blue-500 text-white' 
+                      : `${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.textMuted}`
+                  }`}
+                  title={label}
+                >
+                  {label}
+                  {isActive && (isDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}
+                </button>
+              )
+            })}
+          </div>
 
           {/* 视图切换 */}
           <div className={`flex rounded-xl border ${colors.cardBorder} overflow-hidden`}>
@@ -127,10 +148,15 @@ function AccountHeader({
             </button>
           </div>
 
-          {/* 高级筛选 */}
+          {/* 筛选面板 */}
           <FilterDropdown
             filters={advancedFilters}
             onFiltersChange={onAdvancedFiltersChange}
+            allTags={allTags}
+            selectedTag={selectedTag}
+            onTagFilter={onTagFilter}
+            selectedStatus={selectedStatus}
+            onStatusFilter={onStatusFilter}
           />
 
           {/* 批量操作 */}

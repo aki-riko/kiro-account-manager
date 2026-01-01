@@ -459,7 +459,21 @@ def register_single_account(account_num, total_accounts):
 
     try:
         log("⏳ 正在启动浏览器...")
-        sb_context = SB(uc=True, headless=HEADLESS_MODE, proxy=f"{PROXY_HOST}:{PROXY_PORT}", chromium_arg="--enable-logging --v=1")
+        # 无头模式需要额外参数来模拟真实浏览器环境
+        if HEADLESS_MODE:
+            sb_context = SB(
+                uc=True,
+                headless2=True,  # 使用新版无头模式（更难被检测）
+                proxy=f"{PROXY_HOST}:{PROXY_PORT}",
+                chromium_arg="--window-size=1920,1080 --disable-blink-features=AutomationControlled"
+            )
+        else:
+            sb_context = SB(
+                uc=True,
+                headless=False,
+                proxy=f"{PROXY_HOST}:{PROXY_PORT}",
+                chromium_arg="--enable-logging --v=1"
+            )
         sb = sb_context.__enter__()
         log(f"✅ 浏览器启动成功 ({'无头模式' if HEADLESS_MODE else '有头模式'})")
 
@@ -558,23 +572,44 @@ def register_single_account(account_num, total_accounts):
                     except:
                         continue
                 
+                # 无头模式下增加等待时间，让页面有足够时间响应
+                if HEADLESS_MODE:
+                    sb.sleep(3)
                 sb.reconnect(3)
                 
                 if check_page_error(sb):
                     log("❌ 用户名提交失败")
                     return False
                 
-                # 等待页面跳转到验证码页
-                new_page = wait_for_page_change(sb, 'name', timeout=30)
+                # 等待页面跳转到验证码页（无头模式下增加超时时间）
+                wait_timeout = 45 if HEADLESS_MODE else 30
+                new_page = wait_for_page_change(sb, 'name', timeout=wait_timeout)
                 if new_page:
                     log(f"✅ 已跳转到: {new_page}")
                 else:
-                    # 页面未变化，再次检查是否有错误
-                    sb.sleep(1)
+                    # 页面未变化，检查当前实际页面状态
+                    sb.sleep(2)
+                    actual_page = get_current_page(sb)
+                    log(f"   当前实际页面: {actual_page}, URL: {sb.get_current_url()}")
+                    
                     if check_page_error(sb):
                         log("❌ 用户名提交失败（页面有错误）")
                         return False
-                    log("⚠️ 页面未变化，继续执行")
+                    
+                    # 如果实际已经在验证码页，继续执行
+                    if actual_page == 'verification':
+                        log("✅ 实际已在验证码页面")
+                    else:
+                        # 无头模式下尝试截图诊断
+                        if HEADLESS_MODE:
+                            try:
+                                script_dir = os.path.dirname(os.path.abspath(__file__))
+                                screenshot_path = os.path.join(script_dir, f"debug_page2_headless_{account_num}.png")
+                                sb.save_screenshot(screenshot_path)
+                                log(f"   📸 已保存截图: {screenshot_path}")
+                            except:
+                                pass
+                        log("⚠️ 页面未变化，继续执行")
 
         except Exception as e:
             log(f"❌ 页面2失败: {e}")
@@ -584,7 +619,37 @@ def register_single_account(account_num, total_accounts):
         log("🔢 页面3: 输入邮箱验证码")
 
         try:
-            sb.wait_for_element_visible("[data-testid='email-verification-form-code-input'] input", timeout=15)
+            # 无头模式下增加超时时间
+            element_timeout = 30 if HEADLESS_MODE else 15
+            
+            # 先检查当前页面状态
+            current_page = get_current_page(sb)
+            log(f"   当前页面: {current_page}, URL: {sb.get_current_url()}")
+            
+            # 如果不在验证码页，等待跳转
+            if current_page != 'verification':
+                log("   ⏳ 等待跳转到验证码页...")
+                for i in range(element_timeout):
+                    sb.sleep(1)
+                    current_page = get_current_page(sb)
+                    if current_page == 'verification':
+                        log("   ✅ 已到达验证码页")
+                        break
+                    if i % 5 == 0 and i > 0:
+                        log(f"   等待中 [{i}s]... 当前: {current_page}")
+                else:
+                    # 超时，截图诊断
+                    if HEADLESS_MODE:
+                        try:
+                            script_dir = os.path.dirname(os.path.abspath(__file__))
+                            screenshot_path = os.path.join(script_dir, f"debug_page3_timeout_{account_num}.png")
+                            sb.save_screenshot(screenshot_path)
+                            log(f"   📸 已保存截图: {screenshot_path}")
+                        except:
+                            pass
+                    log(f"   ⚠️ 等待验证码页超时，当前页面: {current_page}")
+            
+            sb.wait_for_element_visible("[data-testid='email-verification-form-code-input'] input", timeout=element_timeout)
             
             # 获取验证码
             log("⏳ 等待验证码...")

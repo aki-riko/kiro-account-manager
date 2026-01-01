@@ -8,7 +8,17 @@ const SUBSCRIPTION_OPTIONS = ['FREE', 'KIRO FREE', 'KIRO PRO', 'KIRO PRO+']
 const STATUS_OPTIONS = ['normal', 'banned', 'expired']
 const PROVIDER_OPTIONS = ['Google', 'GitHub', 'BuilderId']
 
-function FilterDropdown({ filters, onFiltersChange }) {
+function FilterDropdown({ 
+  filters, 
+  onFiltersChange,
+  // 标签筛选
+  allTags = [],
+  selectedTag,
+  onTagFilter,
+  // 状态筛选
+  selectedStatus,
+  onStatusFilter,
+}) {
   const { colors, theme } = useTheme()
   const isLightTheme = theme === 'light'
   const { t } = useTranslation()
@@ -31,6 +41,8 @@ function FilterDropdown({ filters, onFiltersChange }) {
     filters.statuses?.length || 0,
     filters.providers?.length || 0,
     filters.usageRange ? 1 : 0,
+    selectedTag ? 1 : 0,
+    selectedStatus ? 1 : 0,
   ].reduce((a, b) => a + b, 0)
 
   // 单选切换：点击已选中的取消，点击未选中的替换
@@ -54,6 +66,8 @@ function FilterDropdown({ filters, onFiltersChange }) {
       providers: [],
       usageRange: null
     })
+    onTagFilter(null)
+    onStatusFilter(null)
   }
 
   // 获取订阅类型颜色
@@ -117,6 +131,63 @@ function FilterDropdown({ filters, onFiltersChange }) {
           </div>
 
           <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
+            {/* 标签筛选 */}
+            {allTags.length > 0 && (
+              <div>
+                <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
+                  {t('tags.title')}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {allTags.map(tag => {
+                    const isActive = selectedTag === tag.id
+                    return (
+                      <button
+                        key={tag.id}
+                        onClick={() => onTagFilter(isActive ? null : tag.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          isActive
+                            ? 'bg-blue-500 text-white shadow-lg'
+                            : `${colors.input} ${colors.text}`
+                        }`}
+                        style={!isActive && tag.color ? { borderLeft: `3px solid ${tag.color}` } : {}}
+                      >
+                        {tag.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 账号状态 */}
+            <div>
+              <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
+                {t('accounts.status')}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'active', label: t('accounts.active'), color: 'bg-green-500' },
+                  { key: 'banned', label: t('accounts.banned'), color: 'bg-red-500' },
+                ].map(({ key, label, color }) => {
+                  const isActive = selectedStatus === key
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => onStatusFilter(isActive ? null : key)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                        isActive
+                          ? `${color} text-white shadow-lg`
+                          : `${colors.input} ${colors.text}`
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-white/50' : color}`} />
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {/* 订阅类型 */}
             <div>
               <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
