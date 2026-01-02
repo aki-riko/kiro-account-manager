@@ -37,3 +37,7 @@ __pycache__/
 downloaded_files/
 scripts/register/downloaded_files/
 scripts/register/registered_accounts.json
+scripts/register/verified_accounts.json
+scripts/register/*.png
+scripts/register/*.har
+scripts/register/debug/

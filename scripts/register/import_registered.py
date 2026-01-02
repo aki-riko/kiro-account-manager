@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 从 register/accounts.json 批量导入已注册账号到 kiro-account-manager
+# 从 register/registered_accounts.json 批量导入已注册账号到 kiro-account-manager
 
 import json
 import os
@@ -197,10 +197,10 @@ async def process_one(client, idx, total, account_data, stats):
     print(f'[{done}/{total}] ✅ {email}')
     return account
 
-async def async_main(max_workers=10):
+async def async_main(max_workers=10, source_filename='registered_accounts.json'):
     """异步批量导入"""
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    source_file = os.path.join(script_dir, 'accounts.json')
+    source_file = os.path.join(script_dir, source_filename)
     accounts_file = os.path.join(os.environ['APPDATA'], '.kiro-account-manager', 'accounts.json')
     
     if not os.path.exists(source_file):
@@ -210,12 +210,15 @@ async def async_main(max_workers=10):
     with open(source_file, 'r', encoding='utf-8') as f:
         source_accounts = json.load(f)
     
-    total = len(source_accounts)
+    # 过滤掉已导入的账号
+    pending_accounts = [acc for acc in source_accounts if not acc.get('imported')]
+    
+    total = len(pending_accounts)
     if total == 0:
         print('没有待导入的账号')
         return
     
-    print(f'读取到 {total} 个账号，并发数: {max_workers}')
+    print(f'读取到 {len(source_accounts)} 个账号，待导入: {total}，并发数: {max_workers}')
     
     existing_accounts = []
     if os.path.exists(accounts_file):
@@ -235,16 +238,18 @@ async def async_main(max_workers=10):
     
     # httpx 异步客户端，连接池复用
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-        tasks = [limited_process(client, i, acc) for i, acc in enumerate(source_accounts)]
+        tasks = [limited_process(client, i, acc) for i, acc in enumerate(pending_accounts)]
         results = await asyncio.gather(*tasks)
     
     # 合并结果
     added = 0
     updated = 0
+    imported_client_ids = []  # 记录成功导入的 clientId
     
     for account in results:
         if account is None:
             continue
+        imported_client_ids.append(account['clientId'])
         if account['clientId'] in existing_client_ids:
             for j, a in enumerate(existing_accounts):
                 if a.get('clientId') == account['clientId']:
@@ -265,14 +270,18 @@ async def async_main(max_workers=10):
     print(f'完成! 添加: {added}, 更新: {updated}, 失败: {stats["failed"]}')
     print(f'总账号数: {len(existing_accounts)}')
     
-    if added > 0 or updated > 0:
+    # 标记已导入的账号
+    if imported_client_ids:
+        for acc in source_accounts:
+            if acc.get('clientId') in imported_client_ids:
+                acc['imported'] = True
         with open(source_file, 'w', encoding='utf-8') as f:
-            json.dump([], f)
-        print(f'✅ 已清理源文件: {source_file}')
+            json.dump(source_accounts, f, ensure_ascii=False, indent=2)
+        print(f'✅ 已标记 {len(imported_client_ids)} 个账号为已导入')
 
-def main(max_workers=10):
+def main(max_workers=10, source_filename='registered_accounts.json'):
     """同步入口，供 GUI 调用"""
-    asyncio.run(async_main(max_workers))
+    asyncio.run(async_main(max_workers, source_filename))
 
 if __name__ == '__main__':
     main()

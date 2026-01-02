@@ -42,7 +42,7 @@ from gptmail_service import GPTMailHandler
 
 # ========== 路径配置 ==========
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ACCOUNTS_FILE = os.path.join(SCRIPT_DIR, "accounts.json")
+ACCOUNTS_FILE = os.path.join(SCRIPT_DIR, "registered_accounts.json")
 SCREENSHOT_DIR = os.path.join(SCRIPT_DIR, "screenshots")
 
 # 确保截图目录存在
@@ -190,9 +190,8 @@ def poll_token_device_code(
 
 
 # ========== 批量注册配置 ==========
-DEFAULT_BATCH_COUNT = 1
-DEFAULT_CONCURRENT_WINDOWS = 1
-HEADLESS_MODE = False  # 无头模式开关（建议关闭，否则可能收不到验证码）
+from config import HEADLESS_MODE as _DEFAULT_HEADLESS, DEFAULT_BATCH_COUNT, DEFAULT_CONCURRENT_WINDOWS
+HEADLESS_MODE = _DEFAULT_HEADLESS
 
 # 全局锁
 file_lock = threading.Lock()
@@ -529,14 +528,24 @@ def register_single_account(account_num, total_accounts):
     
     try:
         log(f"⏳ 正在启动浏览器...")
-        # 使用 Driver 类（UC 模式反检测配置）
-        sb = Driver(
-            uc=True,                    # 启用 undetected-chromedriver
-            uc_subprocess=True,         # 子进程模式（多线程必需）
-            headless2=HEADLESS_MODE,    # 新版无头模式
-            locale_code="en",           # 语言设置
-        )
-        log(f"✅ 浏览器启动成功 ({'无头模式' if HEADLESS_MODE else '有头模式'})")
+        # UC Mode 在 headless 模式下会被检测，官方推荐：
+        # - Linux: 使用 xvfb=True 虚拟显示器
+        # - Windows: 只能用有头模式
+        import platform
+        driver_args = {
+            'uc': True,
+            'uc_subprocess': True,
+            'locale_code': 'en',
+            'incognito': True,
+        }
+        if HEADLESS_MODE and platform.system() == 'Linux':
+            driver_args['xvfb'] = True
+            log("   使用 xvfb 虚拟显示器模式")
+        elif HEADLESS_MODE:
+            log("⚠️ Windows 不支持 UC 无头模式，自动切换为有头模式")
+        
+        sb = Driver(**driver_args)
+        log(f"✅ 浏览器启动成功")
 
         log(f"⏳ 正在打开授权链接...")
         sb.uc_open_with_reconnect(verification_uri_complete, reconnect_time=4)
@@ -752,13 +761,8 @@ def register_single_account(account_num, total_accounts):
             return False
 
         # 页面5+6: 确认并继续 + 允许访问（都在 view.awsapps.com）
-        allow_selectors = [
-            "#cli_verification_btn",
-            "button[data-testid='allow-access-button']",
-            "button[data-analytics='accept-user-code']",
-            "button.awsui_variant-primary_vjswe_1hxdq_235",
-            "button[type='submit']"
-        ]
+        confirm_selector = "#cli_verification_btn"
+        allow_selector = "[data-testid='allow-access-button']"
         
         max_poll_retries = 5
         for poll_attempt in range(max_poll_retries):
@@ -768,19 +772,14 @@ def register_single_account(account_num, total_accounts):
             # 页面5: 确认并继续
             log("\n✅ 页面5: 确认并继续")
             try:
-                # 1. 确认当前页面（通过 URL，应该是 view.awsapps.com）
                 current_page = get_current_page(sb)
                 log(f"   当前页面: {current_page}, URL: {sb.current_url}")
                 
-                # 2. 等待页面加载完成
-                # 等待并点击按钮
-                for selector in allow_selectors:
-                    if sb.is_element_visible(selector):
-                        sb.uc_click(selector, reconnect_time=3)
-                        log("✅ 已点击'确认并继续'")
-                        break
+                # 等待并点击确认按钮
+                if sb.is_element_visible(confirm_selector):
+                    sb.uc_click(confirm_selector, reconnect_time=3)
+                    log("✅ 已点击'确认并继续'")
                 
-                # 4. 等待页面变化
                 new_page = wait_for_page_change(sb, current_page, timeout=10)
                 if new_page:
                     log(f"   ✅ 已跳转到: {new_page}")
@@ -791,7 +790,6 @@ def register_single_account(account_num, total_accounts):
             # 页面6: 允许访问
             log("\n✅ 页面6: 允许访问")
             try:
-                # 1. 确认当前页面
                 current_page = get_current_page(sb)
                 log(f"   当前页面: {current_page}, URL: {sb.current_url}")
                 
@@ -800,13 +798,10 @@ def register_single_account(account_num, total_accounts):
                     log("✅ 已重定向到 callback!")
                     break
                 
-                # 2. 等待页面加载完成
-                # 等待并点击按钮
-                for selector in allow_selectors:
-                    if sb.is_element_visible(selector):
-                        sb.uc_click(selector, reconnect_time=3)
-                        log("✅ 已点击'允许访问'")
-                        break
+                # 等待并点击允许按钮
+                if sb.is_element_visible(allow_selector):
+                    sb.uc_click(allow_selector, reconnect_time=3)
+                    log("✅ 已点击'允许访问'")
 
             except Exception as e:
                 log(f"ℹ️  页面6处理: {e}")

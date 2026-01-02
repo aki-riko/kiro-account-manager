@@ -127,9 +127,10 @@ export function useAccounts() {
       const suffix = selectedIds.length > 0 ? `-${selectedIds.length}` : ''
       const defaultName = `kiro-accounts${suffix}-${new Date().toISOString().slice(0, 10)}.json`
       const defaultDir = await downloadDir()
+      const sep = defaultDir.includes('\\') ? '\\' : '/'
       
       const filePath = await save({
-        defaultPath: `${defaultDir}${defaultName}`,
+        defaultPath: `${defaultDir}${sep}${defaultName}`,
         filters: [{ name: 'JSON', extensions: ['json'] }],
         title: '导出账号数据'
       })

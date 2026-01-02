@@ -37,12 +37,15 @@ from gptmail_service import GPTMailHandler
 
 
 # ========== 代理配置 ==========
+# TUN 模式下不需要配置代理，浏览器会自动走全局透明代理
+USE_PROXY = False
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT = "7897"
 PROXY_SOCKS5 = f"socks5://{PROXY_HOST}:{PROXY_PORT}"
 
 # ========== 无头模式配置 ==========
-HEADLESS_MODE = False
+from config import HEADLESS_MODE as _DEFAULT_HEADLESS
+HEADLESS_MODE = _DEFAULT_HEADLESS
 
 
 def set_headless_mode(enabled: bool):
@@ -151,7 +154,6 @@ def register_client_min() -> Tuple[str, str]:
     r = post_json(REGISTER_URL, payload)
     r.raise_for_status()
     data = r.json()
-    print(f"[DEBUG] OIDC Register Response: {json.dumps(data, indent=2)}")
     return data["clientId"], data["clientSecret"]
 
 
@@ -268,36 +270,80 @@ def get_current_page(sb):
 def wait_for_page_change(sb, current_page, timeout=30):
     """等待页面变化，返回新页面类型"""
     start_time = time.time()
-    last_url = sb.get_current_url()
-    stable_count = 0
     
     while time.time() - start_time < timeout:
         time.sleep(0.5)
         try:
-            new_url = sb.get_current_url()
-            if new_url != last_url:
-                print(f"   🔗 URL 变化: {new_url}")
-                last_url = new_url
-                stable_count = 0
-            else:
-                stable_count += 1
-                if stable_count >= 4:
-                    new_page = get_current_page(sb)
-                    if new_page != current_page:
-                        return new_page
+            new_page = get_current_page(sb)
+            if new_page != current_page and new_page != 'unknown':
+                return new_page
         except:
             pass
     return None
 
 
-def check_page_error(sb):
-    """检查页面是否有错误提示"""
+def human_type(sb, selector, text):
+    """模拟人类打字，随机延迟"""
     try:
-        error_texts = ['error processing your request', 'please try again', "it's not you, it's us"]
-        page_text = sb.get_page_source().lower()
-        for text in error_texts:
-            if text in page_text:
-                print(f"   ❌ 检测到错误: {text}")
+        element = sb.find_element(selector)
+        element.click()
+        time.sleep(random.uniform(0.1, 0.3))
+        
+        for char in text:
+            element.send_keys(char)
+            # 随机延迟 50-150ms
+            time.sleep(random.uniform(0.05, 0.15))
+        
+        # 打完后随机等待
+        time.sleep(random.uniform(0.2, 0.5))
+    except:
+        # 降级到普通输入
+        sb.type(selector, text)
+
+
+def human_click(sb, selector):
+    """模拟人类点击，带随机延迟"""
+    try:
+        # 点击前随机等待
+        time.sleep(random.uniform(0.3, 0.8))
+        sb.click(selector)
+        # 点击后随机等待
+        time.sleep(random.uniform(0.2, 0.5))
+    except:
+        pass
+
+
+def random_mouse_move(sb):
+    """随机移动鼠标，模拟人类行为"""
+    try:
+        sb.execute_script("""
+            var event = new MouseEvent('mousemove', {
+                clientX: Math.random() * window.innerWidth,
+                clientY: Math.random() * window.innerHeight
+            });
+            document.dispatchEvent(event);
+        """)
+    except:
+        pass
+
+
+def check_page_error(sb):
+    """检查页面是否有错误提示（通过选择器，不依赖语言）"""
+    try:
+        error_selectors = [
+            '[data-analytics-alert="error"]',
+            '[data-testid*="error-alert"]',
+            '[class*="type-error"]',
+        ]
+        for selector in error_selectors:
+            if sb.is_element_visible(selector):
+                # 获取错误文本内容
+                try:
+                    error_text = sb.get_text(selector)
+                    print(f"   ❌ 检测到错误弹窗: {selector}")
+                    print(f"   ❌ 错误内容: {error_text}")
+                except:
+                    print(f"   ❌ 检测到错误弹窗: {selector} (无法获取文本)")
                 return True
         return False
     except:
@@ -459,42 +505,80 @@ def register_single_account(account_num, total_accounts):
 
     try:
         log("⏳ 正在启动浏览器...")
-        # 无头模式需要额外参数来模拟真实浏览器环境
+        # 使用 headless2 新无头模式，更难被检测
         if HEADLESS_MODE:
             sb_context = SB(
                 uc=True,
-                headless2=True,  # 使用新版无头模式（更难被检测）
-                proxy=f"{PROXY_HOST}:{PROXY_PORT}",
-                chromium_arg="--window-size=1920,1080 --disable-blink-features=AutomationControlled"
+                headless2=True,
+                incognito=True,
+                uc_cdp_events=True,
             )
+            log("   使用 headless2 新无头模式")
         else:
             sb_context = SB(
                 uc=True,
-                headless=False,
-                proxy=f"{PROXY_HOST}:{PROXY_PORT}",
-                chromium_arg="--enable-logging --v=1"
+                incognito=True,
+                uc_cdp_events=True,
             )
         sb = sb_context.__enter__()
-        log(f"✅ 浏览器启动成功 ({'无头模式' if HEADLESS_MODE else '有头模式'})")
+        
+        # 反检测：注入脚本隐藏自动化特征
+        try:
+            sb.execute_script("""
+                // 隐藏 webdriver 标志
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+                
+                // 隐藏自动化相关属性
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+                
+                // 模拟真实的 chrome 对象
+                window.chrome = {
+                    runtime: {},
+                    loadTimes: function() {},
+                    csi: function() {},
+                    app: {}
+                };
+                
+                // 隐藏 Permissions API 异常
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+                
+                // 模拟真实的插件列表
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+                
+                // 模拟真实的语言
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['zh-CN', 'zh', 'en-US', 'en']
+                });
+            """)
+        except:
+            pass
+        
+        log(f"✅ 浏览器启动成功")
 
-        log(f"⏳ 打开授权链接...")
+        log(f"⏳ 打开授权链接: {verification_uri_complete}")
         sb.open(verification_uri_complete)
         sb.sleep(5)
         sb.reconnect(3)
-        log("✅ 授权页面加载完成")
 
         # 等待重定向到邮箱输入页
-        log("⏳ 等待重定向...")
+        log("⏳ 等待页面加载...")
         for i in range(60):
             current_page = get_current_page(sb)
-            current_url = sb.get_current_url()
             if i % 10 == 0 and i > 0:
                 log(f"   等待中 [{i}s]...")
             if current_page == 'email':
-                log("✅ 已到达邮箱页面")
-                break
-            if current_page != 'unknown':
-                log(f"✅ 已到达页面: {current_page}")
+                log(f"✅ 已到达邮箱页面: {current_page}")
                 break
             time.sleep(1)
         else:
@@ -509,7 +593,8 @@ def register_single_account(account_num, total_accounts):
                 return False
             
             sb.wait_for_element_visible("input[placeholder='username@example.com']", timeout=20)
-            sb.type("input[placeholder='username@example.com']", email)
+            random_mouse_move(sb)
+            human_type(sb, "input[placeholder='username@example.com']", email)
             log(f"✅ 已输入邮箱: {email}")
 
             hide_cookie_banner(sb)
@@ -525,11 +610,13 @@ def register_single_account(account_num, total_accounts):
                 except:
                     continue
 
-            sb.reconnect(3)
-            
+            # 先等待页面响应，检查错误
+            sb.sleep(2)
             if check_page_error(sb):
                 log("❌ 邮箱提交失败")
                 return False
+            
+            sb.reconnect(3)
             
             new_page = wait_for_page_change(sb, 'email', timeout=15)
             if new_page:
@@ -557,7 +644,8 @@ def register_single_account(account_num, total_accounts):
                 log("ℹ️ 已在验证码页面，跳过姓名步骤")
             else:
                 sb.wait_for_element_visible("[data-testid='signup-full-name-input'] input", timeout=15)
-                sb.type("[data-testid='signup-full-name-input'] input", username)
+                random_mouse_move(sb)
+                human_type(sb, "[data-testid='signup-full-name-input'] input", username)
                 log(f"✅ 已输入用户名: {username}")
 
                 hide_cookie_banner(sb)
@@ -572,14 +660,13 @@ def register_single_account(account_num, total_accounts):
                     except:
                         continue
                 
-                # 无头模式下增加等待时间，让页面有足够时间响应
-                if HEADLESS_MODE:
-                    sb.sleep(3)
-                sb.reconnect(3)
-                
+                # 等待页面响应，检查是否有错误弹窗
+                sb.sleep(2)
                 if check_page_error(sb):
-                    log("❌ 用户名提交失败")
+                    log("❌ 用户名提交失败（检测到错误弹窗）")
                     return False
+                
+                sb.reconnect(3)
                 
                 # 等待页面跳转到验证码页（无头模式下增加超时时间）
                 wait_timeout = 45 if HEADLESS_MODE else 30
@@ -663,6 +750,9 @@ def register_single_account(account_num, total_accounts):
 
             hide_cookie_banner(sb)
             
+            # 记录点击前的页面状态
+            current_page = get_current_page(sb)
+            
             for selector in continue_btn_selectors:
                 try:
                     if sb.is_element_visible(selector):
@@ -672,13 +762,14 @@ def register_single_account(account_num, total_accounts):
                 except:
                     continue
             
-            sb.reconnect(3)
-            
+            # 先等待页面响应，检查错误
+            sb.sleep(2)
             if check_page_error(sb):
                 log("❌ 验证码提交失败")
                 return False
             
-            current_page = get_current_page(sb)
+            sb.reconnect(3)
+            
             new_page = wait_for_page_change(sb, current_page, timeout=20)
             if new_page:
                 log(f"✅ 已跳转到: {new_page}")
@@ -756,11 +847,13 @@ def register_single_account(account_num, total_accounts):
                     except:
                         continue
                 
-                sb.reconnect(3)
-                
+                # 先等待页面响应，检查错误
+                sb.sleep(2)
                 if check_page_error(sb):
                     log("❌ 密码提交失败")
                     return False
+                
+                sb.reconnect(3)
                 
                 new_page = wait_for_page_change(sb, current_page, timeout=20)
                 if new_page:
@@ -778,7 +871,7 @@ def register_single_account(account_num, total_accounts):
             return False
 
         # 页面5: 确认并继续（设备确认页）
-        log("✅ 页面5: 确认并继续")
+        log("🔢 页面5: 确认并继续")
 
         try:
             current_page = get_current_page(sb)
@@ -789,27 +882,20 @@ def register_single_account(account_num, total_accounts):
             elif current_page == 'confirm':
                 sb.sleep(2)
                 
-                confirm_selectors = [
-                    "button[type='submit']",
-                    "button[class*='awsui_variant-primary']",
-                ]
-                
-                for selector in confirm_selectors:
-                    try:
-                        if sb.is_element_visible(selector):
-                            sb.click(selector)
-                            log("✅ 已点击'确认并继续'")
-                            break
-                    except:
-                        continue
-                
-                sb.reconnect(3)
+                # 使用精确选择器
+                try:
+                    sb.uc_click("#cli_verification_btn", reconnect_time=3)
+                    log("✅ 已点击确认按钮")
+                except Exception as e:
+                    log(f"❌ 点击确认按钮失败: {e}")
                 
                 new_page = wait_for_page_change(sb, current_page, timeout=15)
                 if new_page:
                     log(f"✅ 已跳转到: {new_page}")
+                else:
+                    log("⚠️ 页面未变化，可能需要手动处理")
             else:
-                log(f"ℹ️ 当前不在确认页，跳过")
+                log(f"ℹ️ 当前不在确认页，跳过 (当前: {current_page})")
 
         except Exception as e:
             log(f"ℹ️ 页面5处理: {e}")
@@ -826,20 +912,13 @@ def register_single_account(account_num, total_accounts):
             elif current_page == 'allow':
                 sb.sleep(2)
                 
-                allow_selectors = [
-                    "button[type='submit']",
-                    "button[class*='awsui_variant-primary']",
-                    "input[type='submit']"
-                ]
-                
-                for selector in allow_selectors:
-                    try:
-                        if sb.is_element_visible(selector):
-                            sb.click(selector)
-                            log("✅ 已点击'允许访问'")
-                            break
-                    except:
-                        continue
+                # 使用精确选择器
+                try:
+                    if sb.is_element_visible("[data-testid='allow-access-button']"):
+                        sb.click("[data-testid='allow-access-button']")
+                        log("✅ 已点击'允许访问'")
+                except:
+                    pass
                 
                 sb.reconnect(3)
                 
