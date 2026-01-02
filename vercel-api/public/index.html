@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiro API</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #1a1a2e; color: #eee; }
+    h1 { color: #00d9ff; }
+    .card { background: #16213e; border-radius: 8px; padding: 20px; margin: 20px 0; }
+    label { display: block; margin: 10px 0 5px; color: #aaa; }
+    input, select { width: 100%; padding: 10px; border: 1px solid #333; border-radius: 4px; background: #0f0f23; color: #fff; }
+    button { background: #00d9ff; color: #000; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; margin: 10px 5px 10px 0; font-weight: bold; }
+    button:hover { background: #00b8d4; }
+    pre { background: #0f0f23; padding: 15px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 400px; }
+    .error { color: #ff6b6b; }
+    .success { color: #51cf66; }
+  </style>
+</head>
+<body>
+  <h1>Kiro API</h1>
+  <div class="card">
+    <label>IDP (for usage)</label>
+    <select id="idp">
+      <option value="Google">Google</option>
+      <option value="Github">Github</option>
+      <option value="BuilderId">BuilderId</option>
+    </select>
+    <label>Access Token</label>
+    <input type="text" id="accessToken">
+    <label>Refresh Token</label>
+    <input type="text" id="refreshToken">
+    <label>Machine ID (optional)</label>
+    <input type="text" id="machineId" placeholder="留空使用默认值">
+  </div>
+  <div class="card">
+    <button onclick="testUsage()">Get Usage</button>
+    <button onclick="testRefresh()">Refresh Token</button>
+  </div>
+  <div class="card">
+    <pre id="result">-</pre>
+  </div>
+  <script>
+    const $ = id => document.getElementById(id)
+    async function testUsage() {
+      $('result').textContent = 'Loading...'
+      try {
+        const res = await fetch('/api/usage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: $('accessToken').value, idp: $('idp').value })
+        })
+        const data = await res.json()
+        $('result').className = res.ok ? 'success' : 'error'
+        $('result').textContent = JSON.stringify(data, null, 2)
+      } catch (e) { $('result').className = 'error'; $('result').textContent = e.message }
+    }
+    async function testRefresh() {
+      $('result').textContent = 'Loading...'
+      try {
+        const body = { refreshToken: $('refreshToken').value }
+        if ($('machineId').value) body.machineId = $('machineId').value
+        const res = await fetch('/api/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+        const data = await res.json()
+        $('result').className = res.ok ? 'success' : 'error'
+        $('result').textContent = JSON.stringify(data, null, 2)
+      } catch (e) { $('result').className = 'error'; $('result').textContent = e.message }
+    }
+  </script>
+</body>
+</html>

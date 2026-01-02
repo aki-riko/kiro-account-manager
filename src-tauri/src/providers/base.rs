@@ -14,7 +14,7 @@ pub struct AuthResult {
     pub expires_at: String,
     pub expires_in: i64,
     pub provider: String,
-    pub auth_method: String,  // "social" / "IdC" / "web_oauth"
+    pub auth_method: String,  // "social" / "IdC"
     pub token_type: Option<String>,
     
     // IdC (BuilderId) 专用

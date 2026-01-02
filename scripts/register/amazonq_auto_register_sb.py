@@ -505,65 +505,21 @@ def register_single_account(account_num, total_accounts):
 
     try:
         log("⏳ 正在启动浏览器...")
-        # 使用 headless2 新无头模式，更难被检测
+        # UC 模式已内置反检测，不需要手动注入脚本
+        sb_options = {
+            'uc': True,                    # 启用 undetected-chromedriver
+            'uc_cdp_events': True,         # 捕获 CDP 事件
+            'incognito': True,             # 隐身模式
+            'locale_code': 'en',           # 语言设置
+            'do_not_track': True,          # 发送 DNT 头
+            'disable_csp': True,           # 禁用内容安全策略
+        }
         if HEADLESS_MODE:
-            sb_context = SB(
-                uc=True,
-                headless2=True,
-                incognito=True,
-                uc_cdp_events=True,
-            )
+            sb_options['headless2'] = True  # 新无头模式，更难被检测
             log("   使用 headless2 新无头模式")
-        else:
-            sb_context = SB(
-                uc=True,
-                incognito=True,
-                uc_cdp_events=True,
-            )
+        
+        sb_context = SB(**sb_options)
         sb = sb_context.__enter__()
-        
-        # 反检测：注入脚本隐藏自动化特征
-        try:
-            sb.execute_script("""
-                // 隐藏 webdriver 标志
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
-                
-                // 隐藏自动化相关属性
-                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
-                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
-                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
-                
-                // 模拟真实的 chrome 对象
-                window.chrome = {
-                    runtime: {},
-                    loadTimes: function() {},
-                    csi: function() {},
-                    app: {}
-                };
-                
-                // 隐藏 Permissions API 异常
-                const originalQuery = window.navigator.permissions.query;
-                window.navigator.permissions.query = (parameters) => (
-                    parameters.name === 'notifications' ?
-                        Promise.resolve({ state: Notification.permission }) :
-                        originalQuery(parameters)
-                );
-                
-                // 模拟真实的插件列表
-                Object.defineProperty(navigator, 'plugins', {
-                    get: () => [1, 2, 3, 4, 5]
-                });
-                
-                // 模拟真实的语言
-                Object.defineProperty(navigator, 'languages', {
-                    get: () => ['zh-CN', 'zh', 'en-US', 'en']
-                });
-            """)
-        except:
-            pass
-        
         log(f"✅ 浏览器启动成功")
 
         log(f"⏳ 打开授权链接: {verification_uri_complete}")

@@ -7,6 +7,7 @@ use crate::auth::User;
 use crate::auth_social;
 use crate::providers::{AuthMethod, AuthProvider, get_provider_config, create_social_provider, create_idc_provider};
 use crate::commands::common::{get_usage_by_provider, extract_user_info, find_existing_account_idx, calc_status};
+use crate::kiro_portal_client::GetUserUsageAndLimitsResponse;
 use serde::Deserialize;
 
 /// add_kiro_account 命令参数
@@ -62,7 +63,7 @@ async fn login_social(
     let auth_result = social_provider.login().await?;
     
     let usage_result = get_usage_by_provider(&provider_id, &auth_result.access_token).await;
-    let usage: Option<crate::providers::web_oauth::GetUserUsageAndLimitsResponse> = 
+    let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     let (new_email, user_id) = extract_user_info(&usage);
 
@@ -120,7 +121,7 @@ async fn login_idc(
     let auth_result = idc_provider.login().await?;
 
     let usage_result = get_usage_by_provider(&provider_id, &auth_result.access_token).await;
-    let usage: Option<crate::providers::web_oauth::GetUserUsageAndLimitsResponse> = 
+    let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     let (new_email, user_id) = extract_user_info(&usage);
 
@@ -212,7 +213,7 @@ pub async fn handle_kiro_social_callback(
     ).await?;
     
     let usage_result = get_usage_by_provider(&pending.provider, &token_response.access_token).await;
-    let usage: Option<crate::providers::web_oauth::GetUserUsageAndLimitsResponse> = 
+    let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     let (new_email, user_id) = extract_user_info(&usage);
 
@@ -265,7 +266,7 @@ pub async fn add_kiro_account(
     } else {
         crate::commands::common::UsageResult { usage_data: serde_json::Value::Null, is_banned: false, is_auth_error: false }
     };
-    let usage: Option<crate::providers::web_oauth::GetUserUsageAndLimitsResponse> = 
+    let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     let (new_email, user_id) = extract_user_info(&usage);
 

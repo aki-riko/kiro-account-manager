@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
-import { Home, Key, Settings, Info, User, LogIn, Globe, Sun, Moon, Palette, Settings2, Languages } from 'lucide-react'
+import { Home, Key, Settings, Info, User, LogIn, Sun, Moon, Palette, Settings2, Languages } from 'lucide-react'
 import { themes } from '../contexts/ThemeContext'
 import { locales } from '../i18n.jsx'
 import { useApp } from '../hooks/useApp'
@@ -13,7 +13,6 @@ function useMenuItems() {
     { id: 'token', label: t('nav.accounts'), icon: Key },
     { id: 'kiro-config', label: t('nav.kiroConfig'), icon: Settings2 },
     { id: 'login', label: t('nav.desktopOAuth'), icon: LogIn, desc: t('nav.socialIdC') },
-    { id: 'web-oauth', label: t('nav.webOAuth'), icon: Globe, desc: t('nav.webviewLogin') },
     { id: 'settings', label: t('nav.settings'), icon: Settings },
     { id: 'about', label: t('nav.about'), icon: Info },
   ]

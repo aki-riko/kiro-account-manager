@@ -10,8 +10,6 @@ inclusion: always
 │   ├── App.jsx               # 根组件，路由管理
 │   ├── i18n.jsx              # 国际化配置
 │   ├── index.css             # 全局样式（Tailwind）
-│   ├── api/                  # API 工具
-│   │   └── webOAuth.js       # Web OAuth 辅助函数
 │   ├── assets/               # 静态资源
 │   │   └── donate/           # 赞赏二维码图片
 │   ├── components/           # React 组件
@@ -41,7 +39,6 @@ inclusion: always
 │   │   │   └── MCPTemplates.js   # MCP 模板数据
 │   │   ├── Home.jsx          # 首页（统计+配额）
 │   │   ├── Login.jsx         # Desktop OAuth 登录页
-│   │   ├── WebOAuthLogin.jsx # Web Portal OAuth 登录
 │   │   ├── Settings.jsx      # 设置页
 │   │   ├── Sidebar.jsx       # 侧边栏导航
 │   │   ├── About.jsx         # 关于页
@@ -66,9 +63,7 @@ inclusion: always
 │   │   │   ├── app_settings_cmd.rs   # 应用设置命令
 │   │   │   ├── kiro_settings_cmd.rs  # Kiro IDE 设置命令
 │   │   │   ├── machine_guid_cmd.rs   # 系统机器码命令
-│   │   │   ├── web_oauth_cmd.rs  # Web OAuth 命令
 │   │   │   ├── mcp_cmd.rs        # MCP 管理命令
-
 │   │   │   ├── proxy_cmd.rs      # 代理检测命令
 │   │   │   ├── sso_import_cmd.rs # SSO Token 导入命令
 │   │   │   ├── steering_cmd.rs   # Steering 规则命令
@@ -79,16 +74,14 @@ inclusion: always
 │   │   │   ├── base.rs       # 基础 trait
 │   │   │   ├── factory.rs    # 提供者工厂
 │   │   │   ├── social.rs     # Google/GitHub OAuth
-│   │   │   ├── idc.rs        # AWS IAM Identity Center
-│   │   │   ├── web_oauth.rs  # Web OAuth 流程
-│   │   │   └── web.rs        # Web 认证
+│   │   │   └── idc.rs        # AWS IAM Identity Center
+│   │   ├── kiro_portal_client.rs # Kiro Portal 客户端（获取配额）
 │   │   ├── account.rs        # 账号模型和存储
 │   │   ├── auth.rs           # 认证工具
 │   │   ├── auth_social.rs    # 社交登录认证
 │   │   ├── state.rs          # 应用状态管理
 │   │   ├── kiro.rs           # Kiro IDE 集成
 │   │   ├── mcp.rs            # MCP 配置管理
-
 │   │   ├── process.rs        # 进程管理
 │   │   ├── browser.rs        # 浏览器操作
 │   │   ├── kiro_auth_client.rs       # Kiro 认证客户端

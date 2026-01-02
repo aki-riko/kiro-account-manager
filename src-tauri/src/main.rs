@@ -10,6 +10,7 @@ mod deep_link_handler;
 
 mod kiro;
 mod kiro_auth_client;
+mod kiro_portal_client;
 mod mcp;
 
 mod process;
@@ -46,7 +47,6 @@ use commands::mcp_cmd::*;
 use commands::proxy_cmd::*;
 use commands::sso_import_cmd::*;
 use commands::update_cmd::*;
-use commands::web_oauth_cmd::*;
 use commands::steering_cmd::*;
 use kiro::{
     get_kiro_local_token, switch_kiro_account,
@@ -163,14 +163,6 @@ fn main() {
             set_custom_machine_guid,
             clear_macos_override,
             generate_machine_guid,
-            // Web OAuth 命令 (Cognito + CBOR)
-            web_oauth_initiate,
-            web_oauth_complete,
-            web_oauth_refresh,
-            web_oauth_login,
-            web_oauth_close_window,
-            web_oauth_builderid_login,
-            web_oauth_builderid_complete,
             // 浏览器检测
             detect_installed_browsers,
             // MCP 管理命令

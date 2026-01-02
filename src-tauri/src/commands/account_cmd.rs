@@ -4,7 +4,8 @@ use tauri::State;
 use crate::state::AppState;
 use crate::account::Account;
 use crate::auth::{User, refresh_token_desktop};
-use crate::providers::{AuthProvider, IdcProvider, RefreshMetadata, KiroWebPortalClient};
+use crate::providers::{AuthProvider, IdcProvider, RefreshMetadata, KiroPortalClient};
+use crate::kiro_portal_client::GetUserUsageAndLimitsResponse;
 use crate::commands::common::*;
 use serde::{Deserialize, Serialize};
 
@@ -162,7 +163,7 @@ pub async fn verify_account(
     };
     
     // 获取 usage（统一逻辑）
-    let client = KiroWebPortalClient::new();
+    let client = KiroPortalClient::new();
     let usage = client.get_user_usage_and_limits(&new_access_token, &provider).await?;
     let (quota, used, subscription_type) = extract_quota(&usage);
     
@@ -213,7 +214,7 @@ pub async fn add_account_by_social(
         (refresh_result.access_token, refresh_result.refresh_token, usage_result)
     };
     
-    let usage: Option<crate::providers::web_oauth::GetUserUsageAndLimitsResponse> = 
+    let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     
     let (new_email, user_id) = extract_user_info(&usage);
@@ -384,7 +385,7 @@ pub async fn add_account_by_idc(
             (auth_result.access_token, auth_result.refresh_token, usage_result, expires_at, auth_result.id_token, auth_result.sso_session_id)
         };
     
-    let usage: Option<crate::providers::web_oauth::GetUserUsageAndLimitsResponse> = 
+    let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     
     let (new_email, user_id) = extract_user_info(&usage);

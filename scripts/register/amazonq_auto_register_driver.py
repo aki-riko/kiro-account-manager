@@ -533,10 +533,13 @@ def register_single_account(account_num, total_accounts):
         # - Windows: 只能用有头模式
         import platform
         driver_args = {
-            'uc': True,
-            'uc_subprocess': True,
-            'locale_code': 'en',
-            'incognito': True,
+            'uc': True,                    # 启用 undetected-chromedriver
+            'uc_subprocess': True,         # 子进程模式
+            'uc_cdp_events': True,         # 捕获 CDP 事件
+            'locale_code': 'en',           # 语言设置
+            'incognito': True,             # 隐身模式
+            'do_not_track': True,          # 发送 DNT 头
+            'disable_csp': True,           # 禁用内容安全策略
         }
         if HEADLESS_MODE and platform.system() == 'Linux':
             driver_args['xvfb'] = True

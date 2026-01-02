@@ -19,7 +19,6 @@ const Settings = lazy(() => import('./components/Settings'))
 const KiroConfig = lazy(() => import('./components/KiroConfig/index'))
 const About = lazy(() => import('./components/About'))
 const Login = lazy(() => import('./components/Login'))
-const WebOAuthLogin = lazy(() => import('./components/WebOAuthLogin'))
 const AuthCallback = lazy(() => import('./components/AuthCallback'))
 
 // 页面加载骨架屏
@@ -121,7 +120,6 @@ function App() {
       case 'token': return <AccountManager />
       case 'kiro-config': return <KiroConfig />
       case 'login': return <Login onLogin={(user) => { handleLogin(user); setActiveMenu('token'); }} />
-      case 'web-oauth': return <WebOAuthLogin onLogin={(user) => { handleLogin(user); setActiveMenu('token'); }} />
       case 'callback': return <AuthCallback />
       case 'settings': return <Settings />
       case 'about': return <About />

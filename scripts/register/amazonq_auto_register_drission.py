@@ -288,15 +288,25 @@ def register_single_account(account_num, total_accounts):
     try:
         # 配置浏览器选项
         co = ChromiumOptions()
-        # 自动分配端口和临时用户数据，更干净
-        co.auto_port()
+        co.auto_port()  # 自动分配端口
         if HEADLESS_MODE:
             co.headless()
+        
+        # 反检测参数
         co.set_argument('--disable-blink-features=AutomationControlled')
         co.set_argument('--disable-infobars')
         co.set_argument('--no-sandbox')
         co.set_argument('--disable-dev-shm-usage')
-        co.set_argument('--window-size=1280,800')
+        co.set_argument('--disable-web-security')
+        co.set_argument('--disable-features=IsolateOrigins,site-per-process')
+        co.set_argument('--hide-crash-restore-bubble')
+        co.set_argument(f'--window-size={random.randint(1200, 1920)},{random.randint(700, 1080)}')
+        
+        # 禁用密码保存提示
+        co.set_pref('credentials_enable_service', False)
+        
+        # 隐身模式
+        co.incognito()
         
         from DrissionPage import Chromium
         browser = Chromium(co)

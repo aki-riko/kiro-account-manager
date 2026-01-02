@@ -360,9 +360,61 @@ def register_single_account(account_num, total_accounts):
     # 步骤3: 启动浏览器
     log("步骤3: 启动浏览器 (Playwright + Stealth)")
     playwright = None
+    
+    # 随机 Chrome 版本
+    chrome_versions = ['131.0.0.0', '130.0.0.0', '129.0.0.0', '128.0.0.0']
+    chrome_ver = random.choice(chrome_versions)
+    
+    # 随机 User-Agent
+    user_agents = [
+        f'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_ver} Safari/537.36',
+        f'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{chrome_ver} Safari/537.36',
+    ]
+    user_agent = random.choice(user_agents)
+    
+    # 根据 User-Agent 设置对应的 platform
+    if 'Windows' in user_agent:
+        platform_override = 'Win32'
+    else:
+        platform_override = 'MacIntel'
+    
+    # 配置 Stealth - 启用所有反检测选项
     stealth_instance = Stealth(
-        navigator_languages_override=('zh-CN', 'zh', 'en-US', 'en'),
+        # Chrome API 伪装
+        chrome_app=True,
+        chrome_csi=True,
+        chrome_load_times=True,
+        chrome_runtime=True,  # 启用 chrome.runtime
+        hairline=True,
+        
+        # Navigator 属性伪装
+        navigator_webdriver=True,
+        navigator_languages=True,
+        navigator_platform=True,
+        navigator_plugins=True,
+        navigator_user_agent=True,
+        navigator_vendor=True,
+        navigator_hardware_concurrency=True,
+        navigator_permissions=True,
+        
+        # WebGL 伪装
+        webgl_vendor=True,
+        
+        # 其他伪装
+        iframe_content_window=True,
+        media_codecs=True,
+        error_prototype=True,
+        sec_ch_ua=True,
+        
+        # 覆盖值
+        navigator_languages_override=('en-US', 'en'),
+        navigator_platform_override=platform_override,
+        navigator_user_agent_override=user_agent,
+        navigator_vendor_override='Google Inc.',
+        webgl_vendor_override='Intel Inc.',
+        webgl_renderer_override='Intel Iris OpenGL Engine',
     )
+    
     try:
         playwright = sync_playwright().start()
         browser = playwright.chromium.launch(
@@ -372,17 +424,30 @@ def register_single_account(account_num, total_accounts):
                 '--disable-infobars',
                 '--no-sandbox',
                 '--disable-dev-shm-usage',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-site-isolation-trials',
+                f'--window-size={random.randint(1200, 1920)},{random.randint(700, 1080)}',
             ]
         )
         # 随机 viewport
         viewport = random_viewport()
+        
+        # 随机时区
+        timezones = ['Asia/Shanghai', 'Asia/Tokyo', 'America/New_York', 'Europe/London']
+        timezone = random.choice(timezones)
+        
         context = browser.new_context(
             viewport=viewport,
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            locale='zh-CN',
-            timezone_id='Asia/Shanghai',
+            user_agent=user_agent,
+            locale='en-US',
+            timezone_id=timezone,
+            color_scheme='light',
+            device_scale_factor=random.choice([1, 1.25, 1.5, 2]),
+            ignore_https_errors=True,
         )
-        # 手动应用 stealth 到 context
+        
+        # 应用 stealth（库已包含所有反检测功能）
         stealth_instance.apply_stealth_sync(context)
         page = context.new_page()
         log("✅ 浏览器启动成功 (Stealth 已启用)")
@@ -525,23 +590,49 @@ def register_single_account(account_num, total_accounts):
 
         # 页面5: 确认并继续
         log("🔢 页面5: 确认并继续")
-        # 等待确认按钮出现
-        for _ in range(30):
+        # 等待确认按钮出现，尝试多个选择器
+        confirm_clicked = False
+        confirm_selectors = [
+            "#cli_verification_btn",
+            "[data-testid='cli-verification-button']",
+            "button:has-text('Confirm and continue')",
+            "button:has-text('确认并继续')",
+        ]
+        for i in range(30):
+            for selector in confirm_selectors:
+                try:
+                    if page.locator(selector).first.is_visible(timeout=500):
+                        move_mouse_to_element(page, selector)
+                        random_delay(0.3, 0.8)
+                        page.locator(selector).first.click()
+                        log(f"✅ 已点击确认按钮 ({selector})")
+                        confirm_clicked = True
+                        break
+                except:
+                    continue
+            if confirm_clicked:
+                break
+            if i == 10:
+                log(f"⏳ 等待确认按钮中... (已等待 {i} 秒)")
+            time.sleep(1)
+        
+        if not confirm_clicked:
+            log("❌ 确认按钮未出现，超时")
+            # 保存调试截图
             try:
-                if page.locator("#cli_verification_btn").is_visible(timeout=1000):
-                    move_mouse_to_element(page, "#cli_verification_btn")
-                    random_delay(0.3, 0.8)
-                    page.locator("#cli_verification_btn").click()
-                    log("✅ 已点击确认按钮")
-                    break
+                page.screenshot(path="debug/page5_timeout.png")
+                log("📸 已保存调试截图到 debug/page5_timeout.png")
+                log(f"📄 当前 URL: {page.url}")
             except:
                 pass
-            time.sleep(1)
+            return False
+        
         random_delay(2, 4)
 
         # 页面6: 允许访问
         log("✅ 页面6: 允许访问")
         # 等待允许按钮出现并点击
+        allow_clicked = False
         for _ in range(30):
             try:
                 if page.locator("[data-testid='allow-access-button']").is_visible(timeout=1000):
@@ -549,11 +640,16 @@ def register_single_account(account_num, total_accounts):
                     random_delay(0.3, 0.8)
                     page.locator("[data-testid='allow-access-button']").click()
                     log("✅ 已点击'允许访问'")
-                    random_delay(1, 2)  # 等待后端处理
+                    allow_clicked = True
+                    random_delay(1, 2)
                     break
             except:
                 pass
             time.sleep(1)
+        
+        if not allow_clicked:
+            log("❌ 允许访问按钮未出现，超时")
+            return False
 
         # 点击后立即轮询获取 tokens
         log("🔄 轮询获取 Tokens...")

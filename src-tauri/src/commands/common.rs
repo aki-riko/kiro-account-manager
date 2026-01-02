@@ -1,7 +1,7 @@
 // 公共工具函数 - 提取重复逻辑
 
 use crate::account::Account;
-use crate::providers::{AuthProvider, IdcProvider, RefreshMetadata, SocialProvider, KiroWebPortalClient};
+use crate::providers::{AuthProvider, IdcProvider, RefreshMetadata, SocialProvider, KiroPortalClient};
 
 // 常量
 pub const START_URL: &str = "https://view.awsapps.com/start";
@@ -73,9 +73,9 @@ pub async fn get_usage_by_provider(
     provider: &str,
     access_token: &str,
 ) -> UsageResult {
-    // 统一使用 KiroWebPortalService 的 GetUserUsageAndLimits 接口
+    // 统一使用 KiroPortalClient 的 GetUserUsageAndLimits 接口
     // provider 即 idp: Google / Github / BuilderId
-    let client = KiroWebPortalClient::new();
+    let client = KiroPortalClient::new();
     let usage_call = client.get_user_usage_and_limits(access_token, provider).await;
     parse_usage_result(usage_call)
 }
@@ -123,7 +123,7 @@ pub fn calc_client_id_hash() -> String {
 }
 
 /// 从 usage 中提取 email 和 user_id
-pub fn extract_user_info(usage: &Option<crate::providers::web_oauth::GetUserUsageAndLimitsResponse>) -> (Option<String>, Option<String>) {
+pub fn extract_user_info(usage: &Option<crate::kiro_portal_client::GetUserUsageAndLimitsResponse>) -> (Option<String>, Option<String>) {
     let email = usage.as_ref()
         .and_then(|u| u.user_info.as_ref())
         .and_then(|u| u.email.clone());
@@ -155,7 +155,7 @@ pub fn calc_status(is_banned: bool) -> String {
 }
 
 /// 从 usage 响应中提取配额信息
-pub fn extract_quota(usage: &crate::providers::web_oauth::GetUserUsageAndLimitsResponse) -> (Option<i32>, Option<i32>, Option<String>) {
+pub fn extract_quota(usage: &crate::kiro_portal_client::GetUserUsageAndLimitsResponse) -> (Option<i32>, Option<i32>, Option<String>) {
     let (q, u) = usage.usage_breakdown_list.as_ref()
         .and_then(|list| list.first())
         .map(|b| (b.usage_limit, b.current_usage))
