@@ -1,5 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
+// 强制更新配置
+const FORCE_UPDATE = {
+  enabled: true,
+  minVersion: '1.6.0',  // 低于此版本强制更新
+  message: '检测到重要更新，请升级到最新版本以获得更好的体验。'
+}
+
 // 公告列表 - 支持多个公告
 const ANNOUNCEMENTS = [
   {
@@ -22,9 +29,7 @@ const ANNOUNCEMENTS = [
     buyGroup: 'Kiro续杯交流群',
     buyGroupUrl: 'https://qm.qq.com/q/MhecVOcvaW',
     // 购买链接
-    buyUrl: 'https://pay.ldxp.cn/item/yrqrff',
-    // 续杯教程
-    refillTutorialUrl: 'https://xcn46cm1l4ir.feishu.cn/wiki/EGR1wiXGGin8RgkFRGIcioSFnqh'
+    buyUrl: 'https://pay.ldxp.cn/item/yrqrff'
   }
 ]
 
@@ -43,5 +48,8 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
 
   // 只返回 enabled 的公告
   const activeAnnouncements = ANNOUNCEMENTS.filter(a => a.enabled)
-  return res.status(200).json(activeAnnouncements)
+  return res.status(200).json({
+    announcements: activeAnnouncements,
+    forceUpdate: FORCE_UPDATE
+  })
 }

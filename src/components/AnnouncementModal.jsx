@@ -1,15 +1,30 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, ExternalLink, MessageCircle } from 'lucide-react'
+import { AlertTriangle, ExternalLink, MessageCircle, Download } from 'lucide-react'
 import { useApp } from '../hooks/useApp'
 
 // 公告 API 地址
 const ANNOUNCEMENT_API = 'https://vercel-api-hj01857655s-projects-fa88a766.vercel.app/api/announcement'
+const CURRENT_VERSION = __APP_VERSION__ || '0.0.0'
+
+// 版本比较
+const compareVersions = (v1, v2) => {
+  const parts1 = v1.replace(/^v/, '').split('.').map(Number)
+  const parts2 = v2.replace(/^v/, '').split('.').map(Number)
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const p1 = parts1[i] || 0
+    const p2 = parts2[i] || 0
+    if (p1 < p2) return -1
+    if (p1 > p2) return 1
+  }
+  return 0
+}
 
 export default function AnnouncementModal() {
   const { t, theme, colors } = useApp()
   const isLightTheme = theme === 'light' || theme === 'purple'
   const [show, setShow] = useState(false)
   const [announcement, setAnnouncement] = useState(null)
+  const [forceUpdate, setForceUpdate] = useState(null)
   const [agreed, setAgreed] = useState(false)
 
   useEffect(() => {
@@ -23,8 +38,18 @@ export default function AnnouncementModal() {
       
       const data = await res.json()
       
-      // API 返回数组，取第一个未读的公告
-      const list = Array.isArray(data) ? data : [data]
+      // 检查强制更新
+      if (data.forceUpdate?.enabled) {
+        const needUpdate = compareVersions(CURRENT_VERSION, data.forceUpdate.minVersion) < 0
+        if (needUpdate) {
+          setForceUpdate(data.forceUpdate)
+          setShow(true)
+          return
+        }
+      }
+      
+      // 处理公告（兼容新旧格式）
+      const list = data.announcements || (Array.isArray(data) ? data : [data])
       const readIds = JSON.parse(localStorage.getItem('announcement_read_ids') || '[]')
       
       // 找到第一个未读的启用公告
@@ -39,6 +64,9 @@ export default function AnnouncementModal() {
   }
 
   const handleClose = () => {
+    // 强制更新不允许关闭
+    if (forceUpdate) return
+    
     if (announcement?.id) {
       const readIds = JSON.parse(localStorage.getItem('announcement_read_ids') || '[]')
       if (!readIds.includes(announcement.id)) {
@@ -49,7 +77,45 @@ export default function AnnouncementModal() {
     setShow(false)
   }
 
-  if (!show || !announcement) return null
+  const handleDownload = () => {
+    window.open('https://github.com/hj01857655/kiro-account-manager/releases/latest', '_blank')
+  }
+
+  if (!show) return null
+
+  // 强制更新弹窗
+  if (forceUpdate) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div className={`relative w-[420px] max-w-[90vw] rounded-2xl shadow-2xl border ${
+          isLightTheme ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'
+        } overflow-hidden`}>
+          <div className="bg-gradient-to-r from-red-500 to-orange-500 px-6 py-4 flex items-center gap-3">
+            <AlertTriangle size={24} className="text-white" />
+            <span className="text-white font-bold text-lg">需要更新</span>
+          </div>
+          <div className="p-6">
+            <p className={`text-base mb-4 ${colors.text}`}>{forceUpdate.message}</p>
+            <p className={`text-sm ${colors.textMuted}`}>
+              当前版本: v{CURRENT_VERSION} → 最低要求: v{forceUpdate.minVersion}
+            </p>
+          </div>
+          <div className="px-6 pb-6">
+            <button
+              onClick={handleDownload}
+              className="w-full py-3 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90 flex items-center justify-center gap-2"
+            >
+              <Download size={18} />
+              前往下载最新版本
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 普通公告需要有内容才显示
+  if (!announcement) return null
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
