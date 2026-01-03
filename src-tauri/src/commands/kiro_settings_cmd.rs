@@ -84,8 +84,11 @@ fn set_kiro_proxy_inner(proxy: String) -> Result<(), String> {
     
     if let Some(obj) = settings.as_object_mut() {
         if proxy.is_empty() {
+            // 清除代理时，必须把 proxySupport 设为 off，否则 Kiro 会尝试连接系统代理
             obj.remove("http.proxy");
+            obj.insert("http.proxySupport".to_string(), serde_json::Value::String("off".to_string()));
         } else {
+            // 设置代理时，proxySupport 必须为 on，同时提供代理地址
             obj.insert("http.proxy".to_string(), serde_json::Value::String(proxy));
             obj.insert("http.proxyStrictSSL".to_string(), serde_json::Value::Bool(false));
             obj.insert("http.proxySupport".to_string(), serde_json::Value::String("on".to_string()));
