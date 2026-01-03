@@ -55,14 +55,14 @@ const ListRow = memo(function ListRow({
       </div>
 
       {/* 标签 */}
-      <div className="w-40 shrink-0">
+      <div className="w-28 shrink-0">
         {account.tags?.length > 0 ? (
-          <div className="flex items-center gap-1">
-            {account.tags.slice(0, 2).map(tagId => {
+          <div className="flex items-center gap-1 overflow-hidden">
+            {account.tags.slice(0, 1).map(tagId => {
               const tag = tagDefinitions.find(t => t.id === tagId)
-              return tag ? <span key={tagId} className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: `${tag.color}20`, color: tag.color }}>{tag.name}</span> : null
+              return tag ? <span key={tagId} className="text-[10px] px-1.5 py-0.5 rounded font-medium truncate max-w-[80px]" style={{ backgroundColor: `${tag.color}20`, color: tag.color }} title={tag.name}>{tag.name}</span> : null
             })}
-            {account.tags.length > 2 && <span className={`text-[10px] ${colors.textMuted}`}>+{account.tags.length - 2}</span>}
+            {account.tags.length > 1 && <span className={`text-[10px] ${colors.textMuted}`}>+{account.tags.length - 1}</span>}
           </div>
         ) : <span className={`text-xs ${colors.textMuted}`}>-</span>}
       </div>
@@ -98,20 +98,19 @@ const ListRow = memo(function ListRow({
       }`}>{isBanned ? t('accounts.banned') : isActive ? t('accounts.active') : account.status}</span>
 
       {/* 机器码 */}
-      <span className={`text-xs font-mono w-20 text-center shrink-0 ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>
-        {account.machineId?.slice(0, 8) || '-'}
+      <span className={`text-xs font-mono w-16 text-center shrink-0 ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>
+        {account.machineId?.slice(0, 6) || '-'}
       </span>
 
-      {/* 过期时间 */}
-      <span className={`text-xs w-24 text-center shrink-0 ${colors.textMuted}`}>
-        {account.expiresAt?.replace(/^\d{4}\//, '') || '-'}
-      </span>
-
-      {/* 试用到期 */}
-      <span className={`text-xs w-20 text-center shrink-0 ${colors.textMuted}`}>
-        {account.usageData?.usageBreakdownList?.[0]?.freeTrialInfo?.freeTrialExpiry 
-          ? new Date(account.usageData.usageBreakdownList[0].freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString().replace(/^\d{4}\//, '') : '-'}
-      </span>
+      {/* 到期时间（合并显示） */}
+      <div className="w-24 shrink-0 text-[11px]">
+        <span className={colors.textMuted} title="Token 过期">{account.expiresAt?.slice(5, 16).replace('/', '-').replace(' ', ' ') || '-'}</span>
+        {account.usageData?.usageBreakdownList?.[0]?.freeTrialInfo?.freeTrialExpiry && (
+          <span className={`ml-1 ${isLightTheme ? 'text-orange-600' : 'text-orange-400'}`} title="试用到期">
+            试{new Date(account.usageData.usageBreakdownList[0].freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString().slice(5)}
+          </span>
+        )}
+      </div>
     </div>
   )
 }, (prev, next) => (
@@ -169,14 +168,13 @@ function AccountListView({
       <div className={`flex items-center gap-3 px-4 py-3 ${isLightTheme ? 'bg-gray-50' : 'bg-white/5'} border ${colors.cardBorder} rounded-t-xl ${colors.textMuted} text-xs font-semibold uppercase tracking-wider`}>
         <div className="w-4" />
         <div className="w-44">邮箱</div>
-        <div className="w-40">标签</div>
+        <div className="w-28">标签</div>
         <div className="w-20 text-center">提供商</div>
         <div className="w-20 text-center">订阅类型</div>
         <div className="w-20">配额</div>
         <div className="w-14 text-center">状态</div>
-        <div className={`w-20 text-center ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>机器码</div>
-        <div className="w-24 text-center">过期时间</div>
-        <div className="w-20 text-center">试用到期</div>
+        <div className={`w-16 text-center ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>机器码</div>
+        <div className="w-24">到期</div>
       </div>
 
       <div ref={scrollRef} className={`flex-1 overflow-auto border border-t-0 ${colors.cardBorder} rounded-b-xl`}>

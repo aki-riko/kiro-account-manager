@@ -9,7 +9,8 @@ pub struct KiroSettings {
     pub http_proxy: Option<String>,
     pub model_selection: Option<String>,
     pub enable_codebase_indexing: Option<bool>,
-    pub trust_all_commands: Option<bool>,
+    pub trusted_commands_mode: Option<String>,
+    pub custom_trusted_commands: Option<String>,
 }
 
 fn get_kiro_settings_path() -> Option<PathBuf> {
@@ -64,9 +65,24 @@ fn get_kiro_settings_inner() -> Result<KiroSettings, String> {
         http_proxy: json.get("http.proxy").and_then(|v| v.as_str()).map(|s| s.to_string()),
         model_selection: json.get("kiroAgent.modelSelection").and_then(|v| v.as_str()).map(|s| s.to_string()),
         enable_codebase_indexing: json.get("kiroAgent.enableCodebaseIndexing").and_then(|v| v.as_bool()),
-        trust_all_commands: json.get("kiroAgent.trustedCommands")
+        trusted_commands_mode: json.get("kiroAgent.trustedCommands")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().any(|item| item.as_str() == Some("*"))),
+            .map(|arr| {
+                if arr.iter().any(|item| item.as_str() == Some("*")) {
+                    "all".to_string()
+                } else if arr.is_empty() {
+                    "none".to_string()
+                } else {
+                    "common".to_string()
+                }
+            }),
+        custom_trusted_commands: json.get("kiroAgent.trustedCommands")
+            .and_then(|v| v.as_array())
+            .filter(|arr| !arr.iter().any(|item| item.as_str() == Some("*")) && !arr.is_empty())
+            .map(|arr| arr.iter()
+                .filter_map(|item| item.as_str())
+                .collect::<Vec<_>>()
+                .join("\n")),
     })
 }
 
@@ -182,7 +198,7 @@ pub async fn set_kiro_codebase_indexing(enabled: bool) -> Result<(), String> {
         .map_err(|e| format!("Task failed: {}", e))?
 }
 
-fn set_kiro_trust_all_commands_inner(enabled: bool) -> Result<(), String> {
+fn set_kiro_trusted_commands_inner(mode: String, custom_commands: Option<String>) -> Result<(), String> {
     let path = get_kiro_settings_path()
         .ok_or("无法获取 Kiro 设置路径")?;
     
@@ -195,11 +211,42 @@ fn set_kiro_trust_all_commands_inner(enabled: bool) -> Result<(), String> {
     };
     
     if let Some(obj) = settings.as_object_mut() {
-        if enabled {
-            obj.insert("kiroAgent.trustedCommands".to_string(), serde_json::json!(["*"]));
-        } else {
-            obj.insert("kiroAgent.trustedCommands".to_string(), serde_json::json!([]));
-        }
+        let commands = match mode.as_str() {
+            "all" => serde_json::json!(["*"]),
+            "common" => {
+                // 如果有自定义命令，解析它；否则使用默认列表
+                if let Some(ref custom) = custom_commands {
+                    if !custom.trim().is_empty() {
+                        let cmds: Vec<&str> = custom.lines()
+                            .map(|s| s.trim())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                        serde_json::json!(cmds)
+                    } else {
+                        // 默认常用命令
+                        serde_json::json!([
+                            "npm *", "pnpm *", "yarn *", "bun *",
+                            "git *", "cargo *", "rustup *",
+                            "python *", "pip *", "uv *", "uvx *",
+                            "node *", "npx *", "deno *",
+                            "cat *", "ls *", "dir *", "cd *", "pwd",
+                            "mkdir *", "touch *", "echo *"
+                        ])
+                    }
+                } else {
+                    serde_json::json!([
+                        "npm *", "pnpm *", "yarn *", "bun *",
+                        "git *", "cargo *", "rustup *",
+                        "python *", "pip *", "uv *", "uvx *",
+                        "node *", "npx *", "deno *",
+                        "cat *", "ls *", "dir *", "cd *", "pwd",
+                        "mkdir *", "touch *", "echo *"
+                    ])
+                }
+            },
+            _ => serde_json::json!([]),
+        };
+        obj.insert("kiroAgent.trustedCommands".to_string(), commands);
     }
     
     let content = serde_json::to_string_pretty(&settings)
@@ -212,8 +259,8 @@ fn set_kiro_trust_all_commands_inner(enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn set_kiro_trust_all_commands(enabled: bool) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || set_kiro_trust_all_commands_inner(enabled))
+pub async fn set_kiro_trusted_commands(mode: String, custom_commands: Option<String>) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || set_kiro_trusted_commands_inner(mode, custom_commands))
         .await
         .map_err(|e| format!("Task failed: {}", e))?
 }

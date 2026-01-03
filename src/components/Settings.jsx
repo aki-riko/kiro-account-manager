@@ -32,7 +32,8 @@ function Settings() {
     const [showBrowserList, setShowBrowserList] = useState(false)
     const [detectingProxy, setDetectingProxy] = useState(false)
     const [enableCodebaseIndexing, setEnableCodebaseIndexing] = useState(true)
-    const [trustAllCommands, setTrustAllCommands] = useState(false)
+    const [trustedCommandsMode, setTrustedCommandsMode] = useState('none') // 'none' | 'common' | 'all'
+    const [customTrustedCommands, setCustomTrustedCommands] = useState('') // 自定义命令列表
 
     // Kiro IDE 状态
     const [loading, setLoading] = useState(false)
@@ -65,7 +66,7 @@ function Settings() {
                 setOriginalProxy(proxy)
                 setAiModel(kiroSettings.modelSelection || 'claude-sonnet-4.5')
                 setEnableCodebaseIndexing(kiroSettings.enableCodebaseIndexing ?? true)
-                setTrustAllCommands(kiroSettings.trustAllCommands ?? false)
+                setTrustedCommandsMode(kiroSettings.trustedCommandsMode || 'none')
             }
             // 从应用设置读取
             if (appSettings) {
@@ -195,12 +196,23 @@ function Settings() {
         }
     }
 
-    const handleTrustAllCommandsChange = async (checked) => {
-        setTrustAllCommands(checked)
+    const handleTrustedCommandsModeChange = async (mode) => {
+        setTrustedCommandsMode(mode)
         try {
-            await invoke('set_kiro_trust_all_commands', { enabled: checked })
+            await invoke('set_kiro_trusted_commands', { mode, customCommands: customTrustedCommands })
         } catch (err) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
+        }
+    }
+
+    const handleCustomTrustedCommandsChange = async (commands) => {
+        setCustomTrustedCommands(commands)
+        if (trustedCommandsMode === 'common') {
+            try {
+                await invoke('set_kiro_trusted_commands', { mode: 'common', customCommands: commands })
+            } catch (err) {
+                console.error('Failed to save custom commands:', err)
+            }
         }
     }
 
@@ -486,20 +498,39 @@ function Settings() {
                         </div>
                     </label>
 
-                    {/* 信任所有命令 */}
-                    <label className={`flex items-start gap-3 cursor-pointer ${colors.cardSecondary} ${colors.cardHover} rounded-xl p-4 transition-all hover:scale-[1.01] mb-3`}>
-                        <input
-                            type="checkbox"
-                            checked={trustAllCommands}
-                            onChange={(e) => handleTrustAllCommandsChange(e.target.checked)}
-                            className="mt-0.5 w-4 h-4 rounded-lg border-gray-300 text-blue-500 focus:ring-blue-500"
-                        />
-                        <Shield size={16} className={`${colors.textMuted} mt-0.5 flex-shrink-0`} />
-                        <div>
-                            <span className={`text-sm font-medium ${colors.text}`}>{t('settings.trustAllCommands')}</span>
-                            <p className={`text-xs ${colors.textMuted} mt-0.5`}>{t('settings.trustAllCommandsDesc')}</p>
+                    {/* 信任命令 */}
+                    <div className={`${colors.cardSecondary} rounded-xl p-4 mb-3`}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <Shield size={16} className={colors.textMuted} />
+                            <span className={`text-sm font-medium ${colors.text}`}>{t('settings.trustedCommands')}</span>
                         </div>
-                    </label>
+                        <div className="relative">
+                            <select
+                                value={trustedCommandsMode}
+                                onChange={(e) => handleTrustedCommandsModeChange(e.target.value)}
+                                className={`w-full px-4 py-3 border rounded-xl ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 appearance-none cursor-pointer transition-all`}
+                            >
+                                <option value="none">{t('settings.trustedCommandsNone')}</option>
+                                <option value="common">{t('settings.trustedCommandsCommon')}</option>
+                                <option value="all">{t('settings.trustedCommandsAll')}</option>
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                    <path d="M2.5 4.5L6 8L9.5 4.5" stroke={isLightTheme ? '#666' : '#888'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </div>
+                        </div>
+                        {trustedCommandsMode === 'common' && (
+                            <textarea
+                                value={customTrustedCommands}
+                                onChange={(e) => handleCustomTrustedCommandsChange(e.target.value)}
+                                placeholder="npm *&#10;git *&#10;cargo *"
+                                className={`w-full mt-3 px-4 py-3 border rounded-xl ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 resize-none font-mono text-sm`}
+                                rows={4}
+                            />
+                        )}
+                        <p className={`text-xs ${colors.textMuted} mt-2`}>{t('settings.trustedCommandsDesc')}</p>
+                    </div>
 
                     {/* HTTP 代理 */}
                     <div className={`mt-5 pt-5 border-t border-dashed ${colors.cardBorder}`}>

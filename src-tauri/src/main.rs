@@ -142,7 +142,7 @@ fn main() {
             set_kiro_proxy,
             set_kiro_model,
             set_kiro_codebase_indexing,
-            set_kiro_trust_all_commands,
+            set_kiro_trusted_commands,
             // 应用设置命令
             get_app_settings,
             save_app_settings,

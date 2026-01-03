@@ -4,12 +4,12 @@ import { invoke } from '@tauri-apps/api/core'
 const PrivacyContext = createContext()
 
 export function PrivacyProvider({ children }) {
-  const [privacyMode, setPrivacyModeState] = useState(false)
+  const [privacyMode, setPrivacyModeState] = useState(true) // 默认开启隐私模式
 
   // 从后端加载设置
   useEffect(() => {
     invoke('get_app_settings').then(settings => {
-      setPrivacyModeState(settings?.privacyMode ?? false)
+      setPrivacyModeState(settings?.privacyMode ?? true) // 默认 true
     }).catch(() => {})
   }, [])
 
