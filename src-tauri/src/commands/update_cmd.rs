@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use reqwest::Proxy;
 
 const UPDATE_URL_DEFAULT: &str = "https://github.com/hj01857655/kiro-account-manager/releases/latest/download/latest.json";
+#[cfg(target_os = "linux")]
 const UPDATE_URL_DEB: &str = "https://github.com/hj01857655/kiro-account-manager/releases/latest/download/latest-deb.json";
 
 /// 检测 Linux 安装方式

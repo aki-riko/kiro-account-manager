@@ -73,15 +73,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact: .deb
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact: .dmg
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: .msi
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            artifact: .dmg
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: .dmg
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            artifact: .deb
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -226,3 +229,14 @@ A: 修改 strategy matrix，只保留需要的平台。
 
 **Q: Windows 签名？**
 A: 需要配置代码签名证书，添加到 Secrets 中。
+
+**Q: macOS Intel 构建失败？**
+A: `macos-13` 已退役，使用 `macos-15-intel` 构建 x86_64。`macos-latest` 现在是 ARM。
+参考：https://github.com/actions/runner-images/issues/13046
+
+**Q: Linux deb 安装后自动更新推送 AppImage？**
+A: 已解决。deb 安装会自动检测并使用 `latest-deb.json` 更新源，AppImage 使用默认的 `latest.json`。
+检测逻辑在 `src-tauri/src/commands/update_cmd.rs` 的 `detect_linux_install_type()` 函数。
+
+**Q: Linux 登录时启动多个实例？**
+A: 已解决。需要启用 `tauri-plugin-single-instance` 插件，确保 deep link 回调传递给已运行的实例而不是启动新实例。

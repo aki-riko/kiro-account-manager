@@ -67,15 +67,11 @@ pub async fn get_client_registration(client_id_hash: &str) -> Option<ClientRegis
 
 // ===== 切换账号 =====
 
-use crate::process::{check_kiro_running, launch_kiro};
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SwitchAccountResult {
     pub success: bool,
     pub message: String,
-    pub kiro_was_running: bool,
-    pub kiro_restarted: bool,
 }
 
 /// 切换账号参数
@@ -99,18 +95,12 @@ pub struct SwitchAccountParams {
     pub client_secret: Option<String>,
     #[serde(default)]
     pub region: Option<String>,
-    // 选项
-    #[serde(default)]
-    pub auto_restart: Option<bool>,
 }
 
-/// 切换 Kiro 账号（直接写入 Token 文件）
+/// 切换 Kiro 账号（原子写入 Token 文件，无需重启 IDE）
 #[tauri::command]
 pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAccountResult, String> {
-    // 使用 spawn_blocking 避免阻塞异步运行时
     tokio::task::spawn_blocking(move || {
-        let kiro_was_running = check_kiro_running();
-        let should_restart = params.auto_restart.unwrap_or(true);
         let auth_method = params.auth_method.unwrap_or_else(|| "social".to_string());
         let access_token = params.access_token;
         let refresh_token = params.refresh_token;
@@ -121,7 +111,7 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
         let client_secret = params.client_secret;
         let region = params.region;
         
-        // 1. 替换 Token
+        // 获取 token 目录
         let home = std::env::var("USERPROFILE")
             .or_else(|_| std::env::var("HOME"))
             .map_err(|_| "Cannot find home directory")?;
@@ -135,14 +125,12 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
             .map_err(|e| format!("Failed to create directory: {}", e))?;
         
         let file_path = dir_path.join("kiro-auth-token.json");
-        
         let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
         
-        // 根据 auth_method 构建不同的 token 数据
+        // 根据 auth_method 构建 token 数据
         let token_data = if auth_method == "IdC" {
-            // IdC 账号: clientIdHash + region
             let hash = client_id_hash.clone().unwrap_or_default();
-            let data = serde_json::json!({
+            serde_json::json!({
                 "accessToken": access_token,
                 "refreshToken": refresh_token,
                 "expiresAt": expires_at.to_rfc3339(),
@@ -150,10 +138,8 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
                 "provider": provider,
                 "clientIdHash": hash,
                 "region": region.clone().unwrap_or_else(|| "us-east-1".to_string())
-            });
-            data
+            })
         } else {
-            // Social 账号: profileArn
             let arn = profile_arn.unwrap_or_else(|| 
                 "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK".to_string()
             );
@@ -170,7 +156,7 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
         let content = serde_json::to_string_pretty(&token_data)
             .map_err(|e| format!("Failed to serialize: {}", e))?;
         
-        // 原子写入：先写临时文件，再覆盖
+        // 原子写入：先写临时文件，再 rename
         let temp_file_path = dir_path.join("kiro-auth-token.json.tmp");
         std::fs::write(&temp_file_path, &content)
             .map_err(|e| format!("Failed to write temp file: {}", e))?;
@@ -190,7 +176,6 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
                 });
                 let client_reg_content = serde_json::to_string_pretty(&client_reg_data)
                     .map_err(|e| format!("Failed to serialize client registration: {}", e))?;
-                // 原子写入
                 std::fs::write(&client_reg_temp_path, client_reg_content)
                     .map_err(|e| format!("Failed to write client registration temp: {}", e))?;
                 std::fs::rename(&client_reg_temp_path, &client_reg_path)
@@ -198,18 +183,9 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
             }
         }
         
-        // 4. 切换完成
-        let kiro_restarted = if kiro_was_running && should_restart {
-            launch_kiro().is_ok()
-        } else {
-            false
-        };
-        
         Ok(SwitchAccountResult {
             success: true,
             message: format!("Switched to {} ({}) account", provider, auth_method),
-            kiro_was_running,
-            kiro_restarted,
         })
     }).await.map_err(|e| format!("Task failed: {}", e))?
 }

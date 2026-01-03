@@ -52,8 +52,7 @@ export function useSwitchAccount(onLocalTokenChange) {
       accessToken: account.accessToken,
       refreshToken: account.refreshToken,
       provider: account.provider || 'Google',
-      authMethod,
-      autoRestart: false
+      authMethod
     }
     
     if (isIdC) {
