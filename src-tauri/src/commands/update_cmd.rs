@@ -6,23 +6,31 @@ use reqwest::Proxy;
 const UPDATE_URL_DEFAULT: &str = "https://github.com/hj01857655/kiro-account-manager/releases/latest/download/latest.json";
 #[cfg(target_os = "linux")]
 const UPDATE_URL_DEB: &str = "https://github.com/hj01857655/kiro-account-manager/releases/latest/download/latest-deb.json";
+#[cfg(target_os = "linux")]
+const UPDATE_URL_RPM: &str = "https://github.com/hj01857655/kiro-account-manager/releases/latest/download/latest-rpm.json";
 
 /// 检测 Linux 安装方式
 #[cfg(target_os = "linux")]
 fn detect_linux_install_type() -> &'static str {
-    // 检测当前可执行文件路径
     if let Ok(exe_path) = std::env::current_exe() {
         let path_str = exe_path.to_string_lossy();
-        // deb 安装通常在 /usr/bin 或 /opt
+        // deb/rpm 安装通常在 /usr/bin 或 /opt
         if path_str.starts_with("/usr/") || path_str.starts_with("/opt/") {
+            // 检查是 deb 还是 rpm 系统
+            if std::path::Path::new("/etc/debian_version").exists() {
+                return "deb";
+            }
+            if std::path::Path::new("/etc/redhat-release").exists() 
+                || std::path::Path::new("/etc/fedora-release").exists() {
+                return "rpm";
+            }
+            // 默认 deb
             return "deb";
         }
-        // AppImage 通常在 /tmp/.mount_ 或用户目录
         if path_str.contains(".mount_") || path_str.contains("AppImage") {
             return "appimage";
         }
     }
-    // 默认返回 appimage
     "appimage"
 }
 
@@ -30,8 +38,10 @@ fn detect_linux_install_type() -> &'static str {
 fn get_update_url() -> &'static str {
     #[cfg(target_os = "linux")]
     {
-        if detect_linux_install_type() == "deb" {
-            return UPDATE_URL_DEB;
+        match detect_linux_install_type() {
+            "deb" => return UPDATE_URL_DEB,
+            "rpm" => return UPDATE_URL_RPM,
+            _ => {}
         }
     }
     UPDATE_URL_DEFAULT

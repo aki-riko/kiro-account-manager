@@ -33,7 +33,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -63,6 +63,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Linux AppImage 使用 xz 压缩（squashfs 标准格式）
+          # linuxdeploy-plugin-appimage 使用 LDAI_COMP 环境变量
+          LDAI_COMP: ${{ matrix.platform == 'ubuntu-22.04' && 'xz' || '' }}
         with:
           tagName: v__VERSION__
           releaseName: 'Kiro Account Manager v__VERSION__'
@@ -71,8 +74,8 @@ jobs:
           prerelease: false
           args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
 
-  # 生成 deb 专用的 latest-deb.json
-  generate-deb-json:
+  # 生成 deb/rpm 专用的更新 JSON
+  generate-linux-json:
     if: ${{ !endsWith(github.repository, '_dev') }}
     needs: release
     runs-on: ubuntu-latest
@@ -91,15 +94,23 @@ jobs:
         run: |
           VERSION=${{ github.ref_name }}
           VERSION_NUM=${VERSION#v}
-          # 修改 linux-x86_64 平台的 URL 为 deb
           jq --arg ver "$VERSION" --arg verNum "$VERSION_NUM" '
             .platforms["linux-x86_64"].url = "https://github.com/${{ github.repository }}/releases/download/\($ver)/Kiro.Account.Manager_\($verNum)_amd64.deb"
           ' latest.json > latest-deb.json
           cat latest-deb.json
 
-      - name: Upload latest-deb.json to release
+      - name: Generate latest-rpm.json
+        run: |
+          VERSION=${{ github.ref_name }}
+          VERSION_NUM=${VERSION#v}
+          jq --arg ver "$VERSION" --arg verNum "$VERSION_NUM" '
+            .platforms["linux-x86_64"].url = "https://github.com/${{ github.repository }}/releases/download/\($ver)/Kiro.Account.Manager-\($verNum)-1.x86_64.rpm"
+          ' latest.json > latest-rpm.json
+          cat latest-rpm.json
+
+      - name: Upload JSON files to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${{ github.ref_name }}
-          gh release upload "$VERSION" latest-deb.json --clobber -R ${{ github.repository }}
+          gh release upload "$VERSION" latest-deb.json latest-rpm.json --clobber -R ${{ github.repository }}
