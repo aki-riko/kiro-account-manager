@@ -109,7 +109,7 @@ function TokenManager() {
         {generatedKey && (
           <div className="mt-4 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-green-400">✅ 组合 API Key</span>
+              <span className="text-sm font-medium text-green-400">✅ API Key</span>
               <button onClick={copyKey} className="p-2 rounded-lg hover:bg-white/10">
                 {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} className={colors.textMuted} />}
               </button>

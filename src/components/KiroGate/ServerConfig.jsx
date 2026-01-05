@@ -3,6 +3,7 @@ import { Copy, Check, Play, Square, Loader2 } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../hooks/useApp'
 import { useAppSettings } from '../../contexts/AppSettingsContext'
+import { useKiroGateTokens } from '../../hooks/useKiroGateTokens'
 
 const DEFAULT_PORT = 8000
 const PORT_OPTIONS = [8000, 8080, 8888, 9000, 9090, 3000, 3001, 5000]
@@ -10,6 +11,7 @@ const PORT_OPTIONS = [8000, 8080, 8888, 9000, 9090, 3000, 3001, 5000]
 function ServerConfig() {
   const { colors } = useApp()
   const { settings, updateSettings } = useAppSettings()
+  const { tokens } = useKiroGateTokens()
   
   const [port, setPort] = useState(DEFAULT_PORT)
   const [proxyKey, setProxyKey] = useState('')
@@ -65,7 +67,7 @@ function ServerConfig() {
   return (
     <div className="space-y-5">
       {/* 状态卡片 */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className={`${colors.card} rounded-xl p-4 border ${colors.cardBorder} text-center`}>
           <div className="text-2xl mb-1">{serverStatus.running ? '🟢' : '⚪'}</div>
           <div className={`font-bold ${serverStatus.running ? 'text-green-400' : colors.textMuted}`}>
@@ -79,6 +81,13 @@ function ServerConfig() {
             {proxyKey ? '已配置' : '未配置'}
           </div>
           <div className={`text-xs ${colors.textMuted}`}>代理密钥</div>
+        </div>
+        <div className={`${colors.card} rounded-xl p-4 border ${colors.cardBorder} text-center`}>
+          <div className="text-2xl mb-1">👥</div>
+          <div className={`font-bold ${tokens.length > 0 ? 'text-purple-400' : colors.textMuted}`}>
+            {tokens.length}
+          </div>
+          <div className={`text-xs ${colors.textMuted}`}>Token 数量</div>
         </div>
       </div>
 

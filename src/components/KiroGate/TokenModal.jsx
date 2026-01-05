@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { X, AlertCircle, CheckCircle } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 
-// 验证 Social Token（aor 开头，冒号分隔两部分）
-const validateSocialToken = (token) => {
+// 验证 Refresh Token（aor 开头，冒号分隔两部分）
+const validateRefreshToken = (token) => {
   if (!token) return false
   const trimmed = token.trim()
   if (!trimmed.startsWith('aor')) return false
@@ -11,9 +11,14 @@ const validateSocialToken = (token) => {
   return parts.length === 2 && parts[0].length >= 50 && parts[1].length >= 50
 }
 
-// 验证 IDC Token（需要 refreshToken + clientId + clientSecret，region 有默认值）
+// 验证 Social Token
+const validateSocialToken = (item) => {
+  return validateRefreshToken(item.refreshToken) && item.profileArn
+}
+
+// 验证 IdC Token
 const validateIdcToken = (item) => {
-  return item.refreshToken && item.clientId && item.clientSecret
+  return validateRefreshToken(item.refreshToken) && item.clientIdHash
 }
 
 // 解析 JSON 数组输入
@@ -29,10 +34,10 @@ const parseJsonInput = (input) => {
         name: item.name || `Token ${i + 1}`,
         refreshToken: item.refreshToken || '',
         authMethod,
+        profileArn: item.profileArn || null,
+        clientIdHash: item.clientIdHash || null,
         region: item.region || 'us-east-1',
-        clientId: item.clientId || '',
-        clientSecret: item.clientSecret || '',
-        valid: isIdc ? validateIdcToken(item) : validateSocialToken(item.refreshToken)
+        valid: isIdc ? validateIdcToken(item) : validateSocialToken(item)
       }
     })
     return { tokens, error: '' }
@@ -42,8 +47,8 @@ const parseJsonInput = (input) => {
 }
 
 const PLACEHOLDER = `[
-  { "name": "账号1", "refreshToken": "aor..." },
-  { "name": "BuilderId", "authMethod": "IdC", "refreshToken": "...", "clientId": "...", "clientSecret": "..." }
+  { "name": "Google账号", "refreshToken": "aor...", "profileArn": "arn:aws:..." },
+  { "name": "BuilderId", "authMethod": "IdC", "refreshToken": "aor...", "clientIdHash": "e909a05...", "region": "us-east-1" }
 ]`
 
 function TokenModal({ show, onClose, onBatchSave }) {
@@ -70,10 +75,10 @@ function TokenModal({ show, onClose, onBatchSave }) {
     const validTokens = tokens.filter(t => t.valid).map(t => ({
       name: t.name,
       refreshToken: t.refreshToken.trim(),
-      tokenType: t.tokenType,
-      region: t.region || null,
-      clientId: t.clientId || null,
-      clientSecret: t.clientSecret || null
+      authMethod: t.authMethod,
+      profileArn: t.profileArn,
+      clientIdHash: t.clientIdHash,
+      region: t.authMethod === 'IdC' ? t.region : null
     }))
     onBatchSave(validTokens)
   }
@@ -88,7 +93,7 @@ function TokenModal({ show, onClose, onBatchSave }) {
         <div className="space-y-4">
           <div>
             <label className={`block text-sm mb-2 ${colors.textMuted}`}>
-              JSON 数组 <span className="text-xs opacity-60">（支持 Social 和 IDC 类型）</span>
+              JSON 数组 <span className="text-xs opacity-60">（支持批量导入）</span>
             </label>
             <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)} 
               placeholder={PLACEHOLDER}
@@ -109,8 +114,8 @@ function TokenModal({ show, onClose, onBatchSave }) {
             )}
           </div>
           <div className={`text-xs ${colors.textMuted} space-y-1`}>
-            <p>💡 Google/GitHub 登录：refreshToken 以 aor 开头</p>
-            <p>💡 BuilderId/Enterprise：需要 authMethod="IdC"、clientId、clientSecret</p>
+            <p>💡 Google/GitHub：需要 refreshToken + profileArn</p>
+            <p>💡 BuilderId/Enterprise：需要 authMethod="IdC" + refreshToken + clientIdHash</p>
           </div>
           <button onClick={handleSave} disabled={!canSave}
             className={`w-full py-2.5 rounded-xl font-medium transition-all ${

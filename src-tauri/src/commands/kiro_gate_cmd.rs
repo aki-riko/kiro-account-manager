@@ -21,13 +21,13 @@ pub struct KiroGateToken {
   pub name: String,
   pub refresh_token: String,
   #[serde(default)]
-  pub token_type: String, // "social" 或 "idc"
+  pub auth_method: String, // "social" 或 "IdC"
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub region: Option<String>, // IDC 需要
+  pub profile_arn: Option<String>, // Social 需要
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub client_id: Option<String>, // IDC 需要
+  pub client_id_hash: Option<String>, // IdC 需要
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub client_secret: Option<String>, // IDC 需要
+  pub region: Option<String>, // IdC 需要
   pub created_at: String,
 }
 
@@ -83,10 +83,10 @@ pub struct AddTokenParams {
   pub name: String,
   pub refresh_token: String,
   #[serde(default)]
-  pub token_type: String,
+  pub auth_method: String,
+  pub profile_arn: Option<String>,
+  pub client_id_hash: Option<String>,
   pub region: Option<String>,
-  pub client_id: Option<String>,
-  pub client_secret: Option<String>,
 }
 
 #[tauri::command]
@@ -96,10 +96,10 @@ pub async fn add_kiro_gate_token(params: AddTokenParams) -> Result<KiroGateToken
     id: uuid::Uuid::new_v4().to_string(),
     name: params.name,
     refresh_token: params.refresh_token,
-    token_type: if params.token_type.is_empty() { "social".to_string() } else { params.token_type },
+    auth_method: if params.auth_method.is_empty() { "social".to_string() } else { params.auth_method },
+    profile_arn: params.profile_arn,
+    client_id_hash: params.client_id_hash,
     region: params.region,
-    client_id: params.client_id,
-    client_secret: params.client_secret,
     created_at: chrono::Utc::now().to_rfc3339(),
   };
   store.tokens.push(token.clone());
