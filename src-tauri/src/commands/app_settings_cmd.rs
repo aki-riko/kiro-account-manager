@@ -21,6 +21,8 @@ pub struct AppSettings {
     // KiroGate 配置
     pub kiro_gate_server: Option<String>,    // KiroGate 服务地址
     pub kiro_gate_proxy_key: Option<String>, // PROXY_API_KEY
+    // 卡密兑换服务地址
+    pub redeem_server: Option<String>,       // LicenseSystem 服务地址
 }
 
 impl Default for AppSettings {
@@ -38,6 +40,7 @@ impl Default for AppSettings {
             privacy_mode: Some(true),  // 默认开启
             kiro_gate_server: None,
             kiro_gate_proxy_key: None,
+            redeem_server: None,
         }
     }
 }
@@ -93,6 +96,7 @@ fn save_app_settings_inner(updates: AppSettings) -> Result<(), String> {
     if updates.privacy_mode.is_some() { current.privacy_mode = updates.privacy_mode; }
     if updates.kiro_gate_server.is_some() { current.kiro_gate_server = updates.kiro_gate_server; }
     if updates.kiro_gate_proxy_key.is_some() { current.kiro_gate_proxy_key = updates.kiro_gate_proxy_key; }
+    if updates.redeem_server.is_some() { current.redeem_server = updates.redeem_server; }
     
     save_settings_to_file(&current)
 }

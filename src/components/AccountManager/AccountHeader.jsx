@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Download, Upload, RefreshCw, Trash2, Plus, Sparkles, MoreHorizontal, ShoppingCart, LayoutGrid, List, Tag, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, Download, Upload, RefreshCw, Trash2, Plus, Sparkles, MoreHorizontal, ShoppingCart, LayoutGrid, List, Tag, ArrowUp, ArrowDown, Key } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import FilterDropdown from './FilterDropdown'
 
@@ -14,6 +14,7 @@ function AccountHeader({
   onExport,
   onRefresh,
   onRefreshAll,
+  onRedeem,
   autoRefreshing,
   refreshProgress,
   allTags = [],
@@ -183,6 +184,15 @@ function AccountHeader({
             <ShoppingCart size={14} />
             {t('about.shop')}
           </a>
+
+          {/* 卡密兑换按钮 */}
+          <button
+            onClick={onRedeem}
+            className="px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl text-sm font-medium hover:from-emerald-600 hover:to-teal-600 flex items-center gap-1.5 shadow-lg shadow-emerald-500/25"
+          >
+            <Key size={14} />
+            {t('accounts.redeem') || '卡密兑换'}
+          </button>
 
           {/* 添加按钮 */}
           <button onClick={onAdd} className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-medium hover:from-blue-600 hover:to-blue-700 flex items-center gap-1.5 shadow-lg shadow-blue-500/25">

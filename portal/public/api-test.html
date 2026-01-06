@@ -3,37 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kiro API 测试</title>
+  <title>API 测试 - Kiro Account Manager</title>
+  <link rel="icon" href="https://raw.githubusercontent.com/hj01857655/kiro-account-manager/main/src-tauri/icons/32x32.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#00d9ff', dark: '#0f0f23', card: '#16213e' } } }
+    }
+  </script>
   <style>
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #1a1a2e; color: #eee; }
-    h1 { color: #00d9ff; }
-    h3 { color: #aaa; margin: 20px 0 10px; }
-    .nav { margin-bottom: 20px; }
-    .nav a { color: #00d9ff; text-decoration: none; }
-    .nav a:hover { text-decoration: underline; }
-    .card { background: #16213e; border-radius: 8px; padding: 20px; margin: 20px 0; }
-    textarea { width: 100%; height: 200px; padding: 12px; border: 1px solid #333; border-radius: 4px; background: #0f0f23; color: #fff; font-family: monospace; font-size: 13px; resize: vertical; }
-    button { background: #00d9ff; color: #000; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; margin: 10px 5px 10px 0; font-weight: bold; }
-    button:hover { background: #00b8d4; }
-    button.secondary { background: #444; color: #fff; }
-    button.secondary:hover { background: #555; }
-    pre { background: #0f0f23; padding: 15px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 300px; font-size: 12px; }
-    .error { color: #ff6b6b; }
-    .success { color: #51cf66; }
-    .hint { color: #888; font-size: 12px; margin-top: 8px; }
+    .glass { background: rgba(22, 33, 62, 0.8); backdrop-filter: blur(10px); }
+    pre { background: #0f0f23; padding: 15px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 300px; font-size: 12px; }
+    textarea { font-family: 'Consolas', 'Monaco', monospace; }
   </style>
 </head>
-<body>
-  <div class="nav">
-    <a href="/">← 返回首页</a>
-  </div>
+<body class="bg-dark text-gray-100 min-h-screen">
+  <!-- 导航 -->
+  <nav class="fixed top-0 w-full z-50 glass border-b border-white/10">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/" class="flex items-center gap-3">
+          <img src="https://raw.githubusercontent.com/hj01857655/kiro-account-manager/main/src-tauri/icons/32x32.png" alt="Logo" class="w-8 h-8">
+          <span class="font-bold text-lg">Kiro Account Manager</span>
+        </a>
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="/#features" class="text-gray-400 hover:text-white transition">功能</a>
+        <a href="/#download" class="text-gray-400 hover:text-white transition">下载</a>
+        <a href="/tutorial.html" class="text-gray-400 hover:text-white transition">教程</a>
+        <a href="/coffee.html" class="text-gray-400 hover:text-white transition">续杯</a>
+        <a href="/api-test.html" class="text-primary">API 测试</a>
+        <a href="https://kiro.dev/downloads" target="_blank" class="text-gray-400 hover:text-white transition">Kiro IDE</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="pt-24 pb-16 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h1 class="text-3xl font-bold mb-8 text-center">🔧 API 测试</h1>
   
-  <h1>Kiro API 测试</h1>
-  
-  <div class="card">
-    <h3>账号 JSON（支持单个或数组）</h3>
-    <textarea id="jsonInput" placeholder='{
+      <section class="glass rounded-2xl p-6 border border-white/10 mb-6">
+        <h2 class="text-xl font-bold mb-4 text-primary">账号 JSON</h2>
+        <textarea id="jsonInput" class="w-full h-48 p-4 bg-dark border border-white/20 rounded-xl text-sm resize-y focus:border-primary focus:outline-none" placeholder='{
   "accessToken": "...",
   "refreshToken": "...",
   "provider": "Google"
@@ -48,22 +59,31 @@ IdC 类型（BuilderId/Enterprise）需要额外字段：
   "clientSecret": "...",
   "region": "us-east-1"
 }'></textarea>
-    <p class="hint">
-      Social 类型 (Google/Github)：accessToken, refreshToken, provider<br>
-      IdC 类型 (BuilderId/Enterprise)：accessToken, refreshToken, provider, clientId, clientSecret, region(可选)
-    </p>
-  </div>
+        <p class="text-gray-500 text-xs mt-2">
+          Social 类型 (Google/Github)：accessToken, refreshToken, provider<br>
+          IdC 类型 (BuilderId/Enterprise)：accessToken, refreshToken, provider, clientId, clientSecret, region(可选)
+        </p>
+      </section>
 
-  <div class="card">
-    <button onclick="testUsage()">获取配额 (Usage)</button>
-    <button onclick="testRefresh()">刷新 Token (Refresh)</button>
-    <button class="secondary" onclick="formatJson()">格式化 JSON</button>
-    <button class="secondary" onclick="clearAll()">清空</button>
-  </div>
+      <section class="glass rounded-2xl p-6 border border-white/10 mb-6">
+        <div class="flex flex-wrap gap-3">
+          <button onclick="testUsage()" class="px-6 py-2 bg-primary text-dark font-bold rounded-lg hover:opacity-90 transition">获取配额</button>
+          <button onclick="testRefresh()" class="px-6 py-2 bg-primary text-dark font-bold rounded-lg hover:opacity-90 transition">刷新 Token</button>
+          <button onclick="formatJson()" class="px-6 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition">格式化</button>
+          <button onclick="clearAll()" class="px-6 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition">清空</button>
+        </div>
+      </section>
 
-  <div class="card">
-    <pre id="result">结果将显示在这里...</pre>
-  </div>
+      <section class="glass rounded-2xl p-6 border border-white/10">
+        <h2 class="text-xl font-bold mb-4 text-primary">结果</h2>
+        <pre id="result" class="text-gray-300">结果将显示在这里...</pre>
+      </section>
+    </div>
+  </main>
+
+  <footer class="py-6 px-4 border-t border-white/10 text-center text-gray-500 text-sm">
+    <a href="/" class="hover:text-white">← 返回首页</a>
+  </footer>
 
   <script>
     const $ = id => document.getElementById(id)
@@ -80,7 +100,7 @@ IdC 类型（BuilderId/Enterprise）需要额外字段：
         const data = JSON.parse($('jsonInput').value)
         $('jsonInput').value = JSON.stringify(data, null, 2)
       } catch (e) {
-        $('result').className = 'error'
+        $('result').className = 'text-red-400'
         $('result').textContent = 'JSON 格式错误: ' + e.message
       }
     }
@@ -88,7 +108,7 @@ IdC 类型（BuilderId/Enterprise）需要额外字段：
     function clearAll() {
       $('jsonInput').value = ''
       $('result').textContent = '结果将显示在这里...'
-      $('result').className = ''
+      $('result').className = 'text-gray-300'
     }
 
     async function testUsage() {
@@ -106,7 +126,6 @@ IdC 类型（BuilderId/Enterprise）需要额外字段：
             continue
           }
 
-          // 判断认证类型
           const isIdC = ['BuilderId', 'Enterprise', 'idc'].includes(provider)
           const body = { accessToken, authMethod: isIdC ? 'idc' : 'social' }
           if (!isIdC) body.idp = provider
@@ -120,10 +139,10 @@ IdC 类型（BuilderId/Enterprise）需要额外字段：
           results.push({ status: res.status, provider, authMethod: body.authMethod, data })
         }
 
-        $('result').className = 'success'
+        $('result').className = 'text-green-400'
         $('result').textContent = JSON.stringify(results, null, 2)
       } catch (e) {
-        $('result').className = 'error'
+        $('result').className = 'text-red-400'
         $('result').textContent = '错误: ' + e.message
       }
     }
@@ -144,11 +163,9 @@ IdC 类型（BuilderId/Enterprise）需要额外字段：
             continue
           }
 
-          // 判断认证类型
           const isIdC = ['BuilderId', 'Enterprise', 'idc'].includes(provider)
           
           if (isIdC) {
-            // IdC 需要 clientId 和 clientSecret
             const clientId = acc.clientId || acc.client_id
             const clientSecret = acc.clientSecret || acc.client_secret
             const region = acc.region || 'us-east-1'
@@ -166,7 +183,6 @@ IdC 类型（BuilderId/Enterprise）需要额外字段：
             const data = await res.json()
             results.push({ status: res.status, provider, authMethod: 'idc', data })
           } else {
-            // Social 类型
             const body = { refreshToken, authMethod: 'social' }
             if (machineId) body.machineId = machineId
 
@@ -180,10 +196,10 @@ IdC 类型（BuilderId/Enterprise）需要额外字段：
           }
         }
 
-        $('result').className = 'success'
+        $('result').className = 'text-green-400'
         $('result').textContent = JSON.stringify(results, null, 2)
       } catch (e) {
-        $('result').className = 'error'
+        $('result').className = 'text-red-400'
         $('result').textContent = '错误: ' + e.message
       }
     }

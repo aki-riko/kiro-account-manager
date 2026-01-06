@@ -111,6 +111,10 @@
   "settings.proxyCleared": "代理已清除",
   "settings.browserSaved": "浏览器路径已保存",
   "settings.defaultBrowser": "已恢复使用系统默认浏览器",
+  "settings.redeemServer": "卡密兑换服务",
+  "settings.redeemServerDesc": "配置 LicenseSystem 服务地址，用于卡密兑换功能",
+  "settings.redeemServerSaved": "兑换服务地址已保存",
+  "settings.redeemServerCleared": "兑换服务地址已清除",
   "settings.detectFailed": "检测失败",
   "settings.noBrowserFound": "未在常见路径中检测到浏览器，请手动输入路径",
   "settings.detectSuccess": "检测成功",
@@ -249,6 +253,7 @@
   "accounts.batchDelete": "批量删除",
   "accounts.cardView": "卡片视图",
   "accounts.tableView": "列表视图",
+  "accounts.redeem": "卡密兑换",
 
   "login.title": "桌面授权登录",
   "login.subtitle": "选择登录方式",
@@ -632,10 +637,16 @@
   "announcement.title": "重要提示",
   "announcement.warning": "本软件完全免费！",
   "announcement.content1": "如果有人向你收费出售此软件，你被骗了！请立即举报。",
-  "announcement.content2": "本项目遵循 GPL-3.0 开源协议，任何人都可以免费使用。",
+  "announcement.content2": "本项目遵循 CC BY-NC-SA 4.0 开源协议，禁止商业使用。",
   "announcement.content3": "请从官方 GitHub 仓库下载，避免使用来路不明的版本。",
   "announcement.official": "官方开源地址：",
   "announcement.qqGroup": "开源交流群：",
   "announcement.dontRemind": "不再提醒",
-  "announcement.understand": "我已知晓"
+  "announcement.understand": "我已知晓",
+
+  "redeem.success": "兑换成功",
+  "redeem.desc": "输入购买的卡密，自动添加账号到列表",
+  "redeem.placeholder": "请输入卡密",
+  "redeem.account": "账号",
+  "redeem.submit": "兑换"
 }

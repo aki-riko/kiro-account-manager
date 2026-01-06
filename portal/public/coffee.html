@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>续杯服务 - Kiro Account Manager</title>
+  <link rel="icon" href="https://raw.githubusercontent.com/hj01857655/kiro-account-manager/main/src-tauri/icons/32x32.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#00d9ff', dark: '#0f0f23', card: '#16213e' } } }
+    }
+  </script>
+  <style>
+    .glass { background: rgba(22, 33, 62, 0.8); backdrop-filter: blur(10px); }
+  </style>
+</head>
+<body class="bg-dark text-gray-100 min-h-screen">
+  <!-- 导航 -->
+  <nav class="fixed top-0 w-full z-50 glass border-b border-white/10">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/" class="flex items-center gap-3">
+          <img src="https://raw.githubusercontent.com/hj01857655/kiro-account-manager/main/src-tauri/icons/32x32.png" alt="Logo" class="w-8 h-8">
+          <span class="font-bold text-lg">Kiro Account Manager</span>
+        </a>
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="/#features" class="text-gray-400 hover:text-white transition">功能</a>
+        <a href="/#download" class="text-gray-400 hover:text-white transition">下载</a>
+        <a href="/tutorial.html" class="text-gray-400 hover:text-white transition">教程</a>
+        <a href="/coffee.html" class="text-amber-400">续杯</a>
+        <a href="/api-test.html" class="text-gray-400 hover:text-white transition">API 测试</a>
+        <a href="https://kiro.dev/downloads" target="_blank" class="text-gray-400 hover:text-white transition">Kiro IDE</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="pt-24 pb-16 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h1 class="text-3xl font-bold mb-4 text-center">☕ 续杯服务</h1>
+      <p class="text-gray-400 text-center mb-8">Kiro 配额用完了？这里可以续杯</p>
+
+      <!-- 快速入口 -->
+      <section class="glass rounded-2xl p-6 border border-white/10 mb-6">
+        <h2 class="text-xl font-bold mb-4 text-amber-400">🚀 快速入口</h2>
+        <div class="grid md:grid-cols-3 gap-4">
+          <a href="https://xcn46cm1l4ir.feishu.cn/wiki/EGR1wiXGGin8RgkFRGIcioSFnqh" target="_blank"
+            class="block p-4 bg-amber-500/10 rounded-xl border border-amber-500/30 hover:border-amber-500/50 transition text-center">
+            <div class="text-2xl mb-2">📖</div>
+            <div class="font-bold text-amber-400">续杯教程</div>
+            <div class="text-gray-400 text-xs mt-1">详细操作指南</div>
+          </a>
+          <a href="https://qm.qq.com/q/MhecVOcvaW" target="_blank"
+            class="block p-4 bg-amber-500/10 rounded-xl border border-amber-500/30 hover:border-amber-500/50 transition text-center">
+            <div class="text-2xl mb-2">💬</div>
+            <div class="font-bold text-amber-400">续杯交流群</div>
+            <div class="text-gray-400 text-xs mt-1">问题咨询</div>
+          </a>
+          <a href="https://pay.ldxp.cn/item/yrqrff" target="_blank"
+            class="block p-4 bg-amber-500/10 rounded-xl border border-amber-500/30 hover:border-amber-500/50 transition text-center">
+            <div class="text-2xl mb-2">🛒</div>
+            <div class="font-bold text-amber-400">在线购买</div>
+            <div class="text-gray-400 text-xs mt-1">自助下单</div>
+          </a>
+        </div>
+      </section>
+
+      <!-- 说明 -->
+      <section class="glass rounded-2xl p-6 border border-white/10 mb-6">
+        <h2 class="text-xl font-bold mb-4 text-primary">💡 说明</h2>
+        <div class="space-y-3 text-gray-400 text-sm">
+          <p>• 续杯服务为响应用户购买账号需求而提供</p>
+          <p>• 购买前请仔细阅读续杯教程</p>
+          <p>• 如有问题请在续杯交流群咨询</p>
+          <p>• <strong class="text-white">本工具永久免费开源</strong>，如有人对工具收费即为诈骗</p>
+        </div>
+      </section>
+
+      <!-- 返回 -->
+      <div class="text-center">
+        <a href="/" class="text-gray-400 hover:text-white transition">← 返回首页</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="py-6 px-4 border-t border-white/10 text-center text-gray-500 text-sm">
+    <p>Made with ❤️ by hj01857655</p>
+  </footer>
+</body>
+</html>

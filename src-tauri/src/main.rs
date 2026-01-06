@@ -50,6 +50,7 @@ use commands::sso_import_cmd::*;
 use commands::update_cmd::*;
 use commands::steering_cmd::*;
 use commands::kiro_gate_cmd::*;
+use commands::redeem_cmd::*;
 use kiro::{
     get_kiro_local_token, switch_kiro_account,
 };
@@ -247,7 +248,9 @@ fn main() {
             get_api_keys,
             generate_api_key,
             delete_api_key,
-            find_token_by_api_key
+            find_token_by_api_key,
+            // 卡密兑换命令
+            redeem_card
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

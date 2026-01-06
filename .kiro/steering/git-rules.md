@@ -1,4 +1,8 @@
-# Git 仓库规则
+---
+inclusion: always
+---
+
+# Git 仓库规则（项目特定）
 
 ## 仓库说明
 

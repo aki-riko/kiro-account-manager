@@ -53,6 +53,11 @@ function Settings() {
     const [autoSwitchThreshold, setAutoSwitchThreshold] = useState(1)
     const [autoSwitchInterval, setAutoSwitchInterval] = useState(5)
 
+    // 卡密兑换服务
+    const [redeemServer, setRedeemServer] = useState('')
+    const [originalRedeemServer, setOriginalRedeemServer] = useState('')
+    const [savingRedeemServer, setSavingRedeemServer] = useState(false)
+
     // Kiro IDE 状态
     const [loading, setLoading] = useState(false)
 
@@ -111,6 +116,10 @@ function Settings() {
                 setAutoSwitchEnabled(appSettings.autoSwitchEnabled ?? false)
                 setAutoSwitchThreshold(appSettings.autoSwitchThreshold ?? 1)
                 setAutoSwitchInterval(appSettings.autoSwitchInterval ?? 5)
+                // 卡密兑换服务
+                const redeem = appSettings.redeemServer || ''
+                setRedeemServer(redeem)
+                setOriginalRedeemServer(redeem)
             }
         } catch (err) {
             console.error('Failed to load settings:', err)
@@ -236,6 +245,21 @@ function Settings() {
         const interval = parseInt(value) || 5
         setAutoSwitchInterval(interval)
         await saveAppSettings({ autoSwitchInterval: interval }, true)
+    }
+
+    // 卡密兑换服务地址
+    const redeemServerChanged = redeemServer !== originalRedeemServer
+    const handleApplyRedeemServer = async () => {
+        setSavingRedeemServer(true)
+        try {
+            await saveAppSettings({ redeemServer: redeemServer })
+            setOriginalRedeemServer(redeemServer)
+            await showSuccess(t('settings.saveSuccess'), redeemServer ? t('settings.redeemServerSaved') : t('settings.redeemServerCleared'))
+        } catch (err) {
+            await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
+        } finally {
+            setSavingRedeemServer(false)
+        }
     }
 
     const handleCodebaseIndexingChange = async (checked) => {
@@ -899,6 +923,32 @@ function Settings() {
                                 </svg>
                             </div>
                         </div>
+                    </div>
+
+                    {/* 卡密兑换服务 */}
+                    <div className={`mt-5 pt-5 border-t border-dashed ${colors.cardBorder}`}>
+                        <label className={`block text-sm ${colors.textMuted} mb-2`}>{t('settings.redeemServer')}</label>
+                        <div className="flex gap-3">
+                            <input
+                                type="text"
+                                value={redeemServer}
+                                onChange={(e) => setRedeemServer(e.target.value)}
+                                placeholder="https://license.example.com"
+                                className={`flex-1 px-4 py-3 border rounded-xl ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 transition-all`}
+                            />
+                            <button
+                                onClick={handleApplyRedeemServer}
+                                disabled={savingRedeemServer || !redeemServerChanged}
+                                className={`btn-icon px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all ${redeemServerChanged
+                                    ? 'bg-blue-500 text-white hover:bg-blue-600'
+                                    : `${colors.cardSecondary} ${colors.textMuted}`
+                                    }`}
+                            >
+                                {savingRedeemServer ? <RefreshCw size={16} className="animate-spin" /> : <Check size={16} />}
+                                {savingRedeemServer ? t('settings.saving') : t('settings.apply')}
+                            </button>
+                        </div>
+                        <p className={`text-xs ${colors.textMuted} mt-2`}>{t('settings.redeemServerDesc')}</p>
                     </div>
                 </section>
 

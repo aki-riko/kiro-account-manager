@@ -16,6 +16,7 @@ import AccountDetailModal from '../AccountDetailModal'
 import EditAccountModal from './EditAccountModal'
 import BatchTagModal from './BatchTagModal'
 import ConfirmDialog from './ConfirmDialog'
+import RedeemModal from './RedeemModal'
 import { AccountListSkeleton, AccountTableSkeleton } from '../Skeleton'
 
 function AccountManager() {
@@ -28,6 +29,7 @@ function AccountManager() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showBatchTagModal, setShowBatchTagModal] = useState(false)
+  const [showRedeemModal, setShowRedeemModal] = useState(false)
   const [copiedId, setCopiedId] = useState(null)
   const [selectedTag, setSelectedTag] = useState(null)
   const [selectedStatus, setSelectedStatus] = useState(null)
@@ -243,6 +245,7 @@ function AccountManager() {
         onExport={() => handleExport(selectedIds)}
         onRefresh={loadAccounts}
         onRefreshAll={() => batchRefreshAccounts(selectedIds, accounts)}
+        onRedeem={() => setShowRedeemModal(true)}
         autoRefreshing={autoRefreshing}
         lastRefreshTime={lastRefreshTime}
         refreshProgress={refreshProgress}
@@ -312,6 +315,7 @@ function AccountManager() {
       {editingLabelAccount && (<EditAccountModal account={editingLabelAccount} onClose={() => setEditingLabelAccount(null)} onSuccess={() => { loadAccounts(); loadTagDefinitions() }} />)}
       {showImportModal && (<ImportAccountModal onClose={() => setShowImportModal(false)} onSuccess={loadAccounts} />)}
       {showBatchTagModal && (<BatchTagModal accountIds={selectedIds} accounts={accounts} onClose={() => setShowBatchTagModal(false)} onSuccess={() => { loadAccounts(); loadTagDefinitions(); setSelectedIds([]) }} />)}
+      {showRedeemModal && (<RedeemModal isOpen={showRedeemModal} onClose={() => setShowRedeemModal(false)} onSuccess={loadAccounts} colors={colors} />)}
       {autoRefreshing && (<RefreshProgressModal refreshProgress={refreshProgress} />)}
       
       {/* 切换账号弹窗 */}
