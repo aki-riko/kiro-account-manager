@@ -1,6 +1,6 @@
 import { useRef, useMemo, memo, useState, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Users, Plus, RefreshCw, Repeat, Eye, Edit2, Trash2, Copy, UserX } from 'lucide-react'
+import { Users, Plus, RefreshCw, Repeat, Eye, Edit2, Trash2, Copy, UserX, ChevronUp, ChevronDown } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import { usePrivacy } from '../../contexts/PrivacyContext'
 import { getQuota, getUsed, formatUsage } from '../../utils/accountStats'
@@ -67,7 +67,7 @@ const ListRow = memo(function ListRow({
       <input type="checkbox" checked={isSelected} onChange={(e) => onSelectOne(account.id, e.target.checked)} className="w-4 h-4 rounded shrink-0 cursor-pointer" onClick={(e) => e.stopPropagation()} />
       
       {/* 邮箱 */}
-      <div className="w-52 shrink-0">
+      <div className="w-48 shrink-0">
         <div className="flex items-center gap-2">
           <span className={`text-sm font-medium truncate ${colors.text}`}>{maskEmail(account.email)}</span>
           {isCurrent && <span className="text-xs px-1.5 py-0.5 bg-blue-500 text-white rounded shrink-0">当前</span>}
@@ -91,7 +91,7 @@ const ListRow = memo(function ListRow({
       }`}>{account.usageData?.subscriptionInfo?.subscriptionTitle || 'Free'}</span>
 
       {/* 配额 */}
-      <div className="w-20 shrink-0">
+      <div className="w-24 shrink-0">
         <div className={`text-xs ${remaining > 0 ? 'text-green-500' : 'text-red-500'}`}>{formatUsage(used)}/{formatUsage(limit)}</div>
         <div className={`h-1 rounded-full ${isLightTheme ? 'bg-gray-200' : 'bg-white/10'} mt-1`}>
           <div className={`h-full rounded-full ${remaining > 0 ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${Math.min((used / limit) * 100, 100)}%` }} />
@@ -99,24 +99,27 @@ const ListRow = memo(function ListRow({
       </div>
 
       {/* 状态 */}
-      <span className={`text-xs px-2 py-1 rounded w-14 text-center shrink-0 ${
+      <span className={`text-xs px-2 py-1 rounded w-12 text-center shrink-0 ${
         isBanned ? (isLightTheme ? 'bg-red-100 text-red-600' : 'bg-red-500/20 text-red-400')
         : isActive ? (isLightTheme ? 'bg-green-100 text-green-700' : 'bg-green-500/20 text-green-400')
         : (isLightTheme ? 'bg-orange-100 text-orange-600' : 'bg-orange-500/20 text-orange-400')
       }`}>{isBanned ? t('accounts.banned') : isActive ? t('accounts.active') : account.status}</span>
 
       {/* 机器码 */}
-      <span className={`text-xs font-mono w-16 text-center shrink-0 ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>
+      <span className={`text-xs font-mono w-14 text-center shrink-0 ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>
         {account.machineId?.slice(0, 6) || '-'}
       </span>
 
       {/* Token|试用到期时间 */}
-      <div className="w-32 shrink-0 text-[11px]">
-        <span className={colors.textMuted} title="Token 过期">{account.expiresAt?.slice(5, 16).replace('/', '-') || '-'}</span>
+      <div className="w-28 shrink-0 text-[11px]">
+        <span className={colors.textMuted} title="Token 过期">{account.expiresAt?.slice(11, 16) || '-'}</span>
         {account.usageData?.usageBreakdownList?.[0]?.freeTrialInfo?.freeTrialExpiry && (
-          <span className={`${isLightTheme ? 'text-orange-600' : 'text-orange-400'}`} title="试用到期">
-            |{new Date(account.usageData.usageBreakdownList[0].freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString().slice(5)}
-          </span>
+          <>
+            <span className="text-gray-500 mx-1">|</span>
+            <span className={`${isLightTheme ? 'text-orange-600' : 'text-orange-400'}`} title="试用到期">
+              {new Date(account.usageData.usageBreakdownList[0].freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString().slice(5)}
+            </span>
+          </>
         )}
       </div>
 
@@ -141,7 +144,7 @@ const ListRow = memo(function ListRow({
 
 
 function AccountListView({
-  accounts, totalCount, selectedIds, onSelectAll, onSelectOne, onSwitch, onRefresh, onEdit, onEditLabel, onDelete, onDeleteRemote, onCopy, onAdd, refreshingId, switchingId, localToken, tagDefinitions = [], copiedId,
+  accounts, totalCount, selectedIds, onSelectAll, onSelectOne, onSwitch, onRefresh, onEdit, onEditLabel, onDelete, onDeleteRemote, onCopy, onAdd, refreshingId, switchingId, localToken, tagDefinitions = [], copiedId, sortBy, onSortChange,
 }) {
   const { t, theme, colors } = useApp()
   const { maskEmail } = usePrivacy()
@@ -157,6 +160,26 @@ function AccountListView({
     estimateSize: () => 52,
     overscan: 5,
   })
+
+  // 表头排序点击处理
+  const handleSort = useCallback((field) => {
+    if (!onSortChange) return
+    // 点击同一列切换升降序，点击不同列默认升序
+    if (sortBy === `${field}Asc`) {
+      onSortChange(`${field}Desc`)
+    } else if (sortBy === `${field}Desc`) {
+      onSortChange('default')
+    } else {
+      onSortChange(`${field}Asc`)
+    }
+  }, [sortBy, onSortChange])
+
+  // 排序图标
+  const SortIcon = ({ field }) => {
+    if (sortBy === `${field}Asc`) return <ChevronUp size={12} className="inline ml-0.5" />
+    if (sortBy === `${field}Desc`) return <ChevronDown size={12} className="inline ml-0.5" />
+    return null
+  }
 
   if (accounts.length === 0) {
     return (
@@ -188,13 +211,17 @@ function AccountListView({
       {/* 表头 */}
       <div className={`flex items-center gap-3 px-4 py-3 ${isLightTheme ? 'bg-gray-50' : 'bg-white/5'} border ${colors.cardBorder} rounded-t-xl ${colors.textMuted} text-xs font-semibold uppercase tracking-wider`}>
         <div className="w-4" />
-        <div className="w-52">邮箱</div>
+        <div className="w-48">邮箱</div>
         <div className="w-20 text-center">账号类型</div>
         <div className="w-20 text-center">订阅类型</div>
-        <div className="w-20">配额</div>
-        <div className="w-14 text-center">状态</div>
-        <div className={`w-16 text-center ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>机器码</div>
-        <div className="w-32">Token|试用</div>
+        <div className="w-24 cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('usage')}>
+          配额<SortIcon field="usage" />
+        </div>
+        <div className="w-12 text-center">状态</div>
+        <div className={`w-14 text-center ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>机器码</div>
+        <div className="w-28 cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('trial')}>
+          token|试用过期<SortIcon field="trial" />
+        </div>
         <div className="flex-1">标签</div>
       </div>
 

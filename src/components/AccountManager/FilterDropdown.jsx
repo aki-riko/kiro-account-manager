@@ -2,21 +2,67 @@ import { useState, useRef, useEffect } from 'react'
 import { Filter, X, ChevronDown } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useTranslation } from 'react-i18next'
-import { USAGE_RANGES } from './utils/filterUtils'
 import SearchableTagSelect from './SearchableTagSelect'
 
-const SUBSCRIPTION_OPTIONS = ['FREE', 'KIRO FREE', 'KIRO PRO', 'KIRO PRO+']
-const STATUS_OPTIONS = ['normal', 'banned', 'expired']
-const PROVIDER_OPTIONS = ['Google', 'GitHub', 'BuilderId']
+const SUBSCRIPTION_OPTIONS = [
+  { value: '', label: '全部' },
+  { value: 'FREE', label: 'FREE' },
+  { value: 'KIRO FREE', label: 'KIRO FREE' },
+  { value: 'KIRO PRO', label: 'KIRO PRO' },
+  { value: 'KIRO PRO+', label: 'KIRO PRO+' },
+]
+const STATUS_OPTIONS = [
+  { value: '', label: '全部' },
+  { value: 'normal', label: '正常' },
+  { value: 'banned', label: '封禁' },
+  { value: 'expired', label: '过期' },
+]
+const PROVIDER_OPTIONS = [
+  { value: '', label: '全部' },
+  { value: 'Google', label: 'Google' },
+  { value: 'GitHub', label: 'GitHub' },
+  { value: 'BuilderId', label: 'BuilderId' },
+]
+const USAGE_RANGE_OPTIONS = [
+  { value: '', label: '全部' },
+  { value: '0-25', label: '0-25%' },
+  { value: '25-50', label: '25-50%' },
+  { value: '50-75', label: '50-75%' },
+  { value: '75-100', label: '75-100%' },
+]
+
+// 通用筛选下拉组件
+function FilterSelect({ label, value, options, onChange, onClear, colors, isLightTheme }) {
+  const hasValue = !!value
+  const baseStyle = `w-full px-3 py-2 pr-16 border rounded-lg text-sm ${colors.text} ${isLightTheme ? 'bg-white' : 'bg-[#1a1a2e]'} focus:outline-none focus:ring-2 transition-all appearance-none`
+  const activeStyle = hasValue ? 'border-blue-500 ring-1 ring-blue-500/30' : colors.cardBorder
+
+  return (
+    <div>
+      <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{label}</label>
+      <div className="relative">
+        <select value={value} onChange={(e) => onChange(e.target.value)} className={`${baseStyle} ${activeStyle}`}>
+          {options.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <ChevronDown size={14} className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${colors.textMuted}`} />
+        {hasValue && (
+          <button onClick={onClear} className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-red-500/20 rounded transition-colors">
+            <X size={14} className="text-red-500" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function FilterDropdown({ 
   filters, 
   onFiltersChange,
-  // 标签筛选
   allTags = [],
   selectedTag,
   onTagFilter,
-  // 状态筛选
   selectedStatus,
   onStatusFilter,
 }) {
@@ -26,7 +72,6 @@ function FilterDropdown({
   const [open, setOpen] = useState(false)
   const dropdownRef = useRef(null)
 
-  // 点击外部关闭
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -46,219 +91,106 @@ function FilterDropdown({
     selectedStatus ? 1 : 0,
   ].reduce((a, b) => a + b, 0)
 
-  // 单选切换：点击已选中的取消，点击未选中的替换
-  const toggleFilter = (category, value) => {
-    const current = filters[category] || []
-    const newValues = current.includes(value) ? [] : [value]
-    onFiltersChange({ ...filters, [category]: newValues })
-  }
-
-  const setUsageRange = (range) => {
-    onFiltersChange({
-      ...filters,
-      usageRange: filters.usageRange === range ? null : range
-    })
-  }
-
   const clearAll = () => {
-    onFiltersChange({
-      subscriptions: [],
-      statuses: [],
-      providers: [],
-      usageRange: null
-    })
+    onFiltersChange({ subscriptions: [], statuses: [], providers: [], usageRange: null })
     onTagFilter(null)
     onStatusFilter(null)
   }
 
-  // 获取订阅类型颜色
-  const getSubColor = (sub) => {
-    if (sub.includes('PRO+')) return 'from-purple-500 to-pink-500'
-    if (sub.includes('PRO')) return 'from-blue-500 to-cyan-500'
-    return 'from-gray-400 to-gray-500'
-  }
-
-  // 获取状态颜色
-  const getStatusColor = (status) => {
-    if (status === 'banned') return 'bg-red-500'
-    if (status === 'expired') return 'bg-orange-500'
-    return 'bg-green-500'
-  }
-
-  // 获取提供商颜色
-  const getProviderColor = (provider) => {
-    if (provider === 'Google') return 'bg-red-500'
-    if (provider === 'GitHub') return 'bg-gray-700'
-    return 'bg-blue-500'
-  }
-
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* 触发按钮 */}
       <button
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-2 px-3 py-2 ${colors.card} border ${colors.cardBorder} rounded-xl ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} transition-all ${activeCount > 0 ? 'border-blue-500/50' : ''}`}
+        className={`flex items-center gap-2 px-3 py-2 ${colors.card} border ${colors.cardBorder} rounded-xl ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} transition-all ${activeCount > 0 ? 'border-blue-500/50 shadow-sm shadow-blue-500/20' : ''}`}
       >
         <Filter size={16} className={activeCount > 0 ? 'text-blue-500' : colors.textMuted} />
         <span className={`text-sm ${activeCount > 0 ? 'text-blue-500 font-medium' : colors.textMuted}`}>
           {t('filter.title')}
         </span>
         {activeCount > 0 && (
-          <span className="px-1.5 py-0.5 bg-blue-500 text-white text-[10px] rounded-full font-medium">
+          <span className="px-1.5 py-0.5 bg-blue-500 text-white text-[10px] rounded-full font-medium min-w-[18px] text-center">
             {activeCount}
           </span>
         )}
         <ChevronDown size={14} className={`${colors.textMuted} transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* 弹出面板 */}
       {open && (
-        <div className={`absolute right-0 top-full mt-2 w-80 ${colors.card} border ${colors.cardBorder} rounded-2xl shadow-2xl z-50 overflow-hidden`}>
-          {/* 头部 */}
-          <div className={`flex items-center justify-between px-4 py-3 border-b ${colors.cardBorder} ${colors.cardHover}`}>
+        <div className={`absolute right-0 top-full mt-2 w-72 ${colors.card} border ${colors.cardBorder} rounded-2xl shadow-2xl z-50 overflow-hidden`}>
+          <div className={`flex items-center justify-between px-4 py-3 border-b ${colors.cardBorder}`}>
             <div className="flex items-center gap-2">
               <Filter size={16} className="text-blue-500" />
               <span className={`text-sm font-medium ${colors.text}`}>{t('filter.title')}</span>
             </div>
             {activeCount > 0 && (
-              <button
-                onClick={clearAll}
-                className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors"
-              >
+              <button onClick={clearAll} className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors">
                 <X size={12} />
                 {t('filter.clearAll')}
               </button>
             )}
           </div>
 
-          <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
-            {/* 标签筛选 - 可搜索下拉框 */}
+          <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+            {/* 标签 */}
             {allTags.length > 0 && (
               <div>
-                <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
-                  {t('tags.title')}
+                <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{t('tags.title')}</label>
+                <div className="relative">
+                  <SearchableTagSelect
+                    tags={allTags}
+                    value={selectedTag}
+                    onChange={onTagFilter}
+                    placeholder={t('tags.searchPlaceholder') || '搜索标签...'}
+                    showAllOption={true}
+                    showNoneOption={true}
+                    allLabel={t('tags.all')}
+                    noneLabel={t('tags.noTags')}
+                  />
                 </div>
-                <SearchableTagSelect
-                  tags={allTags}
-                  value={selectedTag}
-                  onChange={(tagId) => onTagFilter(tagId)}
-                  placeholder={t('tags.searchPlaceholder') || '搜索标签...'}
-                  showAllOption={true}
-                  showNoneOption={true}
-                  allLabel={t('tags.all')}
-                  noneLabel={t('tags.noTags')}
-                />
               </div>
             )}
 
-            {/* 订阅类型 */}
-            <div>
-              <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
-                {t('filter.subscription')}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {SUBSCRIPTION_OPTIONS.map(sub => {
-                  const isActive = (filters.subscriptions || []).includes(sub)
-                  return (
-                    <button
-                      key={sub}
-                      onClick={() => toggleFilter('subscriptions', sub)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        isActive
-                          ? `bg-gradient-to-r ${getSubColor(sub)} text-white shadow-lg`
-                          : `${colors.input} ${colors.text}`
-                      }`}
-                    >
-                      {sub}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            <FilterSelect
+              label={t('filter.subscription')}
+              value={filters.subscriptions?.[0] || ''}
+              options={SUBSCRIPTION_OPTIONS}
+              onChange={(v) => onFiltersChange({ ...filters, subscriptions: v ? [v] : [] })}
+              onClear={() => onFiltersChange({ ...filters, subscriptions: [] })}
+              colors={colors}
+              isLightTheme={isLightTheme}
+            />
 
-            {/* 状态 */}
-            <div>
-              <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
-                {t('filter.status')}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {STATUS_OPTIONS.map(status => {
-                  const isActive = (filters.statuses || []).includes(status)
-                  return (
-                    <button
-                      key={status}
-                      onClick={() => toggleFilter('statuses', status)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                        isActive
-                          ? `${getStatusColor(status)} text-white shadow-lg`
-                          : `${colors.input} ${colors.text}`
-                      }`}
-                    >
-                      <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-white/50' : getStatusColor(status)}`} />
-                      {t(`filter.status_${status}`)}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            <FilterSelect
+              label={t('filter.status')}
+              value={filters.statuses?.[0] || ''}
+              options={STATUS_OPTIONS}
+              onChange={(v) => onFiltersChange({ ...filters, statuses: v ? [v] : [] })}
+              onClear={() => onFiltersChange({ ...filters, statuses: [] })}
+              colors={colors}
+              isLightTheme={isLightTheme}
+            />
 
-            {/* 提供商 */}
-            <div>
-              <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
-                {t('filter.provider')}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {PROVIDER_OPTIONS.map(provider => {
-                  const isActive = (filters.providers || []).includes(provider)
-                  return (
-                    <button
-                      key={provider}
-                      onClick={() => toggleFilter('providers', provider)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                        isActive
-                          ? `${getProviderColor(provider)} text-white shadow-lg`
-                          : `${colors.input} ${colors.text}`
-                      }`}
-                    >
-                      {provider}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            <FilterSelect
+              label={t('filter.provider')}
+              value={filters.providers?.[0] || ''}
+              options={PROVIDER_OPTIONS}
+              onChange={(v) => onFiltersChange({ ...filters, providers: v ? [v] : [] })}
+              onClear={() => onFiltersChange({ ...filters, providers: [] })}
+              colors={colors}
+              isLightTheme={isLightTheme}
+            />
 
-            {/* 使用率范围 */}
-            <div>
-              <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
-                {t('filter.usageRange')}
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                {USAGE_RANGES.map(range => {
-                  const isActive = filters.usageRange === range.key
-                  // 根据范围设置颜色
-                  const rangeColor = range.max <= 25 ? 'from-green-500 to-emerald-500' :
-                    range.max <= 50 ? 'from-blue-500 to-cyan-500' :
-                    range.max <= 75 ? 'from-yellow-500 to-orange-500' :
-                    'from-red-500 to-pink-500'
-                  return (
-                    <button
-                      key={range.key}
-                      onClick={() => setUsageRange(range.key)}
-                      className={`px-2 py-2 rounded-lg text-xs font-medium transition-all text-center ${
-                        isActive
-                          ? `bg-gradient-to-r ${rangeColor} text-white shadow-lg`
-                          : `${colors.input} ${colors.text}`
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            <FilterSelect
+              label={t('filter.usageRange')}
+              value={filters.usageRange || ''}
+              options={USAGE_RANGE_OPTIONS}
+              onChange={(v) => onFiltersChange({ ...filters, usageRange: v || null })}
+              onClear={() => onFiltersChange({ ...filters, usageRange: null })}
+              colors={colors}
+              isLightTheme={isLightTheme}
+            />
           </div>
 
-          {/* 底部提示 */}
           {activeCount > 0 && (
             <div className={`px-4 py-2 border-t ${colors.cardBorder} bg-blue-500/10`}>
               <p className="text-xs text-blue-500">

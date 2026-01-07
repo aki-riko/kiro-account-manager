@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { X, Tag, Plus, Trash2, Edit2, Check } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import { useDialog } from '../../contexts/DialogContext'
-import { getTags, setAccountTags } from '../../api/groupTag'
-import SearchableTagSelect from './SearchableTagSelect'
+import { getTags } from '../../api/groupTag'
 
 // 预设颜色
 const PRESET_COLORS = [
@@ -18,6 +17,8 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
   const isLightTheme = theme === 'light'
   const [newTagName, setNewTagName] = useState('')
   const [tags, setTags] = useState(allTags || [])
+  const [showDropdown, setShowDropdown] = useState(false)
+  const containerRef = useRef(null)
 
   useEffect(() => {
     if (!allTags) {
@@ -25,8 +26,24 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
     }
   }, [allTags])
 
+  // 点击外部关闭下拉
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const actualTags = allTags || tags
-  const availableTags = actualTags.filter(t => !selectedTagIds.includes(t.id))
+  const unselectedTags = actualTags.filter(t => !selectedTagIds.includes(t.id))
+  
+  // 过滤：有输入时过滤，没输入时显示全部未选中的
+  const filteredTags = newTagName.trim()
+    ? unselectedTags.filter(t => t.name.toLowerCase().includes(newTagName.toLowerCase()))
+    : unselectedTags
 
   // 添加新标签
   const handleAddTag = async () => {
@@ -55,22 +72,10 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
     onChange(selectedTagIds.filter(id => id !== tagId))
   }
 
-  // 下拉选择标签 - 填充到输入框
-  const handleSelectFromDropdown = (e) => {
-    const tagId = e.target.value
-    if (tagId) {
-      const tag = actualTags.find(t => t.id === tagId)
-      if (tag) {
-        setNewTagName(tag.name)
-      }
-    }
-    e.target.value = '' // 重置下拉框
-  }
-
   const getTagById = (tagId) => actualTags.find(t => t.id === tagId)
 
   return (
-    <div>
+    <div ref={containerRef}>
       <label className={`block text-sm font-medium ${colors.textMuted} mb-2 flex items-center gap-1.5`}>
         <Tag size={14} />
         {t('tags.title')}
@@ -97,38 +102,51 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
           <span className={`text-xs ${colors.textMuted}`}>{t('tags.noTags')}</span>
         )}
       </div>
-      {/* 下拉选择已有标签 - 可搜索 */}
-      {availableTags.length > 0 && (
-        <div className="mb-2">
-          <SearchableTagSelect
-            tags={availableTags}
-            value=""
-            onChange={() => {}}
-            placeholder={t('tags.searchPlaceholder') || '搜索标签...'}
-            fillInput={true}
-            onFillInput={(tagName) => setNewTagName(tagName)}
-          />
-        </div>
-      )}
-      {/* 新建标签 */}
+      {/* 搜索/添加标签 - 合并输入框 */}
       <div className="flex gap-2">
-        <input
-          type="text"
-          value={newTagName}
-          onChange={(e) => setNewTagName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-          placeholder={t('tags.newTagPlaceholder')}
-          className={`flex-1 px-3 py-1.5 border ${colors.cardBorder} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${colors.input} ${colors.text}`}
-        />
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            value={newTagName}
+            onChange={(e) => setNewTagName(e.target.value)}
+            onFocus={() => setShowDropdown(true)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
+            placeholder={t('tags.searchOrCreate') || '搜索或输入新标签...'}
+            className={`w-full px-3 py-1.5 border ${colors.cardBorder} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${colors.input} ${colors.text}`}
+          />
+          {/* 搜索建议下拉 - 聚焦就显示 */}
+          {showDropdown && unselectedTags.length > 0 && (
+            <div className={`absolute top-full left-0 right-0 mt-1 ${isLightTheme ? 'bg-white' : 'bg-[#1a1a2e]'} border ${colors.cardBorder} rounded-lg shadow-lg z-10 max-h-32 overflow-y-auto`}>
+              {filteredTags.map(tag => (
+                <button 
+                  key={tag.id} 
+                  type="button"
+                  onClick={() => { onChange([...selectedTagIds, tag.id]); setNewTagName(''); setShowDropdown(false) }}
+                  className={`w-full px-3 py-2 text-left text-sm ${colors.text} ${isLightTheme ? 'hover:bg-gray-100' : 'hover:bg-white/10'} flex items-center gap-2`}
+                >
+                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                  {tag.name}
+                </button>
+              ))}
+              {filteredTags.length === 0 && newTagName.trim() && (
+                <div className={`px-3 py-2 text-sm ${colors.textMuted}`}>
+                  按回车创建 "{newTagName.trim()}"
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={handleAddTag}
           disabled={!newTagName.trim()}
           className="px-3 py-1.5 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 disabled:opacity-50 flex items-center gap-1"
+          title={t('tags.addTag')}
         >
           <Plus size={14} />
         </button>
       </div>
+      <p className={`text-xs ${colors.textMuted} mt-1.5`}>{t('tags.hint') || '输入搜索已有标签，或直接输入创建新标签'}</p>
     </div>
   )
 }

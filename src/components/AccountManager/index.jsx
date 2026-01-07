@@ -292,7 +292,7 @@ function AccountManager() {
         advancedFilters={advancedFilters}
         onAdvancedFiltersChange={setAdvancedFilters}
       />
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 flex flex-col min-h-0">
       {loading ? (
         viewMode === 'card' ? <AccountListSkeleton count={8} /> : <AccountTableSkeleton count={8} />
       ) : viewMode === 'card' ? (
@@ -336,6 +336,8 @@ function AccountManager() {
           localToken={localToken}
           tagDefinitions={tagDefinitions}
           copiedId={copiedId}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
         />
       )}
       </div>

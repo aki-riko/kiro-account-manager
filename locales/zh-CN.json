@@ -628,6 +628,9 @@
   "tags.mode_add": "追加",
   "tags.mode_remove": "移除",
   "tags.searchPlaceholder": "搜索标签...",
+  "tags.addOrSelect": "搜索/添加标签",
+  "tags.searchOrCreate": "搜索或输入新标签...",
+  "tags.hint": "输入搜索已有标签，或直接输入创建新标签",
 
   "filter.title": "高级筛选",
   "filter.clearAll": "清除全部",

@@ -1,11 +1,3 @@
-// 筛选器常量
-export const USAGE_RANGES = [
-  { key: '0-25', label: '0-25%', min: 0, max: 25 },
-  { key: '25-50', label: '25-50%', min: 25, max: 50 },
-  { key: '50-75', label: '50-75%', min: 50, max: 75 },
-  { key: '75-100', label: '75-100%', min: 75, max: 100 },
-]
-
 // 筛选器应用函数
 export function applyFilters(accounts, filters) {
   if (!filters) return accounts
@@ -51,19 +43,21 @@ export function applyFilters(accounts, filters) {
       if (!matchProvider) return false
     }
 
-    // 使用率范围筛选
-    if (filters.usageRange) {
-      const range = USAGE_RANGES.find(r => r.key === filters.usageRange)
-      if (range) {
-        const breakdown = account.usageData?.usageBreakdownList?.[0]
-        const quota = breakdown?.usageLimit || 0
-        const used = breakdown?.currentUsage || 0
-        const percent = quota > 0 ? (used / quota) * 100 : 0
-        if (range.max === 100) {
-          if (percent < range.min || percent > range.max) return false
-        } else {
-          if (percent < range.min || percent >= range.max) return false
-        }
+    // 使用率范围筛选 - 字符串格式 '0-25', '25-50' 等
+    if (filters.usageRange && typeof filters.usageRange === 'string') {
+      const [minStr, maxStr] = filters.usageRange.split('-')
+      const min = parseInt(minStr, 10)
+      const max = parseInt(maxStr, 10)
+      
+      const breakdown = account.usageData?.usageBreakdownList?.[0]
+      const quota = breakdown?.usageLimit || 0
+      const used = breakdown?.currentUsage || 0
+      const percent = quota > 0 ? (used / quota) * 100 : 0
+      
+      if (max === 100) {
+        if (percent < min || percent > max) return false
+      } else {
+        if (percent < min || percent >= max) return false
       }
     }
 

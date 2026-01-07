@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, Tag, Plus } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import { useDialog } from '../../contexts/DialogContext'
@@ -19,9 +19,22 @@ function BatchTagModal({ accountIds, accounts = [], onClose, onSuccess }) {
   const [selectedTagIds, setSelectedTagIds] = useState([])
   const [newTagName, setNewTagName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
+  const inputContainerRef = useRef(null)
 
   useEffect(() => {
     getTags().then(setTags).catch(() => {})
+  }, [])
+
+  // 点击外部关闭下拉
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (inputContainerRef.current && !inputContainerRef.current.contains(e.target)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   // 计算选中账号的共同标签（交集）
@@ -86,10 +99,15 @@ function BatchTagModal({ accountIds, accounts = [], onClose, onSuccess }) {
   }
 
   const availableTags = tags.filter(t => !selectedTagIds.includes(t.id))
+  
+  // 过滤：有输入时过滤，没输入时显示全部未选中的
+  const filteredTags = newTagName.trim()
+    ? availableTags.filter(t => t.name.toLowerCase().includes(newTagName.toLowerCase()))
+    : availableTags
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className={`${isLightTheme ? 'bg-white' : 'bg-[#1a1a2e]'} rounded-xl w-full max-w-md shadow-2xl`} onClick={e => e.stopPropagation()}>
+      <div className={`${isLightTheme ? 'bg-white' : 'bg-[#1a1a2e]'} rounded-xl w-full max-w-lg shadow-2xl`} onClick={e => e.stopPropagation()}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${colors.cardBorder}`}>
           <div className="flex items-center gap-2">
             <Tag size={20} className="text-purple-500" />
@@ -127,55 +145,54 @@ function BatchTagModal({ accountIds, accounts = [], onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* 添加新标签 */}
+          {/* 搜索/添加标签 - 合并输入框 */}
           <div>
-            <label className={`block text-sm font-medium ${colors.textMuted} mb-2`}>{t('tags.addTag')}</label>
+            <label className={`block text-sm font-medium ${colors.textMuted} mb-2`}>{t('tags.addOrSelect')}</label>
             <div className="flex gap-2">
-              <input type="text" value={newTagName} onChange={(e) => setNewTagName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    if (newTagName.trim()) {
-                      handleAddTag()
-                    } else {
-                      handleSubmit()
+              <div className="flex-1 relative" ref={inputContainerRef}>
+                <input type="text" value={newTagName} onChange={(e) => setNewTagName(e.target.value)}
+                  onFocus={() => setShowDropdown(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      if (newTagName.trim()) {
+                        handleAddTag()
+                      } else {
+                        handleSubmit()
+                      }
                     }
-                  }
-                }}
-                placeholder={t('tags.newTagPlaceholder')}
-                className={`flex-1 px-3 py-2 border ${colors.cardBorder} rounded-lg text-sm ${colors.input} ${colors.text}`}
-              />
+                  }}
+                  placeholder={t('tags.searchOrCreate') || '搜索或输入新标签...'}
+                  className={`w-full px-3 py-2 border ${colors.cardBorder} rounded-lg text-sm ${colors.input} ${colors.text}`}
+                />
+                {/* 搜索建议下拉 - 聚焦就显示 */}
+                {showDropdown && availableTags.length > 0 && (
+                  <div className={`absolute top-full left-0 right-0 mt-1 ${isLightTheme ? 'bg-white' : 'bg-[#1a1a2e]'} border ${colors.cardBorder} rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto`}>
+                    {filteredTags.map(tag => (
+                      <button key={tag.id} onClick={() => { setSelectedTagIds([...selectedTagIds, tag.id]); setNewTagName(''); setShowDropdown(false) }}
+                        className={`w-full px-3 py-2 text-left text-sm ${colors.text} ${isLightTheme ? 'hover:bg-gray-100' : 'hover:bg-white/10'} flex items-center gap-2`}
+                      >
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                        {tag.name}
+                      </button>
+                    ))}
+                    {filteredTags.length === 0 && newTagName.trim() && (
+                      <div className={`px-3 py-2 text-sm ${colors.textMuted}`}>
+                        按回车创建 "{newTagName.trim()}"
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <button type="button" onClick={handleAddTag} disabled={!newTagName.trim()}
                 className="px-3 py-2 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 disabled:opacity-50"
+                title={t('tags.addTag')}
               >
                 <Plus size={16} />
               </button>
             </div>
+            <p className={`text-xs ${colors.textMuted} mt-1.5`}>{t('tags.hint') || '输入搜索已有标签，或直接输入创建新标签'}</p>
           </div>
-
-          {/* 可选标签 */}
-          {availableTags.length > 0 && (
-            <div>
-              <label className={`block text-sm font-medium ${colors.textMuted} mb-2`}>{t('tags.available')}</label>
-              <select
-                onChange={(e) => {
-                  const tagId = e.target.value
-                  if (tagId) {
-                    const tag = tags.find(t => t.id === tagId)
-                    if (tag) setNewTagName(tag.name)
-                  }
-                  e.target.value = ''
-                }}
-                defaultValue=""
-                className={`w-full px-3 py-2 border ${colors.cardBorder} rounded-lg text-sm ${colors.input} ${colors.text} ${isLightTheme ? 'bg-white' : 'bg-[#1a1a2e]'}`}
-              >
-                <option value="" disabled>{t('tags.selectTags')}</option>
-                {availableTags.map(tag => (
-                  <option key={tag.id} value={tag.id}>{tag.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
 
         <div className={`flex justify-end gap-3 px-5 py-4 border-t ${colors.cardBorder}`}>

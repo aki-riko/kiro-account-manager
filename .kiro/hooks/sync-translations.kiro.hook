@@ -5,7 +5,7 @@
   "version": "1",
   "when": {
     "type": "fileEdited",
-    "patterns": []
+    "patterns": ["**/locales/zh-CN.json"]
   },
   "then": {
     "type": "askAgent",
