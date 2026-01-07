@@ -110,12 +110,12 @@ const ListRow = memo(function ListRow({
         {account.machineId?.slice(0, 6) || '-'}
       </span>
 
-      {/* 到期时间（合并显示） */}
+      {/* Token|试用到期时间 */}
       <div className="w-32 shrink-0 text-[11px]">
-        <span className={colors.textMuted} title="Token 过期">{account.expiresAt?.slice(5, 16).replace('/', '-').replace(' ', ' ') || '-'}</span>
+        <span className={colors.textMuted} title="Token 过期">{account.expiresAt?.slice(5, 16).replace('/', '-') || '-'}</span>
         {account.usageData?.usageBreakdownList?.[0]?.freeTrialInfo?.freeTrialExpiry && (
-          <span className={`ml-1 ${isLightTheme ? 'text-orange-600' : 'text-orange-400'}`} title="试用到期">
-            试{new Date(account.usageData.usageBreakdownList[0].freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString().slice(5)}
+          <span className={`${isLightTheme ? 'text-orange-600' : 'text-orange-400'}`} title="试用到期">
+            |{new Date(account.usageData.usageBreakdownList[0].freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString().slice(5)}
           </span>
         )}
       </div>
@@ -194,7 +194,7 @@ function AccountListView({
         <div className="w-20">配额</div>
         <div className="w-14 text-center">状态</div>
         <div className={`w-16 text-center ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>机器码</div>
-        <div className="w-32">到期</div>
+        <div className="w-32">Token|试用</div>
         <div className="flex-1">标签</div>
       </div>
 

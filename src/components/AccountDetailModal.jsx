@@ -233,10 +233,10 @@ function AccountDetailModal({ account, onClose }) {
                 <div className="flex justify-between"><span className={colors.textMuted}>{t('detail.email')}</span><span className={`${colors.text} text-xs`}>{account.usageData?.userInfo?.email || account.email}</span></div>
                 <div className="flex justify-between"><span className={colors.textMuted}>{t('detail.subscriptionType')}</span><span className={`${colors.text} font-mono text-xs truncate max-w-[150px]`} title={account.usageData?.subscriptionInfo?.type}>{account.usageData?.subscriptionInfo?.type || '-'}</span></div>
                 <div className="flex justify-between"><span className={colors.textMuted}>{t('detail.upgradeable')}</span><span className={colors.text}>{account.usageData?.subscriptionInfo?.upgradeCapability === 'UPGRADE_CAPABLE' ? t('common.yes') : t('common.no')}</span></div>
-                {breakdown?.overageRate && (
+                {breakdown?.overageRate != null && (
                   <>
-                    <div className="flex justify-between"><span className={colors.textMuted}>{t('detail.overageRate')}</span><span className={colors.text}>${breakdown.overageRate}/{breakdown.unit || t('detail.perUnit')}</span></div>
-                    <div className="flex justify-between"><span className={colors.textMuted}>{t('detail.overageCap')}</span><span className={colors.text}>{breakdown.overageCap}</span></div>
+                    <div className="flex justify-between"><span className={colors.textMuted}>{t('detail.overageRate')}</span><span className={colors.text}>{breakdown.currency === 'USD' ? '$' : breakdown.currency}{breakdown.overageRate}/{t('detail.perCredit')}</span></div>
+                    <div className="flex justify-between"><span className={colors.textMuted}>{t('detail.overageCap')}</span><span className={colors.text}>{breakdown.currency === 'USD' ? '$' : breakdown.currency}{breakdown.overageCap}</span></div>
                   </>
                 )}
               </div>
