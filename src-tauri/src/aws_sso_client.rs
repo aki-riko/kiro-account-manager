@@ -5,6 +5,7 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use log;
 
 /// 默认 scopes（跟 Kiro 一样）
 pub const GRANT_SCOPES: &[&str] = &[
@@ -163,7 +164,7 @@ impl AWSSSOClient {
         }
 
         #[cfg(debug_assertions)]
-        println!("[AWS SSO] Token created successfully");
+        log::debug!("[AWS SSO] Token created successfully");
 
         serde_json::from_str(&text)
             .map_err(|e| format!("Failed to parse token response: {}", e))
@@ -185,9 +186,6 @@ impl AWSSSOClient {
             "refreshToken": refresh_token
         });
 
-        #[cfg(debug_assertions)]
-        println!("[AWS SSO] Refresh Token");
-
         let resp = self.client
             .post(&url)
             .header("Content-Type", "application/json")
@@ -199,15 +197,22 @@ impl AWSSSOClient {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
 
+        // 只打印非 200 的响应
+        if !status.is_success() {
+            log::debug!("[AWS SSO] RefreshToken Status: {}", status);
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                log::debug!("[AWS SSO] RefreshToken Response:\n{}", serde_json::to_string_pretty(&json).unwrap_or(text.clone()));
+            } else {
+                log::debug!("[AWS SSO] RefreshToken Response: {}", text);
+            }
+        }
+
         if !status.is_success() {
             if status.as_u16() == 401 {
                 return Err("RefreshToken 已过期或无效".to_string());
             }
             return Err(format!("Token refresh failed ({}): {}", status, text));
         }
-
-        #[cfg(debug_assertions)]
-        println!("[AWS SSO] Token refreshed successfully");
 
         serde_json::from_str(&text)
             .map_err(|e| format!("Failed to parse token response: {}", e))

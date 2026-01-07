@@ -121,11 +121,16 @@ export function useAccounts() {
       return { success: true }
     } catch (e) {
       console.warn(e)
-      // 更新账号状态为错误信息
       const errorMsg = String(e)
       let status = '刷新失败'
       if (errorMsg.includes('BANNED')) {
         status = 'banned'
+        // 持久化封禁状态到后端
+        try {
+          await invoke('update_account', { id, updates: { status: 'banned' } })
+        } catch (updateErr) {
+          console.error('更新封禁状态失败:', updateErr)
+        }
       } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('过期') || errorMsg.includes('invalid')) {
         status = 'Token已失效'
       }

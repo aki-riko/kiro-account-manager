@@ -63,6 +63,15 @@ export function useAutoRefresh(appSettings, settingsLoading) {
           const errorMsg = String(e)
           if (errorMsg.includes('BANNED')) {
             console.warn(`[AutoRefresh] ${account.email} 账号已封禁`)
+            // 更新账号状态为封禁
+            try {
+              await invoke('update_account', { 
+                id: account.id, 
+                updates: { status: 'banned' } 
+              })
+            } catch (updateErr) {
+              console.error(`[AutoRefresh] 更新封禁状态失败:`, updateErr)
+            }
           } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('invalid')) {
             console.warn(`[AutoRefresh] ${account.email} Token已失效`)
           } else {

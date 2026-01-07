@@ -2,16 +2,10 @@
 
 pub mod common;
 
-/// 生成随机邮箱（用于被封禁账号无法获取真实邮箱时）
-pub fn generate_random_email(provider: &str) -> String {
-    use rand::Rng;
-    let random_id: u32 = rand::thread_rng().gen_range(100000..999999);
-    format!("banned_{}@{}.unknown", random_id, provider.to_lowercase())
-}
-
 pub mod account_cmd;
 pub mod app_settings_cmd;
 pub mod auth_cmd;
+pub mod claude_code_cmd;
 pub mod group_tag_cmd;
 pub mod kiro_gate_cmd;
 pub mod kiro_settings_cmd;

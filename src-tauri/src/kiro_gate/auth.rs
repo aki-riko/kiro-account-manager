@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
+use log;
 
 const TOKEN_REFRESH_THRESHOLD_SECS: u64 = 300; // 5 分钟前刷新
 
@@ -108,7 +109,7 @@ impl TokenManager {
       let refresh_url = format!("https://prod.{}.auth.desktop.kiro.dev/refreshToken", region);
 
       #[cfg(debug_assertions)]
-      println!("[KiroGate Auth] Refreshing Social token, URL: {}", refresh_url);
+      log::debug!("[KiroGate Auth] Refreshing Social token, URL: {}", refresh_url);
 
       let body = serde_json::json!({
         "refreshToken": self.config.refresh_token
@@ -122,7 +123,7 @@ impl TokenManager {
         .await
         .map_err(|e| {
           #[cfg(debug_assertions)]
-          println!("[KiroGate Auth] Request error: {:?}", e);
+          log::debug!("[KiroGate Auth] Request error: {:?}", e);
           format!("刷新 token 请求失败: {}", e)
         })?;
 
@@ -141,7 +142,7 @@ impl TokenManager {
         .map_err(|e| format!("解析刷新响应失败: {}", e))?;
 
       #[cfg(debug_assertions)]
-      println!("[KiroGate Auth] Token refreshed, expires_in: {}", data.expires_in);
+      log::debug!("[KiroGate Auth] Token refreshed, expires_in: {}", data.expires_in);
 
       let expires_at = Instant::now() + Duration::from_secs((data.expires_in - 60) as u64);
       

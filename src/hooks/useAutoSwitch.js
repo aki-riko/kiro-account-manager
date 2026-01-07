@@ -60,7 +60,17 @@ export function useAutoSwitch(appSettings, settingsLoading) {
       } catch (e) {
         const errorMsg = String(e)
         if (errorMsg.includes('BANNED')) {
-          console.warn('[AutoSwitch] 当前账号已封禁，跳过切换')
+          console.warn('[AutoSwitch] 当前账号已封禁')
+          // 更新账号状态为封禁
+          try {
+            await invoke('update_account', { 
+              id: currentAccount.id, 
+              updates: { status: 'banned' } 
+            })
+            emit('accounts-updated')
+          } catch (updateErr) {
+            console.error('[AutoSwitch] 更新封禁状态失败:', updateErr)
+          }
           return
         } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('invalid')) {
           console.warn('[AutoSwitch] 当前账号 Token 已失效')

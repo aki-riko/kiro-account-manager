@@ -314,11 +314,13 @@ pub async fn import_from_sso_token(
 
     // Step 8: 统一使用 Web Portal 接口获取用量信息
     let client = KiroPortalClient::new();
-    let usage = client.get_user_usage_and_limits(&token_data.access_token, "BuilderId").await.ok();
-    let usage_data = serde_json::to_value(&usage).unwrap_or(serde_json::Value::Null);
+    let usage_response = client.get_user_usage_and_limits(&token_data.access_token, "BuilderId").await?;
+    let usage_data = serde_json::to_value(&usage_response).unwrap_or(serde_json::Value::Null);
     
-    let (new_email, user_id) = extract_user_info(&usage);
-    let email = new_email.unwrap_or_else(|| super::generate_random_email("BuilderId"));
+    let (new_email, user_id) = extract_user_info(&Some(usage_response));
+    
+    // 获取不到邮箱直接报错
+    let email = new_email.ok_or("获取邮箱失败，请检查账号状态")?;
     let client_id_hash = calc_client_id_hash();
 
     let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);

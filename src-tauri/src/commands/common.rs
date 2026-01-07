@@ -72,7 +72,7 @@ pub async fn refresh_token_by_provider(
 pub async fn get_usage_by_provider(
     provider: &str,
     access_token: &str,
-) -> UsageResult {
+) -> Result<UsageResult, String> {
     // 统一使用 KiroPortalClient 的 GetUserUsageAndLimits 接口
     // provider 即 idp: Google / Github / BuilderId
     let client = KiroPortalClient::new();
@@ -83,29 +83,26 @@ pub async fn get_usage_by_provider(
 /// 解析 usage 结果，提取封禁状态和认证错误
 fn parse_usage_result<T: serde::Serialize>(
     result: Result<T, String>,
-) -> UsageResult {
+) -> Result<UsageResult, String> {
     match result {
-        Ok(usage) => UsageResult {
+        Ok(usage) => Ok(UsageResult {
             usage_data: serde_json::to_value(&usage).unwrap_or(serde_json::Value::Null),
             is_banned: false,
             is_auth_error: false,
-        },
-        Err(e) if e.starts_with("BANNED:") => UsageResult {
+        }),
+        Err(e) if e.starts_with("BANNED:") => Ok(UsageResult {
             usage_data: serde_json::Value::Null,
             is_banned: true,
             is_auth_error: false,
-        },
+        }),
         // 401 或认证相关错误（包括 403 + token invalid）
-        Err(e) if e.starts_with("AUTH_ERROR:") || e.contains("401") || e.contains("Unauthorized") || e.contains("expired") || e.contains("invalid") => UsageResult {
+        Err(e) if e.starts_with("AUTH_ERROR:") || e.contains("401") || e.contains("Unauthorized") || e.contains("expired") || e.contains("invalid") => Ok(UsageResult {
             usage_data: serde_json::Value::Null,
             is_banned: false,
             is_auth_error: true,
-        },
-        Err(_) => UsageResult {
-            usage_data: serde_json::Value::Null,
-            is_banned: false,
-            is_auth_error: false,
-        },
+        }),
+        // 其他错误直接抛出
+        Err(e) => Err(e),
     }
 }
 

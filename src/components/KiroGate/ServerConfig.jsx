@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Copy, Check, Play, Square, Loader2 } from 'lucide-react'
+import { Copy, Check, Play, Square, Loader2, Terminal, Trash2 } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../hooks/useApp'
 import { useAppSettings } from '../../contexts/AppSettingsContext'
 import { useKiroGateTokens } from '../../hooks/useKiroGateTokens'
+import { useDialog } from '../../contexts/DialogContext'
 
 const DEFAULT_PORT = 8000
 const PORT_OPTIONS = [8000, 8080, 8888, 9000, 9090, 3000, 3001, 5000]
@@ -12,12 +13,17 @@ function ServerConfig() {
   const { colors } = useApp()
   const { settings, updateSettings } = useAppSettings()
   const { tokens } = useKiroGateTokens()
+  const { showSuccess, showError, showConfirm } = useDialog()
   
   const [port, setPort] = useState(DEFAULT_PORT)
   const [proxyKey, setProxyKey] = useState('')
   const [serverStatus, setServerStatus] = useState({ running: false, port: 0, url: '' })
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  // Claude Code 配置状态
+  const [claudeCodeConfigured, setClaudeCodeConfigured] = useState(false)
+  const [claudeCodeLoading, setClaudeCodeLoading] = useState(false)
+  const [apiKeys, setApiKeys] = useState([])
 
   useEffect(() => {
     if (settings) {
@@ -25,6 +31,23 @@ function ServerConfig() {
       setProxyKey(settings.kiroGateProxyKey || '')
     }
   }, [settings])
+
+  // 加载 API Keys 和 Claude Code 配置状态
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [keys, claudeSettings] = await Promise.all([
+          invoke('get_api_keys'),
+          invoke('get_claude_code_settings')
+        ])
+        setApiKeys(keys || [])
+        // 检查是否已配置 KiroGate
+        const env = claudeSettings?.env || {}
+        setClaudeCodeConfigured(!!env.ANTHROPIC_BASE_URL && env.ANTHROPIC_BASE_URL.includes('localhost'))
+      } catch (e) { console.error(e) }
+    }
+    loadData()
+  }, [])
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -42,16 +65,12 @@ function ServerConfig() {
   const saveProxyKey = (v) => { setProxyKey(v); updateSettings({ kiroGateProxyKey: v }) }
 
   const startServer = async () => {
-    // 如果没有设置 PROXY_API_KEY，使用默认值
     const finalProxyKey = proxyKey || 'default-proxy-key'
     setLoading(true)
     try {
       const status = await invoke('start_kiro_gate', { params: { port, proxy_api_key: finalProxyKey } })
       setServerStatus(status)
-      // 如果使用了默认值，保存到设置
-      if (!proxyKey) {
-        saveProxyKey(finalProxyKey)
-      }
+      if (!proxyKey) saveProxyKey(finalProxyKey)
     } catch (e) { alert('启动失败: ' + e) }
     finally { setLoading(false) }
   }
@@ -69,10 +88,57 @@ function ServerConfig() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // 一键配置 Claude Code
+  const configureClaudeCode = async () => {
+    if (!serverStatus.running) {
+      await showError('配置失败', '请先启动 KiroGate 服务器')
+      return
+    }
+    if (apiKeys.length === 0) {
+      await showError('配置失败', '请先在「API Key」页生成一个 sk- 格式的 API Key')
+      return
+    }
+    
+    setClaudeCodeLoading(true)
+    try {
+      // apiKeys[0].apiKey 就是完整的 sk-xxx 格式 API Key
+      const selectedKey = apiKeys[0]
+      
+      await invoke('configure_claude_code', {
+        apiKey: selectedKey.apiKey,
+        baseUrl: serverStatus.url
+      })
+      
+      setClaudeCodeConfigured(true)
+      await showSuccess('配置成功', 'Claude Code 已配置为使用 KiroGate，重启 Claude Code 生效')
+    } catch (e) {
+      await showError('配置失败', String(e))
+    } finally {
+      setClaudeCodeLoading(false)
+    }
+  }
+
+  // 清除 Claude Code 配置
+  const clearClaudeCodeConfig = async () => {
+    const confirmed = await showConfirm('清除配置', '确定要清除 Claude Code 的 KiroGate 配置吗？')
+    if (!confirmed) return
+    
+    setClaudeCodeLoading(true)
+    try {
+      await invoke('clear_claude_code_config')
+      setClaudeCodeConfigured(false)
+      await showSuccess('已清除', 'Claude Code 配置已清除，重启 Claude Code 生效')
+    } catch (e) {
+      await showError('清除失败', String(e))
+    } finally {
+      setClaudeCodeLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* 状态卡片 */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className={`${colors.card} rounded-xl p-4 border ${colors.cardBorder} text-center`}>
           <div className="text-2xl mb-1">{serverStatus.running ? '🟢' : '⚪'}</div>
           <div className={`font-bold ${serverStatus.running ? 'text-green-400' : colors.textMuted}`}>
@@ -93,6 +159,13 @@ function ServerConfig() {
             {tokens.length}
           </div>
           <div className={`text-xs ${colors.textMuted}`}>Token 数量</div>
+        </div>
+        <div className={`${colors.card} rounded-xl p-4 border ${colors.cardBorder} text-center`}>
+          <div className="text-2xl mb-1">💻</div>
+          <div className={`font-bold ${claudeCodeConfigured ? 'text-orange-400' : colors.textMuted}`}>
+            {claudeCodeConfigured ? '已配置' : '未配置'}
+          </div>
+          <div className={`text-xs ${colors.textMuted}`}>Claude Code</div>
         </div>
       </div>
 
@@ -135,15 +208,65 @@ function ServerConfig() {
         </button>
       </div>
 
+      {/* Claude Code 一键配置 */}
+      <div className={`${colors.card} rounded-2xl p-5 border ${colors.cardBorder}`}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Terminal size={20} className="text-orange-400" />
+            <h3 className={`font-semibold ${colors.text}`}>Claude Code 配置</h3>
+          </div>
+          {claudeCodeConfigured && (
+            <span className="px-2 py-1 text-xs rounded-lg bg-orange-500/20 text-orange-400">已配置</span>
+          )}
+        </div>
+        
+        <p className={`text-sm ${colors.textMuted} mb-4`}>
+          一键配置 Claude Code 使用 KiroGate 作为 API 代理，无需手动修改配置文件。
+        </p>
+
+        <div className="flex gap-3">
+          <button 
+            onClick={configureClaudeCode} 
+            disabled={claudeCodeLoading || !serverStatus.running || apiKeys.length === 0}
+            className={`flex-1 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition-all ${
+              claudeCodeConfigured 
+                ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' 
+                : 'bg-gradient-to-r from-orange-500 to-amber-600 text-white hover:opacity-90'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {claudeCodeLoading ? <Loader2 size={16} className="animate-spin" /> : <Terminal size={16} />}
+            {claudeCodeConfigured ? '重新配置' : '一键配置'}
+          </button>
+          
+          {claudeCodeConfigured && (
+            <button 
+              onClick={clearClaudeCodeConfig}
+              disabled={claudeCodeLoading}
+              className={`px-4 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition-all bg-red-500/20 text-red-400 hover:bg-red-500/30 disabled:opacity-50`}
+            >
+              <Trash2 size={16} />
+              清除
+            </button>
+          )}
+        </div>
+
+        {!serverStatus.running && (
+          <p className={`text-xs text-yellow-500 mt-2`}>⚠️ 请先启动 KiroGate 服务器</p>
+        )}
+        {serverStatus.running && apiKeys.length === 0 && (
+          <p className={`text-xs text-yellow-500 mt-2`}>⚠️ 请先在「API Key」页生成 API Key</p>
+        )}
+      </div>
+
       {/* 使用说明 */}
       <div className={`${colors.card} rounded-2xl p-5 border ${colors.cardBorder}`}>
         <h3 className={`font-semibold ${colors.text} mb-3`}>使用流程</h3>
         <div className={`text-sm ${colors.textMuted} space-y-2`}>
-          <p>1. 设置 PROXY_API_KEY（任意字符串）和端口</p>
-          <p>2. 启动服务器</p>
-          <p>3. 在「Token 管理」页添加 Kiro refresh token</p>
-          <p>4. 生成 sk- 格式的 API Key</p>
-          <p>5. 在「API 测试」页测试生成的 API Key</p>
+          <p>1. 设置端口并启动服务器</p>
+          <p>2. 在「Token 管理」页添加 Kiro refresh token</p>
+          <p>3. 在「API Key」页生成 sk- 格式的 API Key</p>
+          <p>4. 点击「一键配置」自动配置 Claude Code</p>
+          <p>5. 重启 Claude Code 即可使用</p>
         </div>
       </div>
     </div>

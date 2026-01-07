@@ -195,9 +195,18 @@ function ImportAccountModal({ onClose, onSuccess }) {
             password: item.password || null
           })
         }
+        // 检查返回的账号是否被封禁
+        if (account.status === 'banned') {
+          return { success: true, index: item._index + 1, email: account.email, banned: true }
+        }
         return { success: true, index: item._index + 1, email: account.email }
       } catch (e) {
-        return { success: false, index: item._index + 1, error: String(e).slice(0, 50) }
+        const errorMsg = String(e)
+        // 检测封禁错误
+        if (errorMsg.includes('BANNED')) {
+          return { success: false, index: item._index + 1, error: '账号已封禁', banned: true }
+        }
+        return { success: false, index: item._index + 1, error: errorMsg.slice(0, 50) }
       }
     }
     
@@ -249,12 +258,25 @@ function ImportAccountModal({ onClose, onSuccess }) {
           region: ssoRegion || null
         })
         if (result.success) {
+          // 检查返回的账号是否被封禁
+          if (result.status === 'banned') {
+            return { success: true, index: index + 1, email: result.email, banned: true }
+          }
           return { success: true, index: index + 1, email: result.email }
         } else {
+          // 检测封禁错误
+          if (result.error?.includes('BANNED')) {
+            return { success: false, index: index + 1, error: '账号已封禁', banned: true }
+          }
           return { success: false, index: index + 1, error: result.error || t('common.unknown') }
         }
       } catch (e) {
-        return { success: false, index: index + 1, error: String(e).slice(0, 80) }
+        const errorMsg = String(e)
+        // 检测封禁错误
+        if (errorMsg.includes('BANNED')) {
+          return { success: false, index: index + 1, error: '账号已封禁', banned: true }
+        }
+        return { success: false, index: index + 1, error: errorMsg.slice(0, 80) }
       }
     }
     

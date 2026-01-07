@@ -62,10 +62,19 @@ async fn login_social(
     
     let auth_result = social_provider.login().await?;
     
-    let usage_result = get_usage_by_provider(&provider_id, &auth_result.access_token).await;
+    let usage_result = get_usage_by_provider(&provider_id, &auth_result.access_token).await?;
+    
+    // 封禁账号直接报错
+    if usage_result.is_banned {
+        return Err("BANNED: 账号已被封禁".to_string());
+    }
+    
     let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     let (new_email, user_id) = extract_user_info(&usage);
+    
+    // 获取不到邮箱直接报错
+    let final_email = new_email.clone().ok_or("获取邮箱失败，请检查账号状态")?;
 
     let mut store = state.store.lock().unwrap();
     let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &provider_id, &auth_result.refresh_token);
@@ -74,7 +83,7 @@ async fn login_social(
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(auth_result.access_token.clone());
         existing.refresh_token = Some(auth_result.refresh_token.clone());
-        if let Some(email) = &new_email { existing.email = email.clone(); }
+        existing.email = final_email.clone();
         existing.user_id = user_id;
         existing.expires_at = Some(auth_result.expires_at.clone());
         existing.profile_arn = auth_result.profile_arn;
@@ -83,8 +92,7 @@ async fn login_social(
         existing.status = calc_status(usage_result.is_banned);
         existing.clone()
     } else {
-        let email = new_email.unwrap_or_else(|| super::generate_random_email(&provider_id));
-        let mut account = Account::new(email.clone(), format!("Kiro {} 账号", provider_id));
+        let mut account = Account::new(final_email.clone(), format!("Kiro {} 账号", provider_id));
         account.access_token = Some(auth_result.access_token.clone());
         account.refresh_token = Some(auth_result.refresh_token.clone());
         account.provider = Some(provider_id.clone());
@@ -98,7 +106,6 @@ async fn login_social(
         account
     };
     
-    let final_email = account.email.clone();
     store.save_to_file();
     drop(store);
 
@@ -120,10 +127,19 @@ async fn login_idc(
     
     let auth_result = idc_provider.login().await?;
 
-    let usage_result = get_usage_by_provider(&provider_id, &auth_result.access_token).await;
+    let usage_result = get_usage_by_provider(&provider_id, &auth_result.access_token).await?;
+    
+    // 封禁账号直接报错
+    if usage_result.is_banned {
+        return Err("BANNED: 账号已被封禁".to_string());
+    }
+    
     let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     let (new_email, user_id) = extract_user_info(&usage);
+    
+    // 获取不到邮箱直接报错
+    let final_email = new_email.clone().ok_or("获取邮箱失败，请检查账号状态")?;
 
     let mut store = state.store.lock().unwrap();
     let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &provider_id, &auth_result.refresh_token);
@@ -132,7 +148,7 @@ async fn login_idc(
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(auth_result.access_token.clone());
         existing.refresh_token = Some(auth_result.refresh_token.clone());
-        if let Some(email) = &new_email { existing.email = email.clone(); }
+        existing.email = final_email.clone();
         existing.user_id = user_id;
         existing.expires_at = Some(auth_result.expires_at.clone());
         existing.client_id_hash = auth_result.client_id_hash;
@@ -146,8 +162,7 @@ async fn login_idc(
         existing.status = calc_status(usage_result.is_banned);
         existing.clone()
     } else {
-        let email = new_email.unwrap_or_else(|| super::generate_random_email("BuilderId"));
-        let mut account = Account::new(email.clone(), format!("Kiro {} 账号", provider_id));
+        let mut account = Account::new(final_email.clone(), format!("Kiro {} 账号", provider_id));
         account.access_token = Some(auth_result.access_token.clone());
         account.refresh_token = Some(auth_result.refresh_token.clone());
         account.provider = Some(provider_id.clone());
@@ -166,7 +181,6 @@ async fn login_idc(
         account
     };
     
-    let final_email = account.email.clone();
     store.save_to_file();
     drop(store);
 
@@ -212,10 +226,19 @@ pub async fn handle_kiro_social_callback(
         &code, &pending.code_verifier, redirect_uri, &pending.machineid,
     ).await?;
     
-    let usage_result = get_usage_by_provider(&pending.provider, &token_response.access_token).await;
+    let usage_result = get_usage_by_provider(&pending.provider, &token_response.access_token).await?;
+    
+    // 封禁账号直接报错
+    if usage_result.is_banned {
+        return Err("BANNED: 账号已被封禁".to_string());
+    }
+    
     let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     let (new_email, user_id) = extract_user_info(&usage);
+    
+    // 获取不到邮箱直接报错
+    let final_email = new_email.clone().ok_or("获取邮箱失败，请检查账号状态")?;
 
     let mut store = state.store.lock().unwrap();
     let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &pending.provider, &token_response.refresh_token);
@@ -224,14 +247,13 @@ pub async fn handle_kiro_social_callback(
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(token_response.access_token.clone());
         existing.refresh_token = Some(token_response.refresh_token.clone());
-        if let Some(email) = &new_email { existing.email = email.clone(); }
+        existing.email = final_email.clone();
         existing.user_id = user_id;
         existing.usage_data = Some(usage_result.usage_data);
         existing.status = calc_status(usage_result.is_banned);
         existing.clone()
     } else {
-        let email = new_email.unwrap_or_else(|| super::generate_random_email(&pending.provider));
-        let mut account = Account::new(email.clone(), format!("Kiro {} 账号", pending.provider));
+        let mut account = Account::new(final_email.clone(), format!("Kiro {} 账号", pending.provider));
         account.access_token = Some(token_response.access_token.clone());
         account.refresh_token = Some(token_response.refresh_token.clone());
         account.provider = Some(pending.provider.clone());
@@ -242,7 +264,6 @@ pub async fn handle_kiro_social_callback(
         account
     };
     
-    let final_email = account.email.clone();
     store.save_to_file();
     drop(store);
     
@@ -262,10 +283,16 @@ pub async fn add_kiro_account(
     println!("Adding Kiro account: email={}, idp={}", email, idp);
     
     let usage_result = if !access_token.is_empty() {
-        get_usage_by_provider(&idp, &access_token).await
+        get_usage_by_provider(&idp, &access_token).await?
     } else {
         crate::commands::common::UsageResult { usage_data: serde_json::Value::Null, is_banned: false, is_auth_error: false }
     };
+    
+    // 封禁账号直接报错
+    if usage_result.is_banned {
+        return Err("BANNED: 账号已被封禁".to_string());
+    }
+    
     let usage: Option<GetUserUsageAndLimitsResponse> = 
         serde_json::from_value(usage_result.usage_data.clone()).ok();
     let (new_email, user_id) = extract_user_info(&usage);

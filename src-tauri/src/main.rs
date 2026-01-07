@@ -51,6 +51,7 @@ use commands::update_cmd::*;
 use commands::steering_cmd::*;
 use commands::kiro_gate_cmd::*;
 use commands::redeem_cmd::*;
+use commands::claude_code_cmd::*;
 use kiro::{
     get_kiro_local_token, switch_kiro_account,
 };
@@ -58,6 +59,16 @@ use process::{close_kiro_ide, is_kiro_ide_running, start_kiro_ide};
 
 fn main() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Debug)
+                // 只显示我们自己的日志，过滤掉第三方库的日志
+                .filter(|metadata| {
+                    let target = metadata.target();
+                    target.starts_with("kiro_account_manager")
+                })
+                .build()
+        )
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -249,6 +260,10 @@ fn main() {
             generate_api_key,
             delete_api_key,
             find_token_by_api_key,
+            // Claude Code 配置命令
+            get_claude_code_settings,
+            configure_claude_code,
+            clear_claude_code_config,
             // 卡密兑换命令
             redeem_card
         ])
