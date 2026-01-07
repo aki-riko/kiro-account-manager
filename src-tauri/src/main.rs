@@ -50,7 +50,6 @@ use commands::sso_import_cmd::*;
 use commands::update_cmd::*;
 use commands::steering_cmd::*;
 use commands::kiro_gate_cmd::*;
-use commands::redeem_cmd::*;
 use commands::claude_code_cmd::*;
 use kiro::{
     get_kiro_local_token, switch_kiro_account,
@@ -263,9 +262,7 @@ fn main() {
             // Claude Code 配置命令
             get_claude_code_settings,
             configure_claude_code,
-            clear_claude_code_config,
-            // 卡密兑换命令
-            redeem_card
+            clear_claude_code_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

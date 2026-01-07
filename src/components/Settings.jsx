@@ -53,11 +53,6 @@ function Settings() {
     const [autoSwitchThreshold, setAutoSwitchThreshold] = useState(1)
     const [autoSwitchInterval, setAutoSwitchInterval] = useState(5)
 
-    // 卡密兑换服务
-    const [redeemServer, setRedeemServer] = useState('')
-    const [originalRedeemServer, setOriginalRedeemServer] = useState('')
-    const [savingRedeemServer, setSavingRedeemServer] = useState(false)
-
     // Kiro IDE 状态
     const [loading, setLoading] = useState(false)
 
@@ -116,10 +111,6 @@ function Settings() {
                 setAutoSwitchEnabled(appSettings.autoSwitchEnabled ?? false)
                 setAutoSwitchThreshold(appSettings.autoSwitchThreshold ?? 1)
                 setAutoSwitchInterval(appSettings.autoSwitchInterval ?? 5)
-                // 卡密兑换服务
-                const redeem = appSettings.redeemServer || ''
-                setRedeemServer(redeem)
-                setOriginalRedeemServer(redeem)
             }
         } catch (err) {
             console.error('Failed to load settings:', err)
@@ -245,21 +236,6 @@ function Settings() {
         const interval = parseInt(value) || 5
         setAutoSwitchInterval(interval)
         await saveAppSettings({ autoSwitchInterval: interval }, true)
-    }
-
-    // 卡密兑换服务地址
-    const redeemServerChanged = redeemServer !== originalRedeemServer
-    const handleApplyRedeemServer = async () => {
-        setSavingRedeemServer(true)
-        try {
-            await saveAppSettings({ redeemServer: redeemServer })
-            setOriginalRedeemServer(redeemServer)
-            await showSuccess(t('settings.saveSuccess'), redeemServer ? t('settings.redeemServerSaved') : t('settings.redeemServerCleared'))
-        } catch (err) {
-            await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
-        } finally {
-            setSavingRedeemServer(false)
-        }
     }
 
     const handleCodebaseIndexingChange = async (checked) => {
@@ -534,7 +510,7 @@ function Settings() {
                 {/* 主题设置 */}
                 <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-100`}>
                     <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.theme')}</h2>
-                    <p className={`text-sm ${colors.textMuted} mb-5`}>{t('settings.themeDesc')}</p>
+                    <p className={`text-sm ${colors.textMuted} mb-4`}>{t('settings.themeDesc')}</p>
 
                     <div className="grid grid-cols-4 gap-3">
                         {themeOptions.map((opt, index) => {
@@ -568,10 +544,10 @@ function Settings() {
                 {/* Kiro IDE 设置 */}
                 <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-150`}>
                     <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.kiroSettings')}</h2>
-                    <p className={`text-sm ${colors.textMuted} mb-5`}>{t('settings.kiroSettingsDesc')}</p>
+                    <p className={`text-sm ${colors.textMuted} mb-4`}>{t('settings.kiroSettingsDesc')}</p>
 
                     {/* AI 模型 */}
-                    <div className="mb-5">
+                    <div className="mb-4">
                         <label className={`block text-sm ${colors.textMuted} mb-2`}>{t('settings.aiModel')} {savingModel && <span className="text-blue-500 text-xs ml-2">{t('settings.saving')}</span>}</label>
                         <div className="relative">
                             <select
@@ -594,7 +570,7 @@ function Settings() {
                     </div>
 
                     {/* 锁定模型 */}
-                    <label className={`flex items-start gap-3 cursor-pointer ${colors.cardSecondary} ${colors.cardHover} rounded-xl p-4 transition-all hover:scale-[1.01] mb-5`}>
+                    <label className={`flex items-start gap-3 cursor-pointer ${colors.cardSecondary} ${colors.cardHover} rounded-xl p-4 transition-all hover:scale-[1.01] mb-4`}>
                         <input
                             type="checkbox"
                             checked={lockModel}
@@ -790,7 +766,7 @@ function Settings() {
                 {/* 账号设置 */}
                 <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-200`}>
                     <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.account')}</h2>
-                    <p className={`text-sm ${colors.textMuted} mb-5`}>{t('settings.accountDesc')}</p>
+                    <p className={`text-sm ${colors.textMuted} mb-4`}>{t('settings.accountDesc')}</p>
 
                     {/* 自动刷新 Token + 刷新间隔 */}
                     <div className="flex items-center gap-3 mb-4">
@@ -814,10 +790,11 @@ function Settings() {
                                 disabled={!autoRefresh}
                                 className={`w-full px-4 py-3 border rounded-xl ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 appearance-none ${!autoRefresh ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} transition-all`}
                             >
+                                <option value="10">10 {t('common.minutes')}</option>
+                                <option value="20">20 {t('common.minutes')}</option>
                                 <option value="30">30 {t('common.minutes')}</option>
+                                <option value="40">40 {t('common.minutes')}</option>
                                 <option value="50">50 {t('common.minutes')} ({t('common.recommended')})</option>
-                                <option value="60">60 {t('common.minutes')}</option>
-                                <option value="120">2 {t('common.hours')}</option>
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
                                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -891,7 +868,7 @@ function Settings() {
                             <Repeat size={16} />
                             <span className="text-sm font-medium whitespace-nowrap">{t('settings.autoSwitch')}</span>
                         </label>
-                        <div className="flex items-center gap-2 flex-1">
+                        <div className="flex items-center gap-2">
                             <span className={`text-sm ${colors.textMuted} whitespace-nowrap`}>{t('settings.autoSwitchThreshold')}</span>
                             <input
                                 type="number"
@@ -900,15 +877,15 @@ function Settings() {
                                 disabled={!autoSwitchEnabled}
                                 min="0"
                                 step="0.1"
-                                className={`w-20 px-3 py-2 border rounded-lg text-center ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 ${!autoSwitchEnabled ? 'cursor-not-allowed opacity-50' : ''} transition-all`}
+                                className={`w-20 px-3 py-3 border rounded-xl text-center ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 ${!autoSwitchEnabled ? 'cursor-not-allowed opacity-50' : ''} transition-all`}
                             />
                         </div>
-                        <div className="relative">
+                        <div className="relative flex-1">
                             <select
                                 value={autoSwitchInterval}
                                 onChange={(e) => handleAutoSwitchIntervalChange(e.target.value)}
                                 disabled={!autoSwitchEnabled}
-                                className={`px-4 py-2 border rounded-lg ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 appearance-none pr-8 ${!autoSwitchEnabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} transition-all`}
+                                className={`w-full px-4 py-3 border rounded-xl ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 appearance-none ${!autoSwitchEnabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} transition-all`}
                             >
                                 <option value="1">1 {t('common.minutes')}</option>
                                 <option value="3">3 {t('common.minutes')}</option>
@@ -917,38 +894,12 @@ function Settings() {
                                 <option value="15">15 {t('common.minutes')}</option>
                                 <option value="30">30 {t('common.minutes')}</option>
                             </select>
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
                                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                                     <path d="M2.5 4.5L6 8L9.5 4.5" stroke={isLightTheme ? '#666' : '#888'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </div>
                         </div>
-                    </div>
-
-                    {/* 卡密兑换服务 */}
-                    <div className={`mt-5 pt-5 border-t border-dashed ${colors.cardBorder}`}>
-                        <label className={`block text-sm ${colors.textMuted} mb-2`}>{t('settings.redeemServer')}</label>
-                        <div className="flex gap-3">
-                            <input
-                                type="text"
-                                value={redeemServer}
-                                onChange={(e) => setRedeemServer(e.target.value)}
-                                placeholder="https://license.example.com"
-                                className={`flex-1 px-4 py-3 border rounded-xl ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 transition-all`}
-                            />
-                            <button
-                                onClick={handleApplyRedeemServer}
-                                disabled={savingRedeemServer || !redeemServerChanged}
-                                className={`btn-icon px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all ${redeemServerChanged
-                                    ? 'bg-blue-500 text-white hover:bg-blue-600'
-                                    : `${colors.cardSecondary} ${colors.textMuted}`
-                                    }`}
-                            >
-                                {savingRedeemServer ? <RefreshCw size={16} className="animate-spin" /> : <Check size={16} />}
-                                {savingRedeemServer ? t('settings.saving') : t('settings.apply')}
-                            </button>
-                        </div>
-                        <p className={`text-xs ${colors.textMuted} mt-2`}>{t('settings.redeemServerDesc')}</p>
                     </div>
                 </section>
 
@@ -958,7 +909,7 @@ function Settings() {
                         <Globe size={18} className="text-blue-500" />
                         <h2 className={`text-lg font-semibold ${colors.text}`}>{t('settings.browser')}</h2>
                     </div>
-                    <p className={`text-sm ${colors.textMuted} mb-5`}>
+                    <p className={`text-sm ${colors.textMuted} mb-4`}>
                         {t('settings.browserDesc')}
                     </p>
 

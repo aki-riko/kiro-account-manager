@@ -176,7 +176,7 @@ function AccountDetailModal({ account, onClose }) {
                     <span className={`text-xs ${colors.textMuted}`}>{t('detail.mainQuota')}</span>
                   </div>
                   <div className={`text-lg font-semibold ${colors.text}`} title={breakdown?.currentUsageWithPrecision != null ? `${t('detail.precise')}: ${breakdown.currentUsageWithPrecision} / ${breakdown.usageLimitWithPrecision}` : undefined}>{formatUsage(form.used)} / {formatUsage(form.quota)}</div>
-                  {breakdown?.nextDateReset && <div className={`text-xs ${colors.textMuted} mt-1`}>{new Date(breakdown.nextDateReset * 1000).toLocaleDateString()} {t('detail.reset')}</div>}
+                  {account.usageData?.nextDateReset && <div className={`text-xs ${colors.textMuted} mt-1`}>{new Date(account.usageData.nextDateReset * 1000).toLocaleDateString()} {t('detail.reset')}</div>}
                 </div>
                 
                 <div className={`rounded-lg p-3 ${freeTrialQuota && freeTrialInfo?.freeTrialStatus === 'ACTIVE' ? (isLightTheme ? 'bg-cyan-50' : 'bg-cyan-500/20') : colors.cardSecondary}`}>
