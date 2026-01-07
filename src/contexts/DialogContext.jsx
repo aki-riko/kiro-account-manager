@@ -28,13 +28,14 @@ export function DialogProvider({ children }) {
   }, [])
 
   // 显示成功弹窗
-  const showSuccess = useCallback((title, message) => {
+  const showSuccess = useCallback((title, message, rawData = null) => {
     return new Promise((resolve) => {
       setResolveRef(() => resolve)
       setDialog({
         type: 'success',
         title,
         message,
+        rawData,
       })
     })
   }, [])
@@ -93,6 +94,7 @@ export function DialogProvider({ children }) {
           type={dialog.type}
           title={dialog.title}
           message={dialog.message}
+          rawData={dialog.rawData}
           confirmText={dialog.confirmText}
           cancelText={dialog.cancelText}
           onConfirm={handleConfirm}

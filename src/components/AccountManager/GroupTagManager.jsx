@@ -4,6 +4,7 @@ import { X, Tag, Plus, Trash2, Edit2, Check } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import { useDialog } from '../../contexts/DialogContext'
 import { getTags, setAccountTags } from '../../api/groupTag'
+import SearchableTagSelect from './SearchableTagSelect'
 
 // 预设颜色
 const PRESET_COLORS = [
@@ -96,19 +97,17 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
           <span className={`text-xs ${colors.textMuted}`}>{t('tags.noTags')}</span>
         )}
       </div>
-      {/* 下拉选择已有标签 */}
+      {/* 下拉选择已有标签 - 可搜索 */}
       {availableTags.length > 0 && (
         <div className="mb-2">
-          <select
-            onChange={handleSelectFromDropdown}
-            defaultValue=""
-            className={`w-full px-3 py-1.5 border ${colors.cardBorder} rounded-lg text-sm ${colors.input} ${colors.text} ${isLightTheme ? 'bg-white' : 'bg-[#1a1a2e]'}`}
-          >
-            <option value="" disabled>{t('tags.selectTags')}</option>
-            {availableTags.map(tag => (
-              <option key={tag.id} value={tag.id}>{tag.name}</option>
-            ))}
-          </select>
+          <SearchableTagSelect
+            tags={availableTags}
+            value=""
+            onChange={() => {}}
+            placeholder={t('tags.searchPlaceholder') || '搜索标签...'}
+            fillInput={true}
+            onFillInput={(tagName) => setNewTagName(tagName)}
+          />
         </div>
       )}
       {/* 新建标签 */}

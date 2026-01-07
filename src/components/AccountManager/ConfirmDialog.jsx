@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle, XCircle, Info, X } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, CheckCircle, XCircle, Info, X, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 
 /**
@@ -6,6 +7,7 @@ import { useApp } from '../../hooks/useApp'
  * @param {string} type - 'confirm' | 'success' | 'error' | 'info'
  * @param {string} title - 标题
  * @param {string} message - 内容
+ * @param {object} rawData - 原始响应数据（可选，用于展开查看）
  * @param {function} onConfirm - 确认回调
  * @param {function} onCancel - 取消回调
  * @param {string} confirmText - 确认按钮文字
@@ -15,6 +17,7 @@ function ConfirmDialog({
   type = 'confirm',
   title,
   message,
+  rawData,
   onConfirm,
   onCancel,
   confirmText,
@@ -23,6 +26,8 @@ function ConfirmDialog({
 }) {
   const { t, theme, colors } = useApp()
   const isLightTheme = theme === 'light'
+  const [expanded, setExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
   
   // Use i18n defaults if not provided
   const finalConfirmText = confirmText || t('common.ok')
@@ -124,6 +129,37 @@ function ConfirmDialog({
           <p className={`${colors.textMuted} text-sm leading-relaxed whitespace-pre-line`}>
             {message}
           </p>
+          
+          {/* 原始响应展开区域 */}
+          {rawData && (
+            <div className="mt-4">
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className={`flex items-center gap-1.5 text-xs ${colors.textMuted} hover:text-blue-500 transition-colors`}
+              >
+                {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {expanded ? '收起原始响应' : '查看原始响应'}
+              </button>
+              {expanded && (
+                <div className={`mt-2 relative`}>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(JSON.stringify(rawData, null, 2))
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className={`absolute top-2 right-2 p-1.5 rounded ${isLightTheme ? 'bg-gray-100 hover:bg-gray-200' : 'bg-white/10 hover:bg-white/20'} transition-colors`}
+                    title="复制"
+                  >
+                    {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} className={colors.textMuted} />}
+                  </button>
+                  <pre className={`text-xs p-3 rounded-lg overflow-auto max-h-48 ${isLightTheme ? 'bg-gray-100 text-gray-700' : 'bg-white/5 text-gray-300'}`}>
+                    {JSON.stringify(rawData, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

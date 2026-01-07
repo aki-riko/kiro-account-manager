@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Download, Upload, RefreshCw, Trash2, Plus, Sparkles, MoreHorizontal, ShoppingCart, LayoutGrid, List, Tag, ArrowUp, ArrowDown, Key } from 'lucide-react'
+import { Search, Download, Upload, RefreshCw, RefreshCcw, RotateCw, Trash2, Plus, Sparkles, LayoutGrid, List, Tag, ArrowUp, ArrowDown } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import FilterDropdown from './FilterDropdown'
 
@@ -14,7 +14,6 @@ function AccountHeader({
   onExport,
   onRefresh,
   onRefreshAll,
-  onRedeem,
   autoRefreshing,
   refreshProgress,
   allTags = [],
@@ -31,17 +30,12 @@ function AccountHeader({
 }) {
   const { t, theme, colors } = useApp()
   const isLightTheme = theme === 'light'
-  const [showMore, setShowMore] = useState(false)
   const [searchExpanded, setSearchExpanded] = useState(false)
-  const moreRef = useRef(null)
   const searchRef = useRef(null)
 
-  // 点击外部关闭下拉菜单和搜索框
+  // 点击外部关闭搜索框
   useEffect(() => {
     const handleClick = (e) => {
-      if (moreRef.current && !moreRef.current.contains(e.target)) {
-        setShowMore(false)
-      }
       // 只在搜索框已展开且点击外部时关闭
       if (searchExpanded && searchRef.current && !searchRef.current.contains(e.target) && !searchTerm) {
         setSearchExpanded(false)
@@ -174,75 +168,44 @@ function AccountHeader({
             </>
           )}
 
-          {/* 购买按钮 */}
-          <a
-            href="https://pay.ldxp.cn/shop/hj01857655"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-sm font-medium hover:from-amber-600 hover:to-orange-600 flex items-center gap-1.5 shadow-lg shadow-amber-500/25"
-          >
-            <ShoppingCart size={14} />
-            {t('about.shop')}
-          </a>
-
-          {/* 卡密兑换按钮 */}
-          <button
-            onClick={onRedeem}
-            className="px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl text-sm font-medium hover:from-emerald-600 hover:to-teal-600 flex items-center gap-1.5 shadow-lg shadow-emerald-500/25"
-          >
-            <Key size={14} />
-            {t('accounts.redeem') || '卡密兑换'}
-          </button>
-
-          {/* 添加按钮 */}
-          <button onClick={onAdd} className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-medium hover:from-blue-600 hover:to-blue-700 flex items-center gap-1.5 shadow-lg shadow-blue-500/25">
-            <Plus size={16} />
-            {t('common.add')}
-          </button>
-
-          {/* 更多操作 */}
-          <div ref={moreRef} className="relative">
+          {/* 操作按钮组 */}
+          <div className={`flex rounded-xl border ${colors.cardBorder} overflow-hidden`}>
             <button
-              onClick={() => setShowMore(!showMore)}
-              className={`p-2 ${colors.card} border ${colors.cardBorder} rounded-xl ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'}`}
+              onClick={onAdd}
+              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} text-green-500`}
+              title={t('common.add')}
             >
-              <MoreHorizontal size={18} className={colors.textMuted} />
+              <Plus size={16} />
             </button>
-
-            {showMore && (
-              <div className={`absolute right-0 top-full mt-2 w-40 py-1 ${colors.card} border ${colors.cardBorder} rounded-xl shadow-xl z-50`}>
-                <button
-                  onClick={() => { onImport(); setShowMore(false) }}
-                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.text}`}
-                >
-                  <Upload size={14} />
-                  {t('accounts.import')}
-                </button>
-                <button
-                  onClick={() => { onExport(); setShowMore(false) }}
-                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.text}`}
-                >
-                  <Download size={14} />
-                  {t('accounts.export')}
-                </button>
-                <div className={`my-1 border-t ${colors.cardBorder}`} />
-                <button
-                  onClick={() => { onRefresh(); setShowMore(false) }}
-                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.text}`}
-                >
-                  <RefreshCw size={14} />
-                  {t('accounts.refreshList')}
-                </button>
-                <button
-                  onClick={() => { onRefreshAll(); setShowMore(false) }}
-                  disabled={autoRefreshing}
-                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.text} disabled:opacity-50`}
-                >
-                  <RefreshCw size={14} className={autoRefreshing ? 'animate-spin' : ''} />
-                  {t('accounts.refreshAll')}
-                </button>
-              </div>
-            )}
+            <button
+              onClick={onImport}
+              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} text-purple-500`}
+              title={t('accounts.import')}
+            >
+              <Upload size={16} />
+            </button>
+            <button
+              onClick={onExport}
+              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} text-orange-500`}
+              title={t('accounts.export')}
+            >
+              <Download size={16} />
+            </button>
+            <button
+              onClick={onRefresh}
+              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.textMuted}`}
+              title={t('accounts.refreshList')}
+            >
+              <RotateCw size={16} />
+            </button>
+            <button
+              onClick={onRefreshAll}
+              disabled={autoRefreshing}
+              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} text-blue-500 disabled:opacity-50`}
+              title={t('accounts.refreshAll')}
+            >
+              <RefreshCcw size={16} className={autoRefreshing ? 'animate-spin' : ''} />
+            </button>
           </div>
         </div>
       </div>

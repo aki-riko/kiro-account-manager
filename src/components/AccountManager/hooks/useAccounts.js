@@ -118,23 +118,20 @@ export function useAccounts() {
     try {
       const updated = await invoke('sync_account', { id })
       setAccounts(prev => prev.map(a => a.id === id ? updated : a))
-      return { success: true }
+      return { success: true, data: updated }
     } catch (e) {
       console.warn(e)
       const errorMsg = String(e)
-      let status = '刷新失败'
+      // 只有封禁时才更新状态
       if (errorMsg.includes('BANNED')) {
-        status = 'banned'
-        // 持久化封禁状态到后端
         try {
           await invoke('update_account', { id, updates: { status: 'banned' } })
+          setAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'banned' } : a))
         } catch (updateErr) {
           console.error('更新封禁状态失败:', updateErr)
         }
-      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('过期') || errorMsg.includes('invalid')) {
-        status = 'Token已失效'
       }
-      setAccounts(prev => prev.map(a => a.id === id ? { ...a, status } : a))
+      // 其他错误只返回错误信息，不更新状态
       return { success: false, error: errorMsg }
     } finally {
       setRefreshingId(null)

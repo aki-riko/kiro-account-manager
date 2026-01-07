@@ -65,7 +65,7 @@
     "targets": ["msi", "app", "dmg", "deb", "rpm", "appimage"],
     "windows": {
       "wix": {
-        "language": ["zh-CN", "en-US", "ru-RU"]
+        "language": "zh-CN"
       }
     },
     "macOS": {

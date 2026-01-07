@@ -21,7 +21,7 @@ import { AccountListSkeleton, AccountTableSkeleton } from '../Skeleton'
 
 function AccountManager() {
   const { t, colors } = useApp()
-  const { showConfirm, showError } = useDialog()
+  const { showConfirm, showError, showSuccess } = useDialog()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [editingAccount, setEditingAccount] = useState(null)
@@ -94,22 +94,24 @@ function AccountManager() {
     handleExport,
   } = useAccounts()
 
-  // 包装刷新函数，添加错误弹窗通知
+  // 包装刷新函数，添加弹窗通知
   const handleRefreshWithNotify = useCallback(async (id) => {
     const result = await handleRefreshStatus(id)
-    if (!result.success && result.error) {
+    if (result.success) {
+      // 只传递 usageData 作为原始响应
+      await showSuccess(t('accounts.refreshSuccess'), t('accountCard.refresh') + t('common.success'), result.data?.usageData)
+    } else if (result.error) {
       const errorMsg = result.error
       if (errorMsg.includes('BANNED')) {
         await showError(t('accounts.refreshFailed'), t('accounts.accountBanned'))
       } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
         await showError(t('accounts.refreshFailed'), t('accounts.tokenInvalid'))
       } else {
-        // 其他所有错误也弹窗提醒
         await showError(t('accounts.refreshFailed'), errorMsg.slice(0, 100))
       }
     }
     return result
-  }, [handleRefreshStatus, showError, t])
+  }, [handleRefreshStatus, showError, showSuccess, t])
 
   // 获取所有标签（从标签定义中获取）
   const allTags = useMemo(() => {
@@ -259,9 +261,21 @@ function AccountManager() {
         onBatchTag={() => setShowBatchTagModal(true)}
         onAdd={() => setShowAddModal(true)}
         onImport={() => setShowImportModal(true)}
-        onExport={() => handleExport(selectedIds)}
+        onExport={async () => {
+          if (selectedIds.length === 0) {
+            await showError(t('accounts.export'), t('accounts.exportSelectFirst') || '请先选择要导出的账号')
+            return
+          }
+          handleExport(selectedIds)
+        }}
         onRefresh={loadAccounts}
-        onRefreshAll={() => batchRefreshAccounts(selectedIds, accounts)}
+        onRefreshAll={async () => {
+          if (selectedIds.length === 0) {
+            await showError(t('accounts.refreshAll'), t('accounts.refreshSelectFirst') || '请先选择要刷新的账号')
+            return
+          }
+          batchRefreshAccounts(selectedIds, accounts)
+        }}
         onRedeem={() => setShowRedeemModal(true)}
         autoRefreshing={autoRefreshing}
         lastRefreshTime={lastRefreshTime}
@@ -314,11 +328,14 @@ function AccountManager() {
           onEdit={setEditingAccount}
           onEditLabel={setEditingLabelAccount}
           onDelete={handleDelete}
+          onDeleteRemote={handleDeleteRemote}
+          onCopy={handleCopy}
           onAdd={() => setShowAddModal(true)}
           refreshingId={refreshingId}
           switchingId={switchingId}
           localToken={localToken}
           tagDefinitions={tagDefinitions}
+          copiedId={copiedId}
         />
       )}
       </div>

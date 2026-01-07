@@ -70,10 +70,23 @@ function AccountDetailModal({ account, onClose }) {
   const breakdown = account.usageData?.usageBreakdownList?.[0]
   const freeTrialInfo = breakdown?.freeTrialInfo
   const bonuses = breakdown?.bonuses || []
-  const freeTrialQuota = freeTrialInfo?.usageLimit || 0
-  const freeTrialUsed = freeTrialInfo?.currentUsage || 0
-  const bonusQuota = bonuses.reduce((sum, b) => sum + (b.usageLimit || 0), 0)
-  const bonusUsed = bonuses.reduce((sum, b) => sum + (b.currentUsage || 0), 0)
+  const now = Date.now()
+  
+  // 检查试用是否过期
+  const trialExpiry = freeTrialInfo?.freeTrialExpiry ? freeTrialInfo.freeTrialExpiry * 1000 : 0
+  const trialActive = freeTrialInfo?.freeTrialStatus === 'ACTIVE' || (trialExpiry > now)
+  const freeTrialQuota = trialActive ? (freeTrialInfo?.usageLimit || 0) : 0
+  const freeTrialUsed = trialActive ? (freeTrialInfo?.currentUsage || 0) : 0
+  
+  // 检查每个奖励是否过期
+  let bonusQuota = 0, bonusUsed = 0
+  bonuses.forEach(b => {
+    const expiry = b.expiresAt ? b.expiresAt * 1000 : Infinity
+    if (expiry > now && b.status !== 'EXPIRED') {
+      bonusQuota += b.usageLimit || 0
+      bonusUsed += b.currentUsage || 0
+    }
+  })
   
   const totalQuota = form.quota + freeTrialQuota + bonusQuota
   const totalUsed = form.used + freeTrialUsed + bonusUsed

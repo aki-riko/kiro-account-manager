@@ -1,6 +1,6 @@
 import { useRef, useMemo, memo, useState, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Users, Plus, RefreshCw, ArrowRightLeft, Eye, Edit2, Trash2 } from 'lucide-react'
+import { Users, Plus, RefreshCw, Repeat, Eye, Edit2, Trash2, Copy, UserX } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import { usePrivacy } from '../../contexts/PrivacyContext'
 import { getQuota, getUsed, formatUsage } from '../../utils/accountStats'
@@ -9,7 +9,7 @@ import ContextMenu from './ContextMenu'
 // 单行组件
 const ListRow = memo(function ListRow({
   account, isSelected, isCurrent, refreshingId, switchingId, tagDefinitions, colors, isLightTheme, t, maskEmail,
-  onSelectOne, onSwitch, onRefresh, onEdit, onEditLabel, onDelete,
+  onSelectOne, onSwitch, onRefresh, onEdit, onEditLabel, onDelete, onDeleteRemote, onCopy,
 }) {
   const [contextMenu, setContextMenu] = useState(null)
   const used = getUsed(account)
@@ -25,15 +25,36 @@ const ListRow = memo(function ListRow({
     setContextMenu({ x: e.clientX, y: e.clientY })
   }, [])
 
+  const handleCopyJson = useCallback(() => {
+    const exportData = {
+      email: account.email,
+      provider: account.provider,
+      accessToken: account.accessToken,
+      refreshToken: account.refreshToken,
+      ...(account.clientIdHash && { clientIdHash: account.clientIdHash }),
+      ...(account.clientId && { clientId: account.clientId }),
+      ...(account.clientSecret && { clientSecret: account.clientSecret }),
+      ...(account.region && { region: account.region }),
+      ...(account.label && { label: account.label }),
+      ...(account.tags?.length && { tags: account.tags }),
+      ...(account.machineId && { machineId: account.machineId }),
+    }
+    onCopy(JSON.stringify(exportData, null, 2), account.id)
+  }, [account, onCopy])
+
   const getMenuItems = useCallback(() => [
-    { icon: Eye, label: t('accounts.detail'), onClick: () => onEdit(account) },
+    { icon: Eye, label: t('accountCard.viewDetails'), onClick: () => onEdit(account) },
     { icon: Edit2, label: t('accountCard.editRemark'), onClick: () => onEditLabel(account) },
+    { icon: Copy, label: t('accountCard.copyJson'), onClick: handleCopyJson },
     { divider: true },
-    { icon: RefreshCw, label: t('accounts.refresh'), onClick: () => onRefresh(account.id), disabled: isRefreshing },
-    { icon: ArrowRightLeft, label: t('accounts.switch'), onClick: () => onSwitch(account), disabled: isSwitching || isBanned },
+    { icon: RefreshCw, label: t('accountCard.refresh'), onClick: () => onRefresh(account.id), disabled: isRefreshing },
+    { icon: Repeat, label: t('accountCard.switchAccount'), onClick: () => onSwitch(account), disabled: isSwitching || isBanned },
     { divider: true },
-    { icon: Trash2, label: t('common.delete'), onClick: () => onDelete(account.id), danger: true },
-  ], [t, account, onEdit, onEditLabel, onRefresh, onSwitch, onDelete, isRefreshing, isSwitching, isBanned])
+    { icon: Trash2, label: t('accountCard.delete'), onClick: () => onDelete(account.id), danger: true },
+    ...(account.provider !== 'Enterprise' && !isBanned && onDeleteRemote ? [
+      { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
+    ] : []),
+  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onSwitch, onDelete, onDeleteRemote, isRefreshing, isSwitching, isBanned])
 
   return (
     <div 
@@ -52,19 +73,6 @@ const ListRow = memo(function ListRow({
           {isCurrent && <span className="text-xs px-1.5 py-0.5 bg-blue-500 text-white rounded shrink-0">当前</span>}
         </div>
         {account.label && <span className={`text-xs ${colors.textMuted} truncate block mt-0.5`}>{account.label}</span>}
-      </div>
-
-      {/* 标签 */}
-      <div className="w-36 shrink-0">
-        {account.tags?.length > 0 ? (
-          <div className="flex items-center gap-1 overflow-hidden">
-            {account.tags.slice(0, 1).map(tagId => {
-              const tag = tagDefinitions.find(t => t.id === tagId)
-              return tag ? <span key={tagId} className="text-[10px] px-1.5 py-0.5 rounded font-medium truncate max-w-[80px]" style={{ backgroundColor: `${tag.color}20`, color: tag.color }} title={tag.name}>{tag.name}</span> : null
-            })}
-            {account.tags.length > 1 && <span className={`text-[10px] ${colors.textMuted}`}>+{account.tags.length - 1}</span>}
-          </div>
-        ) : <span className={`text-xs ${colors.textMuted}`}>-</span>}
       </div>
 
       {/* 提供商 */}
@@ -111,6 +119,19 @@ const ListRow = memo(function ListRow({
           </span>
         )}
       </div>
+
+      {/* 标签 */}
+      <div className="flex-1 min-w-0">
+        {account.tags?.length > 0 ? (
+          <div className="flex items-center gap-1 flex-wrap">
+            {account.tags.slice(0, 3).map(tagId => {
+              const tag = tagDefinitions.find(t => t.id === tagId)
+              return tag ? <span key={tagId} className="text-[10px] px-1.5 py-0.5 rounded font-medium truncate max-w-[120px]" style={{ backgroundColor: `${tag.color}20`, color: tag.color }} title={tag.name}>{tag.name}</span> : null
+            })}
+            {account.tags.length > 3 && <span className={`text-[10px] ${colors.textMuted}`}>+{account.tags.length - 3}</span>}
+          </div>
+        ) : <span className={`text-xs ${colors.textMuted}`}>-</span>}
+      </div>
     </div>
   )
 }, (prev, next) => (
@@ -120,7 +141,7 @@ const ListRow = memo(function ListRow({
 
 
 function AccountListView({
-  accounts, totalCount, selectedIds, onSelectAll, onSelectOne, onSwitch, onRefresh, onEdit, onEditLabel, onDelete, onAdd, refreshingId, switchingId, localToken, tagDefinitions = [],
+  accounts, totalCount, selectedIds, onSelectAll, onSelectOne, onSwitch, onRefresh, onEdit, onEditLabel, onDelete, onDeleteRemote, onCopy, onAdd, refreshingId, switchingId, localToken, tagDefinitions = [], copiedId,
 }) {
   const { t, theme, colors } = useApp()
   const { maskEmail } = usePrivacy()
@@ -168,13 +189,13 @@ function AccountListView({
       <div className={`flex items-center gap-3 px-4 py-3 ${isLightTheme ? 'bg-gray-50' : 'bg-white/5'} border ${colors.cardBorder} rounded-t-xl ${colors.textMuted} text-xs font-semibold uppercase tracking-wider`}>
         <div className="w-4" />
         <div className="w-52">邮箱</div>
-        <div className="w-36">标签</div>
-        <div className="w-20 text-center">提供商</div>
+        <div className="w-20 text-center">账号类型</div>
         <div className="w-20 text-center">订阅类型</div>
         <div className="w-20">配额</div>
         <div className="w-14 text-center">状态</div>
         <div className={`w-16 text-center ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>机器码</div>
         <div className="w-32">到期</div>
+        <div className="flex-1">标签</div>
       </div>
 
       <div ref={scrollRef} className={`flex-1 overflow-auto border border-t-0 ${colors.cardBorder} rounded-b-xl`}>
@@ -200,6 +221,8 @@ function AccountListView({
                   onEdit={onEdit}
                   onEditLabel={onEditLabel}
                   onDelete={onDelete}
+                  onDeleteRemote={onDeleteRemote}
+                  onCopy={onCopy}
                 />
               </div>
             )

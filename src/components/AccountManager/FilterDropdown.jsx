@@ -3,6 +3,7 @@ import { Filter, X, ChevronDown } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useTranslation } from 'react-i18next'
 import { USAGE_RANGES } from './utils/filterUtils'
+import SearchableTagSelect from './SearchableTagSelect'
 
 const SUBSCRIPTION_OPTIONS = ['FREE', 'KIRO FREE', 'KIRO PRO', 'KIRO PRO+']
 const STATUS_OPTIONS = ['normal', 'banned', 'expired']
@@ -131,54 +132,24 @@ function FilterDropdown({
           </div>
 
           <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
-            {/* 标签筛选 - 下拉框 */}
+            {/* 标签筛选 - 可搜索下拉框 */}
             {allTags.length > 0 && (
               <div>
                 <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
                   {t('tags.title')}
                 </div>
-                <select
-                  value={selectedTag || ''}
-                  onChange={(e) => onTagFilter(e.target.value || null)}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 transition-all`}
-                >
-                  <option value="">{t('tags.all')}</option>
-                  <option value="__none__">{t('tags.noTags')}</option>
-                  {allTags.map(tag => (
-                    <option key={tag.id} value={tag.id}>{tag.name}</option>
-                  ))}
-                </select>
+                <SearchableTagSelect
+                  tags={allTags}
+                  value={selectedTag}
+                  onChange={(tagId) => onTagFilter(tagId)}
+                  placeholder={t('tags.searchPlaceholder') || '搜索标签...'}
+                  showAllOption={true}
+                  showNoneOption={true}
+                  allLabel={t('tags.all')}
+                  noneLabel={t('tags.noTags')}
+                />
               </div>
             )}
-
-            {/* 账号状态 */}
-            <div>
-              <div className={`text-xs font-medium ${colors.textMuted} mb-2 uppercase tracking-wide`}>
-                {t('accounts.status')}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { key: 'active', label: t('accounts.active'), color: 'bg-green-500' },
-                  { key: 'banned', label: t('accounts.banned'), color: 'bg-red-500' },
-                ].map(({ key, label, color }) => {
-                  const isActive = selectedStatus === key
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => onStatusFilter(isActive ? null : key)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                        isActive
-                          ? `${color} text-white shadow-lg`
-                          : `${colors.input} ${colors.text}`
-                      }`}
-                    >
-                      <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-white/50' : color}`} />
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
 
             {/* 订阅类型 */}
             <div>

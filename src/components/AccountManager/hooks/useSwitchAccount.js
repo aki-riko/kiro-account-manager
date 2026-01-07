@@ -85,27 +85,55 @@ export function useSwitchAccount(onLocalTokenChange) {
     setSwitchingId(account.id)
     
     try {
-      const settings = appSettings || {}
-      await handleMachineGuid(account, settings)
+      // 先同步账号（刷新 token + 获取最新配额）
+      const refreshedAccount = await invoke('sync_account', { id: account.id })
       
-      const params = buildSwitchParams(account)
+      const settings = appSettings || {}
+      await handleMachineGuid(refreshedAccount, settings)
+      
+      const params = buildSwitchParams(refreshedAccount)
       await invoke('switch_kiro_account', { params })
       
       // 更新当前账号标识
       invoke('get_kiro_local_token').then(onLocalTokenChange).catch(() => onLocalTokenChange(null))
       
-      // 从 usage_data 获取配额信息
-      const usageData = account.usageData
+      // 从 usageData 获取配额信息（API 原始响应）
+      const usageData = refreshedAccount.usageData
       const breakdown = usageData?.usageBreakdownList?.[0]
-      const used = breakdown?.currentUsage ?? 0
-      const limit = breakdown?.usageLimit ?? 50
-      const remaining = limit - used
-      const provider = account.provider || 'Unknown'
+      const now = Date.now()
+      
+      // 主配额（永不过期）
+      const mainUsed = breakdown?.currentUsage ?? 0
+      const mainLimit = breakdown?.usageLimit ?? 0
+      
+      // 试用配额（检查过期）
+      const trialInfo = breakdown?.freeTrialInfo
+      const trialExpiry = trialInfo?.freeTrialExpiry ? trialInfo.freeTrialExpiry * 1000 : 0
+      const trialValid = trialExpiry > now
+      const trialUsed = trialValid ? (trialInfo?.currentUsage ?? 0) : 0
+      const trialLimit = trialValid ? (trialInfo?.usageLimit ?? 0) : 0
+      
+      // 奖励配额（检查每个奖励的过期时间）
+      const bonuses = breakdown?.bonuses ?? []
+      let bonusUsed = 0, bonusLimit = 0
+      bonuses.forEach(b => {
+        const expiry = b.expiresAt ? b.expiresAt * 1000 : Infinity
+        if (expiry > now) {
+          bonusUsed += b.currentUsage ?? 0
+          bonusLimit += b.usageLimit ?? 0
+        }
+      })
+      
+      // 总计
+      const totalUsed = mainUsed + trialUsed + bonusUsed
+      const totalLimit = mainLimit + trialLimit + bonusLimit
+      const remaining = totalLimit - totalUsed
+      const provider = refreshedAccount.provider || 'Unknown'
       
       setSwitchDialog({
         type: 'success',
         title: t('switch.success'),
-        message: `${account.email}\n\n📊 ${t('switch.quota')}: ${used}/${limit} (${t('switch.remaining')} ${remaining})\n🏷️ ${t('switch.type')}: ${provider}`,
+        message: `${refreshedAccount.email}\n\n📊 ${t('switch.quota')}: ${totalUsed}/${totalLimit} (${t('switch.remaining')} ${remaining})\n🏷️ ${t('switch.type')}: ${provider}`,
         account: null,
       })
     } catch (e) {

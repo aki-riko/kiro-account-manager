@@ -113,6 +113,9 @@ impl UsageBreakdown {
 pub struct Account {
     pub id: String,
     pub email: String,
+    // 账号密码（可选）
+    #[serde(default)]
+    pub password: Option<String>,
     pub label: String,
     pub status: String,
     pub added_at: String,
@@ -147,9 +150,6 @@ pub struct Account {
     // 绑定的机器码
     #[serde(default)]
     pub machine_id: Option<String>,
-    // 账号密码（可选）
-    #[serde(default)]
-    pub password: Option<String>,
 }
 
 impl Account {
