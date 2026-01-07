@@ -60,7 +60,14 @@ export function useAutoRefresh(appSettings, settingsLoading) {
         try {
           await invoke('refresh_account_token', { id: account.id })
         } catch (e) {
-          console.warn(`[AutoRefresh] ${account.email} token 刷新失败:`, e)
+          const errorMsg = String(e)
+          if (errorMsg.includes('BANNED')) {
+            console.warn(`[AutoRefresh] ${account.email} 账号已封禁`)
+          } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('invalid')) {
+            console.warn(`[AutoRefresh] ${account.email} Token已失效`)
+          } else {
+            console.warn(`[AutoRefresh] ${account.email} token 刷新失败:`, errorMsg)
+          }
         }
       })
 

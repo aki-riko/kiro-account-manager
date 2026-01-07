@@ -43,7 +43,15 @@ function AccountDetailModal({ account, onClose }) {
       const used = updated.usageData?.usageBreakdownList?.[0]?.currentUsage ?? 0
       setForm(prev => ({ ...prev, quota, used, status: updated.status }))
     } catch (e) {
-      await showError(t('detail.refreshFailed'), e.toString())
+      const errorMsg = String(e)
+      let status = '刷新失败'
+      if (errorMsg.includes('BANNED')) {
+        status = 'banned'
+      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
+        status = 'Token已失效'
+      }
+      setForm(prev => ({ ...prev, status }))
+      await showError(t('detail.refreshFailed'), errorMsg)
     } finally {
       setRefreshing(false)
     }

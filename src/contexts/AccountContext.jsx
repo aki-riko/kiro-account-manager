@@ -75,7 +75,13 @@ export function AccountProvider({ children }) {
 
   // 刷新单个账号
   const refreshAccount = useCallback(async (id) => {
-    await invoke('sync_account', { id })
+    try {
+      await invoke('sync_account', { id })
+    } catch (e) {
+      const errorMsg = String(e)
+      console.warn('[AccountContext] 刷新账号失败:', errorMsg)
+      // 错误会在 loadData 后反映到账号状态
+    }
     await loadData()
   }, [loadData])
 

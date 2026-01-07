@@ -73,7 +73,19 @@ export function useAccounts() {
         success = true
         message = '同步成功'
       } catch (e) {
-        message = String(e).slice(0, 30)
+        const errorMsg = String(e)
+        if (errorMsg.includes('BANNED')) {
+          message = '账号已封禁'
+          // 更新账号状态为封禁
+          const idx = updatedAccounts.findIndex(a => a.id === account.id)
+          if (idx !== -1) updatedAccounts[idx] = { ...updatedAccounts[idx], status: 'banned' }
+        } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
+          message = 'Token已失效'
+          const idx = updatedAccounts.findIndex(a => a.id === account.id)
+          if (idx !== -1) updatedAccounts[idx] = { ...updatedAccounts[idx], status: 'Token已失效' }
+        } else {
+          message = errorMsg.slice(0, 30)
+        }
       }
       completed++
       results.push({ email: account.email, success, message })
@@ -111,7 +123,13 @@ export function useAccounts() {
       console.warn(e)
       // 更新账号状态为错误信息
       const errorMsg = String(e)
-      setAccounts(prev => prev.map(a => a.id === id ? { ...a, status: errorMsg.includes('401') || errorMsg.includes('过期') ? 'Token已失效' : '刷新失败' } : a))
+      let status = '刷新失败'
+      if (errorMsg.includes('BANNED')) {
+        status = 'banned'
+      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('过期') || errorMsg.includes('invalid')) {
+        status = 'Token已失效'
+      }
+      setAccounts(prev => prev.map(a => a.id === id ? { ...a, status } : a))
       return { success: false, error: errorMsg }
     } finally {
       setRefreshingId(null)

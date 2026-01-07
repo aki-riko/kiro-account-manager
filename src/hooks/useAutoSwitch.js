@@ -58,7 +58,15 @@ export function useAutoSwitch(appSettings, settingsLoading) {
         const updated = await invoke('sync_account', { id: currentAccount.id })
         currentAccount = updated
       } catch (e) {
-        console.warn('[AutoSwitch] 刷新当前账号失败:', e)
+        const errorMsg = String(e)
+        if (errorMsg.includes('BANNED')) {
+          console.warn('[AutoSwitch] 当前账号已封禁，跳过切换')
+          return
+        } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('invalid')) {
+          console.warn('[AutoSwitch] 当前账号 Token 已失效')
+        } else {
+          console.warn('[AutoSwitch] 刷新当前账号失败:', errorMsg)
+        }
       }
 
       // 计算剩余额度
