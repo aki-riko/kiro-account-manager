@@ -195,14 +195,14 @@ impl KiroPortalClient {
                 String::from_utf8_lossy(&bytes).to_string()
             };
             
-            // 打印失败日志到开发者工具
-            log::debug!("[KiroPortal] GetUserUsageAndLimits Status: {}", status);
-            log::debug!("[KiroPortal] Response:\n{}", error_msg);
-            
-            // 401 → token 过期，需要刷新
+            // 401 → token 过期，需要刷新（不打印日志，这是正常流程）
             if status.as_u16() == 401 {
                 return Err(format!("AUTH_ERROR: {}", error_msg));
             }
+            
+            // 其他错误打印日志
+            log::debug!("[KiroPortal] GetUserUsageAndLimits Status: {}", status);
+            log::debug!("[KiroPortal] Response:\n{}", error_msg);
             
             // 423 Locked + AccountSuspendedException → 封禁
             if status.as_u16() == 423 {

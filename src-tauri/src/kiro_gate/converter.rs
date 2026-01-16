@@ -337,18 +337,8 @@ pub fn build_kiro_payload(
   request: &ChatCompletionRequest,
   profile_arn: Option<String>,
 ) -> Result<KiroPayload, String> {
-  // 调试日志：打印收到的消息
+  // 调试日志：打印消息数量
   log::debug!("[KiroGate] build_kiro_payload: 收到 {} 条消息", request.messages.len());
-  for (i, msg) in request.messages.iter().enumerate() {
-    let content_preview: String = match &msg.content {
-      Some(serde_json::Value::String(s)) => s.chars().take(100).collect(),
-      Some(serde_json::Value::Array(arr)) => format!("[Array with {} items]", arr.len()),
-      Some(other) => format!("{:?}", other).chars().take(100).collect(),
-      None => "(none)".to_string(),
-    };
-    log::debug!("[KiroGate]   消息[{}]: role={}, content={}, tool_calls={:?}, tool_call_id={:?}", 
-      i, msg.role, content_preview, msg.tool_calls.as_ref().map(|tc| tc.len()), msg.tool_call_id);
-  }
   
   let model_id = get_internal_model_id(&request.model)?;
   let conversation_id = Uuid::new_v4().to_string();

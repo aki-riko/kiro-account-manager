@@ -1187,8 +1187,8 @@ async fn anthropic_non_stream_response(resp: reqwest::Response, model: &str) -> 
             output_tokens = o;
           }
           KiroEvent::ContextUsage { percentage } => {
-            // 非流式响应中记录 context usage（可用于日志）
-            log::debug!("[KiroGate] Context usage: {}%", percentage);
+            // 非流式响应中记录 context usage
+            log::debug!("[KiroGate] Context usage: {:.2}%", percentage);
           }
         }
       }
