@@ -85,6 +85,7 @@ pub async fn start_server(port: u16, proxy_api_key: String) -> Result<(), String
     .route("/v1/models", get(models_handler))
     .route("/v1/chat/completions", post(chat_completions_handler))
     .route("/v1/messages", post(anthropic_messages_handler))
+    .route("/messages", post(anthropic_messages_handler)) // Claude Code 兼容
     .route("/metrics", get(metrics_handler))
     .layer(cors)
     .with_state(state);
@@ -504,32 +505,57 @@ fn verify_api_key(headers: &HeaderMap, proxy_api_key: &str) -> Result<VerifyResu
     auth_header
   };
 
-  // 支持三种格式（按原版 KiroGate 逻辑）：
-  // 1. 多租户格式：PROXY_API_KEY:REFRESH_TOKEN
-  // 2. 传统格式：PROXY_API_KEY
+  // 支持多种格式：
+  // 1. 多租户 IdC 格式：PROXY_API_KEY|idc|REFRESH_TOKEN|CLIENT_ID|CLIENT_SECRET（用 | 分隔）
+  // 2. 多租户 Social 格式：PROXY_API_KEY:REFRESH_TOKEN（用 : 分隔，refresh_token 可能包含冒号）
   // 3. 用户 API Key：sk-{48位十六进制}
   
-  // 检查是否包含冒号（多租户格式）
+  // 检查是否是 IdC 格式（用 | 分隔）
+  if token.contains('|') {
+    let parts: Vec<&str> = token.split('|').collect();
+    
+    // IdC 格式：PROXY_API_KEY|idc|REFRESH_TOKEN|CLIENT_ID|CLIENT_SECRET
+    if parts.len() >= 5 && parts[1].to_lowercase() == "idc" {
+      // 验证 PROXY_API_KEY 部分
+      if parts[0] != proxy_api_key {
+        return Err("API Key 无效".to_string());
+      }
+      
+      return Ok(VerifyResult {
+        refresh_token: parts[2].to_string(),
+        auth_method: "IdC".to_string(),
+        profile_arn: None,
+        client_id: Some(parts[3].to_string()),
+        client_secret: Some(parts[4..].join("|")), // client_secret 可能包含 |
+        region: Some("us-east-1".to_string()),
+      });
+    }
+    
+    return Err("API Key 格式无效，IdC 格式应为：PROXY_API_KEY|idc|REFRESH_TOKEN|CLIENT_ID|CLIENT_SECRET".to_string());
+  }
+  
+  // 检查是否包含冒号（Social 多租户格式）
   if token.contains(':') {
     let parts: Vec<&str> = token.splitn(2, ':').collect();
-    if parts.len() != 2 {
-      return Err("API Key 格式无效".to_string());
-    }
     
     // 验证 PROXY_API_KEY 部分
     if parts[0] != proxy_api_key {
       return Err("API Key 无效".to_string());
     }
     
-    // 多租户模式默认为 Social 类型
-    Ok(VerifyResult {
-      refresh_token: parts[1].to_string(),
-      auth_method: "social".to_string(),
-      profile_arn: None,
-      client_id: None,
-      client_secret: None,
-      region: Some("us-east-1".to_string()),
-    })
+    // Social 格式：PROXY_API_KEY:REFRESH_TOKEN（refresh_token 可能包含冒号）
+    if parts.len() >= 2 {
+      return Ok(VerifyResult {
+        refresh_token: parts[1].to_string(),
+        auth_method: "social".to_string(),
+        profile_arn: None,
+        client_id: None,
+        client_secret: None,
+        region: Some("us-east-1".to_string()),
+      });
+    }
+    
+    return Err("API Key 格式无效".to_string());
   }
   // 检查传统格式：整个 token 就是 PROXY_API_KEY
   else if token == proxy_api_key {
@@ -789,18 +815,92 @@ fn parse_kiro_event(event: &str) -> Option<String> {
   parse_kiro_content(event, &mut None)
 }
 
-// 解析 Kiro 事件内容，带去重
-fn parse_kiro_content(json_str: &str, last_content: &mut Option<String>) -> Option<String> {
+// Kiro 事件解析结果
+#[derive(Debug, Clone)]
+enum KiroEvent {
+  Text(String),
+  ToolUseStart { id: String, name: String },
+  ToolUseInputDelta { id: String, input_delta: String },
+  ToolUseStop { id: String },
+}
+
+// 解析 Kiro 事件，返回文本或工具调用
+fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
   let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
   
-  // 1. 直接 content 字段（最常见格式）
+  // 检查是否是工具调用事件（有 toolUseId 字段）
+  if let Some(tool_use_id) = value.get("toolUseId").and_then(|v| v.as_str()) {
+    let name = value.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let has_stop = value.get("stop").and_then(|v| v.as_bool()) == Some(true);
+    let input_value = value.get("input");
+    
+    // 优先级：stop > input > start
+    // 1. 检查是否是结束事件（有 stop: true）
+    if has_stop {
+      log::info!("[KiroGate] 工具调用结束: name={}, id={}", name, tool_use_id);
+      return Some(KiroEvent::ToolUseStop { id: tool_use_id.to_string() });
+    }
+    
+    // 2. 检查是否有 input 分片（input 字段存在且不为空）
+    if let Some(input_val) = input_value {
+      // input 可能是字符串或对象
+      let input_str = if let Some(s) = input_val.as_str() {
+        s.to_string()
+      } else if input_val.is_object() {
+        serde_json::to_string(input_val).unwrap_or_default()
+      } else {
+        String::new()
+      };
+      
+      if !input_str.is_empty() {
+        log::debug!("[KiroGate] 工具调用 input 分片: name={}, id={}, delta_len={}", name, tool_use_id, input_str.len());
+        return Some(KiroEvent::ToolUseInputDelta { 
+          id: tool_use_id.to_string(), 
+          input_delta: input_str 
+        });
+      }
+    }
+    
+    // 3. 工具调用开始（只有 name 和 toolUseId，没有 input 和 stop）
+    if !name.is_empty() {
+      log::info!("[KiroGate] 工具调用开始: name={}, id={}", name, tool_use_id);
+      return Some(KiroEvent::ToolUseStart { 
+        id: tool_use_id.to_string(), 
+        name 
+      });
+    }
+  }
+  
+  // 检查旧格式：assistantResponseEvent.toolUses
+  if let Some(tool_uses) = value.get("assistantResponseEvent")
+    .and_then(|e| e.get("toolUses"))
+    .and_then(|t| t.as_array())
+  {
+    if let Some(tool) = tool_uses.first() {
+      let id = tool.get("toolUseId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+      let name = tool.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+      if !name.is_empty() {
+        log::info!("[KiroGate] 检测到完整工具调用: name={}, id={}", name, id);
+        return Some(KiroEvent::ToolUseStart { id, name });
+      }
+    }
+  }
+  
+  // 文本内容解析
+  if let Some(text) = parse_text_content(&value) {
+    if !text.is_empty() {
+      return Some(KiroEvent::Text(text));
+    }
+  }
+  
+  None
+}
+
+// 从 JSON 值中提取文本内容
+fn parse_text_content(value: &serde_json::Value) -> Option<String> {
+  // 1. 直接 content 字段
   if let Some(text) = value.get("content").and_then(|c| c.as_str()) {
     if !text.is_empty() {
-      // 去重：跳过重复内容
-      if last_content.as_deref() == Some(text) {
-        return None;
-      }
-      *last_content = Some(text.to_string());
       return Some(text.to_string());
     }
   }
@@ -831,6 +931,22 @@ fn parse_kiro_content(json_str: &str, last_content: &mut Option<String>) -> Opti
     if !text.is_empty() {
       return Some(text.to_string());
     }
+  }
+  
+  None
+}
+
+// 解析 Kiro 事件内容，带去重（兼容旧接口）
+fn parse_kiro_content(json_str: &str, last_content: &mut Option<String>) -> Option<String> {
+  let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
+  
+  if let Some(text) = parse_text_content(&value) {
+    // 去重：跳过重复内容
+    if last_content.as_deref() == Some(&text) {
+      return None;
+    }
+    *last_content = Some(text.clone());
+    return Some(text);
   }
   
   None
@@ -973,34 +1089,84 @@ async fn anthropic_non_stream_response(resp: reqwest::Response, model: &str) -> 
   let text = String::from_utf8_lossy(&bytes);
   let mut content = String::new();
   
+  // 工具调用累积器
+  let mut tool_accumulators: std::collections::HashMap<String, (String, String)> = std::collections::HashMap::new();
+  let mut completed_tools: Vec<(String, String, String)> = Vec::new();
+  
   // 解析所有事件
   let mut remaining = text.as_ref();
   while let Some(start) = remaining.find('{') {
     remaining = &remaining[start..];
     if let Some(json_str) = extract_json(remaining) {
       let json_len = json_str.len();
-      if let Some(c) = parse_kiro_event(&json_str) {
-        content.push_str(&c);
+      
+      if let Some(event) = parse_kiro_event_full(&json_str) {
+        match event {
+          KiroEvent::Text(t) => content.push_str(&t),
+          KiroEvent::ToolUseStart { id, name } => {
+            tool_accumulators.insert(id, (name, String::new()));
+          }
+          KiroEvent::ToolUseInputDelta { id, input_delta } => {
+            if let Some((_, ref mut input_str)) = tool_accumulators.get_mut(&id) {
+              input_str.push_str(&input_delta);
+            }
+          }
+          KiroEvent::ToolUseStop { id } => {
+            if let Some((name, input_str)) = tool_accumulators.remove(&id) {
+              completed_tools.push((id, name, input_str));
+            }
+          }
+        }
       }
+      
       remaining = &remaining[json_len..];
     } else {
       break;
     }
   }
 
-  let response = AnthropicMessagesResponse {
-    id,
-    response_type: "message".to_string(),
-    role: "assistant".to_string(),
-    content: vec![AnthropicContentBlock {
+  // 构建 content 数组
+  let mut content_blocks: Vec<AnthropicContentBlock> = Vec::new();
+  
+  // 添加文本块（如果有内容）
+  if !content.is_empty() {
+    content_blocks.push(AnthropicContentBlock {
       block_type: "text".to_string(),
       text: Some(content),
       id: None,
       name: None,
       input: None,
-    }],
+    });
+  }
+  
+  // 添加工具调用块
+  for (tool_id, tool_name, input_json_str) in completed_tools.iter() {
+    let tool_input: serde_json::Value = serde_json::from_str(input_json_str)
+      .unwrap_or(serde_json::json!({}));
+    
+    content_blocks.push(AnthropicContentBlock {
+      block_type: "tool_use".to_string(),
+      text: None,
+      id: Some(tool_id.clone()),
+      name: Some(tool_name.clone()),
+      input: Some(tool_input),
+    });
+  }
+  
+  // 确定 stop_reason
+  let stop_reason = if !completed_tools.is_empty() {
+    Some("tool_use".to_string())
+  } else {
+    Some("end_turn".to_string())
+  };
+
+  let response = AnthropicMessagesResponse {
+    id,
+    response_type: "message".to_string(),
+    role: "assistant".to_string(),
+    content: content_blocks,
     model: model.to_string(),
-    stop_reason: Some("end_turn".to_string()),
+    stop_reason,
     stop_sequence: None,
     usage: AnthropicUsage {
       input_tokens: 0,
@@ -1020,8 +1186,12 @@ async fn anthropic_stream_response(resp: reqwest::Response, model: &str) -> Resp
     let mut bytes_stream = resp.bytes_stream();
     let mut buffer = String::new();
     let mut sent_start = false;
-    let content_index = 0;
+    let mut content_index = 0;
     let mut last_content: Option<String> = None;
+    
+    // 工具调用累积器: HashMap<tool_use_id, (name, input_json_string)>
+    let mut tool_accumulators: std::collections::HashMap<String, (String, String)> = std::collections::HashMap::new();
+    let mut completed_tools: Vec<(String, String, String)> = Vec::new(); // (id, name, input_json)
     
     use futures::StreamExt;
     
@@ -1035,42 +1205,73 @@ async fn anthropic_stream_response(resp: reqwest::Response, model: &str) -> Resp
             if let Some(json_str) = extract_json(remaining) {
               let json_len = json_str.len();
               
-              if let Some(content) = parse_kiro_content(&json_str, &mut last_content) {
-                // 发送 message_start（仅第一次）
-                if !sent_start {
-                  let event = serde_json::json!({
-                    "type": "message_start",
-                    "message": {
-                      "id": id,
-                      "type": "message",
-                      "role": "assistant",
-                      "content": [],
-                      "model": model,
-                      "stop_reason": null,
-                      "stop_sequence": null,
-                      "usage": { "input_tokens": 0, "output_tokens": 0 }
+              // 使用完整解析器
+              if let Some(event) = parse_kiro_event_full(&json_str) {
+                match event {
+                  KiroEvent::Text(content) => {
+                    // 去重
+                    if last_content.as_deref() == Some(&content) {
+                      buffer = buffer[start + json_len..].to_string();
+                      continue;
                     }
-                  });
-                  yield Ok::<_, Infallible>(format!("event: message_start\ndata: {}\n\n", serde_json::to_string(&event).unwrap()));
-                  
-                  // 发送 content_block_start
-                  let block_start = serde_json::json!({
-                    "type": "content_block_start",
-                    "index": content_index,
-                    "content_block": { "type": "text", "text": "" }
-                  });
-                  yield Ok::<_, Infallible>(format!("event: content_block_start\ndata: {}\n\n", serde_json::to_string(&block_start).unwrap()));
-                  
-                  sent_start = true;
+                    last_content = Some(content.clone());
+                    
+                    // 发送 message_start（仅第一次）
+                    if !sent_start {
+                      let event = serde_json::json!({
+                        "type": "message_start",
+                        "message": {
+                          "id": id,
+                          "type": "message",
+                          "role": "assistant",
+                          "content": [],
+                          "model": model,
+                          "stop_reason": null,
+                          "stop_sequence": null,
+                          "usage": { "input_tokens": 0, "output_tokens": 0 }
+                        }
+                      });
+                      yield Ok::<_, Infallible>(format!("event: message_start\ndata: {}\n\n", serde_json::to_string(&event).unwrap()));
+                      
+                      // 发送 content_block_start
+                      let block_start = serde_json::json!({
+                        "type": "content_block_start",
+                        "index": content_index,
+                        "content_block": { "type": "text", "text": "" }
+                      });
+                      yield Ok::<_, Infallible>(format!("event: content_block_start\ndata: {}\n\n", serde_json::to_string(&block_start).unwrap()));
+                      
+                      sent_start = true;
+                    }
+                    
+                    // 发送 content_block_delta
+                    let delta = serde_json::json!({
+                      "type": "content_block_delta",
+                      "index": content_index,
+                      "delta": { "type": "text_delta", "text": content }
+                    });
+                    yield Ok::<_, Infallible>(format!("event: content_block_delta\ndata: {}\n\n", serde_json::to_string(&delta).unwrap()));
+                  }
+                  KiroEvent::ToolUseStart { id: tool_id, name } => {
+                    // 开始累积新的工具调用
+                    tool_accumulators.insert(tool_id, (name, String::new()));
+                  }
+                  KiroEvent::ToolUseInputDelta { id: tool_id, input_delta } => {
+                    // 累积 input 分片
+                    if let Some((_, ref mut input_str)) = tool_accumulators.get_mut(&tool_id) {
+                      input_str.push_str(&input_delta);
+                    }
+                  }
+                  KiroEvent::ToolUseStop { id: tool_id } => {
+                    // 工具调用完成，移到完成列表
+                    if let Some((name, input_str)) = tool_accumulators.remove(&tool_id) {
+                      // 安全截取 UTF-8 字符串（避免在多字节字符中间截断）
+                      let preview: String = input_str.chars().take(100).collect();
+                      log::info!("[KiroGate] 工具调用完成: name={}, input={}", name, preview);
+                      completed_tools.push((tool_id, name, input_str));
+                    }
+                  }
                 }
-                
-                // 发送 content_block_delta
-                let delta = serde_json::json!({
-                  "type": "content_block_delta",
-                  "index": content_index,
-                  "delta": { "type": "text_delta", "text": content }
-                });
-                yield Ok::<_, Infallible>(format!("event: content_block_delta\ndata: {}\n\n", serde_json::to_string(&delta).unwrap()));
               }
               
               buffer = buffer[start + json_len..].to_string();
@@ -1088,17 +1289,80 @@ async fn anthropic_stream_response(resp: reqwest::Response, model: &str) -> Resp
     
     // 发送结束事件
     if sent_start {
-      // content_block_stop
+      // 关闭文本块
       let block_stop = serde_json::json!({
         "type": "content_block_stop",
         "index": content_index
       });
       yield Ok::<_, Infallible>(format!("event: content_block_stop\ndata: {}\n\n", serde_json::to_string(&block_stop).unwrap()));
+      content_index += 1;
+    } else if !completed_tools.is_empty() {
+      // 如果没有文本但有工具调用，先发送 message_start
+      let event = serde_json::json!({
+        "type": "message_start",
+        "message": {
+          "id": id,
+          "type": "message",
+          "role": "assistant",
+          "content": [],
+          "model": model,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "usage": { "input_tokens": 0, "output_tokens": 0 }
+        }
+      });
+      yield Ok::<_, Infallible>(format!("event: message_start\ndata: {}\n\n", serde_json::to_string(&event).unwrap()));
+      sent_start = true;
+    }
+    
+    // 发送工具调用块
+    for (tool_id, tool_name, input_json_str) in &completed_tools {
+      // 解析 input JSON
+      let tool_input: serde_json::Value = serde_json::from_str(input_json_str)
+        .unwrap_or(serde_json::json!({}));
       
+      // content_block_start
+      let tool_block_start = serde_json::json!({
+        "type": "content_block_start",
+        "index": content_index,
+        "content_block": {
+          "type": "tool_use",
+          "id": tool_id,
+          "name": tool_name,
+          "input": {}
+        }
+      });
+      yield Ok::<_, Infallible>(format!("event: content_block_start\ndata: {}\n\n", serde_json::to_string(&tool_block_start).unwrap()));
+      
+      // input_json_delta
+      let input_delta = serde_json::json!({
+        "type": "content_block_delta",
+        "index": content_index,
+        "delta": {
+          "type": "input_json_delta",
+          "partial_json": serde_json::to_string(&tool_input).unwrap_or_default()
+        }
+      });
+      yield Ok::<_, Infallible>(format!("event: content_block_delta\ndata: {}\n\n", serde_json::to_string(&input_delta).unwrap()));
+      
+      // content_block_stop
+      let tool_block_stop = serde_json::json!({
+        "type": "content_block_stop",
+        "index": content_index
+      });
+      yield Ok::<_, Infallible>(format!("event: content_block_stop\ndata: {}\n\n", serde_json::to_string(&tool_block_stop).unwrap()));
+      
+      content_index += 1;
+    }
+    
+    // 确定 stop_reason
+    let stop_reason = if !completed_tools.is_empty() { "tool_use" } else { "end_turn" };
+    
+    if sent_start {
       // message_delta
       let msg_delta = serde_json::json!({
         "type": "message_delta",
-        "delta": { "stop_reason": "end_turn", "stop_sequence": null },
+        "delta": { "stop_reason": stop_reason, "stop_sequence": null },
         "usage": { "output_tokens": 0 }
       });
       yield Ok::<_, Infallible>(format!("event: message_delta\ndata: {}\n\n", serde_json::to_string(&msg_delta).unwrap()));

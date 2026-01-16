@@ -55,8 +55,7 @@ pub fn configure_claude_code(api_key: String, base_url: String) -> Result<(), St
     // 更新 env 配置
     let mut env = settings.env.unwrap_or_default();
     env.insert("ANTHROPIC_BASE_URL".to_string(), base_url);
-    env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), api_key);
-    env.insert("ANTHROPIC_API_KEY".to_string(), "".to_string());
+    env.insert("ANTHROPIC_API_KEY".to_string(), api_key);
     settings.env = Some(env);
     
     // 写入配置

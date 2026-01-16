@@ -2,6 +2,8 @@
 
 use crate::kiro_gate::{start_server, stop_server, get_server_status, ServerStatus};
 use crate::kiro_gate::metrics::{MetricsData, METRICS};
+use crate::kiro_gate::auth::{TokenConfig, TokenManager};
+use crate::kiro_portal_client::KiroPortalClient;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -253,5 +255,137 @@ pub async fn find_token_by_api_key(api_key: String) -> Result<Option<KiroGateTok
     Ok(tokens.iter().find(|t| t.id == m.token_id).cloned())
   } else {
     Ok(None)
+  }
+}
+
+// ============================================================
+// Token 配额查询
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenUsageInfo {
+  pub token_id: String,
+  pub email: Option<String>,
+  pub subscription_type: Option<String>,
+  pub usage_limit: Option<i32>,
+  pub current_usage: Option<i32>,
+  pub days_until_reset: Option<i32>,
+  pub free_trial_limit: Option<i32>,
+  pub free_trial_usage: Option<i32>,
+  pub bonus_limit: Option<f64>,
+  pub bonus_usage: Option<f64>,
+  pub error: Option<String>,
+}
+
+/// 获取单个 Token 的配额信息
+#[tauri::command]
+pub async fn get_kiro_gate_token_usage(token_id: String) -> Result<TokenUsageInfo, String> {
+  let tokens = load_tokens();
+  let token = tokens.iter().find(|t| t.id == token_id)
+    .ok_or("Token 不存在")?;
+  
+  // 构建 TokenConfig
+  let config = TokenConfig {
+    refresh_token: token.refresh_token.clone(),
+    auth_method: if token.auth_method.is_empty() { "social".to_string() } else { token.auth_method.clone() },
+    profile_arn: token.profile_arn.clone(),
+    client_id: token.client_id.clone(),
+    client_secret: token.client_secret.clone(),
+    region: token.region.clone(),
+  };
+  
+  // 获取 access_token
+  let token_manager = TokenManager::new(config);
+  let access_token = match token_manager.get_access_token().await {
+    Ok(t) => t,
+    Err(e) => {
+      return Ok(TokenUsageInfo {
+        token_id,
+        email: None,
+        subscription_type: None,
+        usage_limit: None,
+        current_usage: None,
+        days_until_reset: None,
+        free_trial_limit: None,
+        free_trial_usage: None,
+        bonus_limit: None,
+        bonus_usage: None,
+        error: Some(e),
+      });
+    }
+  };
+  
+  // 确定 idp
+  let idp = if token.auth_method == "IdC" { "BuilderId" } else { "Google" };
+  
+  // 调用 KiroPortalClient 获取配额
+  let client = KiroPortalClient::new();
+  match client.get_user_usage_and_limits(&access_token, idp).await {
+    Ok(resp) => {
+      // 调试日志
+      #[cfg(debug_assertions)]
+      log::debug!("[KiroGate] Usage response: {}", serde_json::to_string_pretty(&resp).unwrap_or_default());
+      
+      let email = resp.user_info.as_ref().and_then(|u| u.email.clone());
+      let subscription_type = resp.subscription_info.as_ref().and_then(|s| s.subscription_type.clone());
+      let days_until_reset = resp.days_until_reset;
+      
+      // 优先从 usageBreakdownList 获取，否则从 usageBreakdown 获取
+      let breakdown = resp.usage_breakdown_list.as_ref()
+        .and_then(|list| list.first())
+        .or(resp.usage_breakdown.as_ref());
+      
+      // 主配额
+      let (usage_limit, current_usage) = breakdown
+        .map(|b| (b.usage_limit, b.current_usage))
+        .unwrap_or((None, None));
+      
+      // 试用配额
+      let (free_trial_limit, free_trial_usage) = breakdown
+        .and_then(|b| b.free_trial_info.as_ref())
+        .map(|f| (f.usage_limit, f.current_usage))
+        .unwrap_or((None, None));
+      
+      // 奖励配额（合计）
+      let (bonus_limit, bonus_usage) = breakdown
+        .and_then(|b| b.bonuses.as_ref())
+        .filter(|bonuses| !bonuses.is_empty())
+        .map(|bonuses| {
+          let total_limit: f64 = bonuses.iter().filter_map(|b| b.usage_limit).sum();
+          let total_usage: f64 = bonuses.iter().filter_map(|b| b.current_usage).sum();
+          (Some(total_limit), Some(total_usage))
+        })
+        .unwrap_or((None, None));
+      
+      Ok(TokenUsageInfo {
+        token_id,
+        email,
+        subscription_type,
+        usage_limit,
+        current_usage,
+        days_until_reset,
+        free_trial_limit,
+        free_trial_usage,
+        bonus_limit,
+        bonus_usage,
+        error: None,
+      })
+    }
+    Err(e) => {
+      Ok(TokenUsageInfo {
+        token_id,
+        email: None,
+        subscription_type: None,
+        usage_limit: None,
+        current_usage: None,
+        days_until_reset: None,
+        free_trial_limit: None,
+        free_trial_usage: None,
+        bonus_limit: None,
+        bonus_usage: None,
+        error: Some(e),
+      })
+    }
   }
 }

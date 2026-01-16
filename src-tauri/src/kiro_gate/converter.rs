@@ -129,20 +129,26 @@ fn convert_anthropic_content(content: &serde_json::Value) -> serde_json::Value {
   match content {
     serde_json::Value::String(s) => serde_json::Value::String(s.clone()),
     serde_json::Value::Array(arr) => {
+      // 检查是否包含 tool_result（需要保留原始结构）
+      let has_tool_result = arr.iter().any(|item| {
+        if let serde_json::Value::Object(obj) = item {
+          obj.get("type").and_then(|v| v.as_str()) == Some("tool_result")
+        } else {
+          false
+        }
+      });
+      
+      // 如果包含 tool_result，保留原始数组结构
+      if has_tool_result {
+        return content.clone();
+      }
+      
       // 提取文本内容
       let text: String = arr.iter()
         .filter_map(|item| {
           if let serde_json::Value::Object(obj) = item {
             if obj.get("type").and_then(|v| v.as_str()) == Some("text") {
               return obj.get("text").and_then(|v| v.as_str()).map(|s| s.to_string());
-            }
-            // tool_result 的内容
-            if obj.get("type").and_then(|v| v.as_str()) == Some("tool_result") {
-              if let Some(c) = obj.get("content") {
-                if let Some(s) = c.as_str() {
-                  return Some(s.to_string());
-                }
-              }
             }
           }
           None
@@ -300,6 +306,19 @@ pub fn build_kiro_payload(
   request: &ChatCompletionRequest,
   profile_arn: Option<String>,
 ) -> Result<KiroPayload, String> {
+  // 调试日志：打印收到的消息
+  log::debug!("[KiroGate] build_kiro_payload: 收到 {} 条消息", request.messages.len());
+  for (i, msg) in request.messages.iter().enumerate() {
+    let content_preview: String = match &msg.content {
+      Some(serde_json::Value::String(s)) => s.chars().take(100).collect(),
+      Some(serde_json::Value::Array(arr)) => format!("[Array with {} items]", arr.len()),
+      Some(other) => format!("{:?}", other).chars().take(100).collect(),
+      None => "(none)".to_string(),
+    };
+    log::debug!("[KiroGate]   消息[{}]: role={}, content={}, tool_calls={:?}, tool_call_id={:?}", 
+      i, msg.role, content_preview, msg.tool_calls.as_ref().map(|tc| tc.len()), msg.tool_call_id);
+  }
+  
   let model_id = get_internal_model_id(&request.model)?;
   let conversation_id = Uuid::new_v4().to_string();
   

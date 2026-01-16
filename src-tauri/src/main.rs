@@ -260,6 +260,7 @@ fn main() {
             generate_api_key,
             delete_api_key,
             find_token_by_api_key,
+            get_kiro_gate_token_usage,
             // Claude Code 配置命令
             get_claude_code_settings,
             configure_claude_code,
