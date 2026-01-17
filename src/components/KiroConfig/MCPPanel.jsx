@@ -35,6 +35,7 @@ function MCPPanel({ onCountChange }) {
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingServer, setEditingServer] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [toolCount, setToolCount] = useState(0)
 
   const loadConfig = useCallback(async () => {
     try {
@@ -42,6 +43,10 @@ function MCPPanel({ onCountChange }) {
       const mcpServers = config.mcpServers || {}
       setServers(mcpServers)
       onCountChange?.(Object.keys(mcpServers).length)
+      
+      // 加载工具统计
+      const stats = await invoke('get_mcp_tool_stats')
+      setToolCount(stats.estimatedTools)
     } catch (e) {
       console.error('加载 MCP 配置失败:', e)
     } finally {
@@ -84,7 +89,7 @@ function MCPPanel({ onCountChange }) {
   return (
     <div className="h-full flex flex-col">
       {/* 警告横幅 */}
-      {serverList.length > 10 && (
+      {toolCount > 50 && (
         <div className={`mx-6 mt-4 mb-2 px-4 py-3 rounded-xl border-2 ${
           isLightTheme 
             ? 'bg-orange-50 border-orange-200' 
@@ -95,10 +100,10 @@ function MCPPanel({ onCountChange }) {
           </div>
           <div className="flex-1">
             <div className={`text-sm font-medium ${isLightTheme ? 'text-orange-900' : 'text-orange-300'} mb-1`}>
-              MCP 服务器数量较多
+              MCP 工具数量较多
             </div>
             <div className={`text-xs ${isLightTheme ? 'text-orange-700' : 'text-orange-400/80'}`}>
-              您已配置 {serverList.length} 个 MCP 服务器。过多的服务器可能导致工具选择性能下降和上下文消耗增加。建议禁用不常用的服务器。
+              您已配置约 {toolCount} 个 MCP 工具（{serverList.length} 个服务器）。过多的工具可能导致工具选择性能下降和上下文消耗增加。建议禁用不常用的服务器。
             </div>
           </div>
         </div>

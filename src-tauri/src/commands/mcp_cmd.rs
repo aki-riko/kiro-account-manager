@@ -89,3 +89,33 @@ pub async fn toggle_mcp_server(name: String, disabled: bool) -> Result<(), Strin
     .await
     .map_err(|e| e.to_string())?
 }
+
+/// 获取 MCP 工具统计信息
+#[tauri::command]
+pub async fn get_mcp_tool_stats() -> Result<serde_json::Value, String> {
+    tokio::task::spawn_blocking(|| {
+        let mcp_config = McpConfig::load()?;
+        
+        let total_servers = mcp_config.mcp_servers.len();
+        let enabled_servers = mcp_config.mcp_servers.values()
+            .filter(|server| {
+                match server {
+                    McpServer::Command(cmd) => !cmd.disabled,
+                    McpServer::Url(url) => !url.disabled,
+                }
+            })
+            .count();
+        
+        // 估算工具数量：每个启用的服务器平均 5-10 个工具
+        // 使用保守估计：每个服务器 7 个工具
+        let estimated_tools = enabled_servers * 7;
+        
+        Ok(serde_json::json!({
+            "totalServers": total_servers,
+            "enabledServers": enabled_servers,
+            "estimatedTools": estimated_tools,
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

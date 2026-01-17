@@ -232,6 +232,7 @@ fn main() {
             save_mcp_server,
             delete_mcp_server,
             toggle_mcp_server,
+            get_mcp_tool_stats,
 
             // 代理检测命令
             detect_system_proxy,

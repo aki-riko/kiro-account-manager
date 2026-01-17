@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Users, Zap, Shield, TrendingUp, Sparkles, Server } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
-import { useNavigate } from 'react-router-dom'
 import { useApp } from '../hooks/useApp'
 import { useDialog } from '../contexts/DialogContext'
 import { useAccount } from '../contexts/AccountContext'
@@ -17,11 +16,10 @@ import UsageDistribution from './Home/UsageDistribution'
 import QuotaPieChart from './Home/QuotaPieChart'
 import UsageTrendChart from './Home/UsageTrendChart'
 
-function Home() {
+function Home({ onNavigate }) {
   const { t, theme, colors } = useApp()
   const { showError } = useDialog()
   const { maskEmail } = usePrivacy()
-  const navigate = useNavigate()
   const { 
     accounts: tokens, 
     localToken, 
@@ -34,22 +32,21 @@ function Home() {
     refreshAccount 
   } = useAccount()
   const [refreshingAccount, setRefreshingAccount] = useState(false)
-  const [mcpServerCount, setMcpServerCount] = useState(0)
+  const [mcpToolCount, setMcpToolCount] = useState(0)
 
   const handleRefresh = () => refresh()
 
-  // 加载 MCP 服务器数量
+  // 加载 MCP 工具数量
   useEffect(() => {
-    const loadMcpCount = async () => {
+    const loadMcpToolCount = async () => {
       try {
-        const config = await invoke('get_mcp_config')
-        const count = Object.keys(config.mcpServers || {}).length
-        setMcpServerCount(count)
+        const stats = await invoke('get_mcp_tool_stats')
+        setMcpToolCount(stats.estimatedTools)
       } catch (e) {
-        console.error('Failed to load MCP config:', e)
+        console.error('Failed to load MCP tool stats:', e)
       }
     }
-    loadMcpCount()
+    loadMcpToolCount()
   }, [])
 
   // 刷新当前账号的 token 和 usage
@@ -80,11 +77,11 @@ function Home() {
     { 
       icon: Server, 
       iconBg: isLightTheme ? 'bg-cyan-100 text-cyan-600' : 'bg-cyan-500/20 text-cyan-400', 
-      value: mcpServerCount, 
-      label: 'MCP 服务器', 
+      value: mcpToolCount, 
+      label: 'MCP 工具', 
       delay: 'delay-500',
-      onClick: () => navigate('/kiro-config?tab=mcp'),
-      warning: mcpServerCount > 10
+      onClick: () => onNavigate?.('kiroConfig'),
+      warning: mcpToolCount > 50
     },
   ]
 
