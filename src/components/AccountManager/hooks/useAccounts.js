@@ -30,9 +30,13 @@ export function useAccounts() {
   const loadAccounts = useCallback(async () => {
     try {
       setLoading(true)
-      setAccounts(await invoke('get_accounts'))
+      console.log('[DEBUG] 开始加载账号...')
+      const loadedAccounts = await invoke('get_accounts')
+      console.log('[DEBUG] 账号加载成功，数量:', loadedAccounts.length)
+      console.log('[DEBUG] 账号数据:', loadedAccounts)
+      setAccounts(loadedAccounts)
     } catch (e) {
-      console.error(e)
+      console.error('[DEBUG] 账号加载失败:', e)
     } finally {
       setLoading(false)
     }

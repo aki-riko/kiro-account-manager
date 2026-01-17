@@ -625,3 +625,18 @@ pub fn get_accounts_by_tag(state: State<AppState>, tag_id: String) -> Vec<Accoun
     let store = state.store.lock().expect("Failed to acquire store lock");
     store.get_accounts_by_tag(&tag_id).into_iter().cloned().collect()
 }
+
+// ============================================================
+// 配额查询接口
+// ============================================================
+
+/// 获取账号配额信息（不刷新 token，不更新数据库）
+#[tauri::command]
+pub async fn get_account_usage(
+    access_token: String,
+    provider: Option<String>,
+) -> Result<GetUserUsageAndLimitsResponse, String> {
+    let provider_str = provider.as_deref().unwrap_or("Google");
+    let client = KiroPortalClient::new();
+    client.get_user_usage_and_limits(&access_token, provider_str).await
+}

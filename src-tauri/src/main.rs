@@ -31,7 +31,7 @@ use commands::account_cmd::{
     get_accounts, delete_account, delete_accounts, delete_account_remote, update_account, sync_account,
     refresh_account_token, verify_account, add_account_by_social, add_local_kiro_account,
     add_account_by_idc, import_accounts, export_accounts,
-    get_available_accounts, get_accounts_by_group, get_accounts_by_tag
+    get_available_accounts, get_accounts_by_group, get_accounts_by_tag, get_account_usage
 };
 use commands::group_tag_cmd::{
     get_groups, add_group, update_group, delete_group, reorder_groups,
@@ -162,6 +162,7 @@ fn main() {
             get_available_accounts,
             get_accounts_by_group,
             get_accounts_by_tag,
+            get_account_usage,
             // 分组与标签命令
             get_groups,
             add_group,

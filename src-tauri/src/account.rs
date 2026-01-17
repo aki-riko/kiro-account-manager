@@ -194,8 +194,19 @@ impl AccountStore {
 
     fn load_from_file(path: &PathBuf) -> Vec<Account> {
         if let Ok(content) = std::fs::read_to_string(path) {
-            serde_json::from_str(&content).unwrap_or_default()
+            match serde_json::from_str::<Vec<Account>>(&content) {
+                Ok(accounts) => {
+                    eprintln!("[AccountStore] 成功加载 {} 个账号", accounts.len());
+                    accounts
+                }
+                Err(e) => {
+                    eprintln!("[AccountStore] JSON 反序列化失败: {}", e);
+                    eprintln!("[AccountStore] 文件路径: {:?}", path);
+                    Vec::new()
+                }
+            }
         } else {
+            eprintln!("[AccountStore] 无法读取文件: {:?}", path);
             Vec::new()
         }
     }
@@ -260,7 +271,6 @@ impl AccountStore {
                         if account.machine_id.is_none() {
                             account.machine_id = Some(uuid::Uuid::new_v4().to_string().to_lowercase());
                         }
-                        // 保留标签数据，不再清空
                         self.accounts.push(account);
                         added += 1;
                     }
