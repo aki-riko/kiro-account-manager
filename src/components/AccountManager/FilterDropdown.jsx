@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Filter, X, ChevronDown } from 'lucide-react'
+import { Filter, X } from 'lucide-react'
+import { Select } from '@mantine/core'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useTranslation } from 'react-i18next'
 import SearchableTagSelect from './SearchableTagSelect'
@@ -35,24 +36,34 @@ const USAGE_RANGE_OPTIONS = [
 // 通用筛选下拉组件
 function FilterSelect({ label, value, options, onChange, onClear, colors, isLightTheme }) {
   const hasValue = !!value
-  const baseStyle = `w-full px-3 py-2 pr-16 border rounded-lg text-sm ${colors.text} ${isLightTheme ? 'bg-white' : 'bg-[#1a1a2e]'} focus:outline-none focus:ring-2 transition-all appearance-none`
-  const activeStyle = hasValue ? 'border-blue-500 ring-1 ring-blue-500/30' : colors.cardBorder
-
+  
   return (
     <div>
       <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{label}</label>
       <div className="relative">
-        <select value={value} onChange={(e) => onChange(e.target.value)} className={`${baseStyle} ${activeStyle}`}>
-          {options.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-        <ChevronDown size={14} className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${colors.textMuted}`} />
-        {hasValue && (
-          <button onClick={onClear} className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-red-500/20 rounded transition-colors">
-            <X size={14} className="text-red-500" />
-          </button>
-        )}
+        <Select
+          value={value}
+          onChange={onChange}
+          data={options}
+          clearable={hasValue}
+          onClear={onClear}
+          classNames={{
+            input: `${colors.input} ${colors.text}`,
+            dropdown: isLightTheme ? 'bg-white' : 'bg-[#1a1a2e]'
+          }}
+          styles={{
+            input: {
+              fontSize: '0.875rem',
+              padding: '0.5rem 0.75rem',
+              borderRadius: '0.5rem',
+              borderColor: hasValue ? '#3b82f6' : undefined,
+              boxShadow: hasValue ? '0 0 0 1px rgba(59, 130, 246, 0.3)' : undefined
+            },
+            dropdown: {
+              borderColor: colors.cardBorder
+            }
+          }}
+        />
       </div>
     </div>
   )
@@ -118,7 +129,6 @@ function FilterDropdown({
             {activeCount}
           </span>
         )}
-        <ChevronDown size={14} className={`${colors.textMuted} transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (

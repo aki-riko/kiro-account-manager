@@ -130,13 +130,15 @@ function EditMCPModal({ name, config, onClose, onSuccess }) {
               onChange={e => setJsonConfig(e.target.value)}
               rows={16}
               spellCheck={false}
-              styles={{
+              styles={(theme) => ({
                 input: {
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                   fontSize: '0.875rem',
-                  borderColor: parseError ? 'rgba(239, 68, 68, 0.5)' : undefined
+                  borderColor: parseError ? 'rgba(239, 68, 68, 0.5)' : undefined,
+                  borderRadius: '0.75rem',
+                  padding: '0.75rem'
                 }
-              }}
+              })}
               classNames={{
                 input: `${colors.text} ${colors.input} ${colors.inputFocus}`
               }}

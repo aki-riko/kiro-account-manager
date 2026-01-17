@@ -83,6 +83,27 @@ function MCPPanel({ onCountChange }) {
 
   return (
     <div className="h-full flex flex-col">
+      {/* 警告横幅 */}
+      {serverList.length > 10 && (
+        <div className={`mx-6 mt-4 mb-2 px-4 py-3 rounded-xl border-2 ${
+          isLightTheme 
+            ? 'bg-orange-50 border-orange-200' 
+            : 'bg-orange-500/10 border-orange-500/30'
+        } flex items-start gap-3`}>
+          <div className={`mt-0.5 ${isLightTheme ? 'text-orange-600' : 'text-orange-400'}`}>
+            ⚠️
+          </div>
+          <div className="flex-1">
+            <div className={`text-sm font-medium ${isLightTheme ? 'text-orange-900' : 'text-orange-300'} mb-1`}>
+              MCP 服务器数量较多
+            </div>
+            <div className={`text-xs ${isLightTheme ? 'text-orange-700' : 'text-orange-400/80'}`}>
+              您已配置 {serverList.length} 个 MCP 服务器。过多的服务器可能导致工具选择性能下降和上下文消耗增加。建议禁用不常用的服务器。
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 工具栏 */}
       <div className={`px-6 py-3 border-b ${colors.cardBorder} flex items-center justify-between gap-4`}>
         <SearchInput

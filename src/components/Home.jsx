@@ -1,5 +1,7 @@
-import { useState } from 'react'
-import { Users, Zap, Shield, TrendingUp, Sparkles } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Users, Zap, Shield, TrendingUp, Sparkles, Server } from 'lucide-react'
+import { invoke } from '@tauri-apps/api/core'
+import { useNavigate } from 'react-router-dom'
 import { useApp } from '../hooks/useApp'
 import { useDialog } from '../contexts/DialogContext'
 import { useAccount } from '../contexts/AccountContext'
@@ -19,6 +21,7 @@ function Home() {
   const { t, theme, colors } = useApp()
   const { showError } = useDialog()
   const { maskEmail } = usePrivacy()
+  const navigate = useNavigate()
   const { 
     accounts: tokens, 
     localToken, 
@@ -31,8 +34,23 @@ function Home() {
     refreshAccount 
   } = useAccount()
   const [refreshingAccount, setRefreshingAccount] = useState(false)
+  const [mcpServerCount, setMcpServerCount] = useState(0)
 
   const handleRefresh = () => refresh()
+
+  // 加载 MCP 服务器数量
+  useEffect(() => {
+    const loadMcpCount = async () => {
+      try {
+        const config = await invoke('get_mcp_config')
+        const count = Object.keys(config.mcpServers || {}).length
+        setMcpServerCount(count)
+      } catch (e) {
+        console.error('Failed to load MCP config:', e)
+      }
+    }
+    loadMcpCount()
+  }, [])
 
   // 刷新当前账号的 token 和 usage
   const handleRefreshCurrentAccount = async () => {
@@ -59,6 +77,15 @@ function Home() {
     { icon: Shield, iconBg: isLightTheme ? 'bg-green-100 text-green-600' : 'bg-green-500/20 text-green-400', value: `${stats.active}/${stats.banned}`, label: t('home.activeVsBanned'), delay: 'delay-200' },
     { icon: Zap, iconBg: isLightTheme ? 'bg-purple-100 text-purple-600' : 'bg-purple-500/20 text-purple-400', value: stats.proPlus + stats.pro, label: t('home.proAccounts'), delay: 'delay-300' },
     { icon: TrendingUp, iconBg: isLightTheme ? 'bg-orange-100 text-orange-600' : 'bg-orange-500/20 text-orange-400', value: `${stats.usagePercent}%`, label: t('home.usagePercent'), delay: 'delay-400' },
+    { 
+      icon: Server, 
+      iconBg: isLightTheme ? 'bg-cyan-100 text-cyan-600' : 'bg-cyan-500/20 text-cyan-400', 
+      value: mcpServerCount, 
+      label: 'MCP 服务器', 
+      delay: 'delay-500',
+      onClick: () => navigate('/kiro-config?tab=mcp'),
+      warning: mcpServerCount > 10
+    },
   ]
 
   return (
@@ -80,7 +107,7 @@ function Home() {
         </div>
 
         {/* 统计卡片 */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-5 gap-4 mb-6">
           {statCards.map((card, index) => (
             <StatCard key={index} {...card} isLightTheme={isLightTheme} />
           ))}

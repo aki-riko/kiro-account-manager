@@ -269,7 +269,14 @@ function AccountDetailModal({ account, onClose }) {
                     required
                     classNames={{
                       label: `text-xs font-medium ${colors.textMuted}`,
-                      input: `px-3 py-2 border rounded-lg text-sm ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 transition-all`
+                      input: `${colors.text} ${colors.input}`
+                    }}
+                    styles={{
+                      input: {
+                        fontSize: '0.875rem',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: '0.5rem',
+                      }
                     }}
                   />
                 </div>
@@ -281,7 +288,14 @@ function AccountDetailModal({ account, onClose }) {
                     placeholder={t('common.none')}
                     classNames={{
                       label: `text-xs font-medium ${colors.textMuted}`,
-                      input: `px-3 py-2 border rounded-lg text-sm ${colors.text} ${colors.input} opacity-60`
+                      input: `${colors.text} ${colors.input} opacity-60`
+                    }}
+                    styles={{
+                      input: {
+                        fontSize: '0.875rem',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: '0.5rem',
+                      }
                     }}
                   />
                 </div>
