@@ -10,15 +10,20 @@
 
 ## 项目定位
 
-Kiro API 网关服务，提供 OpenAI/Anthropic 兼容接口。
+**专注 Kiro API 的网关服务**，提供 OpenAI/Anthropic 兼容接口。
+
+⚠️ **重要说明**：
+- **只支持 Kiro API**，不支持 Gemini、Antigravity、Qwen 等其他 Provider
+- 专注于 Kiro 的多账号管理和 API 转换
+- 参考项目中的其他 Provider 功能仅作架构参考，不实现
 
 **核心功能**：
 - OpenAI 兼容 `/v1/chat/completions`
 - Anthropic 兼容 `/v1/messages`
-- 多账号轮询 + 自动 Token 刷新
+- Kiro 多账号轮询 + 自动 Token 刷新
 - 限流跳过、过期标记
 - 工具调用、图片、Thinking block 支持
-- Web 管理界面
+- Web 管理界面（可选）
 
 ## 参考项目
 
@@ -53,7 +58,7 @@ Get-Content "E:\VSCodeSpace\Kiro\KiroGate\文件路径" -Raw
 - **技术栈**: Node.js + Express
 - **Stars**: 2.7k+
 - **特点**:
-  - 统一多种客户端 API（Gemini CLI、Antigravity、Qwen Code、Kiro）
+  - 统一多种客户端 API（Gemini CLI、Antigravity、Qwen Code、**Kiro**）
   - OpenAI/Claude/Gemini 三协议智能互转
   - 账号池管理（多账号轮询、自动故障转移、健康检查）
   - Web UI 管理控制台（实时配置、健康监控、日志查看）
@@ -61,40 +66,43 @@ Get-Content "E:\VSCodeSpace\Kiro\KiroGate\文件路径" -Raw
   - 跨类型 Fallback 配置（配额耗尽时自动降级）
   - 代理配置支持（统一代理 + 提供商自带端点）
   - 模型过滤配置（notSupportedModels）
-- **参考用途**:
-  - 账号池管理架构设计
-  - 健康检查和故障转移机制
-  - Web UI 管理界面设计
-  - 多协议转换架构
-  - Fallback 降级策略
+- **参考用途**（仅 Kiro 相关部分）:
+  - Kiro 账号池管理架构设计
+  - Kiro 健康检查和故障转移机制
+  - Web UI 管理界面设计（可选）
+  - Kiro 多账号轮询策略
 
-**关键功能参考**:
-- 账号池轮询和健康检查
-- 跨 Provider Type 的 Fallback 机制
-- 模型过滤和协议兼容性检查
-- Web UI 实时配置管理
+**关键功能参考**（仅 Kiro 部分）:
+- Kiro 账号池轮询和健康检查
+- Kiro 账号故障转移机制
+- Kiro 配额监控和自动切换
+- Web UI 实时配置管理（可选）
+
+⚠️ **注意**：该项目支持多种 Provider，但 kiro-gateway **只实现 Kiro 相关功能**，其他 Provider（Gemini、Antigravity、Qwen）仅作架构参考。
 
 ### 3. aiclientproxy/proxycast ⭐⭐⭐⭐ 桌面应用参考
 - **GitHub**: https://github.com/aiclientproxy/proxycast
 - **技术栈**: Tauri 2.0 + React 18 + Rust
 - **Stars**: 1.1k+
 - **特点**:
-  - 多 Provider 统一管理（Kiro、Gemini、通义千问、Antigravity、Vertex AI）
+  - 多 Provider 统一管理（**Kiro**、Gemini、通义千问、Antigravity、Vertex AI）
   - 智能凭证管理（自动检测变化、Token 自动刷新、配额超限自动切换）
   - OpenAI Chat API + Anthropic Messages API 完整兼容
   - 友好图形界面（Dashboard 监控、Provider 管理、日志查看）
   - 一键读取凭证功能
-- **参考用途**:
-  - Tauri 桌面应用架构（与 kiro-account-manager 类似）
-  - 凭证自动检测和管理
-  - Provider 健康监控界面
-  - 配额超限自动切换逻辑
+- **参考用途**（仅 Kiro 相关部分）:
+  - Kiro 凭证自动检测和管理
+  - Kiro 健康监控界面
+  - Kiro 配额超限自动切换逻辑
+  - Dashboard 实时监控界面（可选）
 
-**关键功能参考**:
-- 凭证文件自动检测和加载
-- Provider 健康状态监控
-- 配额超限自动切换账号
-- Dashboard 实时监控界面
+**关键功能参考**（仅 Kiro 部分）:
+- Kiro 凭证文件自动检测和加载
+- Kiro 健康状态监控
+- Kiro 配额超限自动切换账号
+- Dashboard 实时监控界面（可选）
+
+⚠️ **注意**：该项目支持多种 Provider，但 kiro-gateway **只实现 Kiro 相关功能**，其他 Provider 仅作架构参考。
 
 ### 4. hank9999/kiro.rs ⭐⭐⭐ 前端参考
 - **GitHub**: https://github.com/hank9999/kiro.rs
