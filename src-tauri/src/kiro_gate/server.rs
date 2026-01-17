@@ -34,10 +34,10 @@ pub struct ServerStatus {
   pub url: String,
 }
 
-struct ServerState {
-  proxy_api_key: String,
-  auth_cache: AuthCache,
-  http_client: Client,
+pub struct ServerState {
+  pub proxy_api_key: String,
+  pub auth_cache: AuthCache,
+  pub http_client: Client,
 }
 
 // 全局服务器句柄
@@ -411,6 +411,12 @@ async fn anthropic_messages_handler(
     }
   };
 
+  // 检查是否是 WebSearch 请求
+  if crate::kiro_gate::websearch::is_web_search_request(&request) {
+    emit_log_sync("INFO", "anthropic", "检测到 WebSearch 请求，转发到 WebSearch 处理器");
+    return crate::kiro_gate::websearch::handle_web_search_request(state, headers, request, verify_result).await;
+  }
+
   // 构建 TokenConfig
   let config = TokenConfig {
     refresh_token: verify_result.refresh_token.clone(),
@@ -497,13 +503,13 @@ async fn anthropic_messages_handler(
 // ============================================================
 
 /// 验证结果：包含完整的 Token 信息
-struct VerifyResult {
-  refresh_token: String,
-  auth_method: String,
-  profile_arn: Option<String>,
-  client_id: Option<String>,
-  client_secret: Option<String>,
-  region: Option<String>,
+pub struct VerifyResult {
+  pub refresh_token: String,
+  pub auth_method: String,
+  pub profile_arn: Option<String>,
+  pub client_id: Option<String>,
+  pub client_secret: Option<String>,
+  pub region: Option<String>,
 }
 
 fn verify_api_key(headers: &HeaderMap, proxy_api_key: &str) -> Result<VerifyResult, String> {
@@ -1279,6 +1285,10 @@ async fn anthropic_stream_response(resp: reqwest::Response, model: &str) -> Resp
     let mut content_index = 0;
     let mut last_content: Option<String> = None;
     
+    // Thinking Parser
+    let mut thinking_parser = crate::kiro_gate::thinking_parser::ThinkingParser::new();
+    let mut thinking_index: Option<usize> = None;
+    
     // 工具调用累积器: HashMap<tool_use_id, (name, input_json_string)>
     let mut tool_accumulators: std::collections::HashMap<String, (String, String)> = std::collections::HashMap::new();
     let mut completed_tools: Vec<(String, String, String)> = Vec::new(); // (id, name, input_json)
@@ -1310,41 +1320,99 @@ async fn anthropic_stream_response(resp: reqwest::Response, model: &str) -> Resp
                     }
                     last_content = Some(content.clone());
                     
-                    // 发送 message_start（仅第一次）
-                    if !sent_start {
-                      let event = serde_json::json!({
-                        "type": "message_start",
-                        "message": {
-                          "id": id,
-                          "type": "message",
-                          "role": "assistant",
-                          "content": [],
-                          "model": model,
-                          "stop_reason": null,
-                          "stop_sequence": null,
-                          "usage": { "input_tokens": input_tokens, "output_tokens": output_tokens }
-                        }
-                      });
-                      yield Ok::<_, Infallible>(format!("event: message_start\ndata: {}\n\n", serde_json::to_string(&event).unwrap()));
-                      
-                      // 发送 content_block_start
-                      let block_start = serde_json::json!({
-                        "type": "content_block_start",
-                        "index": content_index,
-                        "content_block": { "type": "text", "text": "" }
-                      });
-                      yield Ok::<_, Infallible>(format!("event: content_block_start\ndata: {}\n\n", serde_json::to_string(&block_start).unwrap()));
-                      
-                      sent_start = true;
-                    }
+                    // 使用 Thinking Parser 解析内容
+                    let segments = thinking_parser.push_and_parse(&content);
                     
-                    // 发送 content_block_delta
-                    let delta = serde_json::json!({
-                      "type": "content_block_delta",
-                      "index": content_index,
-                      "delta": { "type": "text_delta", "text": content }
-                    });
-                    yield Ok::<_, Infallible>(format!("event: content_block_delta\ndata: {}\n\n", serde_json::to_string(&delta).unwrap()));
+                    for segment in segments {
+                      match segment.segment_type {
+                        crate::kiro_gate::thinking_parser::SegmentType::Thinking => {
+                          // 发送 message_start（如果还没发送）
+                          if !sent_start {
+                            let event = serde_json::json!({
+                              "type": "message_start",
+                              "message": {
+                                "id": id,
+                                "type": "message",
+                                "role": "assistant",
+                                "content": [],
+                                "model": model,
+                                "stop_reason": null,
+                                "stop_sequence": null,
+                                "usage": { "input_tokens": input_tokens, "output_tokens": output_tokens }
+                              }
+                            });
+                            yield Ok::<_, Infallible>(format!("event: message_start\ndata: {}\n\n", serde_json::to_string(&event).unwrap()));
+                            sent_start = true;
+                          }
+                          
+                          // 发送 thinking 块（如果还没开始）
+                          if thinking_index.is_none() {
+                            let block_start = serde_json::json!({
+                              "type": "content_block_start",
+                              "index": content_index,
+                              "content_block": { "type": "thinking", "thinking": "" }
+                            });
+                            yield Ok::<_, Infallible>(format!("event: content_block_start\ndata: {}\n\n", serde_json::to_string(&block_start).unwrap()));
+                            thinking_index = Some(content_index);
+                            content_index += 1;
+                          }
+                          
+                          // 发送 thinking delta
+                          let delta = serde_json::json!({
+                            "type": "content_block_delta",
+                            "index": thinking_index.unwrap(),
+                            "delta": { "type": "thinking_delta", "thinking": segment.content }
+                          });
+                          yield Ok::<_, Infallible>(format!("event: content_block_delta\ndata: {}\n\n", serde_json::to_string(&delta).unwrap()));
+                        }
+                        crate::kiro_gate::thinking_parser::SegmentType::Text => {
+                          // 关闭 thinking 块（如果有）
+                          if let Some(idx) = thinking_index.take() {
+                            let block_stop = serde_json::json!({
+                              "type": "content_block_stop",
+                              "index": idx
+                            });
+                            yield Ok::<_, Infallible>(format!("event: content_block_stop\ndata: {}\n\n", serde_json::to_string(&block_stop).unwrap()));
+                          }
+                          
+                          // 发送 message_start（如果还没发送）
+                          if !sent_start {
+                            let event = serde_json::json!({
+                              "type": "message_start",
+                              "message": {
+                                "id": id,
+                                "type": "message",
+                                "role": "assistant",
+                                "content": [],
+                                "model": model,
+                                "stop_reason": null,
+                                "stop_sequence": null,
+                                "usage": { "input_tokens": input_tokens, "output_tokens": output_tokens }
+                              }
+                            });
+                            yield Ok::<_, Infallible>(format!("event: message_start\ndata: {}\n\n", serde_json::to_string(&event).unwrap()));
+                            
+                            // 发送 content_block_start
+                            let block_start = serde_json::json!({
+                              "type": "content_block_start",
+                              "index": content_index,
+                              "content_block": { "type": "text", "text": "" }
+                            });
+                            yield Ok::<_, Infallible>(format!("event: content_block_start\ndata: {}\n\n", serde_json::to_string(&block_start).unwrap()));
+                            
+                            sent_start = true;
+                          }
+                          
+                          // 发送 text delta
+                          let delta = serde_json::json!({
+                            "type": "content_block_delta",
+                            "index": content_index,
+                            "delta": { "type": "text_delta", "text": segment.content }
+                          });
+                          yield Ok::<_, Infallible>(format!("event: content_block_delta\ndata: {}\n\n", serde_json::to_string(&delta).unwrap()));
+                        }
+                      }
+                    }
                   }
                   KiroEvent::ToolUseStart { id: tool_id, name } => {
                     // 开始累积新的工具调用
@@ -1393,7 +1461,103 @@ async fn anthropic_stream_response(resp: reqwest::Response, model: &str) -> Resp
       }
     }
     
+    // 刷新 Thinking Parser 缓冲区
+    let final_segments = thinking_parser.flush();
+    for segment in final_segments {
+      match segment.segment_type {
+        crate::kiro_gate::thinking_parser::SegmentType::Thinking => {
+          if thinking_index.is_none() {
+            // 开始 thinking 块
+            if !sent_start {
+              let event = serde_json::json!({
+                "type": "message_start",
+                "message": {
+                  "id": id,
+                  "type": "message",
+                  "role": "assistant",
+                  "content": [],
+                  "model": model,
+                  "stop_reason": null,
+                  "stop_sequence": null,
+                  "usage": { "input_tokens": input_tokens, "output_tokens": output_tokens }
+                }
+              });
+              yield Ok::<_, Infallible>(format!("event: message_start\ndata: {}\n\n", serde_json::to_string(&event).unwrap()));
+              sent_start = true;
+            }
+            
+            let block_start = serde_json::json!({
+              "type": "content_block_start",
+              "index": content_index,
+              "content_block": { "type": "thinking", "thinking": "" }
+            });
+            yield Ok::<_, Infallible>(format!("event: content_block_start\ndata: {}\n\n", serde_json::to_string(&block_start).unwrap()));
+            thinking_index = Some(content_index);
+            content_index += 1;
+          }
+          
+          let delta = serde_json::json!({
+            "type": "content_block_delta",
+            "index": thinking_index.unwrap(),
+            "delta": { "type": "thinking_delta", "thinking": segment.content }
+          });
+          yield Ok::<_, Infallible>(format!("event: content_block_delta\ndata: {}\n\n", serde_json::to_string(&delta).unwrap()));
+        }
+        crate::kiro_gate::thinking_parser::SegmentType::Text => {
+          if let Some(idx) = thinking_index.take() {
+            let block_stop = serde_json::json!({
+              "type": "content_block_stop",
+              "index": idx
+            });
+            yield Ok::<_, Infallible>(format!("event: content_block_stop\ndata: {}\n\n", serde_json::to_string(&block_stop).unwrap()));
+          }
+          
+          if !sent_start {
+            let event = serde_json::json!({
+              "type": "message_start",
+              "message": {
+                "id": id,
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": model,
+                "stop_reason": null,
+                "stop_sequence": null,
+                "usage": { "input_tokens": input_tokens, "output_tokens": output_tokens }
+              }
+            });
+            yield Ok::<_, Infallible>(format!("event: message_start\ndata: {}\n\n", serde_json::to_string(&event).unwrap()));
+            
+            let block_start = serde_json::json!({
+              "type": "content_block_start",
+              "index": content_index,
+              "content_block": { "type": "text", "text": "" }
+            });
+            yield Ok::<_, Infallible>(format!("event: content_block_start\ndata: {}\n\n", serde_json::to_string(&block_start).unwrap()));
+            
+            sent_start = true;
+          }
+          
+          let delta = serde_json::json!({
+            "type": "content_block_delta",
+            "index": content_index,
+            "delta": { "type": "text_delta", "text": segment.content }
+          });
+          yield Ok::<_, Infallible>(format!("event: content_block_delta\ndata: {}\n\n", serde_json::to_string(&delta).unwrap()));
+        }
+      }
+    }
+    
     // 发送结束事件
+    // 关闭 thinking 块（如果还在打开状态）
+    if let Some(idx) = thinking_index {
+      let block_stop = serde_json::json!({
+        "type": "content_block_stop",
+        "index": idx
+      });
+      yield Ok::<_, Infallible>(format!("event: content_block_stop\ndata: {}\n\n", serde_json::to_string(&block_stop).unwrap()));
+    }
+    
     if sent_start {
       // 关闭文本块
       let block_stop = serde_json::json!({

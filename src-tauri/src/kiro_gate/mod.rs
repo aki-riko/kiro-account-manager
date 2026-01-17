@@ -7,6 +7,8 @@ pub mod converter;
 pub mod auth;
 pub mod metrics;
 pub mod logger;
+pub mod thinking_parser;
+pub mod websearch;
 
 pub use server::{start_server, stop_server, get_server_status, ServerStatus};
 pub use logger::init_logger;
