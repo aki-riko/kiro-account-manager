@@ -6,6 +6,8 @@ import { useAccounts } from './hooks/useAccounts'
 import { useSwitchAccount } from './hooks/useSwitchAccount'
 import { getTags, getGroups } from '../../api/groupTag'
 import { applyFilters } from './utils/filterUtils'
+import { cn } from '../../utils/cn'
+import { showSuccess, showError } from '../../utils/toast.jsx'
 import AccountHeader from './AccountHeader'
 import AccountTable from './AccountTable'
 import AccountListView from './AccountListView'
@@ -20,7 +22,7 @@ import { AccountListSkeleton, AccountTableSkeleton } from '../Skeleton'
 
 function AccountManager() {
   const { t, colors } = useApp()
-  const { showConfirm, showError, showSuccess } = useDialog()
+  const { showConfirm } = useDialog()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [editingAccount, setEditingAccount] = useState(null)
@@ -110,24 +112,23 @@ function AccountManager() {
     handleExport,
   } = useAccounts()
 
-  // 包装刷新函数，添加弹窗通知
+  // 包装刷新函数，添加 toast 通知
   const handleRefreshWithNotify = useCallback(async (id) => {
     const result = await handleRefreshStatus(id)
     if (result.success) {
-      // 只传递 usageData 作为原始响应
-      await showSuccess(t('accounts.refreshSuccess'), t('accountCard.refresh') + t('common.success'), result.data?.usageData)
+      showSuccess(t('accounts.refreshSuccess'))
     } else if (result.error) {
       const errorMsg = result.error
       if (errorMsg.includes('BANNED')) {
-        await showError(t('accounts.refreshFailed'), t('accounts.accountBanned'))
+        showError(t('accounts.accountBanned'))
       } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
-        await showError(t('accounts.refreshFailed'), t('accounts.tokenInvalid'))
+        showError(t('accounts.tokenInvalid'))
       } else {
-        await showError(t('accounts.refreshFailed'), errorMsg.slice(0, 100))
+        showError(errorMsg.slice(0, 100))
       }
     }
     return result
-  }, [handleRefreshStatus, showError, showSuccess, t])
+  }, [handleRefreshStatus, t])
 
   // 获取所有标签（从标签定义中获取）
   const allTags = useMemo(() => {
@@ -277,7 +278,7 @@ function AccountManager() {
   }, [selectedIds, showConfirm, loadAccounts, t])
 
   return (
-    <div className={`h-full flex flex-col ${colors.main}`}>
+    <div className={cn('h-full flex flex-col', colors.main)}>
       <AccountHeader
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
@@ -288,7 +289,7 @@ function AccountManager() {
         onImport={() => setShowImportModal(true)}
         onExport={async () => {
           if (selectedIds.length === 0) {
-            await showError(t('accounts.export'), t('accounts.exportSelectFirst') || '请先选择要导出的账号')
+            showError(t('accounts.exportSelectFirst') || '请先选择要导出的账号')
             return
           }
           handleExport(selectedIds)
@@ -296,7 +297,7 @@ function AccountManager() {
         onRefresh={loadAccounts}
         onRefreshAll={async () => {
           if (selectedIds.length === 0) {
-            await showError(t('accounts.refreshAll'), t('accounts.refreshSelectFirst') || '请先选择要刷新的账号')
+            showError(t('accounts.refreshSelectFirst') || '请先选择要刷新的账号')
             return
           }
           batchRefreshAccounts(selectedIds, accounts)
