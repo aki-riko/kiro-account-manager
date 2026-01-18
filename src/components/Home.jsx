@@ -86,12 +86,12 @@ function Home({ onNavigate }) {
   ]
 
   return (
-    <div className={`h-full overflow-auto ${colors.main}`}>
+    <div className={`h-full overflow-auto ${colors.main} flex justify-center`}>
       {/* 背景装饰光晕 */}
       <div className="bg-glow bg-glow-1" />
       <div className="bg-glow bg-glow-2" />
       
-      <div className="max-w-5xl mx-auto p-8 relative">
+      <div className="max-w-5xl w-full p-8 relative">
         {/* Header */}
         <div className="mb-8 animate-bounce-in">
           <div className="flex items-center gap-3 mb-2">
@@ -106,7 +106,7 @@ function Home({ onNavigate }) {
         {/* 统计卡片 */}
         <div className="grid grid-cols-5 gap-4 mb-6">
           {statCards.map((card, index) => (
-            <StatCard key={index} {...card} isLightTheme={isLightTheme} />
+            <StatCard key={index} {...card} />
           ))}
         </div>
 

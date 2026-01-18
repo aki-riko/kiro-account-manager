@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 import { Lock, Copy, Sun, Moon, Palette, Check, RefreshCw, Settings as SettingsIcon, Clock, Globe, Search, Shield, Download, Upload, Shuffle, AlertTriangle, Eye, EyeOff, Repeat } from 'lucide-react'
-import { Select, Switch, TextInput, Textarea, NumberInput, Button, ActionIcon } from '@mantine/core'
+import { Select, Switch, TextInput, Textarea, NumberInput, Button, ActionIcon, Card } from '@mantine/core'
 import { useApp } from '../hooks/useApp'
 import { useDialog } from '../contexts/DialogContext'
 import { useAppSettings } from '../contexts/AppSettingsContext'
@@ -469,7 +469,7 @@ function Settings() {
         <div className={`flex items-center justify-between py-2 ${colors.cardBorder} border-b last:border-0`}>
             <span className={`text-sm ${colors.textMuted}`}>{label}</span>
             <div className="flex items-center gap-2">
-                <code className={`text-xs ${colors.cardSecondary} px-2 py-1 rounded-lg font-mono ${colors.text} max-w-[200px] truncate`}>
+                <code className={`text-xs px-2 py-1 rounded-lg font-mono ${colors.text} max-w-[200px] truncate border ${colors.cardBorder} ${colors.cardSecondary}`}>
                     {value || '-'}
                 </code>
                 {copyable && value && (
@@ -489,12 +489,12 @@ function Settings() {
     )
 
     return (
-        <div className={`h-full ${colors.main} p-8 overflow-auto`}>
+        <div className={`h-full ${colors.main} p-8 overflow-auto flex justify-center`}>
             {/* 背景装饰 */}
             <div className="bg-glow bg-glow-1" />
             <div className="bg-glow bg-glow-2" />
 
-            <div className="max-w-3xl mx-auto relative">
+            <div className="max-w-3xl w-full relative">
                 {/* Header */}
                 <div className="mb-8 animate-slide-in-left">
                     <div className="flex items-center gap-3 mb-2">
@@ -509,7 +509,14 @@ function Settings() {
                 </div>
 
                 {/* 主题设置 */}
-                <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-100`}>
+                <Card
+                    className="card-glow animate-slide-in-left delay-100"
+                    shadow="sm"
+                    padding="lg"
+                    radius="xl"
+                    withBorder
+                    style={{ marginBottom: '1.5rem' }}
+                >
                     <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.theme')}</h2>
                     <p className={`text-sm ${colors.textMuted} mb-4`}>{t('settings.themeDesc')}</p>
 
@@ -540,10 +547,17 @@ function Settings() {
                             )
                         })}
                     </div>
-                </section>
+                </Card>
 
                 {/* Kiro IDE 设置 */}
-                <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-150`}>
+                <Card
+                    className="card-glow animate-slide-in-left delay-150"
+                    shadow="sm"
+                    padding="lg"
+                    radius="xl"
+                    withBorder
+                    style={{ marginBottom: '1.5rem' }}
+                >
                     <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.kiroSettings')}</h2>
                     <p className={`text-sm ${colors.textMuted} mb-4`}>{t('settings.kiroSettingsDesc')}</p>
 
@@ -571,7 +585,7 @@ function Settings() {
                     </div>
 
                     {/* 锁定模型 */}
-                    <label className={`flex items-start gap-3 cursor-pointer ${colors.cardSecondary} ${colors.cardHover} rounded-xl p-4 transition-all hover:scale-[1.01] mb-4`}>
+                    <label className={`flex items-start gap-3 cursor-pointer rounded-xl p-4 transition-all hover:scale-[1.01] mb-4 border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                         <Switch
                             checked={lockModel}
                             onChange={(e) => handleLockModelChange(e.currentTarget.checked)}
@@ -636,7 +650,7 @@ function Settings() {
 
                     {/* 功能开关 - 2列布局 */}
                     <div className="grid grid-cols-2 gap-2 mb-4">
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg ${colors.cardSecondary} ${colors.cardHover} transition-all`}>
+                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                             <Switch
                                 checked={enableCodebaseIndexing}
                                 onChange={(e) => handleCodebaseIndexingChange(e.currentTarget.checked)}
@@ -644,7 +658,7 @@ function Settings() {
                             />
                             <span className={`text-sm ${colors.text}`}>{t('settings.enableCodebaseIndexing')}</span>
                         </label>
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg ${colors.cardSecondary} ${colors.cardHover} transition-all`}>
+                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                             <Switch
                                 checked={enableTabAutocomplete}
                                 onChange={(e) => handleTabAutocompleteChange(e.currentTarget.checked)}
@@ -652,7 +666,7 @@ function Settings() {
                             />
                             <span className={`text-sm ${colors.text}`}>{t('settings.enableTabAutocomplete')}</span>
                         </label>
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg ${colors.cardSecondary} ${colors.cardHover} transition-all`}>
+                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                             <Switch
                                 checked={usageSummary}
                                 onChange={(e) => handleUsageSummaryChange(e.currentTarget.checked)}
@@ -660,7 +674,7 @@ function Settings() {
                             />
                             <span className={`text-sm ${colors.text}`}>{t('settings.usageSummary')}</span>
                         </label>
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg ${colors.cardSecondary} ${colors.cardHover} transition-all`}>
+                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                             <Switch
                                 checked={codeReferences}
                                 onChange={(e) => handleCodeReferencesChange(e.currentTarget.checked)}
@@ -668,7 +682,7 @@ function Settings() {
                             />
                             <span className={`text-sm ${colors.text}`}>{t('settings.codeReferences')}</span>
                         </label>
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg ${colors.cardSecondary} ${colors.cardHover} transition-all`}>
+                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                             <Switch
                                 checked={enableDebugLogs}
                                 onChange={(e) => handleDebugLogsChange(e.currentTarget.checked)}
@@ -682,7 +696,7 @@ function Settings() {
                     <div className={`pt-4 border-t border-dashed ${colors.cardBorder}`}>
                         <span className={`text-sm ${colors.textMuted} mb-3 block`}>{t('settings.notifications')}</span>
                         <div className="grid grid-cols-2 gap-2">
-                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg ${colors.cardSecondary} ${colors.cardHover} transition-all`}>
+                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                                 <Switch
                                     checked={notifyActionRequired}
                                     onChange={(e) => handleNotificationChange('kiroAgent.notifications.agent.actionRequired', e.currentTarget.checked, setNotifyActionRequired)}
@@ -690,7 +704,7 @@ function Settings() {
                                 />
                                 <span className={`text-sm ${colors.text}`}>{t('settings.notifyActionRequired')}</span>
                             </label>
-                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg ${colors.cardSecondary} ${colors.cardHover} transition-all`}>
+                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                                 <Switch
                                     checked={notifyFailure}
                                     onChange={(e) => handleNotificationChange('kiroAgent.notifications.agent.failure', e.currentTarget.checked, setNotifyFailure)}
@@ -698,7 +712,7 @@ function Settings() {
                                 />
                                 <span className={`text-sm ${colors.text}`}>{t('settings.notifyFailure')}</span>
                             </label>
-                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg ${colors.cardSecondary} ${colors.cardHover} transition-all`}>
+                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                                 <Switch
                                     checked={notifySuccess}
                                     onChange={(e) => handleNotificationChange('kiroAgent.notifications.agent.success', e.currentTarget.checked, setNotifySuccess)}
@@ -706,7 +720,7 @@ function Settings() {
                                 />
                                 <span className={`text-sm ${colors.text}`}>{t('settings.notifySuccess')}</span>
                             </label>
-                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg ${colors.cardSecondary} ${colors.cardHover} transition-all`}>
+                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
                                 <Switch
                                     checked={notifyBilling}
                                     onChange={(e) => handleNotificationChange('kiroAgent.notifications.billing', e.currentTarget.checked, setNotifyBilling)}
@@ -742,9 +756,9 @@ function Settings() {
                             <button
                                 onClick={handleApplyProxy}
                                 disabled={savingProxy || !proxyChanged}
-                                className={`btn-icon px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all ${proxyChanged
-                                    ? 'bg-blue-500 text-white hover:bg-blue-600'
-                                    : `${colors.cardSecondary} ${colors.textMuted}`
+                                className={`btn-icon px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all border ${proxyChanged
+                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500'
+                                    : `${colors.cardSecondary} ${colors.textMuted} ${colors.cardBorder}`
                                     }`}
                             >
                                 {savingProxy ? <RefreshCw size={16} className="animate-spin" /> : <Check size={16} />}
@@ -753,10 +767,17 @@ function Settings() {
                         </div>
                         <p className={`text-xs ${colors.textMuted} mt-2`}>{t('settings.proxyTip')}</p>
                     </div>
-                </section>
+                </Card>
 
                 {/* 账号设置 */}
-                <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-200`}>
+                <Card
+                    className="card-glow animate-slide-in-left delay-200"
+                    shadow="sm"
+                    padding="lg"
+                    radius="xl"
+                    withBorder
+                    style={{ marginBottom: '1.5rem' }}
+                >
                     <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.account')}</h2>
                     <p className={`text-sm ${colors.textMuted} mb-4`}>{t('settings.accountDesc')}</p>
 
@@ -893,10 +914,17 @@ function Settings() {
                             />
                         </div>
                     </div>
-                </section>
+                </Card>
 
                 {/* 浏览器设置 */}
-                <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-250`}>
+                <Card
+                    className="card-glow animate-slide-in-left delay-250"
+                    shadow="sm"
+                    padding="lg"
+                    radius="xl"
+                    withBorder
+                    style={{ marginBottom: '1.5rem' }}
+                >
                     <div className="flex items-center gap-2 mb-1">
                         <Globe size={18} className="text-blue-500" />
                         <h2 className={`text-lg font-semibold ${colors.text}`}>{t('settings.browser')}</h2>
@@ -928,9 +956,9 @@ function Settings() {
                             <button
                                 onClick={handleApplyBrowser}
                                 disabled={savingBrowser || !browserChanged}
-                                className={`btn-icon px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all ${browserChanged
-                                    ? 'bg-blue-500 text-white hover:bg-blue-600'
-                                    : `${colors.cardSecondary} ${colors.textMuted}`
+                                className={`btn-icon px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all border ${browserChanged
+                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500'
+                                    : `${colors.cardSecondary} ${colors.textMuted} ${colors.cardBorder}`
                                     }`}
                             >
                                 {savingBrowser ? <RefreshCw size={16} className="animate-spin" /> : <Check size={16} />}
@@ -941,7 +969,7 @@ function Settings() {
 
                     {/* 检测到的浏览器列表 */}
                     {showBrowserList && detectedBrowsers.length > 0 && (
-                        <div className={`mt-4 p-4 rounded-xl ${colors.cardSecondary}`}>
+                        <div className={`mt-4 p-4 rounded-xl border ${colors.cardBorder} ${colors.cardSecondary}`}>
                             <div className="flex items-center justify-between mb-3">
                                 <span className={`text-sm font-medium ${colors.text}`}>{t('settings.detectedBrowsers')}</span>
                                 <button
@@ -953,7 +981,7 @@ function Settings() {
                             </div>
                             <div className="space-y-2">
                                 {detectedBrowsers.map((browser, index) => (
-                                    <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${colors.card} ${colors.cardHover} transition-colors`}>
+                                    <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${colors.card} ${colors.cardHover} transition-colors border ${colors.cardBorder}`}>
                                         <div className="flex-1 min-w-0">
                                             <div className={`text-sm font-medium ${colors.text}`}>{browser.name}</div>
                                             <div className={`text-xs ${colors.textMuted} truncate`}>{browser.path}</div>
@@ -969,7 +997,7 @@ function Settings() {
                                             )}
                                             <button
                                                 onClick={() => handleSelectBrowser(browser, false)}
-                                                className={`btn-icon px-3 py-1.5 text-xs rounded-lg transition-colors ${colors.cardSecondary} ${colors.cardHover} ${colors.text}`}
+                                                className={`btn-icon px-3 py-1.5 text-xs rounded-lg transition-colors border ${colors.cardSecondary} ${colors.cardHover} ${colors.text} ${colors.cardBorder}`}
                                             >
                                                 {t('settings.normalMode')}
                                             </button>
@@ -983,15 +1011,22 @@ function Settings() {
                     <p className={`text-xs ${colors.textMuted} mt-3`}>
                         {t('settings.browserTip')}
                     </p>
-                </section>
+                </Card>
 
                 {/* 系统机器码管理 */}
-                <section className={`card-glow ${colors.card} rounded-2xl p-6 shadow-sm border ${colors.cardBorder} mb-6 animate-slide-in-left delay-300`}>
+                <Card
+                    className="card-glow animate-slide-in-left delay-300"
+                    shadow="sm"
+                    padding="lg"
+                    radius="xl"
+                    withBorder
+                    style={{ marginBottom: '1.5rem' }}
+                >
                     <div className="flex items-center gap-2 mb-1">
                         <Shield size={18} className="text-orange-500" />
                         <h2 className={`text-lg font-semibold ${colors.text}`}>{t('settings.systemMachineGuid')}</h2>
                         {systemMachineInfo?.osType && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${colors.cardSecondary} ${colors.textMuted}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${colors.textMuted} border ${colors.cardBorder} ${colors.cardSecondary}`}>
                                 {systemMachineInfo.osType === 'windows' ? 'Windows' : systemMachineInfo.osType === 'macos' ? 'macOS' : 'Linux'}
                             </span>
                         )}
@@ -1005,7 +1040,7 @@ function Settings() {
                     </p>
 
                     {/* 当前值 */}
-                    <div className={`${colors.cardSecondary} rounded-xl p-4 mb-4`}>
+                    <div className={`rounded-xl p-4 mb-4 border ${colors.cardBorder} ${colors.cardSecondary}`}>
                         <div className="flex items-center justify-between mb-3">
                             <span className={`text-sm font-medium ${colors.text}`}>{t('settings.currentMachineGuid')}</span>
                             <button
@@ -1017,7 +1052,7 @@ function Settings() {
                             </button>
                         </div>
                         <div className="flex items-center gap-2">
-                            <code className={`flex-1 text-sm ${colors.cardSecondary} px-3 py-2 rounded-lg font-mono ${colors.text}`}>
+                            <code className={`flex-1 text-sm px-3 py-2 rounded-lg font-mono ${colors.text} border ${colors.cardBorder} ${colors.card}`}>
                                 {systemMachineInfo?.machineGuid || t('common.loading')}
                             </code>
                             {systemMachineInfo?.machineGuid && (
@@ -1093,7 +1128,7 @@ function Settings() {
                             {t('common.reset')}
                         </button>
                     )}
-                </section>
+                </Card>
 
 
             </div>

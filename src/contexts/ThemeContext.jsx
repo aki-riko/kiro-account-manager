@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { MantineProvider } from '@mantine/core'
 
 const ThemeContext = createContext()
 
@@ -23,10 +24,34 @@ export const themes = {
     input: 'bg-white border-gray-200',
     inputFocus: 'focus:ring-blue-500/20 focus:border-blue-500',
     btnSecondary: 'bg-gray-100 hover:bg-gray-200 border-gray-300',
+    btnDisabled: 'bg-gray-100 text-gray-400',
     iconColor: '#1a1a1a',
     // 下拉菜单样式
     menuHover: 'hover:bg-gray-100',
+    menuBg: 'bg-white/95',
+    menuBorder: 'border-gray-200/80',
+    menuDivider: 'border-gray-200',
     primary: 'text-blue-600',
+    // 状态徽章
+    badgeDisabled: 'bg-gray-200 text-gray-500',
+    badgeActive: 'bg-green-50 text-green-600',
+    // 开关按钮
+    toggleOff: 'bg-gray-300',
+    toggleOn: 'bg-green-500',
+    toggleThumb: 'bg-white',
+    // 代码块
+    codeBlock: 'bg-gray-100 text-gray-700',
+    // 分隔线
+    divider: 'border-gray-200',
+    // 标签选择器
+    tagActive: 'bg-blue-50',
+    tagHover: 'hover:bg-gray-50',
+    // 对话框
+    dialogHeader: 'bg-gray-50/50',
+    dialogFooter: 'bg-gray-50/80 border-t border-gray-100',
+    // 虚线边框
+    dashedBorder: 'border-gray-300',
+    dashedBorderHover: 'hover:border-gray-400 hover:bg-gray-50',
     // 错误样式
     error: 'bg-red-50 text-red-600',
     errorBorder: 'border-red-200',
@@ -59,10 +84,34 @@ export const themes = {
     input: 'bg-[#252540] border-gray-700',
     inputFocus: 'focus:ring-blue-500/30 focus:border-blue-500',
     btnSecondary: 'bg-[#1a1a1a] hover:bg-[#252525] border-[#333]',
+    btnDisabled: 'bg-white/5 text-gray-500',
     iconColor: 'white',
     // 下拉菜单样式
     menuHover: 'hover:bg-white/10',
+    menuBg: 'bg-gray-800/95',
+    menuBorder: 'border-gray-600/50',
+    menuDivider: 'border-gray-600/50',
     primary: 'text-blue-400',
+    // 状态徽章
+    badgeDisabled: 'bg-gray-500/30 text-gray-400',
+    badgeActive: 'bg-green-500/20 text-green-400',
+    // 开关按钮
+    toggleOff: 'bg-gray-600',
+    toggleOn: 'bg-green-500',
+    toggleThumb: 'bg-gray-200',
+    // 代码块
+    codeBlock: 'bg-white/5 text-gray-300',
+    // 分隔线
+    divider: 'border-white/10',
+    // 标签选择器
+    tagActive: 'bg-white/10',
+    tagHover: 'hover:bg-white/5',
+    // 对话框
+    dialogHeader: 'bg-white/5',
+    dialogFooter: 'bg-white/[0.02] border-t border-white/5',
+    // 虚线边框
+    dashedBorder: 'border-gray-700',
+    dashedBorderHover: 'hover:border-gray-500 hover:bg-white/5',
     // 错误样式
     error: 'bg-red-500/10 text-red-400',
     errorBorder: 'border-red-500/20',
@@ -178,6 +227,12 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     document.body.className = theme === 'dark' ? 'dark' : ''
+    
+    // 设置 CSS 变量供 toast 使用
+    const root = document.documentElement
+    const isLight = theme === 'light' || theme === 'purple' || theme === 'green'
+    root.style.setProperty('--toast-bg', isLight ? '#ffffff' : '#1a1a2e')
+    root.style.setProperty('--toast-text', isLight ? '#000000' : '#ffffff')
   }, [theme])
 
   const value = {
@@ -187,7 +242,113 @@ export function ThemeProvider({ children }) {
     themes,
   }
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  // 根据主题动态生成 Mantine 配置
+  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const mantineTheme = {
+    colorScheme: isLightTheme ? 'light' : 'dark',
+    colors: {
+      dark: [
+        '#C1C2C5',
+        '#A6A7AB',
+        '#909296',
+        '#5c5f66',
+        '#373A40',
+        '#2C2E33',
+        '#25262b',
+        '#1A1B1E',
+        '#141517',
+        '#101113',
+      ],
+    },
+    primaryColor: 'blue',
+    defaultRadius: 'md',
+    components: {
+      Select: {
+        styles: {
+          input: {
+            backgroundColor: 'transparent',
+            borderColor: isLightTheme ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+            color: 'inherit',
+            '&:focus': {
+              borderColor: isLightTheme ? '#3b82f6' : '#60a5fa',
+            },
+          },
+          dropdown: {
+            backgroundColor: isLightTheme ? '#ffffff' : '#1a1a2e',
+            borderColor: isLightTheme ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+          },
+          option: {
+            color: 'inherit',
+            '&[data-selected]': {
+              backgroundColor: isLightTheme ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.2)',
+            },
+            '&[data-hovered]': {
+              backgroundColor: isLightTheme ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)',
+            },
+          },
+        },
+      },
+      TextInput: {
+        styles: {
+          input: {
+            backgroundColor: 'transparent',
+            borderColor: isLightTheme ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+            color: 'inherit',
+            '&:focus': {
+              borderColor: isLightTheme ? '#3b82f6' : '#60a5fa',
+            },
+          },
+        },
+      },
+      Textarea: {
+        styles: {
+          input: {
+            backgroundColor: 'transparent',
+            borderColor: isLightTheme ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+            color: 'inherit',
+            '&:focus': {
+              borderColor: isLightTheme ? '#3b82f6' : '#60a5fa',
+            },
+          },
+        },
+      },
+      NumberInput: {
+        styles: {
+          input: {
+            backgroundColor: 'transparent',
+            borderColor: isLightTheme ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+            color: 'inherit',
+            '&:focus': {
+              borderColor: isLightTheme ? '#3b82f6' : '#60a5fa',
+            },
+          },
+        },
+      },
+      Switch: {
+        styles: {
+          track: {
+            cursor: 'pointer',
+          },
+        },
+      },
+      Card: {
+        styles: {
+          root: {
+            backgroundColor: isLightTheme ? '#ffffff' : 'rgba(30, 30, 50, 0.8)',
+            borderColor: isLightTheme ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.1)',
+          },
+        },
+      },
+    },
+  }
+
+  return (
+    <ThemeContext.Provider value={value}>
+      <MantineProvider theme={mantineTheme}>
+        {children}
+      </MantineProvider>
+    </ThemeContext.Provider>
+  )
 }
 
 export function useTheme() {

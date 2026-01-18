@@ -52,10 +52,6 @@ function AccountQuotaDetail({
       padding={0}
       radius="xl"
       withBorder
-      style={{ 
-        background: isLightTheme ? 'white' : 'rgba(30, 30, 50, 0.8)',
-        borderColor: isLightTheme ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)'
-      }}
     >
       {/* 头部 */}
       <AccountHeader 
@@ -146,11 +142,12 @@ function AccountHeader({ currentAccount, userInfo, subInfo, daysUntilReset, refr
               <Badge
                 size="xs"
                 variant="filled"
-                className={`shrink-0 ${
-                  subInfo.type.includes('PRO+') ? 'bg-gradient-to-r from-purple-500 to-pink-500' :
-                  subInfo.type.includes('PRO') ? 'bg-blue-500' :
-                  (isLightTheme ? 'bg-gray-400' : 'bg-gray-600')
-                }`}
+                style={{
+                  background: subInfo.type.includes('PRO+') ? 'linear-gradient(to right, rgb(168, 85, 247), rgb(236, 72, 153))' :
+                             subInfo.type.includes('PRO') ? 'rgb(59, 130, 246)' :
+                             isLightTheme ? 'rgb(156, 163, 175)' : 'rgb(75, 85, 99)'
+                }}
+                className="shrink-0"
               >
                 {subInfo.subscriptionTitle || 'Free'}
               </Badge>
@@ -204,11 +201,11 @@ function MonthlyUsageProgress({ currentPercent, currentUsed, currentQuota, isLig
           <Text 
             size="lg" 
             fw={700}
-            className={
-              currentPercent > 80 ? 'text-red-500' : 
-              currentPercent > 50 ? 'text-amber-500' : 
-              (isLightTheme ? 'text-blue-600' : 'text-blue-400')
-            }
+            style={{
+              color: currentPercent > 80 ? 'rgb(239, 68, 68)' : 
+                     currentPercent > 50 ? 'rgb(245, 158, 11)' : 
+                     isLightTheme ? 'rgb(37, 99, 235)' : 'rgb(96, 165, 250)'
+            }}
           >
             {currentPercent}%
           </Text>
@@ -243,7 +240,7 @@ function SubscriptionDetails({ subInfo, overageConfig, isLightTheme, colors, t }
         fw={500} 
         tt="uppercase" 
         mb="xs"
-        className={isLightTheme ? 'text-blue-600' : 'text-blue-400'}
+        style={{ color: isLightTheme ? 'rgb(37, 99, 235)' : 'rgb(96, 165, 250)' }}
       >
         {t('home.subscriptionDetails')}
       </Text>
@@ -256,7 +253,8 @@ function SubscriptionDetails({ subInfo, overageConfig, isLightTheme, colors, t }
           <Text size="xs" c="dimmed">{t('home.overage')}</Text>
           <Text 
             size="xs" 
-            className={subInfo.overageCapability === 'OVERAGE_CAPABLE' ? 'text-green-500' : colors.textMuted}
+            style={{ color: subInfo.overageCapability === 'OVERAGE_CAPABLE' ? 'rgb(34, 197, 94)' : undefined }}
+            className={subInfo.overageCapability === 'OVERAGE_CAPABLE' ? '' : colors.textMuted}
           >
             {subInfo.overageCapability === 'OVERAGE_CAPABLE' ? '✓' : '✗'}
           </Text>
@@ -265,7 +263,8 @@ function SubscriptionDetails({ subInfo, overageConfig, isLightTheme, colors, t }
           <Text size="xs" c="dimmed">{t('home.upgrade')}</Text>
           <Text 
             size="xs"
-            className={subInfo.upgradeCapability === 'UPGRADE_CAPABLE' ? 'text-green-500' : colors.textMuted}
+            style={{ color: subInfo.upgradeCapability === 'UPGRADE_CAPABLE' ? 'rgb(34, 197, 94)' : undefined }}
+            className={subInfo.upgradeCapability === 'UPGRADE_CAPABLE' ? '' : colors.textMuted}
           >
             {subInfo.upgradeCapability === 'UPGRADE_CAPABLE' ? '✓' : '✗'}
           </Text>
@@ -275,7 +274,8 @@ function SubscriptionDetails({ subInfo, overageConfig, isLightTheme, colors, t }
             <Text size="xs" c="dimmed">{t('home.status')}</Text>
             <Text 
               size="xs"
-              className={overageConfig.overageStatus === 'ENABLED' ? 'text-green-500' : colors.textMuted}
+              style={{ color: overageConfig.overageStatus === 'ENABLED' ? 'rgb(34, 197, 94)' : undefined }}
+              className={overageConfig.overageStatus === 'ENABLED' ? '' : colors.textMuted}
             >
               {overageConfig.overageStatus === 'ENABLED' ? t('home.enabled') : t('home.disabled')}
             </Text>
@@ -390,9 +390,24 @@ function QuotaBreakdown({ mainUsed, mainLimit, mainPercent, freeTrial, bonuses, 
 // 额度行
 function QuotaRow({ label, used, limit, percent, color, expiry, isLightTheme, colors, t }) {
   const colorMap = {
-    blue: { dot: 'bg-blue-500', bar: 'bg-blue-500', text: colors.textMuted, barBg: isLightTheme ? 'bg-gray-200' : 'bg-white/10' },
-    purple: { dot: 'bg-purple-500', bar: 'bg-purple-500', text: 'text-purple-500', barBg: isLightTheme ? 'bg-purple-100' : 'bg-purple-500/20' },
-    amber: { dot: 'bg-amber-500', bar: 'bg-amber-500', text: 'text-amber-600', barBg: isLightTheme ? 'bg-amber-100' : 'bg-amber-500/20' }
+    blue: { 
+      dot: 'bg-blue-500', 
+      bar: 'bg-blue-500', 
+      text: colors.textMuted, 
+      barBg: colors.cardSecondary
+    },
+    purple: { 
+      dot: 'bg-purple-500', 
+      bar: 'bg-purple-500', 
+      text: 'text-purple-500', 
+      barBg: isLightTheme ? 'bg-purple-100' : 'bg-purple-500/20' 
+    },
+    amber: { 
+      dot: 'bg-amber-500', 
+      bar: 'bg-amber-500', 
+      text: 'text-amber-600', 
+      barBg: isLightTheme ? 'bg-amber-100' : 'bg-amber-500/20' 
+    }
   }
   const c = colorMap[color] || colorMap.blue
   const expiryStr = expiry ? new Date(expiry * 1000).toLocaleDateString() : null

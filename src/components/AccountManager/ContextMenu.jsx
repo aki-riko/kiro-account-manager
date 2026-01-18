@@ -47,29 +47,25 @@ const ContextMenu = memo(function ContextMenu({ x, y, onClose, items, isLightThe
   return createPortal(
     <div
       ref={menuRef}
-      className={`fixed z-[9999] min-w-[180px] py-2 rounded-xl shadow-2xl border backdrop-blur-sm ${
-        isLightTheme ? 'bg-white/95 border-gray-200/80' : 'bg-gray-800/95 border-gray-600/50'
-      }`}
+      className={`fixed z-[9999] min-w-[180px] py-2 rounded-xl shadow-2xl border backdrop-blur-sm ${colors.menuBg} ${colors.menuBorder}`}
       style={{ left: position.x, top: position.y }}
       onClick={(e) => e.stopPropagation()}
     >
       {items.map((item, idx) =>
         item.divider ? (
-          <div key={idx} className={`my-1.5 mx-3 border-t ${isLightTheme ? 'border-gray-200' : 'border-gray-600/50'}`} />
+          <div key={idx} className={`my-1.5 mx-3 border-t ${colors.menuDivider}`} />
         ) : (
           <button
             key={idx}
             onClick={() => { item.onClick(); onClose() }}
             disabled={item.disabled}
             className={`w-full px-4 py-2 text-left text-sm flex items-center gap-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-              item.danger
-                ? (isLightTheme ? 'text-red-600 hover:bg-red-50' : 'text-red-400 hover:bg-red-500/20')
-                : (isLightTheme ? 'text-gray-700 hover:bg-gray-100' : 'text-gray-200 hover:bg-white/10')
+              item.danger ? colors.danger + ' ' + colors.dangerHover : colors.text + ' ' + colors.menuHover
             }`}
           >
-            {item.icon && <item.icon size={16} className={item.danger ? '' : (isLightTheme ? 'text-gray-500' : 'text-gray-400')} />}
+            {item.icon && <item.icon size={16} className={item.danger ? '' : colors.textMuted} />}
             <span className="flex-1">{item.label}</span>
-            {item.shortcut && <span className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-gray-500'}`}>{item.shortcut}</span>}
+            {item.shortcut && <span className={`text-xs ${colors.textMuted}`}>{item.shortcut}</span>}
           </button>
         )
       )}

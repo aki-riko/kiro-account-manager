@@ -170,7 +170,6 @@ function Sidebar({ activeMenu, onMenuChange }) {
       {/* Kiro IDE 本地连接状态 */}
       {localToken && !collapsed && (
         <Paper
-          className={colors.sidebarCard}
           radius="md"
           p="sm"
           mx="sm"
@@ -179,11 +178,13 @@ function Sidebar({ activeMenu, onMenuChange }) {
             animation: 'fadeInUp 0.5s ease-out',
             animationDelay: '0.5s',
             animationFillMode: 'both',
+            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+            backdropFilter: 'blur(8px)',
           }}
         >
           <Group gap="xs" mb="xs">
             <Indicator color="green" processing size={6} />
-            <Text size="xs" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>
+            <Text size="xs" c="white" opacity={0.9}>
               {t('nav.kiroConnected')}
             </Text>
           </Group>
@@ -193,11 +194,11 @@ function Sidebar({ activeMenu, onMenuChange }) {
                 width: 32,
                 height: 32,
                 borderRadius: 8,
-                backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                backgroundColor: 'rgba(34, 197, 94, 0.25)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'rgb(134, 239, 172)',
+                color: 'white',
                 transition: 'transform 200ms ease',
               }}
               className="hover-scale"
@@ -205,10 +206,10 @@ function Sidebar({ activeMenu, onMenuChange }) {
               <User size={14} />
             </Box>
             <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
-              <Text size="xs" fw={500} truncate style={{ color: 'rgba(255, 255, 255, 0.9)' }}>
+              <Text size="xs" fw={500} truncate c="white">
                 {localToken.provider || 'Local'}
               </Text>
-              <Text size="xs" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>
+              <Text size="xs" c="white" opacity={0.7}>
                 {localToken.expiresAt ? new Date(localToken.expiresAt).toLocaleTimeString() : ''}
               </Text>
             </Stack>
@@ -238,12 +239,14 @@ function Sidebar({ activeMenu, onMenuChange }) {
           <Menu.Target>
             <ActionIcon
               variant="subtle"
-              className={`${colors.sidebarCard} hover-scale`}
               radius="md"
               size="md"
               style={{
                 transition: 'transform 200ms ease',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                color: 'white',
               }}
+              className="hover-scale"
             >
               <ThemeIcon size={16} />
             </ActionIcon>
@@ -266,7 +269,7 @@ function Sidebar({ activeMenu, onMenuChange }) {
         </Menu>
         
         {!collapsed && (
-          <Text size="xs" style={{ marginLeft: 'auto', color: 'rgba(255, 255, 255, 0.6)' }}>
+          <Text size="xs" c="white" opacity={0.7} style={{ marginLeft: 'auto' }}>
             v{version || '...'}
           </Text>
         )}

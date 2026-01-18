@@ -16,9 +16,7 @@ function MCPServerCard({ name, config, onToggle, onEdit, onDelete }) {
         <div className="flex items-start gap-3 flex-1 min-w-0">
           {/* 状态指示器 */}
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-            isDisabled 
-              ? (isLightTheme ? 'bg-gray-100' : 'bg-gray-500/20') 
-              : (isLightTheme ? 'bg-green-50' : 'bg-green-500/20')
+            isDisabled ? colors.cardSecondary : colors.badgeActive
           }`}>
             <Server size={20} className={isDisabled ? 'text-gray-400' : 'text-green-500'} />
           </div>
@@ -28,7 +26,7 @@ function MCPServerCard({ name, config, onToggle, onEdit, onDelete }) {
             <div className="flex items-center gap-2">
               <h3 className={`font-semibold ${colors.text} ${isDisabled ? 'opacity-50' : ''}`}>{name}</h3>
               {isDisabled && (
-                <span className={`text-xs px-2 py-0.5 rounded ${isLightTheme ? 'bg-gray-200 text-gray-500' : 'bg-gray-500/30 text-gray-400'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded ${colors.badgeDisabled}`}>
                   {t('mcpManager.disabled')}
                 </span>
               )}
@@ -62,19 +60,17 @@ function MCPServerCard({ name, config, onToggle, onEdit, onDelete }) {
           <button
             onClick={() => onToggle(!isDisabled)}
             className={`relative w-11 h-6 rounded-full transition-colors ${
-              isDisabled 
-                ? (isLightTheme ? 'bg-gray-300' : 'bg-gray-600') 
-                : 'bg-green-500'
+              isDisabled ? colors.toggleOff : colors.toggleOn
             }`}
           >
             <div className={`absolute top-1 w-4 h-4 rounded-full transition-transform ${
               isDisabled ? 'left-1' : 'left-6'
-            } ${isLightTheme ? 'bg-white' : 'bg-gray-200'}`} />
+            } ${colors.toggleThumb}`} />
           </button>
           
           <button
             onClick={onEdit}
-            className={`p-2 rounded-lg ${isLightTheme ? 'hover:bg-gray-100' : 'hover:bg-white/10'} transition-colors`}
+            className={`p-2 rounded-lg ${colors.cardHover} transition-colors`}
             title={t('common.edit')}
           >
             <Edit2 size={16} className={colors.textMuted} />

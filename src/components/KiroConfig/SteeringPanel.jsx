@@ -204,10 +204,10 @@ function FileList({ files, selectedFile, onSelect, onDelete, onRefresh, onCreate
       <div className={`p-4 border-b ${colors.cardBorder} flex items-center justify-between`}>
         <span className={`text-sm font-medium ${colors.text}`}>Steering ({files.length})</span>
         <div className="flex gap-1">
-          <button onClick={onCreate} className={`p-1.5 rounded-lg ${isLightTheme ? 'hover:bg-gray-100' : 'hover:bg-white/10'}`}>
+          <button onClick={onCreate} className={`p-1.5 rounded-lg ${colors.cardHover}`}>
             <Plus size={16} className={colors.textMuted} />
           </button>
-          <button onClick={onRefresh} className={`p-1.5 rounded-lg ${isLightTheme ? 'hover:bg-gray-100' : 'hover:bg-white/10'}`}>
+          <button onClick={onRefresh} className={`p-1.5 rounded-lg ${colors.cardHover}`}>
             <RefreshCw size={16} className={colors.textMuted} />
           </button>
         </div>
@@ -227,7 +227,7 @@ function FileList({ files, selectedFile, onSelect, onDelete, onRefresh, onCreate
                 key={file.fileName}
                 onClick={() => onSelect(file)}
                 className={`p-3 rounded-xl cursor-pointer transition-all group ${
-                  isSelected ? (isLightTheme ? 'bg-blue-50' : 'bg-white/10') : (isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5')
+                  isSelected ? colors.tagActive : colors.tagHover
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -268,7 +268,7 @@ function Editor({ file, editState, hasChanges, saving, inclusionOptions, onConte
           onClick={onSave}
           disabled={!hasChanges || saving}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            hasChanges ? 'bg-blue-500 text-white hover:bg-blue-600' : (isLightTheme ? 'bg-gray-100 text-gray-400' : 'bg-white/5 text-gray-500')
+            hasChanges ? 'bg-blue-500 text-white hover:bg-blue-600' : colors.btnDisabled
           } disabled:opacity-50`}
         >
           <Save size={14} />
@@ -346,14 +346,14 @@ function CreateModal({ inclusionOptions, onCreate, onClose, isLightTheme, colors
         onClick={e => e.stopPropagation()}
         style={{ animation: 'dialogIn 0.2s ease-out' }}
       >
-        <div className={`flex items-center justify-between px-5 py-4 ${isLightTheme ? 'bg-gray-50/50' : 'bg-white/5'}`}>
+        <div className={`flex items-center justify-between px-5 py-4 ${colors.dialogHeader}`}>
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl ${isLightTheme ? 'bg-blue-50' : 'bg-blue-500/15'} flex items-center justify-center`}>
+            <div className={`w-10 h-10 rounded-xl ${colors.info} flex items-center justify-center`}>
               <FileText size={20} className="text-blue-500" />
             </div>
             <h2 className={`text-base font-semibold ${colors.text}`}>{t('steering.newSteering')}</h2>
           </div>
-          <button onClick={onClose} className={`p-1.5 rounded-lg transition-colors ${isLightTheme ? 'hover:bg-gray-100' : 'hover:bg-white/10'}`}>
+          <button onClick={onClose} className={`p-1.5 rounded-lg transition-colors ${colors.cardHover}`}>
             <X size={18} className={colors.textMuted} />
           </button>
         </div>

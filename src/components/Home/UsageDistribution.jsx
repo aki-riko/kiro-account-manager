@@ -48,10 +48,6 @@ function UsageDistribution({ tokens, isLightTheme, colors, t }) {
         padding="lg"
         radius="xl"
         withBorder
-        style={{ 
-          background: isLightTheme ? 'white' : 'rgba(30, 30, 50, 0.8)',
-          borderColor: isLightTheme ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)'
-        }}
       >
         <Group gap="xs" mb="md">
           <PieChart size={18} className="text-blue-500" />
@@ -94,10 +90,6 @@ function UsageDistribution({ tokens, isLightTheme, colors, t }) {
         padding="lg"
         radius="xl"
         withBorder
-        style={{ 
-          background: isLightTheme ? 'white' : 'rgba(30, 30, 50, 0.8)',
-          borderColor: isLightTheme ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)'
-        }}
       >
         <Group gap="xs" mb="md">
           <BarChart2 size={18} className="text-indigo-500" />

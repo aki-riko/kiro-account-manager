@@ -110,6 +110,7 @@ export const showPromise = (promise, messages = {}) => {
 
 /**
  * 确认对话框（使用 Toast）
+ * 注意：Toast 的 style 属性不支持动态主题，这里使用固定颜色
  */
 export const showConfirm = (message, onConfirm, onCancel) => {
   return toast(
@@ -122,7 +123,7 @@ export const showConfirm = (message, onConfirm, onCancel) => {
               toast.dismiss(t.id)
               onCancel?.()
             }}
-            className="px-3 py-1.5 text-sm rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700"
+            className="px-3 py-1.5 text-sm rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
           >
             取消
           </button>
@@ -142,8 +143,8 @@ export const showConfirm = (message, onConfirm, onCancel) => {
       duration: Infinity,
       position: 'top-center',
       style: {
-        background: '#fff',
-        color: '#000',
+        background: 'var(--toast-bg, #fff)',
+        color: 'var(--toast-text, #000)',
         borderRadius: '12px',
         padding: '16px',
         minWidth: '300px',

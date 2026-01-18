@@ -134,7 +134,7 @@ export function AccountTableSkeleton({ count = 8 }) {
       </div>
 
       {/* 表头 */}
-      <div className={`flex items-center gap-3 px-4 py-3 ${isLightTheme ? 'bg-gray-50' : 'bg-white/5'} border ${colors.cardBorder} rounded-t-xl`}>
+      <div className={`flex items-center gap-3 px-4 py-3 ${colors.cardSecondary} border ${colors.cardBorder} rounded-t-xl`}>
         <SkeletonBox className="w-4 h-4" />
         <SkeletonBox className="w-44 h-3" />
         <SkeletonBox className="w-28 h-3" />

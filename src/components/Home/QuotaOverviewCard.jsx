@@ -22,10 +22,6 @@ function QuotaOverviewCard({ stats, isLightTheme, colors, t }) {
       padding="lg"
       radius="xl"
       withBorder
-      style={{ 
-        background: isLightTheme ? 'white' : 'rgba(30, 30, 50, 0.8)',
-        borderColor: isLightTheme ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)'
-      }}
     >
       <Group gap="sm" mb="md">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isLightTheme ? 'bg-emerald-100' : 'bg-emerald-500/20'}`}>

@@ -58,11 +58,11 @@ function About() {
   ]
 
   return (
-    <div className={`h-full ${colors.main} p-8 overflow-auto`}>
+    <div className={`h-full ${colors.main} p-8 overflow-auto flex justify-center`}>
       <div className="bg-glow bg-glow-1" />
       <div className="bg-glow bg-glow-2" />
       
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-3xl w-full space-y-6">
         {/* 头部卡片 */}
         <Card 
           className={`${colors.card} border ${colors.cardBorder}`} 

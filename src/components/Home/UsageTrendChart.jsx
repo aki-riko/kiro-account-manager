@@ -55,10 +55,6 @@ export default function UsageTrendChart({ accounts, stats }) {
       padding="lg"
       radius="xl"
       withBorder
-      style={{ 
-        background: isLightTheme ? 'white' : 'rgba(30, 30, 50, 0.8)',
-        borderColor: isLightTheme ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)'
-      }}
     >
       <Group gap="xs" mb="md">
         <Calendar size={18} className="text-cyan-500" />

@@ -24,6 +24,7 @@ function KiroConfig() {
 
   return (
     <div className={`h-full flex flex-col ${colors.main}`}>
+      <div className="flex-1 flex flex-col min-h-0">
       {/* 头部 */}
       <div className={`${colors.card} border-b ${colors.cardBorder} px-6 py-4`}>
         <div className="flex items-center gap-3 mb-4">
@@ -48,18 +49,14 @@ function KiroConfig() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isActive
-                    ? (isLightTheme ? 'bg-gray-100 text-gray-900' : 'bg-white/10 text-white')
-                    : (isLightTheme ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-50' : 'text-gray-400 hover:text-white hover:bg-white/5')
+                  isActive ? colors.tagActive + ' ' + colors.text : colors.textMuted + ' ' + colors.tagHover
                 }`}
               >
                 <Icon size={16} />
                 {tab.label}
                 {tab.count > 0 && (
                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    isActive
-                      ? (isLightTheme ? 'bg-gray-200 text-gray-700' : 'bg-white/20 text-white')
-                      : (isLightTheme ? 'bg-gray-200 text-gray-500' : 'bg-white/10 text-gray-400')
+                    isActive ? colors.badgeActive : colors.badgeDisabled
                   }`}>
                     {tab.count}
                   </span>
@@ -74,6 +71,7 @@ function KiroConfig() {
       <div className="flex-1 overflow-hidden">
         {activeTab === 'mcp' && <MCPPanel onCountChange={setMcpCount} />}
         {activeTab === 'steering' && <SteeringPanel onCountChange={setSteeringCount} />}
+      </div>
       </div>
     </div>
   )

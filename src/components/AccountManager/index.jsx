@@ -279,6 +279,7 @@ function AccountManager() {
 
   return (
     <div className={cn('h-full flex flex-col', colors.main)}>
+      <div className="flex-1 flex flex-col min-h-0">
       <AccountHeader
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
@@ -394,6 +395,7 @@ function AccountManager() {
           confirmText={switchDialog.type === 'confirm' ? t('switch.confirmBtn') : t('common.ok')}
         />
       )}
+      </div>
     </div>
   )
 }

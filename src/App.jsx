@@ -2,7 +2,6 @@ import { useState, useEffect, Suspense } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { Toaster } from 'react-hot-toast'
-import { MantineProvider } from '@mantine/core'
 import Sidebar from './components/Sidebar'
 import UpdateChecker from './components/UpdateChecker'
 import AnnouncementModal from './components/AnnouncementModal'
@@ -174,51 +173,29 @@ function App() {
   }
 
   return (
-    <MantineProvider
-      theme={{
-        colorScheme: 'dark',
-        colors: {
-          dark: [
-            '#C1C2C5',
-            '#A6A7AB',
-            '#909296',
-            '#5c5f66',
-            '#373A40',
-            '#2C2E33',
-            '#25262b',
-            '#1A1B1E',
-            '#141517',
-            '#101113',
-          ],
-        },
-        primaryColor: 'blue',
-        defaultRadius: 'md',
-      }}
-    >
-      <PrivacyProvider>
-        <AccountProvider>
-          <div className={`flex h-screen ${colors.main}`}>
-            <Sidebar 
-              activeMenu={activeMenu} 
-              onMenuChange={setActiveMenu}
-              user={user}
-              onLogout={handleLogout}
-            />
-            <main className="flex-1 overflow-hidden">
-              <div className="h-full w-full">
-                <Suspense fallback={<PageLoading />}>
-                  {renderContent()}
-                </Suspense>
-              </div>
-            </main>
-            
-            <UpdateChecker />
-            <AnnouncementModal />
-            <Toaster />
-          </div>
-        </AccountProvider>
-      </PrivacyProvider>
-    </MantineProvider>
+    <PrivacyProvider>
+      <AccountProvider>
+        <div className={`flex h-screen ${colors.main}`}>
+          <Sidebar 
+            activeMenu={activeMenu} 
+            onMenuChange={setActiveMenu}
+            user={user}
+            onLogout={handleLogout}
+          />
+          <main className="flex-1 overflow-hidden">
+            <div className="h-full w-full">
+              <Suspense fallback={<PageLoading />}>
+                {renderContent()}
+              </Suspense>
+            </div>
+          </main>
+          
+          <UpdateChecker />
+          <AnnouncementModal />
+          <Toaster />
+        </div>
+      </AccountProvider>
+    </PrivacyProvider>
   )
 }
 

@@ -235,9 +235,9 @@ const AddButton = memo(function AddButton({ onClick, isLightTheme, colors, t }) 
   return (
     <button
       onClick={onClick}
-      className={`rounded-2xl border-2 border-dashed transition-all duration-200 min-h-[320px] flex flex-col items-center justify-center gap-3 ${isLightTheme ? 'border-gray-300 hover:border-gray-400 hover:bg-gray-50' : 'border-gray-700 hover:border-gray-500 hover:bg-white/5'}`}
+      className={`rounded-2xl border-2 border-dashed transition-all duration-200 min-h-[320px] flex flex-col items-center justify-center gap-3 ${colors.dashedBorder} ${colors.dashedBorderHover}`}
     >
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isLightTheme ? 'bg-gray-100' : 'bg-white/10'}`}>
+      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${colors.cardSecondary}`}>
         <Plus size={24} className={colors.textMuted} />
       </div>
       <span className={`text-sm font-medium ${colors.textMuted}`}>{t('common.addAccount')}</span>

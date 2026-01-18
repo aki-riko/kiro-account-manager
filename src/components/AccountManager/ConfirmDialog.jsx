@@ -112,12 +112,9 @@ function ConfirmDialog({
                 <h2 className={`text-lg font-semibold ${colors.text} leading-tight`}>{title}</h2>
               </div>
             </div>
-            <button 
-              onClick={onCancel} 
-              className={`
-                p-2 rounded-xl transition-all duration-200
-                ${isLightTheme ? 'hover:bg-gray-100 active:bg-gray-50' : 'hover:bg-white/10 active:bg-white/5'}
-              `}
+            <button
+              onClick={onCancel}
+              className={`p-2 rounded-xl transition-all duration-200 ${colors.cardHover}`}
             >
               <X size={18} className={colors.textMuted} />
             </button>
@@ -148,12 +145,12 @@ function ConfirmDialog({
                       setCopied(true)
                       setTimeout(() => setCopied(false), 2000)
                     }}
-                    className={`absolute top-2 right-2 p-1.5 rounded ${isLightTheme ? 'bg-gray-100 hover:bg-gray-200' : 'bg-white/10 hover:bg-white/20'} transition-colors`}
+                    className={`absolute top-2 right-2 p-1.5 rounded ${colors.cardHover} transition-colors`}
                     title="复制"
                   >
                     {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} className={colors.textMuted} />}
                   </button>
-                  <pre className={`text-xs p-3 rounded-lg overflow-auto max-h-48 ${isLightTheme ? 'bg-gray-100 text-gray-700' : 'bg-white/5 text-gray-300'}`}>
+                  <pre className={`text-xs p-3 rounded-lg overflow-auto max-h-48 ${colors.codeBlock}`}>
                     {JSON.stringify(rawData, null, 2)}
                   </pre>
                 </div>
@@ -163,19 +160,11 @@ function ConfirmDialog({
         </div>
 
         {/* Footer */}
-        <div className={`
-          relative px-6 py-5 
-          ${isLightTheme ? 'bg-gray-50/80 border-t border-gray-100' : 'bg-white/[0.02] border-t border-white/5'}
-          flex justify-end gap-3
-        `}>
+        <div className={`relative px-6 py-5 ${colors.dialogFooter} flex justify-end gap-3`}>
           {type === 'confirm' && (
             <button
               onClick={onCancel}
-              className={`
-                px-5 py-2.5 text-sm font-medium rounded-xl 
-                ${isLightTheme ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300' : 'bg-white/5 hover:bg-white/10 text-white/80 border border-white/10'}
-                transition-all duration-200 active:scale-[0.98]
-              `}
+              className={`px-5 py-2.5 text-sm font-medium rounded-xl ${colors.btnSecondary} transition-all duration-200 active:scale-[0.98]`}
             >
               {finalCancelText}
             </button>

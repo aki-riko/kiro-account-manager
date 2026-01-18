@@ -10,10 +10,6 @@ function CurrentAccountCard({ localToken, refreshing, handleRefresh, isLightThem
       padding={0}
       radius="xl"
       withBorder
-      style={{ 
-        background: isLightTheme ? 'white' : 'rgba(30, 30, 50, 0.8)',
-        borderColor: isLightTheme ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)'
-      }}
     >
       <Group justify="space-between" p="md" className={`border-b ${colors.cardBorder}`}>
         <Text fw={600} className={colors.text}>{t('home.currentAccount')}</Text>
@@ -62,7 +58,7 @@ function CurrentAccountCard({ localToken, refreshing, handleRefresh, isLightThem
           </Group>
         ) : (
           <Stack align="center" gap="sm" py="lg">
-            <div className={`w-16 h-16 ${isLightTheme ? 'bg-gray-100' : 'bg-white/10'} rounded-full flex items-center justify-center animate-float`}>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center animate-float ${colors.cardSecondary}`}>
               <Users size={28} className={colors.textMuted} />
             </div>
             <Text c="dimmed" fw={500}>{t('home.notLoggedIn')}</Text>
@@ -83,10 +79,6 @@ function TokenDetailPopover({ localToken, isLightTheme, colors, t }) {
       padding="sm"
       radius="xl"
       withBorder
-      style={{ 
-        background: isLightTheme ? 'white' : '#1a1a2e',
-        borderColor: isLightTheme ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'
-      }}
     >
       <Stack gap="xs">
         <Group justify="space-between">

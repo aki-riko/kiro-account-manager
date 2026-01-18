@@ -1,7 +1,10 @@
 import { Card, Badge, Group, Stack, Text } from '@mantine/core'
+import { useApp } from '../../hooks/useApp'
 
 // 统计卡片组件 - 紧凑版
-function StatCard({ icon: Icon, iconBg, value, label, delay, isLightTheme, onClick, warning }) {
+function StatCard({ icon: Icon, iconBg, value, label, delay, onClick, warning }) {
+  const { colors } = useApp()
+  
   return (
     <Card
       onClick={onClick}
@@ -10,15 +13,11 @@ function StatCard({ icon: Icon, iconBg, value, label, delay, isLightTheme, onCli
       padding="md"
       radius="xl"
       withBorder
-      style={{ 
-        background: isLightTheme ? 'white' : 'rgba(30, 30, 50, 0.8)',
-        borderColor: warning ? 'rgba(249, 115, 22, 0.5)' : (isLightTheme ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)'),
-        borderWidth: warning ? '2px' : '1px'
-      }}
+      style={warning ? { borderColor: 'rgba(249, 115, 22, 0.5)', borderWidth: '2px' } : undefined}
     >
       <Group gap="md" wrap="nowrap">
         <div className={`w-9 h-9 ${iconBg} rounded-lg flex items-center justify-center relative flex-shrink-0`}>
-          <Icon size={18} className={!isLightTheme ? 'text-current' : ''} />
+          <Icon size={18} />
           {warning && (
             <Badge
               size="xs"
@@ -30,10 +29,10 @@ function StatCard({ icon: Icon, iconBg, value, label, delay, isLightTheme, onCli
           )}
         </div>
         <Stack gap={0}>
-          <Text size="xl" fw={700} className={`stat-number ${isLightTheme ? 'text-gray-900' : 'text-white'}`}>
+          <Text size="xl" fw={700} className={`stat-number ${colors.text}`}>
             {value}
           </Text>
-          <Text size="xs" c="dimmed">{label}</Text>
+          <Text size="xs" className={colors.textMuted}>{label}</Text>
         </Stack>
       </Group>
     </Card>

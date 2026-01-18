@@ -79,8 +79,8 @@ function Login({ onLogin }) {
     <div className={`h-full flex flex-col items-center justify-center ${colors.main} relative overflow-hidden`}>
       {/* 背景装饰 */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className={`absolute -top-40 -right-40 w-80 h-80 rounded-full ${isLightTheme ? 'bg-purple-100' : 'bg-purple-500/10'} blur-3xl`} />
-        <div className={`absolute -bottom-40 -left-40 w-80 h-80 rounded-full ${isLightTheme ? 'bg-blue-100' : 'bg-blue-500/10'} blur-3xl`} />
+        <div className={`absolute -top-40 -right-40 w-80 h-80 rounded-full ${colors.cardSecondary} blur-3xl`} />
+        <div className={`absolute -bottom-40 -left-40 w-80 h-80 rounded-full ${colors.cardSecondary} blur-3xl`} />
       </div>
 
       <div className="relative z-10 w-full max-w-sm px-6">
@@ -88,7 +88,7 @@ function Login({ onLogin }) {
           <Stack gap="lg">
             {/* Logo */}
             <Stack gap="xs" align="center">
-              <div className={`w-16 h-16 rounded-2xl ${isLightTheme ? 'bg-gradient-to-br from-purple-400 to-blue-500' : 'bg-gradient-to-br from-purple-500 to-blue-600'} flex items-center justify-center shadow-lg shadow-purple-500/25 animate-float`}>
+              <div className={`w-16 h-16 rounded-2xl ${colors.sidebar} flex items-center justify-center shadow-lg animate-float`}>
                 <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
                   <path d="M20 4C12 4 6 10 6 18C6 22 8 25 8 25C8 25 7 28 7 30C7 32 8 34 10 34C11 34 12 33 13 32C14 33 16 34 20 34C24 34 26 33 27 32C28 33 29 34 30 34C32 34 33 32 33 30C33 28 32 25 32 25C32 25 34 22 34 18C34 10 28 4 20 4ZM14 20C12.5 20 11 18.5 11 17C11 15.5 12.5 14 14 14C15.5 14 17 15.5 17 17C17 18.5 15.5 20 14 20ZM26 20C24.5 20 23 18.5 23 17C23 15.5 24.5 14 26 14C27.5 14 29 15.5 29 17C29 18.5 27.5 20 26 20Z" fill="white"/>
                 </svg>
@@ -147,9 +147,9 @@ function Login({ onLogin }) {
             {/* Footer */}
             <Text size="xs" className={colors.textMuted} ta="center" lh={1.6}>
               {t('login.agreement')}{' '}
-              <a href="https://aws.amazon.com/agreement/" target="_blank" rel="noopener noreferrer" className="text-purple-500 hover:underline">{t('login.awsAgreement')}</a>、
-              <a href="https://aws.amazon.com/service-terms/" target="_blank" rel="noopener noreferrer" className="text-purple-500 hover:underline">{t('login.serviceTerms')}</a> {t('login.and')}{' '}
-              <a href="https://aws.amazon.com/privacy/" target="_blank" rel="noopener noreferrer" className="text-purple-500 hover:underline">{t('login.privacy')}</a>
+              <a href="https://aws.amazon.com/agreement/" target="_blank" rel="noopener noreferrer" className={`${colors.primary} hover:underline`}>{t('login.awsAgreement')}</a>、
+              <a href="https://aws.amazon.com/service-terms/" target="_blank" rel="noopener noreferrer" className={`${colors.primary} hover:underline`}>{t('login.serviceTerms')}</a> {t('login.and')}{' '}
+              <a href="https://aws.amazon.com/privacy/" target="_blank" rel="noopener noreferrer" className={`${colors.primary} hover:underline`}>{t('login.privacy')}</a>
             </Text>
           </Stack>
         </Card>
