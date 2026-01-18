@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { SegmentedControl, Stack, Alert } from '@mantine/core'
+import { SegmentedControl, Stack, Alert, Button } from '@mantine/core'
 import { Download, Key, AlertCircle, X } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 
