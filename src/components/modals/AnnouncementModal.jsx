@@ -3,7 +3,7 @@ import { AlertTriangle, ExternalLink, MessageCircle, Download, Loader2 } from 'l
 import { Checkbox } from '@mantine/core'
 import { check } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
-import { useApp } from '../hooks/useApp'
+import { useApp } from '../../hooks/useApp'
 
 // 公告 API 地址
 const ANNOUNCEMENT_API = 'https://vercel-api-lemon-five.vercel.app/api/announcement'

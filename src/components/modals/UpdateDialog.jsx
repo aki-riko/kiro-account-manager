@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { X, Download, RefreshCw, Sparkles, CheckCircle2, FileText } from 'lucide-react'
 import { Modal, Stack, Group, Text, Button, Progress, Alert } from '@mantine/core'
-import { useApp } from '../hooks/useApp'
+import { useApp } from '../../hooks/useApp'
 
 function UpdateDialog({ updateInfo, update, onClose }) {
   const { t, theme, colors } = useApp()

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle, XCircle, Info, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
-import { useApp } from '../../hooks/useApp'
+import { useApp } from '../../../hooks/useApp'
 import {
   Modal,
   ModalContent,
@@ -9,7 +9,7 @@ import {
   ModalDescription,
   ModalFooter,
 } from '../../ui/modal'
-import { Button } from '../ui/button'
+import { Button } from '../../ui/button'
 
 /**
  * 通用确认/提示模态框
@@ -112,9 +112,9 @@ function ConfirmModal({
               )}
             </div>
           )}
-        </DialogDescription>
+        </ModalDescription>
 
-        <DialogFooter>
+        <ModalFooter>
           {type === 'confirm' && (
             <Button variant="secondary" onClick={onCancel}>
               {finalCancelText}
@@ -128,9 +128,9 @@ function ConfirmModal({
           >
             {finalConfirmText}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   )
 }
 

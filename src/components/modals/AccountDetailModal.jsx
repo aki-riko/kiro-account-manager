@@ -2,10 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { X, Copy, Check, RefreshCw, User, CreditCard, Shield } from 'lucide-react'
 import { TextInput } from '@mantine/core'
-import { useApp } from '../hooks/useApp'
-import { useDialog } from '../contexts/DialogContext'
-import { formatUsage } from '../utils/accountStats'
-import { TokenJsonView } from './AccountManager/TokenJsonView'
+import { useApp } from '../../hooks/useApp'
+import { useDialog } from '../../contexts/DialogContext'
+import { formatUsage } from '../../utils/accountStats'
+import { TokenJsonView } from '../features/AccountManager/TokenJsonView'
 
 function AccountDetailModal({ account, onClose }) {
   const { t, theme, colors } = useApp()
