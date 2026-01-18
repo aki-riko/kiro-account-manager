@@ -2,9 +2,9 @@ import { useRef, useMemo, memo, useState, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Users, Plus, RefreshCw, Repeat, Eye, Edit2, Trash2, Copy, UserX, ChevronUp, ChevronDown } from 'lucide-react'
 import { Checkbox } from '@mantine/core'
-import { useApp } from '../../hooks/useApp'
-import { usePrivacy } from '../../contexts/PrivacyContext'
-import { getQuota, getUsed, formatUsage } from '../../utils/accountStats'
+import { useApp } from '../../../hooks/useApp'
+import { usePrivacy } from '../../../contexts/PrivacyContext'
+import { getQuota, getUsed, formatUsage } from '../../../utils/accountStats'
 import ContextMenu from './ContextMenu'
 
 // 单行组件

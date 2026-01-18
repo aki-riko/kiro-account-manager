@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { X, Tag, Plus, Trash2, Edit2, Check, Folder } from 'lucide-react'
 import { TextInput, ColorInput } from '@mantine/core'
-import { useApp } from '../../hooks/useApp'
-import { useDialog } from '../../contexts/DialogContext'
-import { getTags, getGroups } from '../../api/groupTag'
+import { useApp } from '../../../hooks/useApp'
+import { useDialog } from '../../../contexts/DialogContext'
+import { getTags, getGroups } from '../../../api/groupTag'
 
 // 预设颜色
 const PRESET_COLORS = [

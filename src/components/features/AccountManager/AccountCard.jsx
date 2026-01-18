@@ -2,10 +2,10 @@ import { memo, useState, useCallback, useMemo } from 'react'
 import { RefreshCw, Eye, Trash2, Copy, Check, Clock, Repeat, Edit2, UserX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Checkbox } from '@mantine/core'
-import { useTheme } from '../../contexts/ThemeContext'
-import { usePrivacy } from '../../contexts/PrivacyContext'
+import { useTheme } from '../../../contexts/ThemeContext'
+import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { getUsagePercent, getProgressBarColor } from './hooks/useAccountStats'
-import { getQuota, getUsed, getSubType, getSubPlan, formatUsage } from '../../utils/accountStats'
+import { getQuota, getUsed, getSubType, getSubPlan, formatUsage } from '../../../utils/accountStats'
 import ContextMenu from './ContextMenu'
 
 const AccountCard = memo(function AccountCard({

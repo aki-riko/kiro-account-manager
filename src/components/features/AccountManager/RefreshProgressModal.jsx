@@ -1,5 +1,5 @@
 import { RefreshCw } from 'lucide-react'
-import { useApp } from '../../hooks/useApp'
+import { useApp } from '../../../hooks/useApp'
 
 function RefreshProgressModal({ refreshProgress }) {
   const { t, colors } = useApp()

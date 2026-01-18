@@ -1,6 +1,6 @@
 import { memo, useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { useApp } from '../../hooks/useApp'
+import { useApp } from '../../../hooks/useApp'
 
 // 右键菜单组件（使用 Portal 渲染到 body）
 const ContextMenu = memo(function ContextMenu({ x, y, onClose, items }) {

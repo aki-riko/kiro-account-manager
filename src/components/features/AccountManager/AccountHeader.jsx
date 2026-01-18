@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Search, Download, Upload, RefreshCcw, RotateCw, Trash2, Plus, Sparkles, LayoutGrid, List, Tag, ArrowUp, ArrowDown } from 'lucide-react'
-import { useApp } from '../../hooks/useApp'
+import { useApp } from '../../../hooks/useApp'
 import FilterDropdown from './FilterDropdown'
 
 function AccountHeader({

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Tag, Plus } from 'lucide-react'
 import { Stack } from '@mantine/core'
-import { useApp } from '../../hooks/useApp'
-import { useDialog } from '../../contexts/DialogContext'
-import { getTags, setAccountTags } from '../../api/groupTag'
+import { useApp } from '../../../hooks/useApp'
+import { useDialog } from '../../../contexts/DialogContext'
+import { getTags, setAccountTags } from '../../../api/groupTag'
 import { invoke } from '@tauri-apps/api/core'
 import {
   Modal,
@@ -13,7 +13,7 @@ import {
   ModalDescription,
   ModalFooter,
 } from '../../ui/modal'
-import { Button } from '../ui/button'
+import { Button } from '../../ui/button'
 
 const PRESET_COLORS = [
   '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', 

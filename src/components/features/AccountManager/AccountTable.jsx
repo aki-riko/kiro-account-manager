@@ -2,7 +2,7 @@ import { useRef, useMemo, useState, useEffect, useCallback, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Users, Plus } from 'lucide-react'
 import { Checkbox } from '@mantine/core'
-import { useApp } from '../../hooks/useApp'
+import { useApp } from '../../../hooks/useApp'
 import AccountCard from './AccountCard'
 
 // 根据容器宽度计算列数

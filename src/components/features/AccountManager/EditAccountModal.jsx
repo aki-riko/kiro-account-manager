@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { CopyButton, Stack } from '@mantine/core'
 import { Copy, Check, Folder, Plus, X } from 'lucide-react'
-import { useApp } from '../../hooks/useApp'
-import { useDialog } from '../../contexts/DialogContext'
-import { setAccountTags, setAccountGroup, getGroups, addGroup } from '../../api/groupTag'
+import { useApp } from '../../../hooks/useApp'
+import { useDialog } from '../../../contexts/DialogContext'
+import { setAccountTags, setAccountGroup, getGroups, addGroup } from '../../../api/groupTag'
 import { TagSelector } from './GroupTagManager'
 import { TokenJsonView } from './TokenJsonView'
 import {
@@ -15,7 +15,7 @@ import {
   ModalDescription,
   ModalFooter,
 } from '../../ui/modal'
-import { Button } from '../ui/button'
+import { Button } from '../../ui/button'
 
 const PRESET_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', 

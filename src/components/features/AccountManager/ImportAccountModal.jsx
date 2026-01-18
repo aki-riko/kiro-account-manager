@@ -2,8 +2,8 @@ import { useState, useRef } from 'react'
 import { Tabs, Textarea, Select, Stack, Group, Text, Alert, Progress, FileButton, Button } from '@mantine/core'
 import { Upload, FileJson, Key, AlertCircle, CheckCircle, Loader2, X } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
-import { useApp } from '../../hooks/useApp'
-import { getConcurrency } from '../../utils/concurrency'
+import { useApp } from '../../../hooks/useApp'
+import { getConcurrency } from '../../../utils/concurrency'
 
 function validateAccount(item, index) {
   const errors = []

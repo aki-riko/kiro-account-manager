@@ -1,7 +1,7 @@
 // Token 凭证 JSON 视图组件
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { Copy, Check, ChevronDown, ChevronUp, Key, Clock } from 'lucide-react'
-import { useApp } from '../../hooks/useApp'
+import { useApp } from '../../../hooks/useApp'
 
 // 构建凭证 JSON 对象
 function buildCredentialsJson(account) {

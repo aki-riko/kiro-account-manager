@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Filter, X } from 'lucide-react'
-import { useTheme } from '../../contexts/ThemeContext'
+import { useTheme } from '../../../contexts/ThemeContext'
 import { useTranslation } from 'react-i18next'
 import SearchableTagSelect from './SearchableTagSelect'
 

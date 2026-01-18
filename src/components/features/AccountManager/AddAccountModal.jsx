@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { SegmentedControl, Stack, Alert, Button as MantineButton } from '@mantine/core'
 import { Download, Key, AlertCircle } from 'lucide-react'
-import { useApp } from '../../hooks/useApp'
+import { useApp } from '../../../hooks/useApp'
 import {
   Modal,
   ModalContent,
@@ -11,7 +11,7 @@ import {
   ModalDescription,
   ModalFooter,
 } from '../../ui/modal'
-import { Button } from '../ui/button'
+import { Button } from '../../ui/button'
 
 function AddAccountModal({ onClose, onSuccess }) {
   const { t, colors } = useApp()
