@@ -204,8 +204,8 @@ function App() {
               user={user}
               onLogout={handleLogout}
             />
-            <main className="flex-1 overflow-hidden flex justify-center">
-              <div className="h-full max-w-[1600px] w-full px-4">
+            <main className="flex-1 overflow-hidden">
+              <div className="h-full w-full">
                 <Suspense fallback={<PageLoading />}>
                   {renderContent()}
                 </Suspense>
