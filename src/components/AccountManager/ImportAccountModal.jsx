@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
-import { Modal, Tabs, Textarea, Button, Select, Stack, Group, Text, Alert, Progress, FileButton } from '@mantine/core'
-import { Upload, FileJson, Key, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { Tabs, Textarea, Select, Stack, Group, Text, Alert, Progress, FileButton, Button } from '@mantine/core'
+import { Upload, FileJson, Key, AlertCircle, CheckCircle, Loader2, X } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../hooks/useApp'
 import { getConcurrency } from '../../utils/concurrency'
@@ -264,44 +264,118 @@ function ImportAccountModal({ onClose, onSuccess }) {
   )
 
   return (
-    <Modal
-      opened
-      onClose={onClose}
-      title={t('import.title')}
-      size="lg"
-      centered
+    <div 
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in"
+      onClick={onClose}
     >
-      {importResult || ssoResult ? (
-        <Stack gap="md">
-          {importResult && renderResult(importResult)}
-          {ssoResult && renderResult(ssoResult)}
-          <Group justify="flex-end">
-            <Button variant="subtle" onClick={() => { setImportResult(null); setSsoResult(null); setJsonText(''); setSsoToken(''); setParseResult(null) }}>
-              {t('import.continueImport')}
-            </Button>
-            <Button onClick={onClose}>{t('import.done')}</Button>
-          </Group>
-        </Stack>
-      ) : importing || ssoImporting ? (
-        <Stack gap="md">
-          <Group>
-            <Loader2 size={20} className={`animate-spin ${colors.primary}`} />
-            <Text>{importing ? t('import.importing') : t('import.ssoImporting')}</Text>
-          </Group>
-          <Progress value={(importing ? importProgress : ssoProgress).current / (importing ? importProgress : ssoProgress).total * 100} />
-          <Text size="sm" className={colors.textMuted}>
-            {(importing ? importProgress : ssoProgress).current}/{(importing ? importProgress : ssoProgress).total}
-          </Text>
-        </Stack>
-      ) : (
-        <Tabs value={activeTab} onChange={setActiveTab}>
-          <Tabs.List>
-            <Tabs.Tab value="json" leftSection={<FileJson size={16} />}>{t('import.jsonTab')}</Tabs.Tab>
-            <Tabs.Tab value="sso" leftSection={<Key size={16} />}>{t('import.ssoTab')}</Tabs.Tab>
-          </Tabs.List>
+      <div 
+        className={`
+          relative overflow-hidden
+          ${colors.card} 
+          rounded-2xl w-full max-w-[700px] 
+          shadow-2xl
+          border ${colors.cardBorder}
+        `}
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'dialogSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)' }}
+      >
+        {/* 顶部渐变装饰 */}
+        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-indigo-500/10 via-transparent to-transparent pointer-events-none" />
+        
+        {/* 装饰性光晕 */}
+        <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-indigo-500/20 to-purple-500/10 rounded-full blur-3xl opacity-50" />
+        
+        {/* Header */}
+        <div className="relative px-6 pt-6 pb-2">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className={`
+                w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10
+                flex items-center justify-center
+                ring-1 ${colors.ringColor}
+                shadow-lg
+              `}>
+                <Upload size={24} className="text-indigo-400" strokeWidth={2} />
+              </div>
+              <div>
+                <h2 className={`text-lg font-semibold ${colors.text} leading-tight`}>{t('import.title')}</h2>
+                <p className={`text-xs ${colors.textMuted} mt-0.5`}>{t('import.subtitle') || '批量导入账号数据'}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className={`p-2 rounded-xl transition-all duration-200 ${colors.cardHover}`}
+            >
+              <X size={18} className={colors.textMuted} />
+            </button>
+          </div>
+        </div>
 
-          <Tabs.Panel value="json" pt="md">
-            <Stack gap="md">
+        {/* Content */}
+        <div className="relative max-h-[75vh] overflow-y-auto">
+          {importResult || ssoResult ? (
+            <div className="px-6 py-6">
+              <Stack gap="md">
+                {importResult && renderResult(importResult)}
+                {ssoResult && renderResult(ssoResult)}
+                <div className="flex justify-end gap-3 mt-4">
+                  <button
+                    onClick={() => { setImportResult(null); setSsoResult(null); setJsonText(''); setSsoToken(''); setParseResult(null) }}
+                    className={`px-5 py-2.5 text-sm font-medium rounded-xl ${colors.btnSecondary} transition-all duration-200 active:scale-[0.98]`}
+                  >
+                    {t('import.continueImport')}
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className={`
+                      px-6 py-2.5 text-sm font-medium rounded-xl text-white
+                      bg-gradient-to-r from-emerald-500 to-teal-600
+                      shadow-lg shadow-emerald-500/30
+                      hover:opacity-90 hover:shadow-xl
+                      transition-all duration-200 active:scale-[0.98]
+                    `}
+                  >
+                    {t('import.done')}
+                  </button>
+                </div>
+              </Stack>
+            </div>
+          ) : importing || ssoImporting ? (
+            <div className="px-6 py-6">
+              <Stack gap="lg">
+                <div className={`p-5 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder}`}>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                      <Loader2 size={20} className="animate-spin text-white" />
+                    </div>
+                    <div>
+                      <div className={`font-medium ${colors.text}`}>{importing ? t('import.importing') : t('import.ssoImporting')}</div>
+                      <div className={`text-sm ${colors.textMuted}`}>
+                        {(importing ? importProgress : ssoProgress).current}/{(importing ? importProgress : ssoProgress).total}
+                      </div>
+                    </div>
+                  </div>
+                  <Progress 
+                    value={(importing ? importProgress : ssoProgress).current / (importing ? importProgress : ssoProgress).total * 100} 
+                    size="lg"
+                    radius="xl"
+                    classNames={{
+                      root: 'bg-gray-200 dark:bg-gray-700',
+                      bar: 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                    }}
+                  />
+                </div>
+              </Stack>
+            </div>
+          ) : (
+            <Tabs value={activeTab} onChange={setActiveTab}>
+              <Tabs.List className="px-6 pt-4 border-b-0">
+                <Tabs.Tab value="json" leftSection={<FileJson size={16} />}>{t('import.jsonTab')}</Tabs.Tab>
+                <Tabs.Tab value="sso" leftSection={<Key size={16} />}>{t('import.ssoTab')}</Tabs.Tab>
+              </Tabs.List>
+
+              <Tabs.Panel value="json" pt="md" className="px-6 pb-6">
+            <Stack gap="lg">
               <Group>
                 <FileButton onChange={handleFileSelect} accept=".json">
                   {(props) => <Button {...props} variant="light" leftSection={<FileJson size={16} />}>{t('import.selectFile')}</Button>}
@@ -349,21 +423,35 @@ function ImportAccountModal({ onClose, onSuccess }) {
                 </Stack>
               )}
 
-              <Group justify="flex-end">
-                <Button variant="subtle" onClick={onClose}>{t('common.cancel')}</Button>
-                <Button
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={onClose}
+                  className={`px-5 py-2.5 text-sm font-medium rounded-xl ${colors.btnSecondary} transition-all duration-200 active:scale-[0.98]`}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
                   onClick={handleJsonImport}
                   disabled={!parseResult?.valid.length}
-                  leftSection={<Upload size={16} />}
+                  className={`
+                    px-6 py-2.5 text-sm font-medium rounded-xl text-white
+                    bg-gradient-to-r from-indigo-500 to-purple-600
+                    shadow-lg shadow-indigo-500/30
+                    hover:opacity-90 hover:shadow-xl
+                    disabled:opacity-50 disabled:cursor-not-allowed 
+                    flex items-center gap-2 
+                    transition-all duration-200 active:scale-[0.98]
+                  `}
                 >
+                  <Upload size={16} />
                   {t('import.import')} {parseResult?.valid.length ? `(${parseResult.valid.length})` : ''}
-                </Button>
-              </Group>
+                </button>
+              </div>
             </Stack>
           </Tabs.Panel>
 
-          <Tabs.Panel value="sso" pt="md">
-            <Stack gap="md">
+          <Tabs.Panel value="sso" pt="md" className="px-6 pb-6">
+            <Stack gap="lg">
               <Alert color="blue" variant="light">
                 <Text size="sm" fw={500}>{t('import.ssoGuide')}</Text>
                 <ol className={`list-decimal list-inside space-y-1 text-xs mt-2 ${colors.text}`}>
@@ -406,27 +494,58 @@ function ImportAccountModal({ onClose, onSuccess }) {
               />
 
               {ssoToken.trim() && (
-                <Alert icon={<CheckCircle size={16} />} color="blue" variant="light">
+                <Alert icon={<CheckCircle size={16} />} color="blue" variant="light" radius="xl">
                   {t('import.detectedTokens', { count: ssoToken.split('\n').filter(t => t.trim()).length })}
                 </Alert>
               )}
 
-              <Group justify="flex-end">
-                <Button variant="subtle" onClick={onClose}>{t('common.cancel')}</Button>
-                <Button
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={onClose}
+                  className={`px-5 py-2.5 text-sm font-medium rounded-xl ${colors.btnSecondary} transition-all duration-200 active:scale-[0.98]`}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
                   onClick={handleSsoImport}
                   disabled={!ssoToken.trim()}
-                  leftSection={<Key size={16} />}
+                  className={`
+                    px-6 py-2.5 text-sm font-medium rounded-xl text-white
+                    bg-gradient-to-r from-indigo-500 to-purple-600
+                    shadow-lg shadow-indigo-500/30
+                    hover:opacity-90 hover:shadow-xl
+                    disabled:opacity-50 disabled:cursor-not-allowed 
+                    flex items-center gap-2 
+                    transition-all duration-200 active:scale-[0.98]
+                  `}
                 >
+                  <Key size={16} />
                   {t('import.import')} {ssoToken.trim() ? `(${ssoToken.split('\n').filter(t => t.trim()).length})` : ''}
-                </Button>
-              </Group>
+                </button>
+              </div>
             </Stack>
           </Tabs.Panel>
         </Tabs>
       )}
-    </Modal>
-  )
-}
+    </div>
 
-export default ImportAccountModal
+      <style>{`
+        @keyframes dialogSlideIn {
+          from {
+            opacity: 0;
+            transform: scale(0.92) translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.2s ease-out;
+        }
+      `}</style>
+    </div>

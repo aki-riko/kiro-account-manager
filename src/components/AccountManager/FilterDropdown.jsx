@@ -39,35 +39,33 @@ function FilterSelect({ label, value, options, onChange, onClear, colors }) {
   
   return (
     <div>
-      <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{label}</label>
-      <div className="relative">
-        <Select
-          value={value || null}
-          onChange={(v) => {
-            if (!v || v === '') {
-              onClear?.()
-            } else {
-              onChange(v)
-            }
-          }}
-          data={options}
-          clearable={hasValue}
-          classNames={{
-            input: `${colors.input} ${colors.text} ${colors.inputFocus}`,
-            dropdown: `${colors.card} border ${colors.cardBorder}`,
-            option: `${colors.text}`
-          }}
-          styles={{
-            input: {
-              fontSize: '0.875rem',
-              padding: '0.5rem 0.75rem',
-              borderRadius: '0.5rem',
-              borderColor: hasValue ? '#3b82f6' : undefined,
-              boxShadow: hasValue ? '0 0 0 1px rgba(59, 130, 246, 0.3)' : undefined
-            }
-          }}
-        />
-      </div>
+      <label className={`block text-xs font-semibold ${colors.text} mb-2`}>{label}</label>
+      <Select
+        value={value || null}
+        onChange={(v) => {
+          if (!v || v === '') {
+            onClear?.()
+          } else {
+            onChange(v)
+          }
+        }}
+        data={options}
+        clearable={hasValue}
+        classNames={{
+          input: `${colors.input} ${colors.text} ${colors.inputFocus}`,
+          dropdown: `${colors.card} border ${colors.cardBorder}`,
+          option: `${colors.text}`
+        }}
+        styles={{
+          input: {
+            fontSize: '0.875rem',
+            padding: '0.5rem 0.75rem',
+            borderRadius: '0.5rem',
+            borderColor: hasValue ? '#3b82f6' : undefined,
+            boxShadow: hasValue ? '0 0 0 1px rgba(59, 130, 246, 0.3)' : undefined
+          }
+        }}
+      />
     </div>
   )
 }
@@ -120,7 +118,7 @@ function FilterDropdown({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-2 px-3 py-2 ${colors.card} border ${colors.cardBorder} rounded-xl ${colors.cardHover} transition-all ${activeCount > 0 ? 'border-blue-500/50 shadow-sm shadow-blue-500/20' : ''}`}
+        className={`flex items-center gap-2 px-3 py-2 ${colors.card} border ${colors.cardBorder} rounded-lg ${colors.cardHover} transition-all ${activeCount > 0 ? 'border-blue-500/50 shadow-sm shadow-blue-500/20' : ''}`}
       >
         <Filter size={16} className={activeCount > 0 ? 'text-blue-500' : colors.textMuted} />
         <span className={`text-sm ${activeCount > 0 ? 'text-blue-500 font-medium' : colors.textMuted}`}>
@@ -134,103 +132,128 @@ function FilterDropdown({
       </button>
 
       {open && (
-        <div className={`absolute right-0 top-full mt-2 w-72 ${colors.card} border ${colors.cardBorder} rounded-2xl shadow-2xl z-50 overflow-hidden`}>
-          <div className={`flex items-center justify-between px-4 py-3 border-b ${colors.cardBorder}`}>
-            <div className="flex items-center gap-2">
-              <Filter size={16} className="text-blue-500" />
-              <span className={`text-sm font-medium ${colors.text}`}>{t('filter.title')}</span>
+        <div className={`absolute right-0 top-full mt-2 w-80 ${colors.card} border ${colors.cardBorder} rounded-lg shadow-2xl z-50 overflow-hidden backdrop-blur-sm`}>
+          {/* 头部 */}
+          <div className={`px-5 py-4 border-b ${colors.cardBorder} bg-gradient-to-r from-blue-500/5 to-purple-500/5`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                  <Filter size={14} className="text-white" />
+                </div>
+                <span className={`text-sm font-semibold ${colors.text}`}>{t('filter.title')}</span>
+              </div>
+              {activeCount > 0 && (
+                <button 
+                  onClick={clearAll} 
+                  className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 transition-all font-medium"
+                >
+                  <X size={12} />
+                  {t('filter.clearAll')}
+                </button>
+              )}
             </div>
-            {activeCount > 0 && (
-              <button onClick={clearAll} className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-colors">
-                <X size={12} />
-                {t('filter.clearAll')}
-              </button>
-            )}
           </div>
 
-          <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+          {/* 筛选项 */}
+          <div className="p-4 space-y-3 max-h-[420px] overflow-y-auto">
             {/* 分组 */}
             {allGroups.length > 0 && (
-              <div>
-                <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{t('groups.title') || '分组'}</label>
-                <div className="relative">
-                  <SearchableTagSelect
-                    tags={allGroups}
-                    value={selectedGroup}
-                    onChange={onGroupFilter}
-                    placeholder={t('groups.searchPlaceholder') || '搜索分组...'}
-                    showAllOption={true}
-                    showNoneOption={true}
-                    allLabel={t('groups.all') || '全部'}
-                    noneLabel={t('groups.noGroup') || '无分组'}
-                    hasLabel={t('groups.hasGroup') || '有分组'}
-                  />
-                </div>
+              <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+                <label className={`block text-xs font-semibold ${colors.text} mb-2.5`}>{t('groups.title') || '分组'}</label>
+                <SearchableTagSelect
+                  tags={allGroups}
+                  value={selectedGroup}
+                  onChange={onGroupFilter}
+                  placeholder={t('groups.searchPlaceholder') || '搜索分组...'}
+                  showAllOption={true}
+                  showNoneOption={true}
+                  allLabel={t('groups.all') || '全部'}
+                  noneLabel={t('groups.noGroup') || '无分组'}
+                  hasLabel={t('groups.hasGroup') || '有分组'}
+                />
               </div>
             )}
 
             {/* 标签 */}
             {allTags.length > 0 && (
-              <div>
-                <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{t('tags.title')}</label>
-                <div className="relative">
-                  <SearchableTagSelect
-                    tags={allTags}
-                    value={selectedTag}
-                    onChange={onTagFilter}
-                    placeholder={t('tags.searchPlaceholder') || '搜索标签...'}
-                    showAllOption={true}
-                    showNoneOption={true}
-                    allLabel={t('tags.all')}
-                    noneLabel={t('tags.noTags')}
-                    hasLabel={t('tags.hasTags') || '有标签'}
-                  />
-                </div>
+              <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+                <label className={`block text-xs font-semibold ${colors.text} mb-2.5`}>{t('tags.title')}</label>
+                <SearchableTagSelect
+                  tags={allTags}
+                  value={selectedTag}
+                  onChange={onTagFilter}
+                  placeholder={t('tags.searchPlaceholder') || '搜索标签...'}
+                  showAllOption={true}
+                  showNoneOption={true}
+                  allLabel={t('tags.all')}
+                  noneLabel={t('tags.noTags')}
+                  hasLabel={t('tags.hasTags') || '有标签'}
+                />
               </div>
             )}
 
-            <FilterSelect
-              label={t('filter.subscription')}
-              value={filters.subscriptions?.length > 0 ? filters.subscriptions[0] : ''}
-              options={SUBSCRIPTION_OPTIONS}
-              onChange={(v) => onFiltersChange({ ...filters, subscriptions: v ? [v] : [] })}
-              onClear={() => onFiltersChange({ ...filters, subscriptions: [] })}
-              colors={colors}
-            />
+            {/* 订阅类型 */}
+            <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+              <FilterSelect
+                label={t('filter.subscription')}
+                value={filters.subscriptions?.length > 0 ? filters.subscriptions[0] : ''}
+                options={SUBSCRIPTION_OPTIONS}
+                onChange={(v) => onFiltersChange({ ...filters, subscriptions: v ? [v] : [] })}
+                onClear={() => onFiltersChange({ ...filters, subscriptions: [] })}
+                colors={colors}
+              />
+            </div>
 
-            <FilterSelect
-              label={t('filter.status')}
-              value={filters.statuses?.length > 0 ? filters.statuses[0] : ''}
-              options={STATUS_OPTIONS}
-              onChange={(v) => onFiltersChange({ ...filters, statuses: v ? [v] : [] })}
-              onClear={() => onFiltersChange({ ...filters, statuses: [] })}
-              colors={colors}
-            />
+            {/* 账号状态 */}
+            <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+              <FilterSelect
+                label={t('filter.status')}
+                value={filters.statuses?.length > 0 ? filters.statuses[0] : ''}
+                options={STATUS_OPTIONS}
+                onChange={(v) => onFiltersChange({ ...filters, statuses: v ? [v] : [] })}
+                onClear={() => onFiltersChange({ ...filters, statuses: [] })}
+                colors={colors}
+              />
+            </div>
 
-            <FilterSelect
-              label={t('filter.provider')}
-              value={filters.providers?.length > 0 ? filters.providers[0] : ''}
-              options={PROVIDER_OPTIONS}
-              onChange={(v) => onFiltersChange({ ...filters, providers: v ? [v] : [] })}
-              onClear={() => onFiltersChange({ ...filters, providers: [] })}
-              colors={colors}
-            />
+            {/* 登录方式 */}
+            <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+              <FilterSelect
+                label={t('filter.provider')}
+                value={filters.providers?.length > 0 ? filters.providers[0] : ''}
+                options={PROVIDER_OPTIONS}
+                onChange={(v) => onFiltersChange({ ...filters, providers: v ? [v] : [] })}
+                onClear={() => onFiltersChange({ ...filters, providers: [] })}
+                colors={colors}
+              />
+            </div>
 
-            <FilterSelect
-              label={t('filter.usageRange')}
-              value={filters.usageRange || ''}
-              options={USAGE_RANGE_OPTIONS}
-              onChange={(v) => onFiltersChange({ ...filters, usageRange: v || null })}
-              onClear={() => onFiltersChange({ ...filters, usageRange: null })}
-              colors={colors}
-            />
+            {/* 使用率 */}
+            <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+              <FilterSelect
+                label={t('filter.usageRange')}
+                value={filters.usageRange || ''}
+                options={USAGE_RANGE_OPTIONS}
+                onChange={(v) => onFiltersChange({ ...filters, usageRange: v || null })}
+                onClear={() => onFiltersChange({ ...filters, usageRange: null })}
+                colors={colors}
+              />
+            </div>
           </div>
 
+          {/* 底部统计 */}
           {activeCount > 0 && (
-            <div className={`px-4 py-2 border-t ${colors.cardBorder} bg-blue-500/10`}>
-              <p className="text-xs text-blue-500">
-                {t('common.selected')}: {activeCount} {t('common.filter').toLowerCase()}
-              </p>
+            <div className={`px-5 py-3 border-t ${colors.cardBorder} bg-gradient-to-r from-blue-500/10 to-purple-500/10`}>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-blue-600">
+                  {t('common.selected')}: {activeCount} {t('common.filter').toLowerCase()}
+                </p>
+                <div className="flex gap-1">
+                  {Array.from({ length: Math.min(activeCount, 5) }).map((_, i) => (
+                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>

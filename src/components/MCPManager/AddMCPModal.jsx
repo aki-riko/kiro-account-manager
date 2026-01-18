@@ -152,24 +152,30 @@ function AddMCPModal({ onClose, onSuccess }) {
     : serverNames.join(', ')
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
       <div 
-        className={`${colors.card} rounded-2xl shadow-2xl w-[560px] max-h-[85vh] flex flex-col`}
+        className={`relative overflow-hidden ${colors.card} border ${colors.cardBorder} rounded-lg shadow-2xl w-[560px] max-h-[85vh] flex flex-col`}
         onClick={e => e.stopPropagation()}
+        style={{ animation: 'modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}
       >
+        {/* 顶部渐变装饰 */}
+        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-purple-500/10 via-transparent to-transparent pointer-events-none" />
+        
         {/* 标题 */}
-        <div className={`flex items-center justify-between px-5 py-3.5 border-b ${colors.cardBorder}`}>
-          <div className="flex items-center gap-2.5">
-            <Terminal size={18} className="text-purple-500" />
+        <div className={`relative flex items-center justify-between px-6 py-4 border-b ${colors.cardBorder}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/10 flex items-center justify-center shadow-lg">
+              <Terminal size={20} className="text-purple-400" />
+            </div>
             <h2 className={`text-base font-semibold ${colors.text}`}>{t('mcpManager.addMCPServer')}</h2>
           </div>
-          <button onClick={onClose} className={`p-1.5 rounded-lg ${colors.input} hover:opacity-80 transition-all`}>
-            <X size={16} className={colors.textMuted} />
+          <button onClick={onClose} className={`p-2 rounded-lg ${colors.cardHover} transition-all`}>
+            <X size={18} className={colors.textMuted} />
           </button>
         </div>
 
         {/* 内容 */}
-        <div className="flex-1 overflow-auto p-5 space-y-4">
+        <div className="relative flex-1 overflow-auto p-6 space-y-4">
           {/* 快速模板 */}
           <div>
             <label className={`block text-xs ${colors.textMuted} mb-1.5`}>快速填充</label>
@@ -258,17 +264,17 @@ function AddMCPModal({ onClose, onSuccess }) {
         </div>
 
         {/* 底部按钮 */}
-        <div className={`flex justify-end gap-2 px-5 py-3.5 border-t ${colors.cardBorder}`}>
+        <div className={`relative flex justify-end gap-3 px-6 py-4 border-t ${colors.cardBorder}`}>
           <button
             onClick={onClose}
-            className={`px-4 py-2 rounded-lg text-sm ${colors.input} ${colors.text} hover:opacity-80 transition-all`}
+            className={`px-5 py-2.5 rounded-lg text-sm ${colors.text} ${colors.cardHover} transition-all`}
           >
             {t('common.cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={saving || serverCount === 0}
-            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg text-sm font-medium hover:from-purple-600 hover:to-pink-700 disabled:opacity-50 transition-all"
+            className="px-6 py-2.5 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-purple-500/30"
           >
             {saving ? t('common.saving') : serverCount > 1 ? `添加 ${serverCount} 个` : t('common.add')}
           </button>

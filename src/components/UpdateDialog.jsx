@@ -85,7 +85,7 @@ function UpdateDialog({ updateInfo, update, onClose }) {
       withCloseButton={false}
       size="lg"
       padding={0}
-      radius="md"
+      radius="lg"
       styles={{
         content: { overflow: 'hidden' },
         body: { backgroundColor: 'transparent' }

@@ -98,15 +98,30 @@ function AccountDetailModal({ account, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
       <div 
-        className={`${colors.card} rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col border ${colors.cardBorder}`} 
+        className={`relative overflow-hidden ${colors.card} rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col border ${colors.cardBorder}`} 
         onClick={e => e.stopPropagation()}
-        style={{ animation: 'modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}
+        style={{ animation: 'dialogSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)' }}
       >
+        {/* 顶部渐变装饰 */}
+        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-500/10 via-transparent to-transparent pointer-events-none" />
+        
+        {/* 装饰性光晕 */}
+        <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-500/20 to-indigo-500/10 rounded-full blur-3xl opacity-50" />
+        
         {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-4 ${colors.card} border-b ${colors.cardBorder}`}>
+        <div className={`relative flex items-center justify-between px-6 py-4 ${colors.card} border-b ${colors.cardBorder}`}>
           <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${account.provider === 'Google' ? 'bg-red-500/20' : account.provider === 'Github' ? `${colors.cardSecondary}` : 'bg-blue-500/20'}`}>
-              <User size={24} className={account.provider === 'Google' ? 'text-red-400' : account.provider === 'Github' ? `${colors.text}` : 'text-blue-400'} />
+            <div className={`
+              w-12 h-12 rounded-2xl flex items-center justify-center
+              ring-1 ${colors.ringColor} shadow-lg
+              ${account.provider === 'Google' 
+                ? 'bg-gradient-to-br from-red-500/20 to-orange-500/10' 
+                : account.provider === 'Github' 
+                  ? `bg-gradient-to-br ${colors.cardSecondary}` 
+                  : 'bg-gradient-to-br from-blue-500/20 to-indigo-500/10'
+              }`}
+            >
+              <User size={24} className={account.provider === 'Google' ? 'text-red-400' : account.provider === 'Github' ? `${colors.text}` : 'text-blue-400'} strokeWidth={2} />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -311,7 +326,7 @@ function AccountDetailModal({ account, onClose }) {
           </div>
 
           {/* Footer */}
-          <div className={`flex justify-between items-center px-6 py-4 ${colors.card} border-t ${colors.cardBorder}`}>
+          <div className={`relative flex justify-between items-center px-6 py-5 ${colors.dialogFooter}`}>
             <div className={`text-xs ${colors.textMuted}`}>
               {account.status === 'active' || account.status === '正常' || account.status === '有效' 
                 ? <span className="flex items-center gap-1 text-green-500"><Shield size={12} />{t('detail.accountNormal')}</span> 
@@ -319,7 +334,17 @@ function AccountDetailModal({ account, onClose }) {
                   ? <span className="flex items-center gap-1 text-red-500"><Shield size={12} />{t('detail.accountBanned')}</span>
                   : <span className="flex items-center gap-1 text-orange-500"><Shield size={12} />{account.status}</span>}
             </div>
-            <button type="button" onClick={onClose} className="px-5 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600">
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="
+                px-6 py-2.5 text-sm font-medium rounded-xl text-white
+                bg-gradient-to-r from-blue-500 to-indigo-600
+                shadow-lg shadow-blue-500/30
+                hover:opacity-90 hover:shadow-xl
+                transition-all duration-200 active:scale-[0.98]
+              "
+            >
               {t('common.close')}
             </button>
           </div>
@@ -334,10 +359,10 @@ export default AccountDetailModal
 // 添加动画样式
 const style = document.createElement('style')
 style.textContent = `
-  @keyframes modalSlideIn {
+  @keyframes dialogSlideIn {
     from {
       opacity: 0;
-      transform: scale(0.95) translateY(-20px);
+      transform: scale(0.92) translateY(-20px);
     }
     to {
       opacity: 1;
@@ -352,7 +377,7 @@ style.textContent = `
     animation: fade-in 0.2s ease-out;
   }
 `
-if (!document.querySelector('#edit-modal-styles')) {
-  style.id = 'edit-modal-styles'
+if (!document.querySelector('#detail-modal-styles')) {
+  style.id = 'detail-modal-styles'
   document.head.appendChild(style)
 }

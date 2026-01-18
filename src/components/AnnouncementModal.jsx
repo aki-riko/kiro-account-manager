@@ -119,7 +119,7 @@ export default function AnnouncementModal() {
   if (forceUpdate) {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div className={`relative w-[420px] max-w-[90vw] rounded-2xl shadow-2xl border ${colors.card} ${colors.cardBorder} overflow-hidden`}>
+        <div className={`relative w-[420px] max-w-[90vw] rounded-lg shadow-2xl border ${colors.card} ${colors.cardBorder} overflow-hidden`}>
           <div className="bg-gradient-to-r from-red-500 to-orange-500 px-6 py-4 flex items-center gap-3">
             <AlertTriangle size={24} className="text-white" />
             <span className="text-white font-bold text-lg">需要更新</span>
@@ -164,7 +164,7 @@ export default function AnnouncementModal() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className={`relative w-[480px] max-w-[90vw] rounded-2xl shadow-2xl border ${colors.card} ${colors.cardBorder} overflow-hidden animate-fade-in-up`}>
+      <div className={`relative w-[480px] max-w-[90vw] rounded-lg shadow-2xl border ${colors.card} ${colors.cardBorder} overflow-hidden animate-fade-in-up`}>
         {/* 顶部警告条 */}
         <div className="bg-gradient-to-r from-red-500 to-orange-500 px-6 py-4 flex items-center gap-3">
           <AlertTriangle size={24} className="text-white" />
