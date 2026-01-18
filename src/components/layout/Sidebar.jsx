@@ -3,9 +3,9 @@ import { invoke } from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
 import { User, Sun, Moon, Palette } from 'lucide-react'
 import { NavLink, Menu, Tooltip, Text, Group, Stack, Box, ActionIcon, Paper, Indicator } from '@mantine/core'
-import { themes } from '../contexts/ThemeContext'
-import { useApp } from '../hooks/useApp'
-import { routes } from '../routes'
+import { themes } from '../../contexts/ThemeContext'
+import { useApp } from '../../hooks/useApp'
+import { routes } from '../../routes'
 
 function useMenuItems() {
   const { t } = useApp()

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { check } from '@tauri-apps/plugin-updater'
-import { useDialog } from '../contexts/DialogContext'
+import { useDialog } from '../../contexts/DialogContext'
 
 // 更新检查组件 - 启动时自动检查，有更新则弹窗
 function UpdateChecker() {
