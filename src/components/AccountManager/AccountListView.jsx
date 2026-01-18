@@ -92,10 +92,10 @@ const ListRow = memo(function ListRow({
 
       {/* 提供商 */}
       <span className={`text-xs px-2 py-1 rounded w-20 text-center shrink-0 ${
-        account.provider === 'Google' ? (isLightTheme ? 'bg-red-100 text-red-600' : 'bg-red-500/20 text-red-400')
-        : account.provider === 'GitHub' ? (isLightTheme ? 'bg-gray-200 text-gray-700' : 'bg-gray-500/20 text-gray-300')
-        : account.provider === 'BuilderId' ? (isLightTheme ? 'bg-orange-100 text-orange-600' : 'bg-orange-500/20 text-orange-400')
-        : (isLightTheme ? 'bg-gray-100' : 'bg-white/10') + ' ' + colors.textMuted
+        account.provider === 'Google' ? colors.badgeWarning
+        : account.provider === 'GitHub' ? colors.badgeDisabled
+        : account.provider === 'BuilderId' ? colors.badgeWarning
+        : colors.badgeDisabled
       }`}>{account.provider || 'Unknown'}</span>
 
       {/* 订阅类型 */}
@@ -108,26 +108,26 @@ const ListRow = memo(function ListRow({
               ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white'
               : account.usageData?.subscriptionInfo?.subscriptionTitle?.toUpperCase()?.includes('KIRO')
                 ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white'
-                : (isLightTheme ? 'bg-gray-100' : 'bg-white/10') + ' ' + colors.textMuted
+                : colors.badgeDisabled
       }`}>{account.usageData?.subscriptionInfo?.subscriptionTitle || 'Free'}</span>
 
       {/* 配额 */}
       <div className="w-24 shrink-0">
         <div className={`text-xs ${remaining > 0 ? 'text-green-500' : 'text-red-500'}`}>{formatUsage(used)}/{formatUsage(limit)}</div>
-        <div className={`h-1 rounded-full ${isLightTheme ? 'bg-gray-200' : 'bg-white/10'} mt-1`}>
+        <div className={`h-1 rounded-full ${colors.cardSecondary} mt-1`}>
           <div className={`h-full rounded-full ${remaining > 0 ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${Math.min((used / limit) * 100, 100)}%` }} />
         </div>
       </div>
 
       {/* 状态 */}
       <span className={`text-xs px-2 py-1 rounded w-12 text-center shrink-0 ${
-        isBanned ? (isLightTheme ? 'bg-red-100 text-red-600' : 'bg-red-500/20 text-red-400')
-        : isActive ? (isLightTheme ? 'bg-green-100 text-green-700' : 'bg-green-500/20 text-green-400')
-        : (isLightTheme ? 'bg-orange-100 text-orange-600' : 'bg-orange-500/20 text-orange-400')
+        isBanned ? colors.error
+        : isActive ? colors.badgeSuccess
+        : colors.badgeWarning
       }`}>{isBanned ? t('accounts.banned') : isActive ? t('accounts.active') : account.status}</span>
 
       {/* 机器码 */}
-      <span className={`text-xs font-mono w-14 text-center shrink-0 ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>
+      <span className="text-xs font-mono w-14 text-center shrink-0 text-red-500">
         {account.machineId?.slice(0, 6) || '-'}
       </span>
 
@@ -137,7 +137,7 @@ const ListRow = memo(function ListRow({
         {account.usageData?.usageBreakdownList?.[0]?.freeTrialInfo?.freeTrialExpiry && (
           <>
             <span className="text-gray-500 mx-1">|</span>
-            <span className={`${isLightTheme ? 'text-orange-600' : 'text-orange-400'}`} title="试用到期">
+            <span className="text-orange-500" title="试用到期">
               {new Date(account.usageData.usageBreakdownList[0].freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString().slice(5)}
             </span>
           </>
@@ -269,7 +269,7 @@ function AccountListView({
           配额<SortIcon field="usage" />
         </div>
         <div className="w-12 text-center">状态</div>
-        <div className={`w-14 text-center ${isLightTheme ? 'text-red-600' : 'text-red-400'}`}>机器码</div>
+        <div className="w-14 text-center text-red-500">机器码</div>
         <div className="w-28 cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('trial')}>
           token|试用过期<SortIcon field="trial" />
         </div>

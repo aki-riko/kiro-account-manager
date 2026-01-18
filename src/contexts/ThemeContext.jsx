@@ -72,6 +72,39 @@ export const themes = {
     // 危险按钮样式
     danger: 'bg-red-100 text-red-600',
     dangerHover: 'hover:bg-red-200',
+    // 卡片状态样式
+    cardSelected: 'border-purple-400 bg-purple-50',
+    cardCurrent: 'border-green-400 bg-green-50/50',
+    cardBanned: 'border-red-300 bg-red-50/50',
+    cardWarning: 'border-orange-300 bg-orange-50/50',
+    cardNormal: 'border-gray-200 bg-white hover:border-gray-300',
+    cardGlowCurrent: 'shadow-green-500/30 hover:shadow-green-500/50',
+    cardGlowBanned: 'shadow-red-500/30 hover:shadow-red-500/50',
+    cardGlowWarning: 'shadow-orange-500/30 hover:shadow-orange-500/50',
+    // 提供商徽章
+    providerGoogle: 'bg-red-100 text-red-600',
+    providerGithub: 'bg-gray-200 text-gray-700',
+    providerBuilderId: 'bg-orange-100 text-orange-600',
+    providerDefault: 'bg-gray-100 text-gray-500',
+    // 机器码样式
+    machineIdText: 'text-red-600',
+    machineIdTextSecondary: 'text-red-700',
+    machineIdIcon: 'text-red-500',
+    // 快捷操作按钮
+    actionView: 'text-purple-600',
+    actionRefresh: 'text-blue-600',
+    actionSwitch: 'text-green-600',
+    // 配额百分比颜色
+    quotaHigh: 'text-red-500',
+    quotaMedium: 'text-yellow-500',
+    quotaLow: 'text-green-500',
+    // 日期信息颜色
+    dateReset: 'text-gray-500',
+    dateTrial: 'text-purple-500',
+    dateBonus: 'text-amber-500',
+    dateExpired: 'text-red-500',
+    // 图标颜色
+    iconSuccess: 'text-green-500',
   },
   dark: {
     nameKey: 'theme.dark',
@@ -144,6 +177,39 @@ export const themes = {
     hoverBg: 'hover:bg-white/5',
     // 空状态背景
     emptyBg: 'bg-white/5',
+    // 卡片状态样式
+    cardSelected: 'border-purple-500 bg-purple-500/10',
+    cardCurrent: 'border-green-500/50 bg-green-500/5',
+    cardBanned: 'border-red-500/50 bg-red-500/5',
+    cardWarning: 'border-orange-500/50 bg-orange-500/5',
+    cardNormal: 'border-gray-700 bg-gray-800/50 hover:border-gray-600',
+    cardGlowCurrent: 'shadow-green-500/30 hover:shadow-green-500/50',
+    cardGlowBanned: 'shadow-red-500/30 hover:shadow-red-500/50',
+    cardGlowWarning: 'shadow-orange-500/30 hover:shadow-orange-500/50',
+    // 提供商徽章
+    providerGoogle: 'bg-red-500/20 text-red-400',
+    providerGithub: 'bg-gray-600 text-gray-200',
+    providerBuilderId: 'bg-orange-500/20 text-orange-400',
+    providerDefault: 'bg-gray-700 text-gray-400',
+    // 机器码样式
+    machineIdText: 'text-red-400',
+    machineIdTextSecondary: 'text-red-300',
+    machineIdIcon: 'text-red-400',
+    // 快捷操作按钮
+    actionView: 'text-purple-400',
+    actionRefresh: 'text-blue-400',
+    actionSwitch: 'text-green-400',
+    // 配额百分比颜色
+    quotaHigh: 'text-red-500',
+    quotaMedium: 'text-yellow-500',
+    quotaLow: 'text-green-500',
+    // 日期信息颜色
+    dateReset: 'text-gray-400',
+    dateTrial: 'text-purple-400',
+    dateBonus: 'text-amber-400',
+    dateExpired: 'text-red-400',
+    // 图标颜色
+    iconSuccess: 'text-green-500',
   },
   purple: {
     nameKey: 'theme.purple',
@@ -190,6 +256,39 @@ export const themes = {
     // 危险按钮样式
     danger: 'bg-red-100 text-red-600',
     dangerHover: 'hover:bg-red-200',
+    // 卡片状态样式
+    cardSelected: 'border-purple-400 bg-purple-50',
+    cardCurrent: 'border-green-400 bg-green-50/50',
+    cardBanned: 'border-red-300 bg-red-50/50',
+    cardWarning: 'border-orange-300 bg-orange-50/50',
+    cardNormal: 'border-gray-200 bg-white hover:border-gray-300',
+    cardGlowCurrent: 'shadow-green-500/30 hover:shadow-green-500/50',
+    cardGlowBanned: 'shadow-red-500/30 hover:shadow-red-500/50',
+    cardGlowWarning: 'shadow-orange-500/30 hover:shadow-orange-500/50',
+    // 提供商徽章
+    providerGoogle: 'bg-red-100 text-red-600',
+    providerGithub: 'bg-gray-200 text-gray-700',
+    providerBuilderId: 'bg-orange-100 text-orange-600',
+    providerDefault: 'bg-gray-100 text-gray-500',
+    // 机器码样式
+    machineIdText: 'text-red-600',
+    machineIdTextSecondary: 'text-red-700',
+    machineIdIcon: 'text-red-500',
+    // 快捷操作按钮
+    actionView: 'text-purple-600',
+    actionRefresh: 'text-blue-600',
+    actionSwitch: 'text-green-600',
+    // 配额百分比颜色
+    quotaHigh: 'text-red-500',
+    quotaMedium: 'text-yellow-500',
+    quotaLow: 'text-green-500',
+    // 日期信息颜色
+    dateReset: 'text-gray-500',
+    dateTrial: 'text-purple-500',
+    dateBonus: 'text-amber-500',
+    dateExpired: 'text-red-500',
+    // 图标颜色
+    iconSuccess: 'text-green-500',
   },
   green: {
     nameKey: 'theme.green',
@@ -236,6 +335,39 @@ export const themes = {
     // 危险按钮样式
     danger: 'bg-red-100 text-red-600',
     dangerHover: 'hover:bg-red-200',
+    // 卡片状态样式
+    cardSelected: 'border-purple-400 bg-purple-50',
+    cardCurrent: 'border-green-400 bg-green-50/50',
+    cardBanned: 'border-red-300 bg-red-50/50',
+    cardWarning: 'border-orange-300 bg-orange-50/50',
+    cardNormal: 'border-gray-200 bg-white hover:border-gray-300',
+    cardGlowCurrent: 'shadow-green-500/30 hover:shadow-green-500/50',
+    cardGlowBanned: 'shadow-red-500/30 hover:shadow-red-500/50',
+    cardGlowWarning: 'shadow-orange-500/30 hover:shadow-orange-500/50',
+    // 提供商徽章
+    providerGoogle: 'bg-red-100 text-red-600',
+    providerGithub: 'bg-gray-200 text-gray-700',
+    providerBuilderId: 'bg-orange-100 text-orange-600',
+    providerDefault: 'bg-gray-100 text-gray-500',
+    // 机器码样式
+    machineIdText: 'text-red-600',
+    machineIdTextSecondary: 'text-red-700',
+    machineIdIcon: 'text-red-500',
+    // 快捷操作按钮
+    actionView: 'text-purple-600',
+    actionRefresh: 'text-blue-600',
+    actionSwitch: 'text-green-600',
+    // 配额百分比颜色
+    quotaHigh: 'text-red-500',
+    quotaMedium: 'text-yellow-500',
+    quotaLow: 'text-green-500',
+    // 日期信息颜色
+    dateReset: 'text-gray-500',
+    dateTrial: 'text-purple-500',
+    dateBonus: 'text-amber-500',
+    dateExpired: 'text-red-500',
+    // 图标颜色
+    iconSuccess: 'text-green-500',
   },
 }
 

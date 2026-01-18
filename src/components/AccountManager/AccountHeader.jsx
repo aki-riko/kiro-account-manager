@@ -32,7 +32,6 @@ function AccountHeader({
   onAdvancedFiltersChange,
 }) {
   const { t, theme, colors } = useApp()
-  const isLightTheme = theme === 'light'
   const [searchExpanded, setSearchExpanded] = useState(false)
   const searchRef = useRef(null)
 
@@ -75,13 +74,13 @@ function AccountHeader({
                   value={searchTerm}
                   onChange={(e) => onSearchChange(e.target.value)}
                   autoFocus
-                  className={`pl-9 pr-3 py-2 ${isLightTheme ? 'bg-gray-50' : 'bg-white/5'} border-0 rounded-xl text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${colors.text}`}
+                  className={`pl-9 pr-3 py-2 ${colors.cardSecondary} border-0 rounded-xl text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${colors.text}`}
                 />
               </div>
             ) : (
               <button
                 onClick={() => setSearchExpanded(true)}
-                className={`p-2 ${colors.card} border ${colors.cardBorder} rounded-xl ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'}`}
+                className={`p-2 ${colors.card} border ${colors.cardBorder} rounded-xl ${colors.cardHover}`}
                 title={t('accounts.search')}
               >
                 <Search size={18} className={colors.textMuted} />
@@ -117,7 +116,7 @@ function AccountHeader({
                   className={`px-2 py-1.5 text-xs flex items-center gap-1 ${
                     isActive 
                       ? 'bg-blue-500 text-white' 
-                      : `${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.textMuted}`
+                      : `${colors.cardHover} ${colors.textMuted}`
                   }`}
                   title={label}
                 >
@@ -132,14 +131,14 @@ function AccountHeader({
           <div className={`flex rounded-xl border ${colors.cardBorder} overflow-hidden`}>
             <button
               onClick={() => onViewModeChange('card')}
-              className={`p-2 ${viewMode === 'card' ? 'bg-blue-500 text-white' : `${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.textMuted}`}`}
+              className={`p-2 ${viewMode === 'card' ? 'bg-blue-500 text-white' : `${colors.cardHover} ${colors.textMuted}`}`}
               title={t('accounts.cardView')}
             >
               <LayoutGrid size={16} />
             </button>
             <button
               onClick={() => onViewModeChange('table')}
-              className={`p-2 ${viewMode === 'table' ? 'bg-blue-500 text-white' : `${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.textMuted}`}`}
+              className={`p-2 ${viewMode === 'table' ? 'bg-blue-500 text-white' : `${colors.cardHover} ${colors.textMuted}`}`}
               title={t('accounts.tableView')}
             >
               <List size={16} />
@@ -178,28 +177,28 @@ function AccountHeader({
           <div className={`flex rounded-xl border ${colors.cardBorder} overflow-hidden`}>
             <button
               onClick={onAdd}
-              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} text-green-500`}
+              className={`p-2 ${colors.cardHover} text-green-500`}
               title={t('common.add')}
             >
               <Plus size={16} />
             </button>
             <button
               onClick={onImport}
-              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} text-purple-500`}
+              className={`p-2 ${colors.cardHover} text-purple-500`}
               title={t('accounts.import')}
             >
               <Upload size={16} />
             </button>
             <button
               onClick={onExport}
-              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} text-orange-500`}
+              className={`p-2 ${colors.cardHover} text-orange-500`}
               title={t('accounts.export')}
             >
               <Download size={16} />
             </button>
             <button
               onClick={onRefresh}
-              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} ${colors.textMuted}`}
+              className={`p-2 ${colors.cardHover} ${colors.textMuted}`}
               title={t('accounts.refreshList')}
             >
               <RotateCw size={16} />
@@ -207,7 +206,7 @@ function AccountHeader({
             <button
               onClick={onRefreshAll}
               disabled={autoRefreshing}
-              className={`p-2 ${isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'} text-blue-500 disabled:opacity-50`}
+              className={`p-2 ${colors.cardHover} text-blue-500 disabled:opacity-50`}
               title={t('accounts.refreshAll')}
             >
               <RefreshCcw size={16} className={autoRefreshing ? 'animate-spin' : ''} />
@@ -219,7 +218,7 @@ function AccountHeader({
       {/* 刷新进度条 */}
       {autoRefreshing && refreshProgress.total > 0 && (
         <div className="mt-3 flex items-center gap-3">
-          <div className={`flex-1 h-1.5 ${isLightTheme ? 'bg-gray-200' : 'bg-white/10'} rounded-full overflow-hidden`}>
+          <div className={`flex-1 h-1.5 ${colors.cardSecondary} rounded-full overflow-hidden`}>
             <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all" style={{ width: `${(refreshProgress.current / refreshProgress.total) * 100}%` }} />
           </div>
           <span className="text-xs text-blue-500 font-medium">{refreshProgress.current}/{refreshProgress.total}</span>
