@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { useApp } from '../../../hooks/useApp'
-import { useAppSettings } from '../../../contexts/AppSettingsContext'
+import { useApp } from '../../../../hooks/useApp'
+import { useAppSettings } from '../../../../contexts/AppSettingsContext'
 
 /**
  * 账号切换逻辑 hook

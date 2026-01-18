@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { calcAccountStats, getUsagePercent as getUsagePercentUtil } from '../../../utils/accountStats'
+import { calcAccountStats, getUsagePercent as getUsagePercentUtil } from '../../../../utils/accountStats'
 
 // Hook: 使用 memoized 统计数据
 export function useAccountStats(accounts) {
