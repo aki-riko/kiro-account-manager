@@ -104,7 +104,7 @@ export default function QuotaPieChart({ accounts }) {
               <Text size="xs" className={colors.text} truncate style={{ flex: 1 }}>
                 {maskEmail(slice.email).split('@')[0]}
               </Text>
-              <Text size="xs" c="dimmed" className="flex-shrink-0">
+              <Text size="xs" className={`${colors.textMuted} flex-shrink-0`}>
                 {slice.percentage}%
               </Text>
             </Group>

@@ -39,7 +39,10 @@ function FilterSelect({ label, value, options, onChange, onClear, colors }) {
   
   return (
     <div>
-      <label className={`block text-xs font-semibold ${colors.text} mb-2`}>{label}</label>
+      <label className={`block text-xs font-semibold ${colors.text} mb-2.5 flex items-center gap-2`}>
+        <div className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-600"></div>
+        {label}
+      </label>
       <Select
         value={value || null}
         onChange={(v) => {
@@ -51,18 +54,31 @@ function FilterSelect({ label, value, options, onChange, onClear, colors }) {
         }}
         data={options}
         clearable={hasValue}
+        size="sm"
+        radius="md"
         classNames={{
-          input: `${colors.input} ${colors.text} ${colors.inputFocus}`,
-          dropdown: `${colors.card} border ${colors.cardBorder}`,
-          option: `${colors.text}`
+          input: `${colors.text} transition-all duration-200`,
+          dropdown: `${colors.card} border ${colors.cardBorder} shadow-xl`,
+          option: `${colors.text} hover:bg-blue-500/10`
         }}
         styles={{
           input: {
             fontSize: '0.875rem',
-            padding: '0.5rem 0.75rem',
+            padding: '0.625rem 0.875rem',
+            backgroundColor: hasValue ? 'rgba(59, 130, 246, 0.05)' : undefined,
+            borderColor: hasValue ? 'rgba(59, 130, 246, 0.5)' : undefined,
+            borderWidth: '1px',
+            boxShadow: hasValue ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : undefined,
+            transition: 'all 0.2s ease'
+          },
+          dropdown: {
+            borderRadius: '0.75rem',
+            padding: '0.5rem'
+          },
+          option: {
             borderRadius: '0.5rem',
-            borderColor: hasValue ? '#3b82f6' : undefined,
-            boxShadow: hasValue ? '0 0 0 1px rgba(59, 130, 246, 0.3)' : undefined
+            marginBottom: '0.25rem',
+            fontSize: '0.875rem'
           }
         }}
       />
@@ -118,48 +134,89 @@ function FilterDropdown({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className={`flex items-center gap-2 px-3 py-2 ${colors.card} border ${colors.cardBorder} rounded-lg ${colors.cardHover} transition-all ${activeCount > 0 ? 'border-blue-500/50 shadow-sm shadow-blue-500/20' : ''}`}
+        className={`
+          flex items-center gap-2.5 px-4 py-2.5 
+          ${colors.card} border-2 ${colors.cardBorder} 
+          rounded-xl ${colors.cardHover} 
+          transition-all duration-200
+          shadow-sm hover:shadow-md
+          ${activeCount > 0 ? 'border-blue-500 bg-blue-500/5 shadow-blue-500/20' : ''}
+          ${open ? 'ring-2 ring-blue-500/30' : ''}
+        `}
       >
-        <Filter size={16} className={activeCount > 0 ? 'text-blue-500' : colors.textMuted} />
-        <span className={`text-sm ${activeCount > 0 ? 'text-blue-500 font-medium' : colors.textMuted}`}>
+        <div className={`
+          w-8 h-8 rounded-lg flex items-center justify-center
+          ${activeCount > 0 ? 'bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/30' : `${colors.cardSecondary}`}
+          transition-all duration-200
+        `}>
+          <Filter 
+            size={16} 
+            className={activeCount > 0 ? 'text-white' : colors.textMuted} 
+            strokeWidth={2.5}
+          />
+        </div>
+        <span className={`text-sm font-medium ${activeCount > 0 ? 'text-blue-600' : colors.text}`}>
           {t('filter.title')}
         </span>
         {activeCount > 0 && (
-          <span className="px-1.5 py-0.5 bg-blue-500 text-white text-[10px] rounded-full font-medium min-w-[18px] text-center">
+          <span className="px-2 py-0.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xs rounded-full font-bold min-w-[20px] text-center shadow-lg">
             {activeCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className={`absolute right-0 top-full mt-2 w-80 ${colors.card} border ${colors.cardBorder} rounded-lg shadow-2xl z-50 overflow-hidden backdrop-blur-sm`}>
+        <div 
+          className={`
+            absolute right-0 top-full mt-3 w-[340px]
+            ${colors.card} border-2 ${colors.cardBorder} 
+            rounded-2xl shadow-2xl z-50 
+            backdrop-blur-sm
+            overflow-hidden
+          `}
+          style={{ 
+            animation: 'slideDown 0.2s ease-out',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(59, 130, 246, 0.1)'
+          }}
+        >
+          {/* 顶部装饰渐变 */}
+          <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-blue-500/10 via-purple-500/5 to-transparent pointer-events-none" />
+          
           {/* 头部 */}
-          <div className={`px-5 py-4 border-b ${colors.cardBorder} bg-gradient-to-r from-blue-500/5 to-purple-500/5`}>
+          <div className={`relative px-5 py-4 border-b ${colors.cardBorder}`}>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-                  <Filter size={14} className="text-white" />
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                  <Filter size={16} className="text-white" strokeWidth={2.5} />
                 </div>
-                <span className={`text-sm font-semibold ${colors.text}`}>{t('filter.title')}</span>
+                <div>
+                  <span className={`text-sm font-semibold ${colors.text} block`}>{t('filter.title')}</span>
+                  {activeCount > 0 && (
+                    <span className="text-[10px] text-blue-500 font-medium">{activeCount} 个筛选条件</span>
+                  )}
+                </div>
               </div>
               {activeCount > 0 && (
                 <button 
                   onClick={clearAll} 
-                  className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 transition-all font-medium"
+                  className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-all font-medium shadow-sm hover:shadow-md"
                 >
-                  <X size={12} />
-                  {t('filter.clearAll')}
+                  <X size={12} strokeWidth={2.5} />
+                  清空
                 </button>
               )}
             </div>
           </div>
 
           {/* 筛选项 */}
-          <div className="p-4 space-y-3 max-h-[420px] overflow-y-auto">
+          <div className="relative p-5 space-y-3.5 max-h-[420px] overflow-y-auto custom-scrollbar">
             {/* 分组 */}
             {allGroups.length > 0 && (
-              <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
-                <label className={`block text-xs font-semibold ${colors.text} mb-2.5`}>{t('groups.title') || '分组'}</label>
+              <div className={`p-4 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder} hover:border-blue-500/30 transition-all duration-200 shadow-sm hover:shadow-md`}>
+                <label className={`block text-xs font-semibold ${colors.text} mb-2.5 flex items-center gap-2`}>
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                  {t('groups.title') || '分组'}
+                </label>
                 <SearchableTagSelect
                   tags={allGroups}
                   value={selectedGroup}
@@ -176,8 +233,11 @@ function FilterDropdown({
 
             {/* 标签 */}
             {allTags.length > 0 && (
-              <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
-                <label className={`block text-xs font-semibold ${colors.text} mb-2.5`}>{t('tags.title')}</label>
+              <div className={`p-4 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder} hover:border-purple-500/30 transition-all duration-200 shadow-sm hover:shadow-md`}>
+                <label className={`block text-xs font-semibold ${colors.text} mb-2.5 flex items-center gap-2`}>
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
+                  {t('tags.title')}
+                </label>
                 <SearchableTagSelect
                   tags={allTags}
                   value={selectedTag}
@@ -193,7 +253,7 @@ function FilterDropdown({
             )}
 
             {/* 订阅类型 */}
-            <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+            <div className={`p-4 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder} hover:border-indigo-500/30 transition-all duration-200 shadow-sm hover:shadow-md`}>
               <FilterSelect
                 label={t('filter.subscription')}
                 value={filters.subscriptions?.length > 0 ? filters.subscriptions[0] : ''}
@@ -205,7 +265,7 @@ function FilterDropdown({
             </div>
 
             {/* 账号状态 */}
-            <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+            <div className={`p-4 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder} hover:border-emerald-500/30 transition-all duration-200 shadow-sm hover:shadow-md`}>
               <FilterSelect
                 label={t('filter.status')}
                 value={filters.statuses?.length > 0 ? filters.statuses[0] : ''}
@@ -217,7 +277,7 @@ function FilterDropdown({
             </div>
 
             {/* 登录方式 */}
-            <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+            <div className={`p-4 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder} hover:border-cyan-500/30 transition-all duration-200 shadow-sm hover:shadow-md`}>
               <FilterSelect
                 label={t('filter.provider')}
                 value={filters.providers?.length > 0 ? filters.providers[0] : ''}
@@ -229,7 +289,7 @@ function FilterDropdown({
             </div>
 
             {/* 使用率 */}
-            <div className={`p-3.5 rounded-lg ${colors.cardSecondary} border ${colors.cardBorder}`}>
+            <div className={`p-4 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder} hover:border-amber-500/30 transition-all duration-200 shadow-sm hover:shadow-md`}>
               <FilterSelect
                 label={t('filter.usageRange')}
                 value={filters.usageRange || ''}
@@ -243,19 +303,55 @@ function FilterDropdown({
 
           {/* 底部统计 */}
           {activeCount > 0 && (
-            <div className={`px-5 py-3 border-t ${colors.cardBorder} bg-gradient-to-r from-blue-500/10 to-purple-500/10`}>
+            <div className={`relative px-5 py-3.5 border-t ${colors.cardBorder} bg-gradient-to-r from-blue-500/5 to-purple-500/5`}>
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-blue-600">
-                  {t('common.selected')}: {activeCount} {t('common.filter').toLowerCase()}
-                </p>
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md">
+                    <span className="text-xs font-bold text-white">{activeCount}</span>
+                  </div>
+                  <p className="text-xs font-medium text-blue-600">
+                    个筛选条件已激活
+                  </p>
+                </div>
                 <div className="flex gap-1">
                   {Array.from({ length: Math.min(activeCount, 5) }).map((_, i) => (
-                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                    <div 
+                      key={i} 
+                      className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 animate-pulse"
+                      style={{ animationDelay: `${i * 0.1}s` }}
+                    ></div>
                   ))}
                 </div>
               </div>
             </div>
           )}
+          
+          {/* 动画样式 */}
+          <style>{`
+            @keyframes slideDown {
+              from {
+                opacity: 0;
+                transform: translateY(-10px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+            .custom-scrollbar::-webkit-scrollbar {
+              width: 6px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-track {
+              background: transparent;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+              background: linear-gradient(to bottom, #3b82f6, #8b5cf6);
+              border-radius: 3px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+              background: linear-gradient(to bottom, #2563eb, #7c3aed);
+            }
+          `}</style>
         </div>
       )}
     </div>

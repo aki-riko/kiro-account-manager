@@ -22,15 +22,17 @@ Mantine 组件有自己的默认颜色系统，不会自动继承父元素的颜
 const mantineTheme = {
   colorScheme: isLightTheme ? 'light' : 'dark',
   components: {
+    // Card 只设置背景和边框，不设置文字颜色
     Card: {
       styles: {
         root: {
           backgroundColor: isLightTheme ? '#ffffff' : 'rgba(30, 30, 50, 0.8)',
           borderColor: isLightTheme ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.1)',
-          color: isLightTheme ? '#1f2937' : '#e5e7eb', // 关键：设置文字颜色
+          // 不设置 color，让内部组件继承或使用 Tailwind className
         },
       },
     },
+    // Text、Group、Stack 必须设置 color: 'inherit'
     Text: {
       styles: {
         root: {
@@ -41,20 +43,25 @@ const mantineTheme = {
     Group: {
       styles: {
         root: {
-          color: 'inherit',
+          color: 'inherit', // 关键：继承父元素颜色
         },
       },
     },
     Stack: {
       styles: {
         root: {
-          color: 'inherit',
+          color: 'inherit', // 关键：继承父元素颜色
         },
       },
     },
   },
 }
 ```
+
+**关键点**：
+- Card 组件：只设置 `backgroundColor` 和 `borderColor`，不设置 `color`
+- Text/Group/Stack 组件：必须设置 `color: 'inherit'` 以继承父元素颜色
+- 这样可以让 Tailwind 的 `className={colors.text}` 正常工作
 
 ### 2. 避免使用 Mantine 的颜色属性
 ❌ **错误做法**：
@@ -69,10 +76,14 @@ const mantineTheme = {
 
 ### 3. 需要配置的 Mantine 组件
 以下组件都需要在 `mantineTheme.components` 中配置颜色继承：
-- Card
-- Text
-- Group
-- Stack
+- Card - 设置 root 的 color
+- Text - 设置 root 的 color: inherit
+- Group - 设置 root 的 color: inherit
+- Stack - 设置 root 的 color: inherit
+- Select - **重要**：必须同时配置 input 和 option 的 color
+- TextInput - 设置 input 的 color: inherit
+- Textarea - 设置 input 的 color: inherit
+- NumberInput - 设置 input 的 color: inherit
 - Badge（如果使用自定义颜色）
 - Button（如果使用自定义样式）
 - Modal
@@ -93,6 +104,65 @@ const mantineTheme = {
 - `src/components/Home/*.jsx` - 首页组件（已修复）
 - `src/components/AccountManager/*.jsx` - 账号管理组件
 
+## 常见错误
+
+### 错误 1：Card 设置了固定的 color
+```jsx
+// ❌ 错误：Card 设置了固定颜色，会覆盖子组件的 className
+Card: {
+  styles: {
+    root: {
+      color: isLightTheme ? '#1f2937' : '#e5e7eb',
+    },
+  },
+}
+```
+
+```jsx
+// ✅ 正确：Card 不设置 color，让子组件自由控制
+Card: {
+  styles: {
+    root: {
+      backgroundColor: isLightTheme ? '#ffffff' : 'rgba(30, 30, 50, 0.8)',
+      // 不设置 color
+    },
+  },
+}
+```
+
+### 错误 2：Text/Group/Stack 没有设置 color: 'inherit'
+```jsx
+// ❌ 错误：没有设置继承，Mantine 会使用默认颜色
+Text: {
+  styles: {
+    root: {
+      // 没有设置 color
+    },
+  },
+}
+```
+
+```jsx
+// ✅ 正确：设置 color: 'inherit' 继承父元素颜色
+Text: {
+  styles: {
+    root: {
+      color: 'inherit',
+    },
+  },
+}
+```
+
+## 测试方法
+
+修改 ThemeContext 后，必须在所有主题下测试：
+
+1. 切换到深色主题
+2. 检查所有页面的卡片内文字是否清晰可读
+3. 检查是否有深色背景配深色文字的情况
+4. 切换到浅色/紫色/绿色主题重复测试
+
 ## 历史问题
 - 2026-01-18：修复首页所有组件的 `c="dimmed"` 问题（24处）
-- 2026-01-18：在 ThemeContext 中添加 Card、Text、Group、Stack 的颜色继承配置
+- 2026-01-18：在 ThemeContext 中添加 Text、Group、Stack 的 `color: 'inherit'` 配置
+- 2026-01-18：移除 Card 组件的固定 color 设置，只保留背景和边框配置

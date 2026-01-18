@@ -526,14 +526,13 @@ export function ThemeProvider({ children }) {
           },
         },
       },
-      // 重要：Card 设置背景和边框，但不设置文字颜色
-      // Text、Group、Stack 必须设置 color: 'inherit' 以继承父元素颜色
+      // Card 组件必须设置 color 以确保文字颜色正确
       Card: {
         styles: {
           root: {
             backgroundColor: isLightTheme ? '#ffffff' : 'rgba(30, 30, 50, 0.8)',
             borderColor: isLightTheme ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.1)',
-            // 不设置 color，让内部组件继承或使用 Tailwind className
+            color: isLightTheme ? '#1f2937' : '#e5e7eb',
           },
         },
       },
