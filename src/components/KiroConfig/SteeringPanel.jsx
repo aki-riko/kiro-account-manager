@@ -327,7 +327,7 @@ function Editor({ file, editState, hasChanges, saving, inclusionOptions, onConte
           classNames={{
             input: `${colors.text} ${colors.input} ${colors.inputFocus}`
           }}
-          styles={{
+          styles={(theme) => ({
             root: {
               height: '100%',
               display: 'flex',
@@ -346,9 +346,12 @@ function Editor({ file, editState, hasChanges, saving, inclusionOptions, onConte
               fontSize: '0.875rem',
               lineHeight: '1.5',
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              resize: 'none'
+              resize: 'none',
+              color: isLightTheme ? '#1f2937' : '#e5e7eb',
+              backgroundColor: isLightTheme ? '#ffffff' : 'rgba(30, 30, 50, 0.5)',
+              borderColor: isLightTheme ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)',
             }
-          }}
+          })}
         />
       </div>
     </>
