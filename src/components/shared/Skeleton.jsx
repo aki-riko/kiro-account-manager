@@ -1,4 +1,4 @@
-import { useTheme } from '../contexts/ThemeContext'
+import { useTheme } from '../../contexts/ThemeContext'
 
 // 基础骨架元素
 export function SkeletonBox({ className = '' }) {
