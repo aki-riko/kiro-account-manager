@@ -122,7 +122,7 @@ function UpdateDialog({ updateInfo, update, onClose }) {
           <Stack gap="md">
             <Group gap="sm">
               <CheckCircle2 size={24} className="text-emerald-500" />
-              <Text size="lg" fw={500} c="teal">{t('update.downloadComplete')}</Text>
+              <Text size="lg" fw={500} className="text-emerald-600">{t('update.downloadComplete')}</Text>
             </Group>
             <Text size="sm" className={colors.textMuted}>{t('update.restartToInstall')}</Text>
             <Group gap="sm" grow>

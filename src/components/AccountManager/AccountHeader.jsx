@@ -62,19 +62,19 @@ function AccountHeader({
         </div>
 
         {/* 右侧：搜索和操作 */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {/* 搜索框 - 可收缩 */}
           <div ref={searchRef} className="relative">
             {searchExpanded || searchTerm ? (
               <div className="relative">
-                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${colors.textMuted}`} size={16} />
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${colors.textMuted}`} size={18} />
                 <input
                   type="text"
                   placeholder={t('accounts.search')}
                   value={searchTerm}
                   onChange={(e) => onSearchChange(e.target.value)}
                   autoFocus
-                  className={`pl-9 pr-3 py-2 ${colors.cardSecondary} border-0 rounded-xl text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${colors.text}`}
+                  className={`pl-10 pr-4 py-2.5 ${colors.cardSecondary} border-0 rounded-xl text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${colors.text}`}
                 />
               </div>
             ) : (
@@ -89,7 +89,7 @@ function AccountHeader({
           </div>
 
           {/* 排序按钮组 */}
-          <div className={`flex rounded-xl border ${colors.cardBorder} overflow-hidden`}>
+          <div className="flex gap-1">
             {[
               { key: 'usage', label: t('sort.usage') },
               { key: 'added', label: t('sort.added') },
@@ -113,35 +113,35 @@ function AccountHeader({
                       onSortChange(`${key}Desc`)
                     }
                   }}
-                  className={`px-2 py-1.5 text-xs flex items-center gap-1 ${
+                  className={`px-3 py-2 text-sm rounded-lg flex items-center gap-1.5 transition-all ${
                     isActive 
-                      ? 'bg-blue-500 text-white' 
-                      : `${colors.cardHover} ${colors.textMuted}`
+                      ? 'bg-blue-500 text-white shadow-sm' 
+                      : `${colors.card} border ${colors.cardBorder} ${colors.cardHover} ${colors.textMuted}`
                   }`}
                   title={label}
                 >
                   {label}
-                  {isActive && (isDesc ? <ArrowDown size={12} /> : <ArrowUp size={12} />)}
+                  {isActive && (isDesc ? <ArrowDown size={14} /> : <ArrowUp size={14} />)}
                 </button>
               )
             })}
           </div>
 
           {/* 视图切换 */}
-          <div className={`flex rounded-xl border ${colors.cardBorder} overflow-hidden`}>
+          <div className="flex gap-1">
             <button
               onClick={() => onViewModeChange('card')}
-              className={`p-3 ${viewMode === 'card' ? 'bg-blue-500 text-white' : `${colors.cardHover} ${colors.textMuted}`}`}
+              className={`p-2.5 rounded-lg transition-all ${viewMode === 'card' ? 'bg-blue-500 text-white shadow-sm' : `${colors.card} border ${colors.cardBorder} ${colors.cardHover} ${colors.textMuted}`}`}
               title={t('accounts.cardView')}
             >
-              <LayoutGrid size={20} />
+              <LayoutGrid size={18} />
             </button>
             <button
               onClick={() => onViewModeChange('table')}
-              className={`p-3 ${viewMode === 'table' ? 'bg-blue-500 text-white' : `${colors.cardHover} ${colors.textMuted}`}`}
+              className={`p-2.5 rounded-lg transition-all ${viewMode === 'table' ? 'bg-blue-500 text-white shadow-sm' : `${colors.card} border ${colors.cardBorder} ${colors.cardHover} ${colors.textMuted}`}`}
               title={t('accounts.tableView')}
             >
-              <List size={20} />
+              <List size={18} />
             </button>
           </div>
 
@@ -162,54 +162,54 @@ function AccountHeader({
           {/* 批量操作 */}
           {selectedCount > 0 && (
             <>
-              <button onClick={onBatchTag} className="px-5 py-3 bg-purple-500 text-white rounded-xl text-sm hover:bg-purple-600 flex items-center gap-2">
-                <Tag size={18} />
+              <button onClick={onBatchTag} className="px-4 py-2 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600 flex items-center gap-2 shadow-sm transition-all">
+                <Tag size={16} />
                 {t('tags.batchSet')} ({selectedCount})
               </button>
-              <button onClick={onBatchDelete} className="px-5 py-3 bg-red-500 text-white rounded-xl text-sm hover:bg-red-600 flex items-center gap-2">
-                <Trash2 size={18} />
+              <button onClick={onBatchDelete} className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 flex items-center gap-2 shadow-sm transition-all">
+                <Trash2 size={16} />
                 {t('accounts.batchDelete')} ({selectedCount})
               </button>
             </>
           )}
 
           {/* 操作按钮组 */}
-          <div className={`flex rounded-xl border ${colors.cardBorder} overflow-hidden`}>
+          <div className="flex gap-1">
             <button
               onClick={onAdd}
-              className={`p-3 ${colors.cardHover} text-green-500`}
+              className={`p-2.5 rounded-lg ${colors.card} border ${colors.cardBorder} ${colors.cardHover} text-green-500 transition-all`}
               title={t('common.add')}
             >
-              <Plus size={20} />
+              <Plus size={18} />
             </button>
             <button
               onClick={onImport}
-              className={`p-3 ${colors.cardHover} text-purple-500`}
+              className={`p-2.5 rounded-lg ${colors.card} border ${colors.cardBorder} ${colors.cardHover} text-purple-500 transition-all`}
               title={t('accounts.import')}
             >
-              <Upload size={20} />
+              <Upload size={18} />
             </button>
             <button
               onClick={onExport}
-              className={`p-3 ${colors.cardHover} text-orange-500`}
+              className={`p-2.5 rounded-lg ${colors.card} border ${colors.cardBorder} ${colors.cardHover} text-orange-500 transition-all`}
               title={t('accounts.export')}
             >
-              <Download size={20} />
+              <Download size={18} />
             </button>
             <button
               onClick={onRefresh}
-              className={`p-3 ${colors.cardHover} ${colors.textMuted}`}
+              className={`p-2.5 rounded-lg ${colors.card} border ${colors.cardBorder} ${colors.cardHover} ${colors.textMuted} transition-all`}
               title={t('accounts.refreshList')}
             >
-              <RotateCw size={20} />
+              <RotateCw size={18} />
             </button>
             <button
               onClick={onRefreshAll}
               disabled={autoRefreshing}
-              className={`p-3 ${colors.cardHover} text-blue-500 disabled:opacity-50`}
+              className={`p-2.5 rounded-lg ${colors.card} border ${colors.cardBorder} ${colors.cardHover} text-blue-500 disabled:opacity-50 transition-all`}
               title={t('accounts.refreshAll')}
             >
-              <RefreshCcw size={20} className={autoRefreshing ? 'animate-spin' : ''} />
+              <RefreshCcw size={18} className={autoRefreshing ? 'animate-spin' : ''} />
             </button>
           </div>
         </div>

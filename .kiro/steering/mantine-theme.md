@@ -214,3 +214,9 @@ Card (color: 未设置) ← 错误！
 - ❌ **错误思路**：Card 不设置 color，让子组件用 className 控制
 - ✅ **正确思路**：Card 设置基础 color，子组件 inherit 继承，需要时用 className 覆盖
 - 🔑 **记住**：Card 的 color 不是可选的，是必须的！
+
+### 特殊场景：有色背景配白色文字
+- **UpdateDialog 顶部横幅**：蓝色渐变背景 `from-blue-500 to-indigo-600`，使用 `c="white"` 是正确的
+- **Sidebar**：渐变色背景（蓝/紫/绿），使用 `c="white"` 是正确的
+- **原则**：有色背景（非深色卡片）配白色文字，对比度足够，可以使用 `c="white"`
+- **区别**：深色卡片（如 `bg-[#1a1a2e]`）配深色文字才是问题
