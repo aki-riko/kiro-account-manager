@@ -375,7 +375,7 @@ function ImportAccountModal({ onClose, onSuccess }) {
               </Tabs.List>
 
               <Tabs.Panel value="json" pt="md" className="px-6 pb-6">
-            <Stack gap="lg">
+                <Stack gap="lg">
               <Group>
                 <FileButton onChange={handleFileSelect} accept=".json">
                   {(props) => <Button {...props} variant="light" leftSection={<FileJson size={16} />}>{t('import.selectFile')}</Button>}
@@ -526,8 +526,9 @@ function ImportAccountModal({ onClose, onSuccess }) {
             </Stack>
           </Tabs.Panel>
         </Tabs>
-      )}
-    </div>
+          )}
+        </div>
+      </div>
 
       <style>{`
         @keyframes dialogSlideIn {
@@ -549,3 +550,7 @@ function ImportAccountModal({ onClose, onSuccess }) {
         }
       `}</style>
     </div>
+  )
+}
+
+export default ImportAccountModal

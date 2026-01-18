@@ -36,9 +36,6 @@ export const themes = {
     // 状态徽章
     badgeDisabled: 'bg-gray-200 text-gray-500',
     badgeActive: 'bg-green-50 text-green-600',
-    badgeInfo: 'bg-blue-50 text-blue-600',
-    badgePurple: 'bg-purple-50 text-purple-600',
-    badgeSuccess: 'bg-green-50 text-green-600',
     badgeInfo: 'bg-blue-100 text-blue-600',
     badgeSuccess: 'bg-green-100 text-green-600',
     badgePurple: 'bg-purple-100 text-purple-600',
@@ -145,9 +142,6 @@ export const themes = {
     // 状态徽章
     badgeDisabled: 'bg-gray-500/30 text-gray-400',
     badgeActive: 'bg-green-500/20 text-green-400',
-    badgeInfo: 'bg-blue-500/20 text-blue-400',
-    badgePurple: 'bg-purple-500/20 text-purple-400',
-    badgeSuccess: 'bg-green-500/20 text-green-400',
     badgeInfo: 'bg-blue-500/20 text-blue-400',
     badgeSuccess: 'bg-green-500/20 text-green-400',
     badgePurple: 'bg-purple-500/20 text-purple-400',
