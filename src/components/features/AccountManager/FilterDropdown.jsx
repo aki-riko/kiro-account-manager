@@ -10,7 +10,7 @@ const SUBSCRIPTION_OPTIONS = [
   { value: 'KIRO FREE', label: 'KIRO FREE' },
   { value: 'KIRO PRO', label: 'KIRO PRO' },
   { value: 'KIRO PRO+', label: 'KIRO PRO+' },
-  { value: 'KIRO ENTERPRISE', label: 'KIRO ENTERPRISE' },
+  { value: 'KIRO POWER', label: 'KIRO POWER' },
 ]
 const STATUS_OPTIONS = [
   { value: '', label: '全部' },
@@ -23,7 +23,7 @@ const PROVIDER_OPTIONS = [
   { value: 'Google', label: 'Google' },
   { value: 'GitHub', label: 'GitHub' },
   { value: 'BuilderId', label: 'BuilderId' },
-  { value: 'KiroEnterprise', label: 'Enterprise' },
+  { value: 'Enterprise', label: 'Enterprise' },
 ]
 const USAGE_RANGE_OPTIONS = [
   { value: '', label: '全部' },
