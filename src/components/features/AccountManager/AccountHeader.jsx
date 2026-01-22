@@ -79,10 +79,10 @@ function AccountHeader({
                 {searchTerm && (
                   <button
                     onClick={() => onSearchChange('')}
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg ${colors.cardHover} transition-all hover:scale-110`}
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg ${colors.cardHover} transition-all hover:scale-110`}
                     title="清空"
                   >
-                    <X size={14} className={colors.textMuted} />
+                    <X size={16} className={colors.textMuted} />
                   </button>
                 )}
               </div>
