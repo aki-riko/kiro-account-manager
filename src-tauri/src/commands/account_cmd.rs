@@ -282,7 +282,7 @@ pub async fn add_account_by_social(
     });
     
     let mut store = state.store.lock().expect("Failed to acquire store lock");
-    let existing_idx = find_existing_account_idx(&store.accounts, &Some(final_email.clone()), &idp, &refresh_token);
+    let existing_idx = find_existing_account_idx(&store.accounts, &Some(final_email.clone()), &idp, &refresh_token, &user_id);
     
     let account = if let Some(idx) = existing_idx {
         let existing = &mut store.accounts[idx];
@@ -378,6 +378,7 @@ pub async fn add_local_kiro_account(state: State<'_, AppState>) -> Result<Accoun
             None, // 本地导入不指定 machine_id，自动生成
             local_token.access_token.clone(), // 传入 access_token
             None, // 本地导入无密码
+            Some(provider), // 传入 provider (BuilderId 或 Enterprise)
         ).await
     } else {
         add_account_by_social(
@@ -390,7 +391,7 @@ pub async fn add_local_kiro_account(state: State<'_, AppState>) -> Result<Accoun
     }
 }
 
-/// 手动添加 BuilderId 账号
+/// 手动添加 BuilderId/Enterprise 账号
 #[tauri::command]
 pub async fn add_account_by_idc(
     state: State<'_, AppState>,
@@ -401,13 +402,20 @@ pub async fn add_account_by_idc(
     machine_id: Option<String>,
     access_token: Option<String>,
     password: Option<String>,
+    provider: Option<String>, // 新增: 支持指定 provider (BuilderId 或 Enterprise)
 ) -> Result<Account, String> {
     let region = region.unwrap_or_else(|| "us-east-1".to_string());
+    let provider_id = provider.unwrap_or_else(|| "BuilderId".to_string()); // 默认 BuilderId
+    
+    // 验证 provider
+    if provider_id != "BuilderId" && provider_id != "Enterprise" {
+        return Err(format!("不支持的 provider: {}, 只支持 BuilderId 或 Enterprise", provider_id));
+    }
     
     // 先尝试用传入的 access_token 获取配额
     let (final_access_token, final_refresh_token, usage_result, expires_at, id_token, sso_session_id) = 
         if let Some(at) = access_token {
-            match get_usage_by_provider("BuilderId", &at).await {
+            match get_usage_by_provider(&provider_id, &at).await {
                 Ok(result) if result.is_auth_error => {
                     // 401 了，刷新 token
                     let metadata = RefreshMetadata {
@@ -416,9 +424,9 @@ pub async fn add_account_by_idc(
                         region: Some(region.clone()),
                         ..Default::default()
                     };
-                    let idc_provider = IdcProvider::new("BuilderId", &region, None);
+                    let idc_provider = IdcProvider::new(&provider_id, &region, None);
                     let auth_result = idc_provider.refresh_token(&refresh_token, metadata).await?;
-                    let new_usage = get_usage_by_provider("BuilderId", &auth_result.access_token).await?;
+                    let new_usage = get_usage_by_provider(&provider_id, &auth_result.access_token).await?;
                     let expires_at = calc_expires_at(auth_result.expires_in);
                     (auth_result.access_token, auth_result.refresh_token, new_usage, expires_at, auth_result.id_token, auth_result.sso_session_id)
                 }
@@ -436,9 +444,9 @@ pub async fn add_account_by_idc(
                 region: Some(region.clone()),
                 ..Default::default()
             };
-            let idc_provider = IdcProvider::new("BuilderId", &region, None);
+            let idc_provider = IdcProvider::new(&provider_id, &region, None);
             let auth_result = idc_provider.refresh_token(&refresh_token, metadata).await?;
-            let usage_result = get_usage_by_provider("BuilderId", &auth_result.access_token).await?;
+            let usage_result = get_usage_by_provider(&provider_id, &auth_result.access_token).await?;
             let expires_at = calc_expires_at(auth_result.expires_in);
             (auth_result.access_token, auth_result.refresh_token, usage_result, expires_at, auth_result.id_token, auth_result.sso_session_id)
         };
@@ -453,19 +461,24 @@ pub async fn add_account_by_idc(
     
     let (new_email, user_id) = extract_user_info(&usage);
     
-    // 获取不到邮箱直接报错
-    let final_email = new_email.ok_or("获取邮箱失败，请检查账号状态")?;
+    // Enterprise 账号允许没有 email,使用 userId 作为标识
+    let final_email = if provider_id == "Enterprise" {
+        new_email.clone().or_else(|| user_id.clone()).ok_or("Enterprise 账号缺少 email 和 userId")?
+    } else {
+        new_email.clone().ok_or("获取邮箱失败，请检查账号状态")?
+    };
     
     let client_id_hash = calc_client_id_hash();
     
     let mut store = state.store.lock().expect("Failed to acquire store lock");
-    let existing_idx = find_existing_account_idx(&store.accounts, &Some(final_email.clone()), "BuilderId", &refresh_token);
+    let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &provider_id, &refresh_token, &user_id);
     
     let account = if let Some(idx) = existing_idx {
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(final_access_token);
         existing.refresh_token = Some(final_refresh_token);
-        existing.user_id = user_id;
+        existing.user_id = user_id.clone();
+        existing.provider = Some(provider_id.clone()); // 确保 provider 不变
         if !expires_at.is_empty() {
             existing.expires_at = Some(expires_at);
         }
@@ -483,10 +496,10 @@ pub async fn add_account_by_idc(
         existing.status = calc_status(usage_result.is_banned);
         existing.clone()
     } else {
-        let mut account = Account::new(final_email, "Kiro BuilderId 账号".to_string());
+        let mut account = Account::new(final_email, format!("Kiro {} 账号", provider_id));
         account.access_token = Some(final_access_token);
         account.refresh_token = Some(final_refresh_token);
-        account.provider = Some("BuilderId".to_string());
+        account.provider = Some(provider_id.clone());
         account.auth_method = Some("IdC".to_string());
         account.user_id = user_id;
         if !expires_at.is_empty() {

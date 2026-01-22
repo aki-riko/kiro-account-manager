@@ -130,20 +130,38 @@ pub fn extract_user_info(usage: &Option<crate::kiro_portal_client::GetUserUsageA
     (email, user_id)
 }
 
-/// 查找已存在的账号索引（优先邮箱匹配，其次 refresh_token 匹配）
+/// 查找已存在的账号索引
+/// Enterprise 账号优先用 userId 匹配（因为可能没有 email）
+/// 其他账号优先用 email 匹配，其次 refresh_token 匹配
 pub fn find_existing_account_idx(
     accounts: &[Account],
     email: &Option<String>,
     provider: &str,
     refresh_token: &str,
+    user_id: &Option<String>,
 ) -> Option<usize> {
-    if let Some(ref e) = email {
-        accounts.iter().position(|a| &a.email == e && a.provider.as_deref() == Some(provider))
-    } else {
-        accounts.iter().position(|a| {
-            a.provider.as_deref() == Some(provider) && a.refresh_token.as_ref() == Some(&refresh_token.to_string())
-        })
+    // Enterprise 账号优先用 userId 匹配
+    if provider == "Enterprise" {
+        if let Some(ref uid) = user_id {
+            if let Some(idx) = accounts.iter().position(|a| {
+                a.provider.as_deref() == Some(provider) && a.user_id.as_ref() == Some(uid)
+            }) {
+                return Some(idx);
+            }
+        }
     }
+    
+    // 其他账号或 Enterprise 没有 userId 时，用 email 匹配
+    if let Some(ref e) = email {
+        if let Some(idx) = accounts.iter().position(|a| &a.email == e && a.provider.as_deref() == Some(provider)) {
+            return Some(idx);
+        }
+    }
+    
+    // 最后用 refresh_token 匹配
+    accounts.iter().position(|a| {
+        a.provider.as_deref() == Some(provider) && a.refresh_token.as_ref() == Some(&refresh_token.to_string())
+    })
 }
 
 /// 根据 usage_result 计算账号状态

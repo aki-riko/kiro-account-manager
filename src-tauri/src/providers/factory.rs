@@ -40,13 +40,19 @@ pub fn get_provider_config(provider: &str) -> Option<ProviderConfig> {
             region: "us-east-1".to_string(),
             start_url: Some("https://view.awsapps.com/start".to_string()),
         }),
+        "Enterprise" => Some(ProviderConfig {
+            provider_id: "Enterprise".to_string(),
+            auth_method: AuthMethod::Idc,
+            region: "us-east-1".to_string(),
+            start_url: Some("https://amzn.awsapps.com/start".to_string()),
+        }),
         _ => None,
     }
 }
 
 /// 获取支持的 providers
 pub fn get_supported_providers() -> Vec<&'static str> {
-    vec!["Google", "Github", "BuilderId"]
+    vec!["Google", "Github", "BuilderId", "Enterprise"]
 }
 
 /// 创建 Social Provider

@@ -198,6 +198,7 @@ const AccountCard = memo(function AccountCard({
             account.provider === 'Google' ? colors.providerGoogle
               : account.provider === 'GitHub' ? colors.providerGithub
               : account.provider === 'BuilderId' ? colors.providerBuilderId
+              : account.provider === 'Enterprise' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-orange-500/30'
               : colors.providerDefault
           }`}>
             {account.provider || t('common.unknown')}

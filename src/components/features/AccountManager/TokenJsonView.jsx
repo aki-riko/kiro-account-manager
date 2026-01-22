@@ -99,7 +99,7 @@ function JsonRenderer({ json, colors, indent = 0 }) {
 }
 
 // Token JSON 视图（只读）
-export function TokenJsonView({ account, defaultExpanded = true }) {
+export function TokenJsonView({ account, defaultExpanded = false }) {
   const { t, colors } = useApp()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [copied, setCopied] = useState(false)
@@ -118,9 +118,10 @@ export function TokenJsonView({ account, defaultExpanded = true }) {
   }
   
   return (
-    <div className={`${colors.card} rounded-xl shadow-sm overflow-hidden border ${colors.cardBorder}`}>
+    <div className={`border-b ${colors.cardBorder}`} style={{ margin: 0 }}>
       <div 
-        className={`flex items-center justify-between px-8 py-6 cursor-pointer ${colors.cardHover} transition-all duration-200`}
+        className={`flex items-center justify-between cursor-pointer ${colors.cardHover} transition-all duration-200`}
+        style={{ padding: '1.75rem 3rem' }}
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
@@ -146,7 +147,7 @@ export function TokenJsonView({ account, defaultExpanded = true }) {
       </div>
       
       {expanded && (
-        <div className={`px-8 pb-8 border-t ${colors.cardBorder} pt-6 animate-in fade-in slide-in-from-top-2 duration-200`}>
+        <div className={`animate-in fade-in slide-in-from-top-2 duration-200`} style={{ margin: 0, padding: '1.25rem 3rem 2rem 3rem' }}>
           <div className="flex items-center justify-between mb-3">
             <span className={`text-xs font-medium ${colors.textMuted}`}>
               {Object.keys(credentialsJson).length} {t('detail.fields') || '个字段'}
