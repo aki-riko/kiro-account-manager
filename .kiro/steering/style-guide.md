@@ -66,6 +66,8 @@ ThemeContext (主题颜色变量)
 - `providerGoogle` - Google 徽章
 - `providerGithub` - GitHub 徽章
 - `providerBuilderId` - BuilderId 徽章
+- `providerEnterprise` - Enterprise 徽章
+- `providerDefault` - 默认徽章
 
 #### 配额颜色
 - `quotaHigh` - 配额高（>80%，红色）

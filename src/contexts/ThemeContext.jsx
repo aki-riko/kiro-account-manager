@@ -83,6 +83,7 @@ export const themes = {
     providerGoogle: 'bg-red-100 text-red-600',
     providerGithub: 'bg-gray-200 text-gray-700',
     providerBuilderId: 'bg-orange-100 text-orange-600',
+    providerEnterprise: 'bg-orange-100 text-orange-600',
     providerDefault: 'bg-gray-100 text-gray-500',
     // 机器码样式
     machineIdText: 'text-red-600',
@@ -193,6 +194,7 @@ export const themes = {
     providerGoogle: 'bg-red-500/20 text-red-400',
     providerGithub: 'bg-gray-600 text-gray-200',
     providerBuilderId: 'bg-orange-500/20 text-orange-400',
+    providerEnterprise: 'bg-orange-500/20 text-orange-400',
     providerDefault: 'bg-gray-700 text-gray-400',
     // 机器码样式
     machineIdText: 'text-red-400',
@@ -281,6 +283,7 @@ export const themes = {
     providerGoogle: 'bg-red-100 text-red-600',
     providerGithub: 'bg-gray-200 text-gray-700',
     providerBuilderId: 'bg-orange-100 text-orange-600',
+    providerEnterprise: 'bg-orange-100 text-orange-600',
     providerDefault: 'bg-gray-100 text-gray-500',
     // 机器码样式
     machineIdText: 'text-red-600',
@@ -369,6 +372,7 @@ export const themes = {
     providerGoogle: 'bg-red-100 text-red-600',
     providerGithub: 'bg-gray-200 text-gray-700',
     providerBuilderId: 'bg-orange-100 text-orange-600',
+    providerEnterprise: 'bg-orange-100 text-orange-600',
     providerDefault: 'bg-gray-100 text-gray-500',
     // 机器码样式
     machineIdText: 'text-red-600',
