@@ -3,8 +3,8 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { useApp } from "../../hooks/useApp"
-import { Button } from './button'
 
+// Modal 使用相同的 Radix UI Dialog 原语，但针对表单场景优化
 const ModalRoot = DialogPrimitive.Root
 const ModalTrigger = DialogPrimitive.Trigger
 const ModalPortal = DialogPrimitive.Portal
@@ -14,7 +14,7 @@ const ModalOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/60 backdrop-blur-sm",
+      "fixed inset-0 z-50 bg-black/70 backdrop-blur-md",
       "data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
@@ -22,12 +22,12 @@ const ModalOverlay = React.forwardRef(({ className, ...props }, ref) => (
     {...props}
   />
 ))
-ModalOverlay.displayName = DialogPrimitive.Overlay.displayName
+ModalOverlay.displayName = "ModalOverlay"
 
 const ModalContent = React.forwardRef(({ 
   className, 
   children, 
-  maxWidth = "400px",
+  maxWidth = "600px",
   showClose = true,
   ...props 
 }, ref) => {
@@ -41,27 +41,28 @@ const ModalContent = React.forwardRef(({
         className={cn(
           "fixed left-[50%] top-[50%] z-50",
           "translate-x-[-50%] translate-y-[-50%]",
-          "w-full shadow-2xl rounded-2xl border p-4",
+          "w-full shadow-2xl rounded-2xl border",
+          "max-h-[90vh] flex flex-col",
           colors.card,
           colors.cardBorder,
-          "duration-200",
+          "duration-300",
           "data-[state=open]:animate-in data-[state=closed]:animate-out",
           "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-          "data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-top-[48%]",
+          "data-[state=closed]:slide-out-to-bottom-4 data-[state=open]:slide-in-from-bottom-4",
           className
         )}
         style={{ maxWidth }}
         {...props}
       >
         <DialogPrimitive.Description className="sr-only">
-          弹窗内容
+          模态框内容
         </DialogPrimitive.Description>
         {children}
         {showClose && (
           <DialogPrimitive.Close 
             className={cn(
-              "absolute right-4 top-4 p-2 rounded-xl",
+              "absolute right-4 top-4 p-2 rounded-lg z-10",
               "transition-all duration-200",
               colors.cardHover,
               "hover:scale-110",
@@ -76,25 +77,22 @@ const ModalContent = React.forwardRef(({
     </ModalPortal>
   )
 })
-ModalContent.displayName = DialogPrimitive.Content.displayName
+ModalContent.displayName = "ModalContent"
 
-const ModalHeader = React.forwardRef(({ className, icon: Icon, iconColor, iconBg, children, ...props }, ref) => {
+const ModalHeader = React.forwardRef(({ className, children, ...props }, ref) => {
+  const { colors } = useApp()
+  
   return (
     <div
       ref={ref}
-      className={cn("px-6 pt-6 pb-2", className)}
+      className={cn(
+        "relative border-b",
+        colors.cardBorder,
+        "px-6 py-4",
+        className
+      )}
       {...props}
     >
-      {Icon && (
-        <div className="flex items-center gap-4 mb-2">
-          <div className={cn(
-            "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
-            iconBg || "bg-gradient-to-br from-blue-500/20 to-indigo-500/10"
-          )}>
-            <Icon size={24} className={iconColor || "text-blue-400"} strokeWidth={2} />
-          </div>
-        </div>
-      )}
       {children}
     </div>
   )
@@ -116,20 +114,43 @@ const ModalTitle = React.forwardRef(({ className, ...props }, ref) => {
     />
   )
 })
-ModalTitle.displayName = DialogPrimitive.Title.displayName
+ModalTitle.displayName = "ModalTitle"
 
 const ModalDescription = React.forwardRef(({ className, ...props }, ref) => {
   const { colors } = useApp()
   
   return (
-    <div
+    <DialogPrimitive.Description
       ref={ref}
-      className={cn("px-6 py-4", colors.text, className)}
+      className={cn("text-sm mt-1", colors.textMuted, className)}
       {...props}
     />
   )
 })
 ModalDescription.displayName = "ModalDescription"
+
+const ModalBody = React.forwardRef(({ 
+  className, 
+  noPadding = false,
+  ...props 
+}, ref) => {
+  const { colors } = useApp()
+  
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        noPadding ? "" : "px-6 py-4",
+        "overflow-y-auto flex-1",
+        colors.text,
+        className
+      )}
+      style={{ scrollbarWidth: 'thin' }}
+      {...props}
+    />
+  )
+})
+ModalBody.displayName = "ModalBody"
 
 const ModalFooter = React.forwardRef(({ className, ...props }, ref) => {
   const { colors } = useApp()
@@ -138,8 +159,9 @@ const ModalFooter = React.forwardRef(({ className, ...props }, ref) => {
     <div
       ref={ref}
       className={cn(
-        "px-6 py-4 flex justify-end gap-3",
-        colors.dialogFooter,
+        "relative flex justify-between items-center border-t",
+        colors.cardBorder,
+        "px-6 py-4",
         className
       )}
       {...props}
@@ -149,60 +171,32 @@ const ModalFooter = React.forwardRef(({ className, ...props }, ref) => {
 ModalFooter.displayName = "ModalFooter"
 
 /**
- * Modal - 完整的弹窗组件
+ * Modal - 完整的模态框组件（表单类）
+ * 
+ * @param {Object} props
+ * @param {boolean} props.open - 是否打开
+ * @param {Function} props.onOpenChange - 状态改变回调
+ * @param {ReactNode} props.header - 自定义头部内容
+ * @param {ReactNode} props.children - 内容区域
+ * @param {ReactNode} props.footer - 底部区域
+ * @param {string} props.maxWidth - 最大宽度
+ * @param {boolean} props.showClose - 是否显示关闭按钮
  */
 export function Modal({
   open,
   onOpenChange,
-  title,
-  description,
+  header,
   children,
-  maxWidth = '400px',
-  icon: Icon,
-  iconColor,
-  iconBg,
-  confirmText = '确定',
-  cancelText = '取消',
-  onConfirm,
-  confirmVariant = 'primary',
-  loading = false,
-  showCancel = true,
+  footer,
+  maxWidth = '600px',
   showClose = true,
 }) {
   return (
     <ModalRoot open={open} onOpenChange={onOpenChange}>
       <ModalContent maxWidth={maxWidth} showClose={showClose}>
-        <ModalHeader icon={Icon} iconColor={iconColor} iconBg={iconBg}>
-          <ModalTitle>{title}</ModalTitle>
-          {description && (
-            <p className="text-sm text-gray-500 mt-2">{description}</p>
-          )}
-        </ModalHeader>
-        
-        {children && (
-          <ModalDescription>{children}</ModalDescription>
-        )}
-        
-        <ModalFooter>
-          {showCancel && (
-            <Button
-              variant="secondary"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
-              {cancelText}
-            </Button>
-          )}
-          {onConfirm && (
-            <Button
-              variant={confirmVariant}
-              onClick={onConfirm}
-              loading={loading}
-            >
-              {confirmText}
-            </Button>
-          )}
-        </ModalFooter>
+        {header && <ModalHeader>{header}</ModalHeader>}
+        {children && <ModalBody>{children}</ModalBody>}
+        {footer && <ModalFooter>{footer}</ModalFooter>}
       </ModalContent>
     </ModalRoot>
   )
@@ -219,4 +213,5 @@ export {
   ModalFooter,
   ModalTitle,
   ModalDescription,
+  ModalBody,
 }

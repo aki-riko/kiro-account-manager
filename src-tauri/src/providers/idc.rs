@@ -91,7 +91,7 @@ impl AuthProvider for IdcProvider {
         // Step 3: 注册客户端（Authorization Code Flow）
         #[cfg(debug_assertions)]
         println!("[IdC] Registering auth code client...");
-        let client_reg = sso_client.register_client(start_url, &redirect_uri).await?;
+        let client_reg = sso_client.register_client(start_url, &redirect_uri, provider == "Enterprise").await?;
         
         #[cfg(debug_assertions)]
         println!("[IdC] Client ID: {}", client_reg.client_id);

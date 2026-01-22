@@ -1,3 +1,7 @@
+---
+inclusion: always
+---
+
 # Kiro IDE 源码分析
 
 ## 源码位置
@@ -71,14 +75,44 @@ E:\VSCodeSpace\Kiro\kiro-agent-source-analysis
    - 与其他模块的**交互方式**
    - 可能的**优化点**和**改进方向**
 
-5. **使用 PowerShell 查询源码**
-   ```powershell
-   # 搜索关键词（推荐）
-   Select-String -Path "C:\Users\12925\AppData\Local\Programs\Kiro\resources\app\extensions\kiro.kiro-agent\dist\extension.js" -Pattern "关键词" -Context 5,5
+5. **使用源码分析方法论**
    
+   采用 **关键词定位 + 行范围追踪法**（详见 `source-code-analysis.md`）：
+   
+   **步骤 1：关键词搜索**
+   ```powershell
+   # 搜索关键词，定位到行号
+   Select-String -Path "C:\Users\12925\AppData\Local\Programs\Kiro\resources\app\extensions\kiro.kiro-agent\dist\extension.js" -Pattern "关键词" -Context 5,5
+   ```
+   
+   **步骤 2：确定行范围**
+   - 向上查找函数开始位置
+   - 向下查找函数结束位置
+   - 确定完整的行号区间（如 139320-139360）
+   
+   **步骤 3：提取完整代码**
+   ```powershell
+   # 读取指定行范围
+   $content = Get-Content "C:\Users\12925\AppData\Local\Programs\Kiro\resources\app\extensions\kiro.kiro-agent\dist\extension.js"
+   $content[起始行..结束行] -join "`n"
+   
+   # 或使用更大的上下文
+   Select-String -Path "extension.js" -Pattern "关键词" -Context 20,20
+   ```
+   
+   **步骤 4：分析并记录**
+   ```powershell
    # 读取分析文档
    Get-Content "E:\VSCodeSpace\Kiro\kiro-agent-source-analysis\功能名-分析.md" -Raw
    ```
+   
+   **关键原则**：
+   - ✅ 通过关键词快速定位
+   - ✅ 查看完整的行号区间，不只看片段
+   - ✅ 理解函数的完整逻辑和上下文
+   - ✅ 记录行号区间方便后续追溯
+   - ❌ 不要只看搜索结果的几行代码
+   - ❌ 不要直接复制混淆后的大段代码
 
 **示例：好的分析文档 vs 不好的做法**
 

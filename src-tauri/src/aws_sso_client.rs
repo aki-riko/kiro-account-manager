@@ -84,6 +84,7 @@ impl AWSSSOClient {
         &self,
         issuer_url: &str,
         redirect_uri: &str,
+        has_user_provided_input: bool,
     ) -> Result<ClientRegistration, String> {
         let url = format!("{}/client/register", self.base_url);
         
@@ -115,6 +116,12 @@ impl AWSSSOClient {
         let text = resp.text().await.unwrap_or_default();
 
         if !status.is_success() {
+            // 特殊处理：用户提供的 Start URL 无效
+            if has_user_provided_input && status.as_u16() == 400 {
+                if text.to_lowercase().contains("invalid start url") {
+                    return Err("Start URL 无效，请检查您输入的 URL 是否正确".to_string());
+                }
+            }
             return Err(format!("Client registration failed ({}): {}", status, text));
         }
 

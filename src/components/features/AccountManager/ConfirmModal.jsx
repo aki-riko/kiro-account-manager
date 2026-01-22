@@ -6,7 +6,7 @@ import {
   ModalContent,
   ModalHeader,
   ModalTitle,
-  ModalDescription,
+  ModalBody,
   ModalFooter,
 } from '../../ui/modal'
 import { Button } from '../../ui/button'
@@ -77,8 +77,8 @@ function ConfirmModal({
           <ModalTitle>{title}</ModalTitle>
         </ModalHeader>
 
-        <ModalDescription>
-          <p className={`${colors.text} text-sm leading-relaxed whitespace-pre-line`}>
+        <ModalBody>
+          <p className="text-sm leading-relaxed whitespace-pre-line">
             {message}
           </p>
           
@@ -112,7 +112,7 @@ function ConfirmModal({
               )}
             </div>
           )}
-        </ModalDescription>
+        </ModalBody>
 
         <ModalFooter>
           {type === 'confirm' && (

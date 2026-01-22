@@ -7,15 +7,28 @@
 }
 
 * {
+  box-sizing: border-box;
+}
+
+/* 只重置 body 和 html 的 margin/padding */
+html, body {
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
+}
+
+/* 重置常见元素的 margin/padding */
+h1, h2, h3, h4, h5, h6, p, ul, ol, li, figure, blockquote, dl, dd {
+  margin: 0;
+  padding: 0;
 }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow: hidden;
   transition: background-color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body.dark {

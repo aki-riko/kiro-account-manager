@@ -1,3 +1,7 @@
+---
+inclusion: always
+---
+
 # Portal 规范
 
 ## 目录结构

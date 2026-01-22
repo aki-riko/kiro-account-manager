@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Tag, Plus } from 'lucide-react'
-import { Stack } from '@mantine/core'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { getTags, setAccountTags } from '../../../api/groupTag'
@@ -11,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogBody,
   DialogFooter,
 } from '../../ui/dialog'
 import { Button } from '../../ui/button'
@@ -119,13 +119,12 @@ function BatchTagModal({ accountIds, accounts = [], onClose, onSuccess }) {
       <DialogContent maxWidth="480px">
         <DialogHeader icon={Tag} iconColor="text-purple-400" iconBg="bg-gradient-to-br from-purple-500/20 to-pink-500/10">
           <DialogTitle>{t('tags.batchSet')}</DialogTitle>
-          <p className={`text-sm ${colors.text} mt-1 opacity-80`}>{accountIds.length} 个账号</p>
+          <DialogDescription>{accountIds.length} 个账号</DialogDescription>
         </DialogHeader>
 
-        <DialogDescription>
-          <Stack gap="md" p="md">
-        {/* 已选标签 - 点击 ❌ 取消 */}
-        <div>
+        <DialogBody gap="md">
+          {/* 已选标签 - 点击 ❌ 取消 */}
+          <div>
             <label className={`block text-sm font-semibold ${colors.text} mb-3`}>{t('tags.selected')}</label>
             <div className="flex flex-wrap gap-2 min-h-[36px]">
               {selectedTagIds.length === 0 ? (
@@ -203,8 +202,7 @@ function BatchTagModal({ accountIds, accounts = [], onClose, onSuccess }) {
             </div>
             <p className={`text-xs ${colors.text} opacity-60 mt-2 leading-relaxed`}>{t('tags.hint') || '输入搜索已有标签，或直接输入创建新标签'}</p>
           </div>
-          </Stack>
-        </DialogDescription>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="secondary" onClick={onClose}>

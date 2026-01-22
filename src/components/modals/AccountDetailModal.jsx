@@ -1,11 +1,18 @@
-import { useState, useRef, useEffect, useMemo, memo } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { X, Copy, Check, RefreshCw, User, CreditCard, Shield } from 'lucide-react'
+import { Copy, Check, RefreshCw, User, CreditCard, Shield } from 'lucide-react'
 import { TextInput } from '@mantine/core'
 import { useApp } from '../../hooks/useApp'
 import { useDialog } from '../../contexts/DialogContext'
 import { formatUsage } from '../../utils/accountStats'
 import { TokenJsonView } from '../features/AccountManager/TokenJsonView'
+import {
+  ModalRoot,
+  ModalContent,
+  ModalBody,
+  ModalFooter,
+} from '../ui/modal'
+import { Button } from '../ui/button'
 
 // 配额卡片组件（优化性能）
 const QuotaCard = memo(({ title, used, quota, icon, status, expiry, colors, t }) => {
@@ -13,13 +20,9 @@ const QuotaCard = memo(({ title, used, quota, icon, status, expiry, colors, t })
   const hasQuota = quota > 0
   
   return (
-    <div className={`rounded-xl p-5 border transition-all hover:shadow-lg ${
+    <div className={`rounded-lg p-3 border transition-all hover:shadow-md ${
       hasQuota && isActive
-        ? title.includes('试用') 
-          ? 'border-cyan-500/50 bg-cyan-500/10 shadow-cyan-500/20'
-          : title.includes('奖励')
-            ? 'border-purple-500/50 bg-purple-500/10 shadow-purple-500/20'
-            : `${colors.cardBorder} ${colors.cardSecondary}`
+        ? 'border-blue-500/30 bg-blue-500/5 shadow-blue-500/10'
         : `${colors.cardBorder} ${colors.cardSecondary}`
     }`}>
       <div className="flex items-center gap-2 mb-3">
@@ -32,7 +35,7 @@ const QuotaCard = memo(({ title, used, quota, icon, status, expiry, colors, t })
                 : 'bg-blue-500 shadow-lg shadow-blue-500/50'
             : 'bg-gray-400'
         }`}></div>
-        <span className={`text-xs font-semibold uppercase tracking-wide ${
+        <span className={`text-xs font-medium uppercase tracking-wide ${
           hasQuota && isActive
             ? title.includes('试用')
               ? 'text-cyan-500'
@@ -47,7 +50,7 @@ const QuotaCard = memo(({ title, used, quota, icon, status, expiry, colors, t })
           </span>
         )}
       </div>
-      <div className={`text-2xl font-bold ${colors.text} mb-1`}>
+      <div className={`text-2xl font-semibold ${colors.text} mb-1`}>
         {hasQuota ? (
           <>{formatUsage(used)} <span className={`text-base ${colors.textMuted} font-normal`}>/ {formatUsage(quota)}</span></>
         ) : (
@@ -154,366 +157,340 @@ function AccountDetailModal({ account, onClose }) {
   const totalPercent = totalQuota > 0 ? Math.min(100, (totalUsed / totalQuota) * 100) : 0
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-6 animate-in fade-in duration-200" 
-      onClick={onClose}
-    >
-      <div 
-        className={`relative ${colors.card} rounded-2xl w-full max-w-4xl shadow-2xl max-h-[90vh] flex flex-col border ${colors.cardBorder} animate-in zoom-in-95 slide-in-from-bottom-4 duration-300`} 
-        onClick={e => e.stopPropagation()}
-      >
+    <ModalRoot open={true} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent maxWidth="800px">
         {/* 顶部渐变背景 */}
         <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-br from-blue-500/5 via-purple-500/3 to-transparent pointer-events-none rounded-t-2xl" />
         
-        {/* Header */}
-        <div className={`relative border-b ${colors.cardBorder}`} style={{ padding: '2rem 3rem' }}>
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-5 flex-1">
-              {/* 头像图标 */}
-              <div className={`
-                w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg
-                ${account.provider === 'Google' 
-                  ? 'bg-gradient-to-br from-red-500 to-orange-500' 
-                  : account.provider === 'Github' 
-                    ? 'bg-gradient-to-br from-gray-700 to-gray-900' 
-                    : 'bg-gradient-to-br from-blue-500 to-indigo-600'
-                }`}
-              >
-                <User size={28} className="text-white" strokeWidth={2} />
-              </div>
-              
-              {/* 账号信息 */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className={`text-xl font-bold ${colors.text} truncate`}>{account.email}</h2>
-                  <span className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shadow-lg ${
-                    (account.usageData?.subscriptionInfo?.subscriptionTitle?.toUpperCase()?.includes('ENTERPRISE'))
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-500/30'
-                      : (account.usageData?.subscriptionInfo?.type?.includes('PRO+') || account.usageData?.subscriptionInfo?.subscriptionTitle?.includes('PRO+'))
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-purple-500/30'
-                        : (account.usageData?.subscriptionInfo?.type?.includes('PRO') || account.usageData?.subscriptionInfo?.subscriptionTitle?.includes('PRO'))
-                          ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-blue-500/30'
-                          : (account.usageData?.subscriptionInfo?.subscriptionTitle?.toUpperCase()?.includes('KIRO'))
-                            ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-teal-500/30'
-                            : `${colors.cardSecondary} ${colors.textMuted}`
-                  }`}>
-                    {account.usageData?.subscriptionInfo?.subscriptionTitle || 'Free'}
-                  </span>
-                </div>
-                
-                <div className={`flex items-center gap-3 text-sm ${colors.textMuted} mb-3`}>
-                  <span className={`flex items-center gap-1.5 font-medium ${
-                    account.provider === 'Google' ? 'text-red-500'
-                      : account.provider === 'GitHub' ? colors.text
-                      : account.provider === 'BuilderId' ? 'text-orange-500'
-                      : colors.textMuted
-                  }`}>
-                    <div className="w-1.5 h-1.5 rounded-full bg-current"></div>
-                    {account.provider || t('common.unknown')}
-                  </span>
-                  <span>·</span>
-                  <span>{t('detail.addedAt')} {account.addedAt?.split(' ')[0]}</span>
-                </div>
-                
-                {/* 机器码 */}
-                {account.machineId && (
-                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${colors.cardSecondary}`}>
-                    <span className={`text-xs font-medium ${colors.textMuted}`}>Machine ID:</span>
-                    <code className="text-xs font-mono text-red-400">
-                      {account.machineId}
-                    </code>
-                    <button 
-                      type="button" 
-                      onClick={() => handleCopy(account.machineId, 'machineId')} 
-                      className={`p-1 rounded ${colors.cardHover}`}
-                    >
-                      {copied === 'machineId' ? <Check size={12} className="text-green-500" /> : <Copy size={12} className={colors.textMuted} />}
-                    </button>
-                  </div>
-                )}
-              </div>
+        {/* Header - 自定义复杂头部 */}
+        <div className={`relative border-b ${colors.cardBorder} px-6 py-4`}>
+          <div className="flex items-start gap-3">
+            {/* 头像图标 */}
+            <div className={`
+              w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md
+              ${account.provider === 'Google' 
+                ? 'bg-gradient-to-br from-red-500 to-orange-500' 
+                : account.provider === 'Github' 
+                  ? 'bg-gradient-to-br from-gray-700 to-gray-900' 
+                  : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+              }`}
+            >
+              <User size={22} className="text-white" strokeWidth={2} />
             </div>
             
-            {/* 关闭按钮 */}
-            <button 
-              onClick={onClose} 
-              className={`p-2.5 ${colors.cardHover} rounded-xl flex-shrink-0 ml-4`}
-            >
-              <X size={20} className={colors.textMuted} />
-            </button>
+            {/* 账号信息 */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className={`text-base font-semibold ${colors.text} truncate`}>{account.email}</h2>
+                <span className={`px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap shadow-sm ${
+                  (account.usageData?.subscriptionInfo?.subscriptionTitle?.toUpperCase()?.includes('ENTERPRISE'))
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-500/30'
+                    : (account.usageData?.subscriptionInfo?.type?.includes('PRO+') || account.usageData?.subscriptionInfo?.subscriptionTitle?.includes('PRO+'))
+                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-purple-500/30'
+                      : (account.usageData?.subscriptionInfo?.type?.includes('PRO') || account.usageData?.subscriptionInfo?.subscriptionTitle?.includes('PRO'))
+                        ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-blue-500/30'
+                        : (account.usageData?.subscriptionInfo?.subscriptionTitle?.toUpperCase()?.includes('KIRO'))
+                          ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-teal-500/30'
+                          : `${colors.cardSecondary} ${colors.textMuted}`
+                }`}>
+                  {account.usageData?.subscriptionInfo?.subscriptionTitle || 'Free'}
+                </span>
+              </div>
+              
+              <div className={`flex items-center gap-2 text-xs ${colors.textMuted} mb-2`}>
+                <span className={`flex items-center gap-1 font-medium ${
+                  account.provider === 'Google' ? 'text-red-500'
+                    : account.provider === 'GitHub' ? colors.text
+                    : account.provider === 'BuilderId' ? 'text-orange-500'
+                    : colors.textMuted
+                }`}>
+                  <div className="w-1 h-1 rounded-full bg-current"></div>
+                  {account.provider || t('common.unknown')}
+                </span>
+                <span>·</span>
+                <span>{t('detail.addedAt')} {account.addedAt?.split(' ')[0]}</span>
+              </div>
+              
+              {/* 机器码 */}
+              {account.machineId && (
+                <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md ${colors.cardSecondary}`}>
+                  <span className={`text-[10px] font-medium ${colors.textMuted}`}>Machine ID:</span>
+                  <code className="text-[10px] font-mono text-red-400">
+                    {account.machineId}
+                  </code>
+                  <button 
+                    type="button" 
+                    onClick={() => handleCopy(account.machineId, 'machineId')} 
+                    className={`p-0.5 rounded ${colors.cardHover}`}
+                  >
+                    {copied === 'machineId' ? <Check size={10} className="text-green-500" /> : <Copy size={10} className={colors.textMuted} />}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         
-        {/* Content - 滚动区域 */}
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+        {/* Body - 使用 ModalBody 的 noPadding，自己控制每个区域的 padding */}
+        <ModalBody noPadding>
           {/* 配额总览 */}
-          <div className={`border-b ${colors.cardBorder}`} style={{ margin: 0, padding: '2rem 3rem' }}>
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl ${colors.cardSecondary}`}>
-                  <CreditCard size={22} className={colors.textMuted} />
+          <div className={`border-b ${colors.cardBorder} px-6 py-4`}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-lg ${colors.cardSecondary}`}>
+                  <CreditCard size={18} className={colors.textMuted} />
                 </div>
-                <span className={`text-lg font-bold ${colors.text}`}>{t('detail.quotaOverview')}</span>
+                <span className={`text-sm font-semibold ${colors.text}`}>{t('detail.quotaOverview')}</span>
               </div>
               <button 
                 type="button" 
                 onClick={handleRefresh} 
                 disabled={refreshing} 
                 className={`
-                  p-3 rounded-xl transition-all
+                  p-2 rounded-lg transition-all
                   ${refreshing ? 'bg-blue-500/20' : 'bg-blue-500/20 hover:bg-blue-500/30 hover:scale-110'}
                   disabled:opacity-50 disabled:cursor-not-allowed
                 `} 
                 title={t('detail.syncQuota')}
               >
-                <RefreshCw size={18} className={`text-blue-500 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw size={15} className={`text-blue-500 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
             </div>
               
-              <div className="mb-5">
-                <div className="flex items-baseline justify-between mb-3">
-                  <div>
-                    <span className={`text-4xl font-bold ${colors.text}`}>{formatUsage(totalUsed)}</span>
-                    <span className={`text-lg ${colors.textMuted} ml-2`}>/ {formatUsage(totalQuota)}</span>
-                  </div>
-                  <span className={`text-base font-semibold px-3 py-1 rounded-lg ${
-                    totalPercent > 80 ? 'bg-red-500/20 text-red-500' 
-                    : totalPercent > 50 ? 'bg-yellow-500/20 text-yellow-600' 
-                    : 'bg-green-500/20 text-green-600'
-                  }`}>
-                    {totalPercent.toFixed(0)}% {t('detail.used')}
-                  </span>
+            <div className="mb-5">
+              <div className="flex items-baseline justify-between mb-3">
+                <div>
+                  <span className={`text-4xl font-semibold ${colors.text}`}>{formatUsage(totalUsed)}</span>
+                  <span className={`text-lg ${colors.textMuted} ml-2`}>/ {formatUsage(totalQuota)}</span>
                 </div>
-                <div className={`h-4 ${colors.cardSecondary} rounded-full overflow-hidden shadow-inner`}>
-                  <div 
-                    className={`h-full rounded-full transition-all duration-500 shadow-lg ${
-                      totalPercent > 80 ? 'bg-gradient-to-r from-red-400 to-red-500' 
-                      : totalPercent > 50 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' 
-                      : 'bg-gradient-to-r from-green-400 to-emerald-500'
-                    }`} 
-                    style={{ width: `${totalPercent}%` }} 
-                  />
-                </div>
+                <span className={`text-base font-medium px-3 py-1 rounded-lg ${
+                  totalPercent > 80 ? 'bg-red-500/20 text-red-500' 
+                  : totalPercent > 50 ? 'bg-yellow-500/20 text-yellow-600' 
+                  : 'bg-green-500/20 text-green-600'
+                }`}>
+                  {totalPercent.toFixed(0)}% {t('detail.used')}
+                </span>
               </div>
-              
-              <div className="grid grid-cols-3 gap-5">
-                {/* 主配额卡片 */}
-                <QuotaCard
-                  title={t('detail.mainQuota')}
-                  used={form.used}
-                  quota={form.quota}
-                  icon="🔄"
-                  expiry={account.usageData?.nextDateReset ? `${new Date(account.usageData.nextDateReset * 1000).toLocaleDateString()} ${t('detail.reset')}` : null}
-                  colors={colors}
-                  t={t}
-                />
-                
-                {/* 试用配额卡片 */}
-                <QuotaCard
-                  title={t('detail.freeTrial')}
-                  used={freeTrialUsed}
-                  quota={freeTrialQuota}
-                  status={freeTrialInfo?.freeTrialStatus}
-                  icon="⏰"
-                  expiry={freeTrialInfo?.freeTrialExpiry ? `${new Date(freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString()} ${t('detail.expires')}` : null}
-                  colors={colors}
-                  t={t}
-                />
-                
-                {/* 奖励配额卡片 */}
-                <QuotaCard
-                  title={t('detail.bonusTotal')}
-                  used={bonusUsed}
-                  quota={bonusQuota}
-                  icon="🎁"
-                  expiry={bonuses.length > 0 ? `${bonuses.length} ${t('detail.bonusCount')}` : null}
-                  colors={colors}
-                  t={t}
+              <div className={`h-4 ${colors.cardSecondary} rounded-full overflow-hidden shadow-inner`}>
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 shadow-lg ${
+                    totalPercent > 80 ? 'bg-gradient-to-r from-red-400 to-red-500' 
+                    : totalPercent > 50 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' 
+                    : 'bg-gradient-to-r from-green-400 to-emerald-500'
+                  }`} 
+                  style={{ width: `${totalPercent}%` }} 
                 />
               </div>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-3">
+              {/* 主配额卡片 */}
+              <QuotaCard
+                title={t('detail.mainQuota')}
+                used={form.used}
+                quota={form.quota}
+                icon="🔄"
+                expiry={account.usageData?.nextDateReset ? `${new Date(account.usageData.nextDateReset * 1000).toLocaleDateString()} ${t('detail.reset')}` : null}
+                colors={colors}
+                t={t}
+              />
               
-              {/* Bonuses 列表 */}
-              {bonuses.length > 0 && (
-                <div className={`mt-6 pt-5 border-t ${colors.cardBorder}`} style={{ margin: '1.5rem 0 0 0', paddingTop: '1.25rem' }}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="text-lg">🎁</span>
-                    <span className={`text-sm font-semibold ${colors.text}`}>{t('detail.bonusDetails')}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${colors.badgeInfo} font-medium`}>{bonuses.length}</span>
-                  </div>
-                  <div className="space-y-3">
-                    {bonuses.map((bonus, idx) => (
-                      <div key={idx} className={`flex items-center justify-between p-4 rounded-xl border transition-all hover:shadow-md ${
-                        bonus.status === 'ACTIVE' 
-                          ? 'bg-purple-500/10 border-purple-500/30' 
-                          : bonus.status === 'EXHAUSTED' 
-                            ? `${colors.cardSecondary} ${colors.cardBorder}` 
-                            : `${colors.cardSecondary} ${colors.cardBorder}`
-                      }`}>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-sm font-semibold ${colors.text}`}>{bonus.displayName || bonus.bonusCode}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${
-                              bonus.status === 'ACTIVE' 
-                                ? 'bg-green-500/20 text-green-500' 
-                                : bonus.status === 'EXHAUSTED' 
-                                  ? `${colors.cardSecondary} ${colors.textMuted}` 
-                                  : 'bg-yellow-500/20 text-yellow-600'
-                            }`}>
-                              {bonus.status}
-                            </span>
-                          </div>
-                          <div className={`text-xs ${colors.textMuted} leading-relaxed`}>
-                            {bonus.description && <span>{bonus.description} · </span>}
-                            {bonus.redeemedAt && <span>{t('detail.redeemed')}: {new Date(bonus.redeemedAt * 1000).toLocaleDateString()} · </span>}
-                            {bonus.expiresAt && <span>{t('detail.expires')}: {new Date(bonus.expiresAt * 1000).toLocaleDateString()}</span>}
-                          </div>
-                        </div>
-                        <div className="text-right ml-4 flex-shrink-0">
-                          <div className={`text-base font-bold ${colors.text}`}>{formatUsage(bonus.currentUsage || 0)} <span className={`text-sm ${colors.textMuted} font-normal`}>/ {formatUsage(bonus.usageLimit || 0)}</span></div>
-                          <div className={`text-xs ${colors.textMuted} font-mono mt-0.5`}>{bonus.bonusCode}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* 试用配额卡片 */}
+              <QuotaCard
+                title={t('detail.freeTrial')}
+                used={freeTrialUsed}
+                quota={freeTrialQuota}
+                status={freeTrialInfo?.freeTrialStatus}
+                icon="⏰"
+                expiry={freeTrialInfo?.freeTrialExpiry ? `${new Date(freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString()} ${t('detail.expires')}` : null}
+                colors={colors}
+                t={t}
+              />
               
-              {/* 订阅信息 */}
-              <div className={`mt-6 pt-5 border-t ${colors.cardBorder}`} style={{ margin: '1.5rem 0 0 0', paddingTop: '1.25rem' }}>
+              {/* 奖励配额卡片 */}
+              <QuotaCard
+                title={t('detail.bonusTotal')}
+                used={bonusUsed}
+                quota={bonusQuota}
+                icon="🎁"
+                expiry={bonuses.length > 0 ? `${bonuses.length} ${t('detail.bonusCount')}` : null}
+                colors={colors}
+                t={t}
+              />
+            </div>
+            
+            {/* Bonuses 列表 */}
+            {bonuses.length > 0 && (
+              <div className="mt-6 pt-5 border-t" style={{ borderColor: colors.cardBorder }}>
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="text-lg">📋</span>
-                  <span className={`text-sm font-semibold ${colors.text}`}>订阅信息</span>
+                  <span className="text-lg">🎁</span>
+                  <span className={`text-sm font-medium ${colors.text}`}>{t('detail.bonusDetails')}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${colors.badgeInfo} font-medium`}>{bonuses.length}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
-                    <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.userId')}</div>
-                    <div className={`${colors.text} font-mono text-xs truncate`} title={account.usageData?.userInfo?.userId}>
-                      {account.usageData?.userInfo?.userId?.slice(-12) || '-'}
-                    </div>
-                  </div>
-                  <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
-                    <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.email')}</div>
-                    <div className={`${colors.text} text-xs truncate`}>
-                      {account.usageData?.userInfo?.email || account.email}
-                    </div>
-                  </div>
-                  <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
-                    <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.subscriptionType')}</div>
-                    <div className={`${colors.text} font-mono text-xs truncate`} title={account.usageData?.subscriptionInfo?.type}>
-                      {account.usageData?.subscriptionInfo?.type || '-'}
-                    </div>
-                  </div>
-                  <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
-                    <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.upgradeable')}</div>
-                    <div className={colors.text}>
-                      {account.usageData?.subscriptionInfo?.upgradeCapability === 'UPGRADE_CAPABLE' ? (
-                        <span className="text-green-500 font-medium">✓ {t('common.yes')}</span>
-                      ) : (
-                        <span className={colors.textMuted}>✗ {t('common.no')}</span>
-                      )}
-                    </div>
-                  </div>
-                  {breakdown?.overageRate != null && (
-                    <>
-                      <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
-                        <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.overageRate')}</div>
-                        <div className={`${colors.text} font-semibold`}>
-                          {breakdown.currency === 'USD' ? '$' : breakdown.currency}{breakdown.overageRate}/{t('detail.perCredit')}
+                <div className="space-y-3">
+                  {bonuses.map((bonus, idx) => (
+                    <div key={idx} className={`flex items-center justify-between p-4 rounded-xl border transition-all hover:shadow-md ${
+                      bonus.status === 'ACTIVE' 
+                        ? 'bg-purple-500/10 border-purple-500/30' 
+                        : bonus.status === 'EXHAUSTED' 
+                          ? `${colors.cardSecondary} ${colors.cardBorder}` 
+                          : `${colors.cardSecondary} ${colors.cardBorder}`
+                    }`}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-sm font-medium ${colors.text}`}>{bonus.displayName || bonus.bonusCode}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${
+                            bonus.status === 'ACTIVE' 
+                              ? 'bg-green-500/20 text-green-500' 
+                              : bonus.status === 'EXHAUSTED' 
+                                ? `${colors.cardSecondary} ${colors.textMuted}` 
+                                : 'bg-yellow-500/20 text-yellow-600'
+                          }`}>
+                            {bonus.status}
+                          </span>
+                        </div>
+                        <div className={`text-xs ${colors.textMuted} leading-relaxed`}>
+                          {bonus.description && <span>{bonus.description} · </span>}
+                          {bonus.redeemedAt && <span>{t('detail.redeemed')}: {new Date(bonus.redeemedAt * 1000).toLocaleDateString()} · </span>}
+                          {bonus.expiresAt && <span>{t('detail.expires')}: {new Date(bonus.expiresAt * 1000).toLocaleDateString()}</span>}
                         </div>
                       </div>
-                      <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
-                        <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.overageCap')}</div>
-                        <div className={`${colors.text} font-semibold`}>
-                          {breakdown.currency === 'USD' ? '$' : breakdown.currency}{breakdown.overageCap}
-                        </div>
+                      <div className="text-right ml-4 flex-shrink-0">
+                        <div className={`text-base font-semibold ${colors.text}`}>{formatUsage(bonus.currentUsage || 0)} <span className={`text-sm ${colors.textMuted} font-normal`}>/ {formatUsage(bonus.usageLimit || 0)}</span></div>
+                        <div className={`text-xs ${colors.textMuted} font-mono mt-0.5`}>{bonus.bonusCode}</div>
                       </div>
-                    </>
-                  )}
+                    </div>
+                  ))}
                 </div>
               </div>
+            )}
+            
+            {/* 订阅信息 */}
+            <div className="mt-6 pt-5 border-t" style={{ borderColor: colors.cardBorder }}>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-lg">📋</span>
+                <span className={`text-sm font-medium ${colors.text}`}>订阅信息</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
+                  <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.userId')}</div>
+                  <div className={`${colors.text} font-mono text-xs truncate`} title={account.usageData?.userInfo?.userId}>
+                    {account.usageData?.userInfo?.userId?.slice(-12) || '-'}
+                  </div>
+                </div>
+                <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
+                  <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.email')}</div>
+                  <div className={`${colors.text} text-xs truncate`}>
+                    {account.usageData?.userInfo?.email || account.email}
+                  </div>
+                </div>
+                <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
+                  <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.subscriptionType')}</div>
+                  <div className={`${colors.text} font-mono text-xs truncate`} title={account.usageData?.subscriptionInfo?.type}>
+                    {account.usageData?.subscriptionInfo?.type || '-'}
+                  </div>
+                </div>
+                <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
+                  <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.upgradeable')}</div>
+                  <div className={colors.text}>
+                    {account.usageData?.subscriptionInfo?.upgradeCapability === 'UPGRADE_CAPABLE' ? (
+                      <span className="text-green-500 font-medium">✓ {t('common.yes')}</span>
+                    ) : (
+                      <span className={colors.textMuted}>✗ {t('common.no')}</span>
+                    )}
+                  </div>
+                </div>
+                {breakdown?.overageRate != null && (
+                  <>
+                    <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
+                      <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.overageRate')}</div>
+                      <div className={`${colors.text} font-medium`}>
+                        {breakdown.currency === 'USD' ? '$' : breakdown.currency}{breakdown.overageRate}/{t('detail.perCredit')}
+                      </div>
+                    </div>
+                    <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
+                      <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.overageCap')}</div>
+                      <div className={`${colors.text} font-medium`}>
+                        {breakdown.currency === 'USD' ? '$' : breakdown.currency}{breakdown.overageCap}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
+          </div>
 
-            {/* 基本信息 */}
-            <div className={`border-b ${colors.cardBorder}`} style={{ margin: 0, padding: '2rem 3rem' }}>
-              <div className="flex items-center gap-3 mb-6">
-                <div className={`p-2.5 rounded-xl ${colors.cardSecondary}`}>
-                  <User size={22} className={colors.textMuted} />
-                </div>
-                <span className={`text-lg font-bold ${colors.text}`}>{t('detail.basicInfo')}</span>
+          {/* 基本信息 */}
+          <div className={`border-b ${colors.cardBorder} px-6 py-4`}>
+            <div className="flex items-center gap-2 mb-4">
+              <div className={`p-1.5 rounded-lg ${colors.cardSecondary}`}>
+                <User size={18} className={colors.textMuted} />
               </div>
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <TextInput
-                    label={t('detail.emailAddress')}
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    required
-                    classNames={{
-                      label: `text-sm font-medium ${colors.textMuted} mb-2`,
-                      input: `${colors.text} ${colors.input} ${colors.inputFocus}`
-                    }}
-                    styles={{
-                      input: {
-                        fontSize: '0.875rem',
-                        padding: '0.75rem 1rem',
-                        borderRadius: '0.75rem',
-                      }
-                    }}
-                  />
-                </div>
-                <div>
-                  <TextInput
-                    label={t('detail.remarkLabel')}
-                    value={form.label}
-                    readOnly
-                    placeholder={t('common.none')}
-                    classNames={{
-                      label: `text-sm font-medium ${colors.textMuted} mb-2`,
-                      input: `${colors.text} ${colors.input} opacity-60`
-                    }}
-                    styles={{
-                      input: {
-                        fontSize: '0.875rem',
-                        padding: '0.75rem 1rem',
-                        borderRadius: '0.75rem',
-                      }
-                    }}
-                  />
-                </div>
+              <span className={`text-sm font-semibold ${colors.text}`}>{t('detail.basicInfo')}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <TextInput
+                  label={t('detail.emailAddress')}
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  required
+                  classNames={{
+                    label: `text-sm font-medium ${colors.textMuted} mb-2`,
+                    input: `${colors.text} ${colors.input} ${colors.inputFocus}`
+                  }}
+                  styles={{
+                    input: {
+                      fontSize: '0.875rem',
+                      padding: '0.75rem 1rem',
+                      borderRadius: '0.75rem',
+                    }
+                  }}
+                />
+              </div>
+              <div>
+                <TextInput
+                  label={t('detail.remarkLabel')}
+                  value={form.label}
+                  readOnly
+                  placeholder={t('common.none')}
+                  classNames={{
+                    label: `text-sm font-medium ${colors.textMuted} mb-2`,
+                    input: `${colors.text} ${colors.input} opacity-60`
+                  }}
+                  styles={{
+                    input: {
+                      fontSize: '0.875rem',
+                      padding: '0.75rem 1rem',
+                      borderRadius: '0.75rem',
+                    }
+                  }}
+                />
               </div>
             </div>
+          </div>
 
           {/* Token 凭证 JSON 视图 */}
           <TokenJsonView account={account} />
-        </div>
+        </ModalBody>
 
         {/* Footer */}
-        <div className={`relative flex justify-between items-center border-t ${colors.cardBorder} bg-gradient-to-t from-black/5 to-transparent`} style={{ padding: '1.5rem 3rem' }}>
-            <div className={`text-sm ${colors.textMuted} flex items-center gap-2.5`}>
-              {account.status === 'active' || account.status === '正常' || account.status === '有效' 
-                ? <><Shield size={16} className="text-green-500" /><span className="text-green-500 font-semibold">{t('detail.accountNormal')}</span></> 
-                : account.status === 'banned' || account.status === '封禁' || account.status === '已封禁'
-                  ? <><Shield size={16} className="text-red-500" /><span className="text-red-500 font-semibold">{t('detail.accountBanned')}</span></>
-                  : <><Shield size={16} className="text-orange-500" /><span className="text-orange-500 font-semibold">{account.status}</span></>}
-            </div>
-            <button 
-              type="button" 
-              onClick={onClose} 
-              className="
-                px-8 py-3 text-sm font-bold rounded-xl text-white
-                bg-gradient-to-r from-blue-500 to-indigo-600
-                shadow-lg shadow-blue-500/30
-                hover:opacity-90 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-[1.02]
-                transition-all duration-200 active:scale-[0.98]
-              "
-            >
-              {t('common.close')}
-            </button>
+        <ModalFooter>
+          <div className={`text-sm ${colors.textMuted} flex items-center gap-2`}>
+            {account.status === 'active' || account.status === '正常' || account.status === '有效' 
+              ? <><Shield size={15} className="text-green-500" /><span className="text-green-500 font-medium">{t('detail.accountNormal')}</span></> 
+              : account.status === 'banned' || account.status === '封禁' || account.status === '已封禁'
+                ? <><Shield size={15} className="text-red-500" /><span className="text-red-500 font-medium">{t('detail.accountBanned')}</span></>
+                : <><Shield size={15} className="text-orange-500" /><span className="text-orange-500 font-medium">{account.status}</span></>}
           </div>
-        </div>
-      </div>
-    )
-  }
-  
-  export default AccountDetailModal
+          <Button onClick={onClose}>
+            {t('common.close')}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
+  )
+}
+
+export default AccountDetailModal

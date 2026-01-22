@@ -155,10 +155,10 @@ const AccountCard = memo(function AccountCard({
         }`}>{isNormal ? t('accounts.active') : isBanned ? t('accounts.banned') : account.status}</span>
       </div>
 
-      <div className="p-6 pt-11 flex-1 flex flex-col gap-5">
+      <div className="p-4 pt-9 flex-1 flex flex-col gap-2.5">
         {/* 头像和邮箱 */}
-        <div className="flex items-start gap-3.5">
-          <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold shadow-lg ${
+        <div className="flex items-start gap-2">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-base font-bold shadow-md ${
             account.provider === 'Google' ? colors.providerGoogle :
             account.provider === 'Github' ? colors.providerGithub :
             colors.badgeInfo
@@ -166,22 +166,22 @@ const AccountCard = memo(function AccountCard({
             {account.email[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className={`font-semibold ${colors.text} text-base truncate`}>{maskEmail(account.email)}</span>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className={`font-medium ${colors.text} text-[13px] truncate`}>{maskEmail(account.email)}</span>
               <button 
                 onClick={() => onCopy(account.email, account.id)} 
-                className={`btn-icon p-1.5 rounded-lg ${colors.cardHover} flex-shrink-0 transition-all hover:scale-110`}
+                className={`btn-icon p-1 rounded-lg ${colors.cardHover} flex-shrink-0 transition-all hover:scale-110`}
               >
-                {copiedId === account.id ? <Check size={14} className={colors.iconSuccess} /> : <Copy size={14} className={colors.textMuted} />}
+                {copiedId === account.id ? <Check size={11} className={colors.iconSuccess} /> : <Copy size={11} className={colors.textMuted} />}
               </button>
             </div>
-            <div className={`text-sm ${colors.textMuted}`}>{account.label || account.provider || t('common.noLabel')}</div>
+            <div className={`text-[11px] ${colors.textMuted}`}>{account.label || account.provider || t('common.noLabel')}</div>
           </div>
         </div>
 
         {/* 订阅类型和登录方式 */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <span className={`inline-flex px-3.5 py-2 rounded-xl text-xs font-bold shadow-md ${
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={`inline-flex px-2 py-0.5 rounded-lg text-[11px] font-medium shadow-sm ${
             (subType.includes('ENTERPRISE') || subPlan.toUpperCase().includes('ENTERPRISE'))
               ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
               : (subType.includes('PRO+') || subPlan.includes('PRO+'))
@@ -194,7 +194,7 @@ const AccountCard = memo(function AccountCard({
           }`}>
             {subPlan || 'Free'}
           </span>
-          <span className={`text-xs px-3.5 py-2 rounded-xl font-semibold shadow-sm ${
+          <span className={`text-[11px] px-2 py-0.5 rounded-lg font-medium shadow-sm ${
             account.provider === 'Google' ? colors.providerGoogle
               : account.provider === 'GitHub' ? colors.providerGithub
               : account.provider === 'BuilderId' ? colors.providerBuilderId
@@ -204,7 +204,7 @@ const AccountCard = memo(function AccountCard({
             {account.provider || t('common.unknown')}
           </span>
           {isCurrentAccount && (
-            <span className="text-xs px-3.5 py-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold shadow-md">
+            <span className="text-[11px] px-2 py-0.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium shadow-sm">
               {t('common.currentlyUsing')}
             </span>
           )}
@@ -218,7 +218,7 @@ const AccountCard = memo(function AccountCard({
               if (!group) return null
               return (
                 <span 
-                  className={`text-sm px-4 py-2 rounded-xl font-semibold shadow-sm ${colors.cardSecondary}`}
+                  className={`text-[11px] px-2.5 py-1 rounded-lg font-medium shadow-sm ${colors.cardSecondary}`}
                   style={{ 
                     backgroundColor: group.color ? `${group.color}20` : undefined,
                     color: group.color || colors.textMuted
@@ -242,7 +242,7 @@ const AccountCard = memo(function AccountCard({
               return (
                 <span 
                   key={tagLink.tagId} 
-                  className="text-sm px-4 py-2 rounded-full text-white cursor-default font-semibold shadow-md"
+                  className="text-[11px] px-2.5 py-0.5 rounded-full text-white cursor-default font-medium shadow-sm"
                   style={{ backgroundColor: tagColor }}
                   title={linkedAt ? `关联于 ${linkedAt}` : ''}
                 >
@@ -254,27 +254,27 @@ const AccountCard = memo(function AccountCard({
         )}
 
         {/* 配额进度 */}
-        <div className={`p-4 rounded-xl ${colors.cardSecondary}`}>
-          <div className="flex items-center justify-between text-sm mb-3">
-            <span className={`${colors.text} font-semibold`}>{t('common.usage')}</span>
-            <span className={`font-bold text-base ${percent > 80 ? 'text-red-400' : percent > 50 ? 'text-yellow-400' : 'text-green-400'}`}>
+        <div className={`p-2.5 rounded-lg ${colors.cardSecondary}`}>
+          <div className="flex items-center justify-between text-[11px] mb-1.5">
+            <span className={`${colors.text} font-medium`}>{t('common.usage')}</span>
+            <span className={`font-semibold text-sm ${percent > 80 ? 'text-red-400' : percent > 50 ? 'text-yellow-400' : 'text-green-400'}`}>
               {Math.round(percent)}%
             </span>
           </div>
-          <div className={`h-3 ${colors.cardSecondary} rounded-full overflow-hidden mb-3 shadow-inner`}>
+          <div className={`h-1.5 ${colors.cardSecondary} rounded-full overflow-hidden mb-1.5 shadow-inner`}>
             <div 
               className={`h-full rounded-full transition-all duration-500 ${getProgressBarColor(percent)}`} 
               style={{ width: `${Math.min(percent, 100)}%` }} 
             />
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className={`font-bold ${colors.text}`}>{formatUsage(used)} / {formatUsage(quota)}</span>
-            <span className={`${colors.textMuted} font-medium`}>{t('common.remaining')} {formatUsage(quota - used)}</span>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className={`font-semibold ${colors.text}`}>{formatUsage(used)} / {formatUsage(quota)}</span>
+            <span className={`${colors.textMuted}`}>{t('common.remaining')} {formatUsage(quota - used)}</span>
           </div>
           {/* 日期信息 */}
           {(nextDateReset || (breakdown?.freeTrialInfo?.freeTrialExpiry && breakdown.freeTrialInfo.freeTrialStatus === 'ACTIVE') || breakdown?.bonuses?.some(b => b.status === 'ACTIVE' && b.expiresAt)) && (
-            <div className={`mt-3 pt-3 border-t ${colors.cardBorder} flex items-center gap-2 flex-wrap text-[10px]`}>
-              <Clock size={10} className={colors.textMuted} />
+            <div className={`mt-2 pt-2 border-t ${colors.cardBorder} flex items-center gap-1.5 flex-wrap text-[10px]`}>
+              <Clock size={9} className={colors.textMuted} />
               {nextDateReset && (
                 <span className={colors.dateReset}>{t('common.reset')} {new Date(nextDateReset * 1000).toLocaleDateString()}</span>
               )}
@@ -290,8 +290,8 @@ const AccountCard = memo(function AccountCard({
 
         {/* Token 过期时间 */}
         {account.expiresAt && (
-          <div className={`text-xs ${isExpired ? colors.dateExpired : colors.textMuted} flex items-center gap-1.5 px-3 py-2 rounded-lg ${colors.cardSecondary}`}>
-            <Clock size={12} />
+          <div className={`text-[11px] ${isExpired ? colors.dateExpired : colors.textMuted} flex items-center gap-1 px-2 py-1 rounded-lg ${colors.cardSecondary}`}>
+            <Clock size={10} />
             <span>Token: {account.expiresAt}</span>
             {isExpired && <span className={`${colors.dateExpired} font-medium`}>({t('accountCard.tokenExpired')})</span>}
           </div>
@@ -299,45 +299,45 @@ const AccountCard = memo(function AccountCard({
 
         {/* 机器码 */}
         {account.machineId && (
-          <div className={`text-sm flex items-center gap-2.5 px-4 py-3 rounded-xl ${colors.cardSecondary} shadow-sm`}>
-            <span className={`font-bold shrink-0 ${colors.machineIdText}`}>机器码:</span>
-            <span className={`font-mono text-xs break-all ${colors.machineIdTextSecondary}`}>{account.machineId}</span>
+          <div className={`text-[11px] flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${colors.cardSecondary} shadow-sm`}>
+            <span className={`font-medium shrink-0 ${colors.machineIdText}`}>机器码:</span>
+            <span className={`font-mono text-[10px] break-all ${colors.machineIdTextSecondary}`}>{account.machineId}</span>
             <button 
               onClick={() => onCopy(account.machineId, `${account.id}-mid`)} 
-              className={`btn-icon p-2 rounded-lg flex-shrink-0 ${colors.cardHover} transition-all hover:scale-110`}
+              className={`btn-icon p-1 rounded-lg flex-shrink-0 ${colors.cardHover} transition-all hover:scale-110`}
             >
-              {copiedId === `${account.id}-mid` ? <Check size={14} className={colors.iconSuccess} /> : <Copy size={14} className={colors.machineIdIcon} />}
+              {copiedId === `${account.id}-mid` ? <Check size={11} className={colors.iconSuccess} /> : <Copy size={11} className={colors.machineIdIcon} />}
             </button>
           </div>
         )}
 
         {/* 底部操作栏 */}
-        <div className={`mt-auto pt-5 border-t ${colors.cardBorder} flex items-center justify-between`}>
-          <span className={`text-xs ${colors.textMuted} opacity-70 font-medium`}>{t('accountCard.rightClickTip')}</span>
-          <div className="flex items-center gap-2">
+        <div className={`mt-auto pt-3 border-t ${colors.cardBorder} flex items-center justify-between`}>
+          <span className={`text-[10px] ${colors.textMuted} opacity-70`}>{t('accountCard.rightClickTip')}</span>
+          <div className="flex items-center gap-1.5">
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(account) }}
-              className={`p-2.5 rounded-xl ${colors.cardHover} ${colors.actionView} transition-all hover:scale-110 shadow-sm`}
+              className={`p-2 rounded-lg ${colors.cardHover} ${colors.actionView} transition-all hover:scale-110 shadow-sm`}
               title={t('accountCard.viewDetails')}
             >
-              <Eye size={18} />
+              <Eye size={16} />
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onRefresh(account.id) }}
               disabled={refreshingId === account.id}
-              className={`p-2.5 rounded-xl ${colors.cardHover} ${colors.actionRefresh} disabled:opacity-50 transition-all hover:scale-110 shadow-sm`}
+              className={`p-2 rounded-lg ${colors.cardHover} ${colors.actionRefresh} disabled:opacity-50 transition-all hover:scale-110 shadow-sm`}
               title={t('accountCard.refresh')}
             >
-              <RefreshCw size={18} className={refreshingId === account.id ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={refreshingId === account.id ? 'animate-spin' : ''} />
             </button>
             {!isCurrentAccount && (
               <button
                 onClick={(e) => { e.stopPropagation(); onSwitch(account) }}
                 disabled={switchingId === account.id || isBanned}
-                className={`p-2.5 rounded-xl ${colors.cardHover} ${colors.actionSwitch} disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-110 shadow-sm`}
+                className={`p-2 rounded-lg ${colors.cardHover} ${colors.actionSwitch} disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-110 shadow-sm`}
                 title={isBanned ? t('accountCard.bannedCannotSwitch') : t('accountCard.switchAccount')}
               >
-                <Repeat size={18} className={switchingId === account.id ? 'animate-spin' : ''} />
+                <Repeat size={16} className={switchingId === account.id ? 'animate-spin' : ''} />
               </button>
             )}
           </div>

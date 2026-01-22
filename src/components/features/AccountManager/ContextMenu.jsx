@@ -49,7 +49,7 @@ const ContextMenu = memo(function ContextMenu({ x, y, onClose, items }) {
   return createPortal(
     <div
       ref={menuRef}
-      className={`fixed z-[9999] min-w-[200px] py-2 rounded-xl shadow-2xl border backdrop-blur-md ${colors.card} ${colors.cardBorder}`}
+      className={`fixed z-[9999] min-w-[160px] py-1 rounded-lg shadow-2xl border backdrop-blur-md ${colors.card} ${colors.cardBorder}`}
       style={{ 
         left: position.x, 
         top: position.y,
@@ -66,7 +66,7 @@ const ContextMenu = memo(function ContextMenu({ x, y, onClose, items }) {
             onClick={() => { item.onClick(); onClose() }}
             disabled={item.disabled}
             className={`
-              w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 
+              w-full px-2.5 py-1.5 text-left text-sm flex items-center gap-2 
               transition-all duration-200
               disabled:opacity-40 disabled:cursor-not-allowed
               ${item.danger 
@@ -77,17 +77,17 @@ const ContextMenu = memo(function ContextMenu({ x, y, onClose, items }) {
           >
             {item.icon && (
               <div className={`
-                w-8 h-8 rounded-lg flex items-center justify-center
+                w-6 h-6 rounded-md flex items-center justify-center
                 ${item.danger ? 'bg-red-500/10' : colors.cardSecondary}
               `}>
                 <item.icon 
-                  size={16} 
+                  size={14} 
                   className={item.danger ? 'text-red-400' : colors.textMuted}
                   strokeWidth={2}
                 />
               </div>
             )}
-            <span className="flex-1 font-medium">{item.label}</span>
+            <span className="flex-1">{item.label}</span>
             {item.shortcut && (
               <span className={`text-xs px-2 py-0.5 rounded ${colors.cardSecondary} ${colors.textMuted}`}>
                 {item.shortcut}

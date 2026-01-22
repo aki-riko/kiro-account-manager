@@ -135,7 +135,7 @@ function AccountTable({
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 280,
+    estimateSize: () => 240,
     overscan: 1, // 减少预渲染行数
   })
 
@@ -231,12 +231,12 @@ const AddButton = memo(function AddButton({ onClick, colors, t }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-2xl border-2 border-dashed min-h-[280px] flex flex-col items-center justify-center gap-3 ${colors.dashedBorder} ${colors.dashedBorderHover}`}
+      className={`rounded-2xl border-2 border-dashed min-h-[240px] flex flex-col items-center justify-center gap-2.5 ${colors.dashedBorder} ${colors.dashedBorderHover}`}
     >
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${colors.cardSecondary}`}>
-        <Plus size={24} className={colors.textMuted} />
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${colors.cardSecondary}`}>
+        <Plus size={20} className={colors.textMuted} />
       </div>
-      <span className={`text-sm font-medium ${colors.textMuted}`}>{t('common.addAccount')}</span>
+      <span className={`text-xs font-medium ${colors.textMuted}`}>{t('common.addAccount')}</span>
     </button>
   )
 })

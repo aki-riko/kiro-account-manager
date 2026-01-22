@@ -519,6 +519,7 @@
   "detail.overageRate": "超额费率",
   "detail.overageCap": "超额上限",
   "detail.perCredit": "积分",
+  "detail.fields": "个字段",
 
   "mcpManager.title": "MCP 服务",
   "mcpManager.subtitle": "管理 Kiro IDE 的 MCP 服务配置",

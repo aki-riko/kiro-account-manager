@@ -3,7 +3,6 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { useApp } from "../../hooks/useApp"
-import { Button } from './button'
 
 const DialogRoot = DialogPrimitive.Root
 const DialogTrigger = DialogPrimitive.Trigger
@@ -41,7 +40,9 @@ const DialogContent = React.forwardRef(({
         className={cn(
           "fixed left-[50%] top-[50%] z-50",
           "translate-x-[-50%] translate-y-[-50%]",
-          "w-full shadow-2xl rounded-2xl border p-4",
+          "w-full shadow-2xl rounded-2xl border",
+          "max-h-[90vh] flex flex-col",
+          // ⚠️ 移除 p-4，让子组件控制内边距
           colors.card,
           colors.cardBorder,
           "duration-200",
@@ -82,16 +83,16 @@ const DialogHeader = React.forwardRef(({ className, icon: Icon, iconColor, iconB
   return (
     <div
       ref={ref}
-      className={cn("px-6 pt-6 pb-2", className)}
+      className={cn("px-5 pt-5 pb-2", className)}
       {...props}
     >
       {Icon && (
-        <div className="flex items-center gap-4 mb-2">
+        <div className="flex items-center gap-3 mb-2">
           <div className={cn(
-            "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
+            "w-10 h-10 rounded-xl flex items-center justify-center shadow-md",
             iconBg || "bg-gradient-to-br from-blue-500/20 to-indigo-500/10"
           )}>
-            <Icon size={24} className={iconColor || "text-blue-400"} strokeWidth={2} />
+            <Icon size={20} className={iconColor || "text-blue-400"} strokeWidth={2} />
           </div>
         </div>
       )}
@@ -108,7 +109,7 @@ const DialogTitle = React.forwardRef(({ className, ...props }, ref) => {
     <DialogPrimitive.Title
       ref={ref}
       className={cn(
-        "text-lg font-semibold leading-tight",
+        "text-base font-semibold leading-tight",
         colors.text,
         className
       )}
@@ -122,14 +123,46 @@ const DialogDescription = React.forwardRef(({ className, ...props }, ref) => {
   const { colors } = useApp()
   
   return (
-    <div
+    <DialogPrimitive.Description
       ref={ref}
-      className={cn("px-6 py-4", colors.text, className)}
+      className={cn("text-xs mt-1.5", colors.textMuted, className)}
       {...props}
     />
   )
 })
-DialogDescription.displayName = "DialogDescription"
+DialogDescription.displayName = DialogPrimitive.Description.displayName
+
+const DialogBody = React.forwardRef(({ 
+  className, 
+  gap = "sm",
+  noPadding = false,
+  ...props 
+}, ref) => {
+  const { colors } = useApp()
+  
+  const gapClasses = {
+    none: "",
+    sm: "space-y-3",
+    md: "space-y-4",
+    lg: "space-y-6",
+    xl: "space-y-8",
+  }
+  
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        noPadding ? "" : "px-5 py-3",
+        "overflow-y-auto flex-1",
+        colors.text,
+        gapClasses[gap],
+        className
+      )}
+      {...props}
+    />
+  )
+})
+DialogBody.displayName = "DialogBody"
 
 const DialogFooter = React.forwardRef(({ className, ...props }, ref) => {
   const { colors } = useApp()
@@ -138,7 +171,7 @@ const DialogFooter = React.forwardRef(({ className, ...props }, ref) => {
     <div
       ref={ref}
       className={cn(
-        "px-6 py-4 flex justify-end gap-3",
+        "px-5 py-3 flex justify-end gap-2.5",
         colors.dialogFooter,
         className
       )}
@@ -150,6 +183,19 @@ DialogFooter.displayName = "DialogFooter"
 
 /**
  * Dialog - 完整的对话框组件
+ * 
+ * @param {Object} props
+ * @param {boolean} props.open - 是否打开
+ * @param {Function} props.onOpenChange - 状态改变回调
+ * @param {string} props.title - 标题
+ * @param {string} props.description - 描述文本
+ * @param {ReactNode} props.children - 内容区域
+ * @param {ReactNode} props.footer - 底部按钮区域
+ * @param {string} props.maxWidth - 最大宽度
+ * @param {Component} props.icon - 图标组件
+ * @param {string} props.iconColor - 图标颜色
+ * @param {string} props.iconBg - 图标背景
+ * @param {boolean} props.showClose - 是否显示关闭按钮
  */
 export function Dialog({
   open,
@@ -157,52 +203,30 @@ export function Dialog({
   title,
   description,
   children,
+  footer,
   maxWidth = '400px',
   icon: Icon,
   iconColor,
   iconBg,
-  confirmText = '确定',
-  cancelText = '取消',
-  onConfirm,
-  confirmVariant = 'primary',
-  loading = false,
-  showCancel = true,
   showClose = true,
 }) {
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
       <DialogContent maxWidth={maxWidth} showClose={showClose}>
-        <DialogHeader icon={Icon} iconColor={iconColor} iconBg={iconBg}>
-          <DialogTitle>{title}</DialogTitle>
-          {description && (
-            <p className="text-sm text-gray-500 mt-2">{description}</p>
-          )}
-        </DialogHeader>
-        
-        {children && (
-          <DialogDescription>{children}</DialogDescription>
+        {(title || description || Icon) && (
+          <DialogHeader icon={Icon} iconColor={iconColor} iconBg={iconBg}>
+            {title && <DialogTitle>{title}</DialogTitle>}
+            {description && <DialogDescription>{description}</DialogDescription>}
+          </DialogHeader>
         )}
         
-        <DialogFooter>
-          {showCancel && (
-            <Button
-              variant="secondary"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
-              {cancelText}
-            </Button>
-          )}
-          {onConfirm && (
-            <Button
-              variant={confirmVariant}
-              onClick={onConfirm}
-              loading={loading}
-            >
-              {confirmText}
-            </Button>
-          )}
-        </DialogFooter>
+        {children && (
+          <DialogBody>{children}</DialogBody>
+        )}
+        
+        {footer && (
+          <DialogFooter>{footer}</DialogFooter>
+        )}
       </DialogContent>
     </DialogRoot>
   )
@@ -219,4 +243,5 @@ export {
   DialogFooter,
   DialogTitle,
   DialogDescription,
+  DialogBody,
 }
