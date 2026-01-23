@@ -27,6 +27,25 @@
 
 ---
 
+## 📥 下载
+
+**最新版本**：[GitHub Releases](https://github.com/hj01857655/kiro-account-manager/releases/latest)
+
+| 平台 | 下载链接 |
+|------|---------|
+| 🪟 **Windows** | [KiroAccountManager_x64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/KiroAccountManager_x64_zh-CN.msi) |
+| 🍎 **macOS (Intel)** | [KiroAccountManager_x64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/KiroAccountManager_x64.dmg) |
+| 🍎 **macOS (Apple Silicon)** | [KiroAccountManager_aarch64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/KiroAccountManager_aarch64.dmg) |
+| **Linux (AppImage)** | [kiro-account-manager_amd64.AppImage](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/kiro-account-manager_amd64.AppImage) |
+| 🐧 **Linux (deb)** | [kiro-account-manager_amd64.deb](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/kiro-account-manager_amd64.deb) |
+
+**系统要求**：
+- **Windows**: Windows 10/11 (64-bit)，需要 WebView2 (Win11 已内置)
+- **macOS**: macOS 10.15+ (Intel / Apple Silicon 通用)
+- **Linux**: x86_64，需要 WebKitGTK
+
+---
+
 ## ✨ 核心功能
 
 ### 🔐 在线登录
@@ -146,28 +165,6 @@
 ![规则管理](screenshots/规则管理.webp)
 ![设置](screenshots/设置.png)
 ![关于](screenshots/关于.png)
-
----
-
-## 💻 系统要求
-
-- **Windows**: Windows 10/11 (64-bit)，需要 WebView2 (Win11 已内置)
-- **macOS**: macOS 10.15+ (Intel / Apple Silicon 通用)
-- **Linux**: x86_64，需要 WebKitGTK
-
----
-
-## 📥 下载
-
-**最新版本**：[GitHub Releases](https://github.com/hj01857655/kiro-account-manager/releases/latest)
-
-| 平台 | 下载链接 |
-|------|---------|
-| 🪟 **Windows** | [KiroAccountManager_x64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/KiroAccountManager_x64_zh-CN.msi) |
-| 🍎 **macOS (Intel)** | [KiroAccountManager_x64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/KiroAccountManager_x64.dmg) |
-| 🍎 **macOS (Apple Silicon)** | [KiroAccountManager_aarch64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/KiroAccountManager_aarch64.dmg) |
-| **Linux (AppImage)** | [kiro-account-manager_amd64.AppImage](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/kiro-account-manager_amd64.AppImage) |
-| 🐧 **Linux (deb)** | [kiro-account-manager_amd64.deb](https://github.com/hj01857655/kiro-account-manager/releases/latest/download/kiro-account-manager_amd64.deb) |
 
 ---
 
