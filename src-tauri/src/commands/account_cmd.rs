@@ -331,17 +331,57 @@ pub fn import_accounts(state: State<AppState>, json: String) -> Result<usize, St
 #[tauri::command]
 pub fn export_accounts(state: State<AppState>, ids: Option<Vec<String>>) -> String {
     let store = state.store.lock().expect("Failed to acquire store lock");
+    
+    // 修复 provider 为 null 的账号
+    let fix_provider = |mut account: Account| -> Account {
+        if account.provider.is_none() && account.auth_method.as_deref() == Some("IdC") {
+            // IdC 账号但 provider 为 null，根据 start_url 或 client_secret 判断
+            if let Some(ref start_url) = account.start_url {
+                if start_url.contains("awsapps.com") {
+                    account.provider = Some("Enterprise".to_string());
+                } else {
+                    account.provider = Some("BuilderId".to_string());
+                }
+            } else if let Some(ref client_secret) = account.client_secret {
+                if client_secret.contains("initiateLoginUri") {
+                    account.provider = Some("Enterprise".to_string());
+                } else {
+                    account.provider = Some("BuilderId".to_string());
+                }
+            } else {
+                // 默认 BuilderId
+                account.provider = Some("BuilderId".to_string());
+            }
+        } else if account.provider.is_none() && account.auth_method.as_deref() == Some("social") {
+            // Social 账号但 provider 为 null，根据邮箱判断
+            if account.email.contains("gmail") {
+                account.provider = Some("Google".to_string());
+            } else if account.email.contains("github") {
+                account.provider = Some("Github".to_string());
+            } else {
+                account.provider = Some("Google".to_string());
+            }
+        }
+        account
+    };
+    
     match ids {
         Some(id_list) if !id_list.is_empty() => {
             // 导出选中的账号
-            let selected: Vec<&Account> = store.accounts.iter()
+            let selected: Vec<Account> = store.accounts.iter()
                 .filter(|a| id_list.contains(&a.id))
+                .cloned()
+                .map(fix_provider)
                 .collect();
             serde_json::to_string_pretty(&selected).unwrap_or_else(|_| "[]".to_string())
         }
         _ => {
             // 导出全部
-            store.export_to_json()
+            let fixed: Vec<Account> = store.accounts.iter()
+                .cloned()
+                .map(fix_provider)
+                .collect();
+            serde_json::to_string_pretty(&fixed).unwrap_or_else(|_| "[]".to_string())
         }
     }
 }
@@ -407,20 +447,17 @@ pub async fn add_account_by_idc(
     start_url: Option<String>, // 新增: Enterprise 的 Start URL
 ) -> Result<Account, String> {
     let region = region.unwrap_or_else(|| "us-east-1".to_string());
-    let provider_id = provider.unwrap_or_else(|| "BuilderId".to_string()); // 默认 BuilderId
+    
+    // provider 必须明确指定，不做智能判断
+    let provider_id = provider.ok_or("缺少 provider 参数，请指定 BuilderId 或 Enterprise")?;
     
     // 验证 provider
     if provider_id != "BuilderId" && provider_id != "Enterprise" {
         return Err(format!("不支持的 provider: {}, 只支持 BuilderId 或 Enterprise", provider_id));
     }
     
-    // Enterprise 必须提供 start_url
-    if provider_id == "Enterprise" && start_url.is_none() {
-        return Err("Enterprise 账号需要提供 Start URL".to_string());
-    }
-    
     // 先尝试用传入的 access_token 获取配额
-    let (final_access_token, final_refresh_token, usage_result, expires_at, id_token, sso_session_id) = 
+    let (final_access_token, final_refresh_token, usage_result, expires_at, id_token, sso_session_id) =
         if let Some(at) = access_token {
             match get_usage_by_provider(&provider_id, &at).await {
                 Ok(result) if result.is_auth_error => {
