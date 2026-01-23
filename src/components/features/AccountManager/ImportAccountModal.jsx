@@ -184,7 +184,9 @@ function ImportAccountModal({ onClose, onSuccess }) {
             region: item.region || null,
             machineId: item.machineId || null,
             accessToken: item.accessToken || null,
-            password: item.password || null
+            password: item.password || null,
+            provider: provider,
+            startUrl: item.startUrl || null
           })
         }
         if (account.status === 'banned') {

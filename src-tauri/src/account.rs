@@ -287,6 +287,7 @@ impl AccountStore {
         }
     }
 
+    #[allow(dead_code)]
     pub fn export_to_json(&self) -> String {
         serde_json::to_string_pretty(&self.accounts).unwrap_or_default()
     }
