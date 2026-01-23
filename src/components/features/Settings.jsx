@@ -990,19 +990,11 @@ function Settings() {
                                             <div className={`text-xs ${colors.textMuted} truncate`}>{browser.path}</div>
                                         </div>
                                         <div className="flex gap-2 ml-3">
-                                            {browser.incognitoArg && (
-                                                <button
-                                                    onClick={() => handleSelectBrowser(browser, true)}
-                                                    className="btn-icon px-3 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                                                >
-                                                    {t('settings.incognitoMode')}
-                                                </button>
-                                            )}
                                             <button
-                                                onClick={() => handleSelectBrowser(browser, false)}
-                                                className={`btn-icon px-3 py-1.5 text-xs rounded-lg transition-colors border ${colors.cardSecondary} ${colors.cardHover} ${colors.text} ${colors.cardBorder}`}
+                                                onClick={() => handleSelectBrowser(browser, true)}
+                                                className="btn-icon px-3 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                                             >
-                                                {t('settings.normalMode')}
+                                                {t('settings.selectBrowser')}
                                             </button>
                                         </div>
                                     </div>
