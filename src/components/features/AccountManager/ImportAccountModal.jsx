@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Tabs, Textarea, Select, Stack, Group, Text, Alert, Progress, FileButton, Button as MantineButton } from '@mantine/core'
-import { Upload, FileJson, Key, AlertCircle, CheckCircle, Loader2, Database, RefreshCw } from 'lucide-react'
+import { Tabs, Textarea, Select, Stack, Group, Alert, Progress, FileButton, Button as MantineButton } from '@mantine/core'
+import { Upload, FileJson, Key, AlertCircle, CheckCircle, Loader2, Database, RefreshCw, LogIn } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
+import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../../hooks/useApp'
 import { getConcurrency } from '../../../utils/concurrency'
 import {
@@ -58,6 +59,7 @@ function validateAccount(item, index) {
 
 function ImportAccountModal({ onClose, onSuccess }) {
   const { t, colors } = useApp()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('json')
   const [jsonText, setJsonText] = useState('')
   const [parseResult, setParseResult] = useState(null)
@@ -478,10 +480,13 @@ function ImportAccountModal({ onClose, onSuccess }) {
                       {(props) => <MantineButton {...props} variant="light" leftSection={<FileJson size={16} />}>{t('import.selectFile')}</MantineButton>}
                     </FileButton>
                     <MantineButton variant="light" color="blue" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", provider: "Google", machineId: "" }], null, 2))}>
-                      {t('import.socialTemplate')}
+                      Social 模板
                     </MantineButton>
                     <MantineButton variant="light" color="violet" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", region: "us-east-1", provider: "BuilderId", machineId: "" }], null, 2))}>
-                      {t('import.idcTemplate')}
+                      BuilderId 模板
+                    </MantineButton>
+                    <MantineButton variant="light" color="grape" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", region: "ap-southeast-2", provider: "Enterprise", machineId: "" }], null, 2))}>
+                      Enterprise 模板
                     </MantineButton>
                   </Group>
 
@@ -668,46 +673,85 @@ function ImportAccountModal({ onClose, onSuccess }) {
           ) : importing || ssoImporting || kiroImporting ? (
             <div></div>
           ) : activeTab === 'json' ? (
-            <div className="flex gap-3">
-              <Button variant="secondary" onClick={onClose}>
-                {t('common.cancel')}
-              </Button>
+            <div className="flex justify-between">
               <Button 
-                onClick={handleJsonImport}
-                disabled={!parseResult?.valid.length}
+                variant="secondary" 
+                onClick={() => {
+                  onClose()
+                  navigate('/login')
+                }}
                 className="flex items-center gap-2"
               >
-                <Upload size={16} />
-                {t('import.import')} {parseResult?.valid.length ? `(${parseResult.valid.length})` : ''}
+                <LogIn size={16} />
+                在线登录
               </Button>
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={onClose}>
+                  {t('common.cancel')}
+                </Button>
+                <Button 
+                  onClick={handleJsonImport}
+                  disabled={!parseResult?.valid.length}
+                  className="flex items-center gap-2"
+                >
+                  <Upload size={16} />
+                  {t('import.import')} {parseResult?.valid.length ? `(${parseResult.valid.length})` : ''}
+                </Button>
+              </div>
             </div>
           ) : activeTab === 'sso' ? (
-            <div className="flex gap-3">
-              <Button variant="secondary" onClick={onClose}>
-                {t('common.cancel')}
-              </Button>
+            <div className="flex justify-between">
               <Button 
-                onClick={handleSsoImport}
-                disabled={!ssoToken.trim()}
+                variant="secondary" 
+                onClick={() => {
+                  onClose()
+                  navigate('/login')
+                }}
                 className="flex items-center gap-2"
               >
-                <Key size={16} />
-                {t('import.import')} {ssoToken.trim() ? `(${ssoToken.split('\n').filter(t => t.trim()).length})` : ''}
+                <LogIn size={16} />
+                在线登录
               </Button>
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={onClose}>
+                  {t('common.cancel')}
+                </Button>
+                <Button 
+                  onClick={handleSsoImport}
+                  disabled={!ssoToken.trim()}
+                  className="flex items-center gap-2"
+                >
+                  <Key size={16} />
+                  {t('import.import')} {ssoToken.trim() ? `(${ssoToken.split('\n').filter(t => t.trim()).length})` : ''}
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="flex gap-3">
-              <Button variant="secondary" onClick={onClose}>
-                {t('common.cancel')}
-              </Button>
+            <div className="flex justify-between">
               <Button 
-                onClick={handleKiroImport}
-                disabled={kiroAccounts.length === 0}
+                variant="secondary" 
+                onClick={() => {
+                  onClose()
+                  navigate('/login')
+                }}
                 className="flex items-center gap-2"
               >
-                <Database size={16} />
-                导入 {kiroAccounts.length > 0 ? `(${kiroAccounts.length})` : ''}
+                <LogIn size={16} />
+                在线登录
               </Button>
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={onClose}>
+                  {t('common.cancel')}
+                </Button>
+                <Button 
+                  onClick={handleKiroImport}
+                  disabled={kiroAccounts.length === 0}
+                  className="flex items-center gap-2"
+                >
+                  <Database size={16} />
+                  导入 {kiroAccounts.length > 0 ? `(${kiroAccounts.length})` : ''}
+                </Button>
+              </div>
             </div>
           )}
         </DialogFooter>
