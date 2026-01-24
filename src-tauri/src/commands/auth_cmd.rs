@@ -71,7 +71,7 @@ async fn login_social(
     let (new_email, user_id) = extract_user_info(&usage);
     
     // 获取不到邮箱直接报错
-    let final_email = new_email.clone().ok_or("获取邮箱失败，请检查账号状态")?;
+    let _final_email = new_email.clone().ok_or("获取邮箱失败，请检查账号状态")?;
 
     let mut store = state.store.lock().expect("Failed to acquire lock");
     let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &provider_id, &auth_result.refresh_token, &user_id);
@@ -80,7 +80,7 @@ async fn login_social(
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(auth_result.access_token.clone());
         existing.refresh_token = Some(auth_result.refresh_token.clone());
-        existing.email = final_email.clone();
+        existing.email = new_email.clone();
         existing.user_id = user_id.clone();
         existing.expires_at = Some(auth_result.expires_at.clone());
         existing.profile_arn = auth_result.profile_arn.clone();
@@ -89,6 +89,7 @@ async fn login_social(
         existing.status = calc_status(usage_result.is_banned);
         existing.clone()
     } else {
+        let final_email = new_email.ok_or("获取邮箱失败")?;
         let mut account = Account::new(final_email.clone(), format!("Kiro {} 账号", provider_id));
         account.access_token = Some(auth_result.access_token.clone());
         account.refresh_token = Some(auth_result.refresh_token.clone());
@@ -107,8 +108,9 @@ async fn login_social(
     store.save_to_file();
     drop(store);
 
-    update_auth_state(&state, &final_email, &provider_id, &auth_result.access_token, &auth_result.refresh_token);
-    println!("\n[{}] LOGIN SUCCESS: {}", auth_method, account.email);
+    let display_id = account.get_display_id();
+    update_auth_state(&state, &account.email, &provider_id, &auth_result.access_token, &auth_result.refresh_token);
+    println!("\n[{}] LOGIN SUCCESS: {}", auth_method, display_id);
 
     let _ = app_handle.emit("login-success", account.id.clone());
     Ok(format!("{} login completed for {}", auth_method, provider_id))
@@ -150,7 +152,7 @@ async fn login_idc(
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(auth_result.access_token.clone());
         existing.refresh_token = Some(auth_result.refresh_token.clone());
-        existing.email = final_email.clone();
+        existing.email = new_email.clone();
         existing.user_id = user_id.clone();
         existing.provider = Some(provider_id.clone()); // 确保 provider 不变
         existing.expires_at = Some(auth_result.expires_at.clone());
@@ -188,18 +190,19 @@ async fn login_idc(
     store.save_to_file();
     drop(store);
 
-    update_auth_state(&state, &final_email, &provider_id, &auth_result.access_token, &auth_result.refresh_token);
-    println!("\n[{}] LOGIN SUCCESS: {}", auth_method, account.email);
+    let display_id = account.get_display_id();
+    update_auth_state(&state, &account.email, &provider_id, &auth_result.access_token, &auth_result.refresh_token);
+    println!("\n[{}] LOGIN SUCCESS: {}", auth_method, display_id);
 
     let _ = app_handle.emit("login-success", account.id.clone());
-    Ok(format!("{} login completed for {}", auth_method, final_email))
+    Ok(format!("{} login completed for {}", auth_method, display_id))
 }
 
-fn update_auth_state(state: &State<'_, AppState>, email: &str, provider: &str, access_token: &str, refresh_token: &str) {
+fn update_auth_state(state: &State<'_, AppState>, email: &Option<String>, provider: &str, access_token: &str, refresh_token: &str) {
     let user = User {
         id: uuid::Uuid::new_v4().to_string(),
-        email: email.to_string(),
-        name: email.split('@').next().unwrap_or("User").to_string(),
+        email: email.clone(),
+        name: email.as_ref().and_then(|e| e.split('@').next()).unwrap_or("User").to_string(),
         avatar: None,
         provider: provider.to_string(),
     };
@@ -251,7 +254,7 @@ pub async fn handle_kiro_social_callback(
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(token_response.access_token.clone());
         existing.refresh_token = Some(token_response.refresh_token.clone());
-        existing.email = final_email.clone();
+        existing.email = new_email.clone();
         existing.user_id = user_id.clone();
         existing.usage_data = Some(usage_result.usage_data);
         existing.status = calc_status(usage_result.is_banned);
@@ -272,9 +275,10 @@ pub async fn handle_kiro_social_callback(
     store.save_to_file();
     drop(store);
     
-    update_auth_state(&state, &final_email, &pending.provider, &token_response.access_token, &token_response.refresh_token);
+    let display_id = account.get_display_id();
+    update_auth_state(&state, &account.email, &pending.provider, &token_response.access_token, &token_response.refresh_token);
     let _ = app_handle.emit("login-success", account.id);
-    println!("Social callback login completed: {}", final_email);
+    println!("Social callback login completed: {}", display_id);
     Ok(())
 }
 

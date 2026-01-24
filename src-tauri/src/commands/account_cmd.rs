@@ -130,7 +130,7 @@ pub async fn sync_account(state: State<'_, AppState>, id: String) -> Result<Acco
         if let Some(user_info) = usage.usage_data.get("userInfo") {
             if let Some(email) = user_info.get("email").and_then(|v| v.as_str()) {
                 if !email.is_empty() {
-                    a.email = email.to_string();
+                    a.email = Some(email.to_string());
                 }
             }
             if let Some(user_id) = user_info.get("userId").and_then(|v| v.as_str()) {
@@ -326,7 +326,7 @@ pub async fn add_account_by_social(
     let user = User {
         id: uuid::Uuid::new_v4().to_string(),
         email: account.email.clone(),
-        name: account.email.split('@').next().unwrap_or("User").to_string(),
+        name: account.email.as_ref().and_then(|e| e.split('@').next()).unwrap_or("User").to_string(),
         avatar: None,
         provider: idp,
     };
@@ -367,10 +367,14 @@ pub fn export_accounts(state: State<AppState>, ids: Option<Vec<String>>) -> Stri
             }
         } else if account.provider.is_none() && account.auth_method.as_deref() == Some("social") {
             // Social 账号但 provider 为 null，根据邮箱判断
-            if account.email.contains("gmail") {
-                account.provider = Some("Google".to_string());
-            } else if account.email.contains("github") {
-                account.provider = Some("Github".to_string());
+            if let Some(ref email) = account.email {
+                if email.contains("gmail") {
+                    account.provider = Some("Google".to_string());
+                } else if email.contains("github") {
+                    account.provider = Some("Github".to_string());
+                } else {
+                    account.provider = Some("Google".to_string());
+                }
             } else {
                 account.provider = Some("Google".to_string());
             }
@@ -532,12 +536,13 @@ async fn add_account_by_idc_internal(
     start_url: Option<String>,
     client_id_hash: Option<String>,
 ) -> Result<Account, String> {
+    let is_enterprise = provider_id == "Enterprise";
+    
     // BuilderId 使用默认 region，Enterprise 必须提供 region
-    let region = if provider_id == "BuilderId" {
-        region.unwrap_or_else(|| "us-east-1".to_string())
-    } else {
-        // Enterprise 必须提供 region
+    let region = if is_enterprise {
         region.ok_or("Enterprise 账号必须提供 region")?
+    } else {
+        region.unwrap_or_else(|| "us-east-1".to_string())
     };
     
     // 先尝试用传入的 access_token 获取配额
@@ -589,82 +594,138 @@ async fn add_account_by_idc_internal(
     
     let (new_email, user_id) = extract_user_info(&usage);
     
-    // Enterprise 账号允许没有 email,使用 userId 作为标识
-    let final_email = if provider_id == "Enterprise" {
-        new_email.clone().or_else(|| user_id.clone()).ok_or("Enterprise 账号缺少 email 和 userId")?
-    } else {
-        new_email.clone().ok_or("获取邮箱失败，请检查账号状态")?
-    };
+    // ========== Enterprise 和 BuilderId 分开处理 ==========
     
-    // 计算 client_id_hash（与 Kiro IDE 源码一致）
-    let client_id_hash = if let Some(hash) = client_id_hash {
-        // 从 Kiro 导入时直接使用提供的 hash
-        hash
-    } else {
-        // JSON 导入时计算 hash
-        let actual_start_url = if provider_id == "BuilderId" {
-            "https://view.awsapps.com/start"
+    if is_enterprise {
+        // Enterprise 账号：必须有 user_id，email 可选
+        let user_id = user_id.ok_or("Enterprise 账号缺少 userId")?;
+        
+        // 计算 client_id_hash
+        let client_id_hash = if let Some(hash) = client_id_hash {
+            hash
         } else {
-            // Enterprise 必须提供 Start URL
-            start_url.as_deref().ok_or("Enterprise 账号缺少 Start URL")?
+            let actual_start_url = start_url.as_deref().ok_or("Enterprise 账号缺少 Start URL")?;
+            calculate_client_id_hash(actual_start_url)
         };
         
-        calculate_client_id_hash(actual_start_url)
-    };
-    
-    let mut store = state.store.lock().expect("Failed to acquire store lock");
-    let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &provider_id, &refresh_token, &user_id);
-    
-    let account = if let Some(idx) = existing_idx {
-        let existing = &mut store.accounts[idx];
-        existing.access_token = Some(final_access_token);
-        existing.refresh_token = Some(final_refresh_token);
-        existing.user_id = user_id.clone();
-        existing.provider = Some(provider_id.clone()); // 确保 provider 不变
-        if !expires_at.is_empty() {
-            existing.expires_at = Some(expires_at);
-        }
-        existing.client_id = Some(client_id);
-        existing.client_secret = Some(client_secret);
-        existing.region = Some(region);
-        existing.client_id_hash = Some(client_id_hash);
-        existing.start_url = start_url.clone(); // 保存 Start URL
-        if id_token.is_some() {
-            existing.id_token = id_token;
-        }
-        if sso_session_id.is_some() {
-            existing.sso_session_id = sso_session_id;
-        }
-        existing.usage_data = Some(usage_result.usage_data);
-        existing.status = calc_status(usage_result.is_banned);
-        existing.clone()
+        let mut store = state.store.lock().expect("Failed to acquire store lock");
+        let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &provider_id, &refresh_token, &Some(user_id.clone()));
+        
+        let account = if let Some(idx) = existing_idx {
+            // 更新已存在的账号
+            let existing = &mut store.accounts[idx];
+            existing.access_token = Some(final_access_token);
+            existing.refresh_token = Some(final_refresh_token);
+            existing.email = new_email;  // 更新 email（可能是 None）
+            existing.user_id = Some(user_id);
+            if !expires_at.is_empty() {
+                existing.expires_at = Some(expires_at);
+            }
+            existing.client_id = Some(client_id);
+            existing.client_secret = Some(client_secret);
+            existing.region = Some(region);
+            existing.client_id_hash = Some(client_id_hash);
+            existing.start_url = start_url.clone();
+            if id_token.is_some() {
+                existing.id_token = id_token;
+            }
+            if sso_session_id.is_some() {
+                existing.sso_session_id = sso_session_id;
+            }
+            existing.usage_data = Some(usage_result.usage_data);
+            existing.status = calc_status(usage_result.is_banned);
+            existing.clone()
+        } else {
+            // 创建新的 Enterprise 账号
+            let mut account = Account::new_enterprise(user_id.clone(), format!("Kiro Enterprise 账号"));
+            account.access_token = Some(final_access_token);
+            account.refresh_token = Some(final_refresh_token);
+            account.email = new_email;  // 可能是 None
+            if !expires_at.is_empty() {
+                account.expires_at = Some(expires_at);
+            }
+            account.client_id = Some(client_id);
+            account.client_secret = Some(client_secret);
+            account.region = Some(region);
+            account.client_id_hash = Some(client_id_hash);
+            account.start_url = start_url.clone();
+            account.id_token = id_token;
+            account.sso_session_id = sso_session_id;
+            account.usage_data = Some(usage_result.usage_data);
+            account.status = calc_status(usage_result.is_banned);
+            account.machine_id = Some(machine_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string().to_lowercase()));
+            account.password = password.clone();
+            store.accounts.insert(0, account.clone());
+            account
+        };
+        
+        store.save_to_file();
+        Ok(account)
+        
     } else {
-        let mut account = Account::new(final_email, format!("Kiro {} 账号", provider_id));
-        account.access_token = Some(final_access_token);
-        account.refresh_token = Some(final_refresh_token);
-        account.provider = Some(provider_id.clone());
-        account.auth_method = Some("IdC".to_string());
-        account.user_id = user_id;
-        if !expires_at.is_empty() {
-            account.expires_at = Some(expires_at);
-        }
-        account.client_id = Some(client_id);
-        account.client_secret = Some(client_secret);
-        account.region = Some(region);
-        account.client_id_hash = Some(client_id_hash);
-        account.start_url = start_url.clone(); // 保存 Start URL
-        account.id_token = id_token;
-        account.sso_session_id = sso_session_id;
-        account.usage_data = Some(usage_result.usage_data);
-        account.status = calc_status(usage_result.is_banned);
-        account.machine_id = Some(machine_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string().to_lowercase()));
-        account.password = password.clone();
-        store.accounts.insert(0, account.clone());
-        account
-    };
-    
-    store.save_to_file();
-    Ok(account)
+        // BuilderId 账号：必须有 email
+        let email = new_email.ok_or("BuilderId 账号缺少 email")?;
+        
+        // 计算 client_id_hash
+        let client_id_hash = if let Some(hash) = client_id_hash {
+            hash
+        } else {
+            calculate_client_id_hash("https://view.awsapps.com/start")
+        };
+        
+        let mut store = state.store.lock().expect("Failed to acquire store lock");
+        let existing_idx = find_existing_account_idx(&store.accounts, &Some(email.clone()), &provider_id, &refresh_token, &user_id);
+        
+        let account = if let Some(idx) = existing_idx {
+            // 更新已存在的账号
+            let existing = &mut store.accounts[idx];
+            existing.access_token = Some(final_access_token);
+            existing.refresh_token = Some(final_refresh_token);
+            existing.user_id = user_id;
+            if !expires_at.is_empty() {
+                existing.expires_at = Some(expires_at);
+            }
+            existing.client_id = Some(client_id);
+            existing.client_secret = Some(client_secret);
+            existing.region = Some(region);
+            existing.client_id_hash = Some(client_id_hash);
+            if id_token.is_some() {
+                existing.id_token = id_token;
+            }
+            if sso_session_id.is_some() {
+                existing.sso_session_id = sso_session_id;
+            }
+            existing.usage_data = Some(usage_result.usage_data);
+            existing.status = calc_status(usage_result.is_banned);
+            existing.clone()
+        } else {
+            // 创建新的 BuilderId 账号
+            let mut account = Account::new(email, format!("Kiro BuilderId 账号"));
+            account.access_token = Some(final_access_token);
+            account.refresh_token = Some(final_refresh_token);
+            account.provider = Some(provider_id.clone());
+            account.auth_method = Some("IdC".to_string());
+            account.user_id = user_id;
+            if !expires_at.is_empty() {
+                account.expires_at = Some(expires_at);
+            }
+            account.client_id = Some(client_id);
+            account.client_secret = Some(client_secret);
+            account.region = Some(region);
+            account.client_id_hash = Some(client_id_hash);
+            account.id_token = id_token;
+            account.sso_session_id = sso_session_id;
+            account.usage_data = Some(usage_result.usage_data);
+            account.status = calc_status(usage_result.is_banned);
+            account.machine_id = Some(machine_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string().to_lowercase()));
+            account.password = password.clone();
+            store.accounts.insert(0, account.clone());
+            account
+        };
+        
+        store.save_to_file();
+        Ok(account)
+    }
 }
 
 /// 更新账号信息（支持修改 label、token、SSO Client ID/Secret、machineId）
@@ -754,7 +815,7 @@ pub async fn delete_account_remote(
         store.delete(&id);
     }
     
-    Ok(format!("账号 {} 已从服务端删除", account.email))
+    Ok(format!("账号 {} 已从服务端删除", account.get_display_id()))
 }
 
 

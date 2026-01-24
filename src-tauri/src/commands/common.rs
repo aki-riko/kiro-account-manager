@@ -129,36 +129,31 @@ pub fn extract_user_info(usage: &Option<crate::kiro_portal_client::GetUserUsageA
 }
 
 /// 查找已存在的账号索引
-/// Enterprise 账号优先用 userId 匹配（因为可能没有 email）
-/// 其他账号优先用 email 匹配，其次 refresh_token 匹配
+/// 使用 email + user_id + auth_method + provider 四字段组合精确去重
+/// 只有当 4 个字段都相同时才认为是重复账号
 pub fn find_existing_account_idx(
     accounts: &[Account],
     email: &Option<String>,
     provider: &str,
-    refresh_token: &str,
+    _refresh_token: &str,
     user_id: &Option<String>,
 ) -> Option<usize> {
-    // Enterprise 账号优先用 userId 匹配
-    if provider == "Enterprise" {
-        if let Some(ref uid) = user_id {
-            if let Some(idx) = accounts.iter().position(|a| {
-                a.provider.as_deref() == Some(provider) && a.user_id.as_ref() == Some(uid)
-            }) {
-                return Some(idx);
-            }
-        }
-    }
+    // 推断 auth_method
+    let auth_method = if provider == "BuilderId" || provider == "Enterprise" {
+        "IdC"
+    } else {
+        "social"
+    };
     
-    // 其他账号或 Enterprise 没有 userId 时，用 email 匹配
-    if let Some(ref e) = email {
-        if let Some(idx) = accounts.iter().position(|a| &a.email == e && a.provider.as_deref() == Some(provider)) {
-            return Some(idx);
-        }
-    }
-    
-    // 最后用 refresh_token 匹配
+    // 使用 4 字段组合精确匹配
     accounts.iter().position(|a| {
-        a.provider.as_deref() == Some(provider) && a.refresh_token.as_ref() == Some(&refresh_token.to_string())
+        let email_match = a.email == *email;
+        let user_id_match = a.user_id == *user_id;
+        let auth_method_match = a.auth_method.as_deref() == Some(auth_method);
+        let provider_match = a.provider.as_deref() == Some(provider);
+        
+        // 4 个字段都相同才认为是重复
+        email_match && user_id_match && auth_method_match && provider_match
     })
 }
 

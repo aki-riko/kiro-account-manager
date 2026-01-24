@@ -143,8 +143,8 @@ impl SwitchResult {
         Self {
             success: true,
             new_account_id: Some(account.id.clone()),
-            new_account_email: Some(account.email.clone()),
-            message: format!("已切换到账号: {}", account.email),
+            new_account_email: account.email.clone(),
+            message: format!("已切换到账号: {}", account.get_display_id()),
         }
     }
 

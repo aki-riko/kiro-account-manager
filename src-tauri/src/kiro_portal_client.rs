@@ -1,9 +1,41 @@
 // Kiro Web Portal 客户端 - CBOR API
 // 提供 GetUserUsageAndLimits 等公共接口，所有账号类型共用
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 const KIRO_WEB_PORTAL: &str = "https://app.kiro.dev";
+
+// ============================================================
+// 自定义反序列化器
+// ============================================================
+
+/// 兼容两种时间格式：字符串（企业版）和时间戳（普通版）
+fn deserialize_next_date_reset<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+    
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum DateReset {
+        Timestamp(f64),
+        String(String),
+    }
+    
+    match Option::<DateReset>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(DateReset::Timestamp(ts)) => Ok(Some(ts)),
+        Some(DateReset::String(s)) => {
+            // 解析 ISO 8601 格式字符串 "2026-02-01 00:00:00+00:00"
+            use chrono::{DateTime, Utc};
+            let dt = DateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S%z")
+                .or_else(|_| DateTime::parse_from_rfc3339(&s))
+                .map_err(|e| Error::custom(format!("Invalid date format: {}", e)))?;
+            Ok(Some(dt.with_timezone(&Utc).timestamp() as f64))
+        }
+    }
+}
 
 // ============================================================
 // CBOR 编解码
@@ -102,8 +134,32 @@ pub struct SubscriptionInfo {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OverageConfiguration {
-    #[serde(rename = "overageStatus")]
+    // 普通版字段
+    #[serde(rename = "overageStatus", skip_serializing_if = "Option::is_none")]
     pub overage_status: Option<String>,
+    #[serde(rename = "overageLimit", skip_serializing_if = "Option::is_none")]
+    pub overage_limit: Option<serde_json::Value>,
+    
+    // 企业版字段
+    #[serde(rename = "overageEnabled", skip_serializing_if = "Option::is_none")]
+    pub overage_enabled: Option<bool>,
+}
+
+impl OverageConfiguration {
+    /// 判断超额是否启用（兼容两种格式）
+    pub fn is_overage_enabled(&self) -> bool {
+        // 企业版：检查 overageEnabled 字段
+        if let Some(enabled) = self.overage_enabled {
+            return enabled;
+        }
+        
+        // 普通版：检查 overageStatus 字段
+        if let Some(status) = &self.overage_status {
+            return status != "DISABLED";
+        }
+        
+        false
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -118,7 +174,7 @@ pub struct GetUserUsageAndLimitsResponse {
     pub overage_configuration: Option<OverageConfiguration>,
     #[serde(rename = "daysUntilReset")]
     pub days_until_reset: Option<i32>,
-    #[serde(rename = "nextDateReset")]
+    #[serde(rename = "nextDateReset", deserialize_with = "deserialize_next_date_reset")]
     pub next_date_reset: Option<f64>,
     #[serde(rename = "userInfo")]
     pub user_info: Option<GetUserInfoResponse>,

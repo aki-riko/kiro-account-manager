@@ -91,7 +91,9 @@ impl AccountTagLink {
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     pub id: String,
-    pub email: String,
+    /// email 字段（企业账号可能没有，用 user_id 代替）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
     // 账号密码（可选）
     #[serde(default)]
     pub password: Option<String>,
@@ -135,11 +137,12 @@ pub struct Account {
 }
 
 impl Account {
+    /// 创建普通账号（Google/GitHub/BuilderId）
     pub fn new(email: String, label: String) -> Self {
         let now: DateTime<Local> = Local::now();
         Self {
             id: Uuid::new_v4().to_string(),
-            email,
+            email: Some(email),
             label,
             status: "active".to_string(),
             added_at: now.format("%Y/%m/%d %H:%M:%S").to_string(),
@@ -164,6 +167,53 @@ impl Account {
             tag_links: Vec::new(),
             machine_id: None,
             password: None,
+        }
+    }
+
+    /// 创建 Enterprise 账号（没有 email，使用 user_id）
+    pub fn new_enterprise(user_id: String, label: String) -> Self {
+        let now: DateTime<Local> = Local::now();
+        Self {
+            id: Uuid::new_v4().to_string(),
+            email: None,  // Enterprise 账号没有 email
+            label,
+            status: "active".to_string(),
+            added_at: now.format("%Y/%m/%d %H:%M:%S").to_string(),
+            access_token: None,
+            refresh_token: None,
+            csrf_token: None,
+            session_token: None,
+            expires_at: None,
+            provider: Some("Enterprise".to_string()),
+            user_id: Some(user_id),
+            auth_method: Some("IdC".to_string()),
+            client_id: None,
+            client_secret: None,
+            region: None,
+            client_id_hash: None,
+            sso_session_id: None,
+            id_token: None,
+            start_url: None,
+            profile_arn: None,
+            usage_data: None,
+            group_id: None,
+            tag_links: Vec::new(),
+            machine_id: None,
+            password: None,
+        }
+    }
+
+    /// 判断是否是 Enterprise 账号
+    pub fn is_enterprise(&self) -> bool {
+        self.provider.as_deref() == Some("Enterprise")
+    }
+
+    /// 获取显示用的标识（Enterprise 用 user_id，其他用 email）
+    pub fn get_display_id(&self) -> String {
+        if self.is_enterprise() {
+            self.user_id.clone().unwrap_or_else(|| "Unknown".to_string())
+        } else {
+            self.email.clone().unwrap_or_else(|| "Unknown".to_string())
         }
     }
 
@@ -266,9 +316,21 @@ impl AccountStore {
                 let mut added = 0;
                 for mut account in imported {
                     let exists = self.accounts.iter().any(|a| {
-                        a.id == account.id || 
-                        (a.email == account.email && a.provider == account.provider)
+                        // 优先用 ID 去重
+                        if a.id == account.id {
+                            return true;
+                        }
+                        
+                        // 使用 email + user_id + auth_method + provider 组合去重
+                        let email_match = a.email == account.email;
+                        let user_id_match = a.user_id == account.user_id;
+                        let auth_method_match = a.auth_method == account.auth_method;
+                        let provider_match = a.provider == account.provider;
+                        
+                        // 如果 email、user_id、auth_method、provider 都相同，则认为是重复账号
+                        email_match && user_id_match && auth_method_match && provider_match
                     });
+                    
                     if !exists {
                         // 如果没有 machine_id，生成一个
                         if account.machine_id.is_none() {

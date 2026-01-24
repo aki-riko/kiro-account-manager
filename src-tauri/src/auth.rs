@@ -10,7 +10,7 @@ use std::sync::Mutex;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: String,
-    pub email: String,
+    pub email: Option<String>,
     pub name: String,
     pub avatar: Option<String>,
     pub provider: String,
