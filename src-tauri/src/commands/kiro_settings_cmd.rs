@@ -24,6 +24,27 @@ pub struct KiroSettings {
     pub notify_billing: bool,
 }
 
+impl Default for KiroSettings {
+    fn default() -> Self {
+        Self {
+            http_proxy: None,
+            model_selection: Some("claude-sonnet-4.5".to_string()),
+            enable_codebase_indexing: true,
+            trusted_commands_mode: Some("none".to_string()),
+            custom_trusted_commands: None,
+            agent_autonomy: Some("Supervised".to_string()),
+            enable_tab_autocomplete: true,
+            usage_summary: true,
+            code_references: true,
+            enable_debug_logs: false,
+            notify_action_required: true,
+            notify_failure: true,
+            notify_success: true,
+            notify_billing: true,
+        }
+    }
+}
+
 fn get_kiro_settings_path() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -66,17 +87,113 @@ fn get_kiro_settings_inner() -> Result<KiroSettings, String> {
         return Ok(KiroSettings::default());
     }
     
+    // 读取 app-settings.json（首次启动会使用默认值）
+    let app_settings = super::app_settings_cmd::get_app_settings_inner().unwrap_or_default();
+    
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("读取设置文件失败: {}", e))?;
     
-    let json: serde_json::Value = serde_json::from_str(&content)
+    let mut json: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| format!("解析设置文件失败: {}", e))?;
+    
+    let mut ide_modified = false;
+    
+    // 核心逻辑：以 app-settings.json 为准，强制同步到 Kiro IDE
+    // 首次启动时，app_settings 使用默认值，会将默认值写入 IDE
+    
+    // enableCodebaseIndexing
+    let codebase_indexing = app_settings.enable_codebase_indexing.unwrap_or(true);
+    if json.get("kiroAgent.enableCodebaseIndexing").and_then(|v| v.as_bool()) != Some(codebase_indexing) {
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("kiroAgent.enableCodebaseIndexing".to_string(), serde_json::Value::Bool(codebase_indexing));
+            ide_modified = true;
+        }
+    }
+    
+    // enableTabAutocomplete
+    let tab_autocomplete = app_settings.enable_tab_autocomplete.unwrap_or(true);
+    if json.get("kiroAgent.enableTabAutocomplete").and_then(|v| v.as_bool()) != Some(tab_autocomplete) {
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("kiroAgent.enableTabAutocomplete".to_string(), serde_json::Value::Bool(tab_autocomplete));
+            ide_modified = true;
+        }
+    }
+    
+    // usageSummary
+    let usage_summary = app_settings.usage_summary.unwrap_or(true);
+    if json.get("kiroAgent.usageSummary").and_then(|v| v.as_bool()) != Some(usage_summary) {
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("kiroAgent.usageSummary".to_string(), serde_json::Value::Bool(usage_summary));
+            ide_modified = true;
+        }
+    }
+    
+    // codeReferences
+    let code_references = app_settings.code_references.unwrap_or(true);
+    if json.get("kiroAgent.codeReferences").and_then(|v| v.as_bool()) != Some(code_references) {
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("kiroAgent.codeReferences".to_string(), serde_json::Value::Bool(code_references));
+            ide_modified = true;
+        }
+    }
+    
+    // enableDebugLogs
+    let debug_logs = app_settings.enable_debug_logs.unwrap_or(false);
+    if json.get("kiroAgent.enableDebugLogs").and_then(|v| v.as_bool()) != Some(debug_logs) {
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("kiroAgent.enableDebugLogs".to_string(), serde_json::Value::Bool(debug_logs));
+            ide_modified = true;
+        }
+    }
+    
+    // notifyActionRequired
+    let notify_action = app_settings.notify_action_required.unwrap_or(true);
+    if json.get("kiroAgent.notifications.agent.actionRequired").and_then(|v| v.as_bool()) != Some(notify_action) {
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("kiroAgent.notifications.agent.actionRequired".to_string(), serde_json::Value::Bool(notify_action));
+            ide_modified = true;
+        }
+    }
+    
+    // notifyFailure
+    let notify_failure = app_settings.notify_failure.unwrap_or(true);
+    if json.get("kiroAgent.notifications.agent.failure").and_then(|v| v.as_bool()) != Some(notify_failure) {
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("kiroAgent.notifications.agent.failure".to_string(), serde_json::Value::Bool(notify_failure));
+            ide_modified = true;
+        }
+    }
+    
+    // notifySuccess
+    let notify_success = app_settings.notify_success.unwrap_or(true);
+    if json.get("kiroAgent.notifications.agent.success").and_then(|v| v.as_bool()) != Some(notify_success) {
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("kiroAgent.notifications.agent.success".to_string(), serde_json::Value::Bool(notify_success));
+            ide_modified = true;
+        }
+    }
+    
+    // notifyBilling
+    let notify_billing = app_settings.notify_billing.unwrap_or(true);
+    if json.get("kiroAgent.notifications.billing").and_then(|v| v.as_bool()) != Some(notify_billing) {
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("kiroAgent.notifications.billing".to_string(), serde_json::Value::Bool(notify_billing));
+            ide_modified = true;
+        }
+    }
+    
+    // 如果有修改，写入 Kiro IDE settings.json
+    if ide_modified {
+        let content = serde_json::to_string_pretty(&json)
+            .map_err(|e| format!("序列化设置失败: {}", e))?;
+        std::fs::write(&path, content)
+            .map_err(|e| format!("写入设置文件失败: {}", e))?;
+    }
     
     Ok(KiroSettings {
         http_proxy: json.get("http.proxy").and_then(|v| v.as_str()).map(|s| s.to_string()),
         model_selection: json.get("kiroAgent.modelSelection").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        // 如果 settings.json 中没有这些字段，使用 Kiro IDE 的默认值
-        enable_codebase_indexing: json.get("kiroAgent.enableCodebaseIndexing").and_then(|v| v.as_bool()).unwrap_or(true),
+        enable_codebase_indexing: codebase_indexing,
         trusted_commands_mode: json.get("kiroAgent.trustedCommands")
             .and_then(|v| v.as_array())
             .map(|arr| {
@@ -95,17 +212,15 @@ fn get_kiro_settings_inner() -> Result<KiroSettings, String> {
                 .filter_map(|item| item.as_str())
                 .collect::<Vec<_>>()
                 .join("\n")),
-        // Agent 设置（使用 Kiro IDE 默认值）
         agent_autonomy: json.get("kiroAgent.agentAutonomy").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        enable_tab_autocomplete: json.get("kiroAgent.enableTabAutocomplete").and_then(|v| v.as_bool()).unwrap_or(true),
-        usage_summary: json.get("kiroAgent.usageSummary").and_then(|v| v.as_bool()).unwrap_or(true),
-        code_references: json.get("kiroAgent.codeReferences").and_then(|v| v.as_bool()).unwrap_or(true),
-        enable_debug_logs: json.get("kiroAgent.enableDebugLogs").and_then(|v| v.as_bool()).unwrap_or(false),
-        // 通知设置（使用 Kiro IDE 默认值）
-        notify_action_required: json.get("kiroAgent.notifications.agent.actionRequired").and_then(|v| v.as_bool()).unwrap_or(true),
-        notify_failure: json.get("kiroAgent.notifications.agent.failure").and_then(|v| v.as_bool()).unwrap_or(true),
-        notify_success: json.get("kiroAgent.notifications.agent.success").and_then(|v| v.as_bool()).unwrap_or(true),
-        notify_billing: json.get("kiroAgent.notifications.billing").and_then(|v| v.as_bool()).unwrap_or(true),
+        enable_tab_autocomplete: tab_autocomplete,
+        usage_summary: usage_summary,
+        code_references: code_references,
+        enable_debug_logs: debug_logs,
+        notify_action_required: notify_action,
+        notify_failure: notify_failure,
+        notify_success: notify_success,
+        notify_billing: notify_billing,
     })
 }
 

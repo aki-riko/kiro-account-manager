@@ -250,7 +250,9 @@ function Settings() {
     const handleCodebaseIndexingChange = async (checked) => {
         setEnableCodebaseIndexing(checked)
         try {
+            // 同时写入 Kiro IDE 和 app-settings.json
             await invoke('set_kiro_codebase_indexing', { enabled: checked })
+            await saveAppSettings({ enableCodebaseIndexing: checked })
         } catch (err) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         }
@@ -290,6 +292,7 @@ function Settings() {
         setEnableTabAutocomplete(checked)
         try {
             await invoke('set_kiro_tab_autocomplete', { enabled: checked })
+            await saveAppSettings({ enableTabAutocomplete: checked })
         } catch (err) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         }
@@ -299,6 +302,7 @@ function Settings() {
         setUsageSummary(checked)
         try {
             await invoke('set_kiro_usage_summary', { enabled: checked })
+            await saveAppSettings({ usageSummary: checked })
         } catch (err) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         }
@@ -308,6 +312,7 @@ function Settings() {
         setCodeReferences(checked)
         try {
             await invoke('set_kiro_code_references', { enabled: checked })
+            await saveAppSettings({ codeReferences: checked })
         } catch (err) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         }
@@ -317,6 +322,7 @@ function Settings() {
         setEnableDebugLogs(checked)
         try {
             await invoke('set_kiro_debug_logs', { enabled: checked })
+            await saveAppSettings({ enableDebugLogs: checked })
         } catch (err) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         }
@@ -327,6 +333,17 @@ function Settings() {
         setter(checked)
         try {
             await invoke('set_kiro_notification', { key, enabled: checked })
+            // 根据 key 保存到对应的 app-settings 字段
+            const fieldMap = {
+                'kiroAgent.notifications.agent.actionRequired': 'notifyActionRequired',
+                'kiroAgent.notifications.agent.failure': 'notifyFailure',
+                'kiroAgent.notifications.agent.success': 'notifySuccess',
+                'kiroAgent.notifications.billing': 'notifyBilling'
+            }
+            const field = fieldMap[key]
+            if (field) {
+                await saveAppSettings({ [field]: checked })
+            }
         } catch (err) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         }

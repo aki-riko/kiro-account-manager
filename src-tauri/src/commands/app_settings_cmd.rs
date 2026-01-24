@@ -18,6 +18,16 @@ pub struct AppSettings {
     pub bind_machine_id_to_account: Option<bool>,  // true=绑定模式（每个账号固定机器码），false=随机模式
     // 隐私模式：脱敏显示邮箱
     pub privacy_mode: Option<bool>,
+    // Kiro IDE 开关设置（用户偏好）
+    pub enable_codebase_indexing: Option<bool>,
+    pub enable_tab_autocomplete: Option<bool>,
+    pub usage_summary: Option<bool>,
+    pub code_references: Option<bool>,
+    pub enable_debug_logs: Option<bool>,
+    pub notify_action_required: Option<bool>,
+    pub notify_failure: Option<bool>,
+    pub notify_success: Option<bool>,
+    pub notify_billing: Option<bool>,
 }
 
 // 兼容旧配置文件中的 redeem_server 字段（已废弃）
@@ -36,6 +46,16 @@ impl Default for AppSettings {
             browser_path: None,
             bind_machine_id_to_account: Some(true),
             privacy_mode: Some(true),  // 默认开启
+            // Kiro IDE 开关默认值
+            enable_codebase_indexing: Some(true),
+            enable_tab_autocomplete: Some(true),
+            usage_summary: Some(true),
+            code_references: Some(true),
+            enable_debug_logs: Some(false),
+            notify_action_required: Some(true),
+            notify_failure: Some(true),
+            notify_success: Some(true),
+            notify_billing: Some(true),
         }
     }
 }
@@ -53,10 +73,13 @@ fn get_app_settings_path() -> PathBuf {
     get_data_dir().join("app-settings.json")
 }
 
-fn get_app_settings_inner() -> Result<AppSettings, String> {
+pub fn get_app_settings_inner() -> Result<AppSettings, String> {
     let path = get_app_settings_path();
     if !path.exists() {
-        return Ok(AppSettings::default());
+        // 首次启动：创建并保存默认值
+        let default_settings = AppSettings::default();
+        save_settings_to_file(&default_settings)?;
+        return Ok(default_settings);
     }
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("读取设置失败: {}", e))?;
@@ -64,7 +87,7 @@ fn get_app_settings_inner() -> Result<AppSettings, String> {
         .map_err(|e| format!("解析设置失败: {}", e))
 }
 
-fn save_settings_to_file(settings: &AppSettings) -> Result<(), String> {
+pub fn save_settings_to_file(settings: &AppSettings) -> Result<(), String> {
     let path = get_app_settings_path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).ok();
@@ -89,6 +112,17 @@ fn save_app_settings_inner(updates: AppSettings) -> Result<(), String> {
     if updates.browser_path.is_some() { current.browser_path = updates.browser_path; }
     if updates.bind_machine_id_to_account.is_some() { current.bind_machine_id_to_account = updates.bind_machine_id_to_account; }
     if updates.privacy_mode.is_some() { current.privacy_mode = updates.privacy_mode; }
+    
+    // Kiro IDE 开关设置
+    if updates.enable_codebase_indexing.is_some() { current.enable_codebase_indexing = updates.enable_codebase_indexing; }
+    if updates.enable_tab_autocomplete.is_some() { current.enable_tab_autocomplete = updates.enable_tab_autocomplete; }
+    if updates.usage_summary.is_some() { current.usage_summary = updates.usage_summary; }
+    if updates.code_references.is_some() { current.code_references = updates.code_references; }
+    if updates.enable_debug_logs.is_some() { current.enable_debug_logs = updates.enable_debug_logs; }
+    if updates.notify_action_required.is_some() { current.notify_action_required = updates.notify_action_required; }
+    if updates.notify_failure.is_some() { current.notify_failure = updates.notify_failure; }
+    if updates.notify_success.is_some() { current.notify_success = updates.notify_success; }
+    if updates.notify_billing.is_some() { current.notify_billing = updates.notify_billing; }
     
     save_settings_to_file(&current)
 }
