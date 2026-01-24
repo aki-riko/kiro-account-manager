@@ -110,7 +110,14 @@ impl AWSSSOClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| format!("Client registration failed: {}", e))?;
+            .map_err(|e| {
+                // 网络错误可能是 region 不正确
+                if e.to_string().contains("dns error") || e.to_string().contains("connection") {
+                    format!("无法连接到 AWS SSO 服务。\n\n可能的原因：\n1. Region 选择错误（请确认您的 IAM Identity Center 所在的 Region）\n2. 网络连接问题\n3. Start URL 格式错误\n\n错误详情: {}", e)
+                } else {
+                    format!("Client registration failed: {}", e)
+                }
+            })?;
 
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
@@ -123,6 +130,8 @@ impl AWSSSOClient {
                 if text.to_lowercase().contains("invalid start url provided") {
                     return Err("Start URL 无效。请检查您输入的 IAM Identity Center Start URL 是否正确。\n\n示例格式：https://d-1234567890.awsapps.com/start".to_string());
                 }
+                // 其他 400 错误可能是 region 不匹配
+                return Err(format!("注册客户端失败 (400 Bad Request)\n\n可能的原因：\n1. Region 选择错误（请确认您的 IAM Identity Center 所在的 Region）\n2. Start URL 格式错误\n\n错误详情: {}", text));
             }
             return Err(format!("Client registration failed ({}): {}", status, text));
         }
@@ -201,7 +210,14 @@ impl AWSSSOClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| format!("Token refresh request failed: {}", e))?;
+            .map_err(|e| {
+                // 网络错误可能是 region 不正确
+                if e.to_string().contains("dns error") || e.to_string().contains("connection") {
+                    format!("无法连接到 AWS SSO 服务。\n\n可能的原因：\n1. Region 选择错误（请确认账号注册时使用的 Region）\n2. 网络连接问题\n\n错误详情: {}", e)
+                } else {
+                    format!("Token refresh request failed: {}", e)
+                }
+            })?;
 
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
@@ -219,6 +235,13 @@ impl AWSSSOClient {
         if !status.is_success() {
             if status.as_u16() == 401 {
                 return Err("RefreshToken 已过期或无效".to_string());
+            }
+            if status.as_u16() == 400 {
+                // 400 错误可能是 region 不匹配或 refresh token 无效
+                if text.to_lowercase().contains("invalid") && text.to_lowercase().contains("refresh") {
+                    return Err(format!("RefreshToken 无效或已过期。\n\n可能的原因：\n1. Region 选择错误（请确认账号注册时使用的 Region）\n2. RefreshToken 已过期\n3. ClientId 或 ClientSecret 不匹配\n\n错误详情: {}", text));
+                }
+                return Err(format!("Token refresh failed (400 Bad Request)\n\n可能的原因：\n1. Region 选择错误\n2. RefreshToken 无效\n\n错误详情: {}", text));
             }
             return Err(format!("Token refresh failed ({}): {}", status, text));
         }

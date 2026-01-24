@@ -8,21 +8,6 @@ use crate::auth_social;
 use crate::providers::{AuthMethod, AuthProvider, get_provider_config, create_social_provider, create_idc_provider};
 use crate::commands::common::{get_usage_by_provider, extract_user_info, find_existing_account_idx, calc_status};
 use crate::kiro_portal_client::GetUserUsageAndLimitsResponse;
-use serde::Deserialize;
-
-/// add_kiro_account 命令参数
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)]  // quota 和 used 保留用于兼容旧版前端
-pub struct AddKiroAccountParams {
-    pub email: String,
-    pub access_token: String,
-    pub refresh_token: String,
-    pub csrf_token: String,
-    pub idp: String,
-    pub quota: Option<i32>,
-    pub used: Option<i32>,
-}
 
 #[tauri::command]
 pub fn get_current_user(state: State<AppState>) -> Option<User> {
@@ -291,89 +276,6 @@ pub async fn handle_kiro_social_callback(
     let _ = app_handle.emit("login-success", account.id);
     println!("Social callback login completed: {}", final_email);
     Ok(())
-}
-
-#[tauri::command]
-pub async fn add_kiro_account(
-    state: State<'_, AppState>,
-    params: AddKiroAccountParams,
-) -> Result<Account, String> {
-    let AddKiroAccountParams { email, access_token, refresh_token, csrf_token, idp, quota: _, used: _ } = params;
-    
-    println!("Adding Kiro account: email={}, idp={}", email, idp);
-    
-    let usage_result = if !access_token.is_empty() {
-        get_usage_by_provider(&idp, &access_token).await?
-    } else {
-        crate::commands::common::UsageResult { usage_data: serde_json::Value::Null, is_banned: false, is_auth_error: false }
-    };
-    
-    // 封禁账号直接报错
-    if usage_result.is_banned {
-        return Err("BANNED: 账号已被封禁".to_string());
-    }
-    
-    let usage: Option<GetUserUsageAndLimitsResponse> = 
-        serde_json::from_value(usage_result.usage_data.clone()).ok();
-    let (new_email, user_id) = extract_user_info(&usage);
-
-    *state.auth.access_token.lock().expect("Failed to acquire lock") = Some(access_token.clone());
-    *state.auth.refresh_token.lock().expect("Failed to acquire lock") = Some(refresh_token.clone());
-    *state.auth.csrf_token.lock().expect("Failed to acquire lock") = Some(csrf_token.clone());
-    
-    let mut store = state.store.lock().expect("Failed to acquire lock");
-    
-    // 查找已有账号
-    let existing_idx = if let Some(e) = &new_email {
-        store.accounts.iter().position(|a| &a.email == e && a.provider.as_deref() == Some(&idp))
-    } else {
-        store.accounts.iter().position(|a| a.email == email && a.provider.as_deref() == Some(&idp))
-            .or_else(|| find_existing_account_idx(&store.accounts, &None, &idp, &refresh_token, &user_id))
-    };
-    
-    let account = if let Some(idx) = existing_idx {
-        let existing = &mut store.accounts[idx];
-        existing.access_token = Some(access_token.clone());
-        existing.refresh_token = Some(refresh_token.clone());
-        if let Some(e) = &new_email { existing.email = e.clone(); }
-        existing.user_id = user_id;
-        existing.csrf_token = Some(csrf_token.clone());
-        existing.usage_data = Some(usage_result.usage_data);
-        existing.status = calc_status(usage_result.is_banned);
-        existing.clone()
-    } else {
-        let final_email = new_email.unwrap_or(email.clone());
-        let mut account = Account::new(final_email.clone(), format!("Kiro {} 账号", idp));
-        account.access_token = Some(access_token.clone());
-        account.refresh_token = Some(refresh_token.clone());
-        account.provider = Some(idp.clone());
-        // 根据 idp 设置 auth_method
-        account.auth_method = Some(if idp == "BuilderId" || idp == "Enterprise" {
-            "IdC".to_string()
-        } else {
-            "social".to_string()
-        });
-        account.user_id = user_id;
-        account.csrf_token = Some(csrf_token.clone());
-        account.usage_data = Some(usage_result.usage_data);
-        account.status = calc_status(usage_result.is_banned);
-        store.accounts.insert(0, account.clone());
-        account
-    };
-    
-    let final_email = account.email.clone();
-    let user = User {
-        id: uuid::Uuid::new_v4().to_string(),
-        email: final_email.clone(),
-        name: final_email.split('@').next().unwrap_or("User").to_string(),
-        avatar: None,
-        provider: idp.clone(),
-    };
-    *state.auth.user.lock().expect("Failed to acquire lock") = Some(user);
-    *state.pending_login.lock().expect("Failed to acquire lock") = None;
-    
-    store.save_to_file();
-    Ok(account)
 }
 
 #[tauri::command]

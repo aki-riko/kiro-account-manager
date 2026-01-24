@@ -184,7 +184,6 @@ fn main() {
             kiro_login,
             get_supported_providers,
             handle_kiro_social_callback,
-            add_kiro_account,
             // Kiro IDE 命令
             get_kiro_local_token,
             switch_kiro_account,
