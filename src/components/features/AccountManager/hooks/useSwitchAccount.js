@@ -56,10 +56,6 @@ export function useSwitchAccount(onLocalTokenChange) {
     }
     
     if (isIdC) {
-      // IdC 账号必须提供这些字段，不能为空
-      if (!account.clientIdHash || !account.clientId || !account.clientSecret) {
-        throw new Error('IdC 账号缺少必需字段（clientIdHash、clientId、clientSecret）')
-      }
       params.clientIdHash = account.clientIdHash
       params.region = account.region || 'us-east-1'
       params.clientId = account.clientId
@@ -77,21 +73,6 @@ export function useSwitchAccount(onLocalTokenChange) {
       setSwitchDialog({ type: 'error', title: t('switch.failed'), message: t('switch.missingAuth'), account: null })
       return
     }
-    
-    // 检查 IdC 账号的必需字段
-    const isIdC = account.provider === 'BuilderId' || account.provider === 'Enterprise' || account.clientIdHash
-    if (isIdC) {
-      if (!account.clientIdHash || !account.clientId || !account.clientSecret) {
-        setSwitchDialog({ 
-          type: 'error', 
-          title: t('switch.failed'), 
-          message: 'IdC 账号缺少必需字段（clientIdHash、clientId、clientSecret），请重新添加账号', 
-          account: null 
-        })
-        return
-      }
-    }
-    
     setSwitchDialog({
       type: 'confirm',
       title: t('switch.title'),
