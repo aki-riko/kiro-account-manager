@@ -9,7 +9,6 @@ function AccountHeader({
   selectedCount,
   onBatchDelete,
   onBatchTag,
-  onAdd,
   onImport,
   onExport,
   onRefresh,
@@ -184,13 +183,6 @@ function AccountHeader({
 
           {/* 操作按钮组 */}
           <div className="flex gap-1.5">
-            <button
-              onClick={onAdd}
-              className={`p-3 rounded-xl ${colors.card} border ${colors.cardBorder} ${colors.cardHover} text-green-500 transition-all hover:scale-105`}
-              title={t('common.add')}
-            >
-              <Plus size={18} />
-            </button>
             <button
               onClick={onImport}
               className={`p-3 rounded-xl ${colors.card} border ${colors.cardBorder} ${colors.cardHover} text-purple-500 transition-all hover:scale-105`}

@@ -275,7 +275,6 @@ function AccountManager() {
         selectedCount={selectedIds.length}
         onBatchDelete={onBatchDelete}
         onBatchTag={() => setShowBatchTagModal(true)}
-        onAdd={() => setShowImportModal(true)}
         onImport={() => setShowImportModal(true)}
         onExport={async () => {
           if (selectedIds.length === 0) {
