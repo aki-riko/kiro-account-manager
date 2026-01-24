@@ -304,7 +304,7 @@ function ImportAccountModal({ onClose, onSuccess }) {
             accessToken: account.accessToken || null,
             password: null,
             provider: account.provider,
-            startUrl: account.startUrl || null
+            startUrl: null  // Kiro IDE 不存储 startUrl，AWS 从 JWT 中自动解析
           })
         } else {
           result = await invoke('add_account_by_social', {

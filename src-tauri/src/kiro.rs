@@ -17,7 +17,8 @@ pub struct KiroLocalToken {
     // IdC 专用
     pub client_id_hash: Option<String>,
     pub region: Option<String>,
-    pub start_url: Option<String>, // Enterprise 专用
+    // 注意：Kiro IDE 不在 kiro-auth-token.json 中存储 startUrl
+    // startUrl 包含在 clientSecret JWT 的 initiateLoginUri 字段中
 }
 
 /// IdC 客户端注册信息 (从 {clientIdHash}.json 读取)
@@ -82,7 +83,9 @@ pub struct KiroAccountInfo {
     pub client_secret: Option<String>,
     pub client_id_hash: Option<String>,
     pub region: Option<String>,
-    pub start_url: Option<String>, // Enterprise 专用
+    // 注意：不需要 start_url 字段
+    // startUrl 包含在 clientSecret JWT 的 initiateLoginUri 字段中
+    // AWS SSO OIDC API 会自动从 JWT 中解析
 }
 
 /// 读取 Kiro IDE 中的所有账号
@@ -124,7 +127,6 @@ pub async fn read_kiro_accounts() -> Result<Vec<KiroAccountInfo>, String> {
                         client_secret: None,
                         client_id_hash: token.client_id_hash.clone(),
                         region: token.region.clone(),
-                        start_url: token.start_url.clone(), // Enterprise 专用
                     };
                     
                     // 如果是 IdC 账号，读取 client registration
@@ -200,7 +202,6 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
         let client_id = params.client_id;
         let client_secret = params.client_secret;
         let region = params.region;
-        let start_url = params.start_url;
         
         // 获取 token 目录
         let home = std::env::var("USERPROFILE")
