@@ -3,25 +3,25 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KiroSettings {
     pub http_proxy: Option<String>,
     pub model_selection: Option<String>,
-    pub enable_codebase_indexing: Option<bool>,
+    pub enable_codebase_indexing: bool,
     pub trusted_commands_mode: Option<String>,
     pub custom_trusted_commands: Option<String>,
     // Agent 设置
     pub agent_autonomy: Option<String>,
-    pub enable_tab_autocomplete: Option<bool>,
-    pub usage_summary: Option<bool>,
-    pub code_references: Option<bool>,
-    pub enable_debug_logs: Option<bool>,
+    pub enable_tab_autocomplete: bool,
+    pub usage_summary: bool,
+    pub code_references: bool,
+    pub enable_debug_logs: bool,
     // 通知设置
-    pub notify_action_required: Option<bool>,
-    pub notify_failure: Option<bool>,
-    pub notify_success: Option<bool>,
-    pub notify_billing: Option<bool>,
+    pub notify_action_required: bool,
+    pub notify_failure: bool,
+    pub notify_success: bool,
+    pub notify_billing: bool,
 }
 
 fn get_kiro_settings_path() -> Option<PathBuf> {
@@ -75,7 +75,8 @@ fn get_kiro_settings_inner() -> Result<KiroSettings, String> {
     Ok(KiroSettings {
         http_proxy: json.get("http.proxy").and_then(|v| v.as_str()).map(|s| s.to_string()),
         model_selection: json.get("kiroAgent.modelSelection").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        enable_codebase_indexing: json.get("kiroAgent.enableCodebaseIndexing").and_then(|v| v.as_bool()),
+        // 如果 settings.json 中没有这些字段，使用 Kiro IDE 的默认值
+        enable_codebase_indexing: json.get("kiroAgent.enableCodebaseIndexing").and_then(|v| v.as_bool()).unwrap_or(true),
         trusted_commands_mode: json.get("kiroAgent.trustedCommands")
             .and_then(|v| v.as_array())
             .map(|arr| {
@@ -94,17 +95,17 @@ fn get_kiro_settings_inner() -> Result<KiroSettings, String> {
                 .filter_map(|item| item.as_str())
                 .collect::<Vec<_>>()
                 .join("\n")),
-        // Agent 设置
+        // Agent 设置（使用 Kiro IDE 默认值）
         agent_autonomy: json.get("kiroAgent.agentAutonomy").and_then(|v| v.as_str()).map(|s| s.to_string()),
-        enable_tab_autocomplete: json.get("kiroAgent.enableTabAutocomplete").and_then(|v| v.as_bool()),
-        usage_summary: json.get("kiroAgent.usageSummary").and_then(|v| v.as_bool()),
-        code_references: json.get("kiroAgent.codeReferences").and_then(|v| v.as_bool()),
-        enable_debug_logs: json.get("kiroAgent.enableDebugLogs").and_then(|v| v.as_bool()),
-        // 通知设置
-        notify_action_required: json.get("kiroAgent.notifications.agent.actionRequired").and_then(|v| v.as_bool()),
-        notify_failure: json.get("kiroAgent.notifications.agent.failure").and_then(|v| v.as_bool()),
-        notify_success: json.get("kiroAgent.notifications.agent.success").and_then(|v| v.as_bool()),
-        notify_billing: json.get("kiroAgent.notifications.billing").and_then(|v| v.as_bool()),
+        enable_tab_autocomplete: json.get("kiroAgent.enableTabAutocomplete").and_then(|v| v.as_bool()).unwrap_or(true),
+        usage_summary: json.get("kiroAgent.usageSummary").and_then(|v| v.as_bool()).unwrap_or(true),
+        code_references: json.get("kiroAgent.codeReferences").and_then(|v| v.as_bool()).unwrap_or(true),
+        enable_debug_logs: json.get("kiroAgent.enableDebugLogs").and_then(|v| v.as_bool()).unwrap_or(false),
+        // 通知设置（使用 Kiro IDE 默认值）
+        notify_action_required: json.get("kiroAgent.notifications.agent.actionRequired").and_then(|v| v.as_bool()).unwrap_or(true),
+        notify_failure: json.get("kiroAgent.notifications.agent.failure").and_then(|v| v.as_bool()).unwrap_or(true),
+        notify_success: json.get("kiroAgent.notifications.agent.success").and_then(|v| v.as_bool()).unwrap_or(true),
+        notify_billing: json.get("kiroAgent.notifications.billing").and_then(|v| v.as_bool()).unwrap_or(true),
     })
 }
 
