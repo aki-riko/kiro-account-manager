@@ -56,10 +56,13 @@ export function useSwitchAccount(onLocalTokenChange) {
     }
     
     if (isIdC) {
-      // 后端会根据 startUrl 自动计算 clientIdHash，前端不需要传
       params.region = account.region || 'us-east-1'
       params.clientId = account.clientId
       params.clientSecret = account.clientSecret
+      // Enterprise 需要传递 startUrl
+      if (account.provider === 'Enterprise') {
+        params.startUrl = account.startUrl
+      }
     } else {
       params.profileArn = account.profileArn || 'arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK'
     }

@@ -1,6 +1,17 @@
 // Kiro IDE 相关功能
 
 use serde::{Deserialize, Serialize};
+use sha1::{Digest, Sha1};
+
+// ===== 辅助函数 =====
+
+/// 根据 startUrl 计算 clientIdHash（与 Kiro IDE 源码一致）
+fn calculate_client_id_hash(start_url: &str) -> String {
+    let input = format!(r#"{{"startUrl":"{}"}}"#, start_url);
+    let mut hasher = Sha1::new();
+    hasher.update(input.as_bytes());
+    hex::encode(hasher.finalize())
+}
 
 // ===== Kiro IDE 本地 Token =====
 
@@ -178,7 +189,9 @@ pub struct SwitchAccountParams {
     // Social 专用
     #[serde(default)]
     pub profile_arn: Option<String>,
-    // IdC 专用（不需要 client_id_hash，后端会根据 startUrl 自动计算）
+    // IdC 专用
+    #[serde(default)]
+    pub start_url: Option<String>, // Enterprise 必须提供，BuilderId 不需要
     #[serde(default)]
     pub client_id: Option<String>,
     #[serde(default)]
@@ -196,6 +209,7 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
         let refresh_token = params.refresh_token;
         let provider = params.provider;
         let profile_arn = params.profile_arn;
+        let start_url = params.start_url;
         let client_id = params.client_id;
         let client_secret = params.client_secret;
         let region = params.region;
@@ -218,21 +232,17 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
         
         // 根据 auth_method 构建 token 数据
         let token_data = if auth_method == "IdC" {
-            // IdC 账号：始终根据 startUrl 重新计算 clientIdHash（与 Kiro IDE 源码一致）
-            use sha1::{Digest, Sha1};
-            
+            // 确定 startUrl
             let actual_start_url = if provider == "BuilderId" {
-                "https://view.awsapps.com/start"
+                "https://view.awsapps.com/start".to_string()
+            } else if provider == "Enterprise" {
+                start_url.clone().ok_or("Enterprise 账号必须提供 start_url")?
             } else {
-                // Enterprise 账号必须提供 client_id_hash（因为无法从 client_secret 中提取 startUrl）
-                return Err("Enterprise 账号必须提供 client_id_hash".to_string());
+                return Err(format!("未知的 IdC Provider: {}", provider));
             };
             
-            // 与 Kiro IDE 完全一致：SHA-1(JSON.stringify({ startUrl }))
-            let input = serde_json::json!({ "startUrl": actual_start_url }).to_string();
-            let mut hasher = Sha1::new();
-            hasher.update(input.as_bytes());
-            let hash = hex::encode(hasher.finalize());
+            // 计算 clientIdHash
+            let hash = calculate_client_id_hash(&actual_start_url);
             
             serde_json::json!({
                 "accessToken": access_token,
@@ -270,19 +280,17 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
         // IdC 账号还需要写入 Client Registration 文件
         if auth_method == "IdC" {
             if let (Some(cid), Some(csec)) = (client_id, client_secret) {
-                // 重新计算 hash（与上面保持一致）
-                use sha1::{Digest, Sha1};
-                
+                // 确定 startUrl
                 let actual_start_url = if provider == "BuilderId" {
-                    "https://view.awsapps.com/start"
+                    "https://view.awsapps.com/start".to_string()
+                } else if provider == "Enterprise" {
+                    start_url.ok_or("Enterprise 账号必须提供 start_url")?
                 } else {
-                    return Err("Enterprise 账号必须提供 client_id_hash".to_string());
+                    return Err(format!("未知的 IdC Provider: {}", provider));
                 };
                 
-                let input = serde_json::json!({ "startUrl": actual_start_url }).to_string();
-                let mut hasher = Sha1::new();
-                hasher.update(input.as_bytes());
-                let hash = hex::encode(hasher.finalize());
+                // 计算 clientIdHash
+                let hash = calculate_client_id_hash(&actual_start_url);
                 
                 let client_reg_path = dir_path.join(format!("{}.json", hash));
                 let client_reg_temp_path = dir_path.join(format!("{}.json.tmp", hash));

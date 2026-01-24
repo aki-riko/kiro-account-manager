@@ -2,7 +2,6 @@ use crate::browser::open_browser;
 use reqwest::Client;
 use serde::Deserialize;
 use std::time::Duration;
-use log;
 
 /// Kiro Authentication Service Client
 /// 负责与 https://prod.us-east-1.auth.desktop.kiro.dev 通信
