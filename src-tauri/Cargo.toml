@@ -44,6 +44,7 @@ once_cell = "1.19"
 hex = "0.4"
 async-trait = "0.1"
 dirs = "5"
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

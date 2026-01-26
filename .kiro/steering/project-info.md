@@ -218,11 +218,11 @@ npm run compile
 │   │   │   ├── app_settings_cmd.rs   # 应用设置命令
 │   │   │   ├── kiro_settings_cmd.rs  # Kiro IDE 设置命令
 │   │   │   ├── machine_guid_cmd.rs   # 系统机器码命令
+│   │   │   ├── group_tag_cmd.rs  # 分组标签命令
 │   │   │   ├── mcp_cmd.rs        # MCP 管理命令
 │   │   │   ├── proxy_cmd.rs      # 代理检测命令
-│   │   │   ├── sso_import_cmd.rs # SSO Token 导入命令
 │   │   │   ├── steering_cmd.rs   # Steering 规则命令
-│   │   │   ├── fingerprint_cmd.rs # 指纹管理命令
+│   │   │   ├── common.rs         # 通用工具函数
 │   │   │   └── update_cmd.rs     # 更新检查命令
 │   │   ├── providers/        # 认证提供者实现
 │   │   │   ├── mod.rs        # 模块导出
