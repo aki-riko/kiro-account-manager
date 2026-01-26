@@ -85,8 +85,10 @@
 ### 📦 批量操作
 
 **导入导出**
-- JSON 格式（Social / IdC）
-- 🆕 SSO Token 批量导入（BuilderId / Enterprise 多行粘贴）
+- JSON 格式（文件导入 / 文本粘贴）
+- 🆕 从 Kiro IDE 导入（自动检测已登录账号）
+- 🆕 从 kiro-cli 导入（读取 SQLite 数据库）
+- 导出为 JSON 文件（支持批量选择）
 
 **批量管理**
 - 批量刷新（智能并发控制，自动优化速度）
