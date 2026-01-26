@@ -5,6 +5,7 @@ import { Copy, Check, Folder, Plus, X } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { setAccountTags, setAccountGroup, getGroups, addGroup } from '../../../api/groupTag'
+import { getAccountDisplayName } from '../../../utils/accountStats'
 import { TagSelector } from './GroupTagManager'
 import { TokenJsonView } from './TokenJsonView'
 import {
@@ -149,7 +150,7 @@ function EditAccountModal({ account, onClose, onSuccess }) {
       <DialogContent maxWidth="480px">
         <DialogHeader icon={Folder} iconColor="text-emerald-400" iconBg="bg-gradient-to-br from-emerald-500/20 to-teal-500/10">
           <DialogTitle>{t('editAccount.title')}</DialogTitle>
-          <DialogDescription>{account.email}</DialogDescription>
+          <DialogDescription>{getAccountDisplayName(account)}</DialogDescription>
         </DialogHeader>
 
         <DialogBody>

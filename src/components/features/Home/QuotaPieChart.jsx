@@ -4,6 +4,7 @@ import { PieChart } from 'lucide-react'
 import { useMemo } from 'react'
 import { useApp } from '../../../hooks/useApp'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
+import { getAccountDisplayName } from '../../../utils/accountStats'
 
 // 饼图颜色
 const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316']
@@ -44,7 +45,7 @@ export default function QuotaPieChart({ accounts }) {
       const percentage = account.quota / totalQuota
       const angle = percentage * 360
       const slice = {
-        email: account.email,
+        email: getAccountDisplayName(account),
         percentage: (percentage * 100).toFixed(1),
         startAngle,
         endAngle: startAngle + angle,

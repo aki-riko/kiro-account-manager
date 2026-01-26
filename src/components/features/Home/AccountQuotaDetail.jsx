@@ -1,5 +1,6 @@
 import { Card, Group, Stack, Text, Badge, Progress, ActionIcon, Tooltip } from '@mantine/core'
 import { RefreshCw } from 'lucide-react'
+import { getAccountDisplayName } from '../../../utils/accountStats'
 
 // 当前账号配额详情
 function AccountQuotaDetail({ 
@@ -136,7 +137,7 @@ function AccountHeader({ currentAccount, userInfo, subInfo, daysUntilReset, refr
         <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
           <Group gap="xs" wrap="nowrap">
             <Text fw={600} className={colors.text} truncate>
-              {maskEmail(userInfo?.email || currentAccount.email)}
+              {userInfo?.email ? maskEmail(userInfo.email) : (currentAccount.email ? maskEmail(currentAccount.email) : getAccountDisplayName(currentAccount))}
             </Text>
             {subInfo?.type && (
               <Badge

@@ -8,6 +8,7 @@ import { getTags, getGroups } from '../../../api/groupTag'
 import { applyFilters } from './utils/filterUtils'
 import { cn } from '../../../utils/cn'
 import { showSuccess, showError } from '../../../utils/toast.jsx'
+import { getAccountDisplayName } from '../../../utils/accountStats'
 import AccountHeader from './AccountHeader'
 import AccountTable from './AccountTable'
 import AccountListView from './AccountListView'
@@ -162,9 +163,10 @@ function AccountManager({ onNavigate }) {
   const filteredAccounts = useMemo(() => {
     let result = accounts.filter(a => {
       const term = searchTerm.toLowerCase()
-      // 搜索过滤：邮箱、备注、标签名称（从 tagLinks 中提取）
+      // 搜索过滤：邮箱/用户ID、备注、标签名称（从 tagLinks 中提取）
+      const displayName = getAccountDisplayName(a).toLowerCase()
       const tagNames = (a.tagLinks || []).map(link => tagDefinitions.find(t => t.id === link.tagId)?.name || '').join(' ').toLowerCase()
-      const matchSearch = a.email.toLowerCase().includes(term) ||
+      const matchSearch = displayName.includes(term) ||
         a.label.toLowerCase().includes(term) ||
         tagNames.includes(term)
       // 分组过滤（__none__ 表示无分组，__has__ 表示有分组）

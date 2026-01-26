@@ -4,6 +4,7 @@ import { Upload, FileJson, AlertCircle, CheckCircle, Loader2, Database, RefreshC
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
 import { getConcurrency } from '../../../utils/concurrency'
+import { getAccountDisplayName } from '../../../utils/accountStats'
 import {
   DialogRoot,
   DialogContent,
@@ -201,9 +202,9 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
         
         const account = result.account
         if (account.status === 'banned') {
-          return { success: true, index: item._index + 1, email: account.email, isNew: result.isNew, banned: true }
+          return { success: true, index: item._index + 1, email: getAccountDisplayName(account), isNew: result.isNew, banned: true }
         }
-        return { success: true, index: item._index + 1, email: account.email, isNew: result.isNew }
+        return { success: true, index: item._index + 1, email: getAccountDisplayName(account), isNew: result.isNew }
       } catch (e) {
         const errorMsg = String(e)
         if (errorMsg.includes('BANNED')) {
@@ -533,7 +534,7 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
                                     {account.provider} ({account.authMethod})
                                   </div>
                                   <div className={`text-xs ${colors.textMuted}`}>
-                                    {account.email || '未知邮箱'}
+                                    {getAccountDisplayName(account)}
                                   </div>
                                 </div>
                                 <div className={`px-2 py-1 rounded text-xs ${colors.badgeInfo}`}>

@@ -1,7 +1,7 @@
 import { Card, Group, Stack, Text, Progress } from '@mantine/core'
 import { PieChart, BarChart2 } from 'lucide-react'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
-import { formatUsage } from '../../../utils/accountStats'
+import { formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
 
 // 使用率分布统计
 function UsageDistribution({ tokens, isLightTheme, colors, t }) {
@@ -114,7 +114,7 @@ function UsageDistribution({ tokens, isLightTheme, colors, t }) {
               <div key={i}>
                 <Group justify="space-between" mb={4}>
                   <Text size="xs" className={colors.text} truncate style={{ maxWidth: 140 }}>
-                    {maskEmail(account.email).split('@')[0]}
+                    {account.email ? maskEmail(account.email).split('@')[0] : getAccountDisplayName(account)}
                   </Text>
                   <Text size="xs" className={colors.textMuted}>
                     {account.usedStr}/{account.limitStr} ({account.percent}%)

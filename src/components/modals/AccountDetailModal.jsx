@@ -4,7 +4,7 @@ import { Copy, Check, RefreshCw, User, CreditCard, Shield } from 'lucide-react'
 import { TextInput } from '@mantine/core'
 import { useApp } from '../../hooks/useApp'
 import { useDialog } from '../../contexts/DialogContext'
-import { formatUsage } from '../../utils/accountStats'
+import { formatUsage, getAccountDisplayName } from '../../utils/accountStats'
 import { TokenJsonView } from '../features/AccountManager/TokenJsonView'
 import {
   DialogRoot,
@@ -75,7 +75,7 @@ function AccountDetailModal({ account, onClose }) {
   const initQuota = account.usageData?.usageBreakdownList?.[0]?.usageLimit ?? account.quota ?? 0
   const initUsed = account.usageData?.usageBreakdownList?.[0]?.currentUsage ?? account.used ?? 0
   const [form, setForm] = useState({
-    email: account.email,
+    email: account.email || getAccountDisplayName(account),
     label: account.label || '',
     quota: initQuota,
     used: initUsed,
@@ -181,7 +181,9 @@ function AccountDetailModal({ account, onClose }) {
             {/* 账号信息 */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <h2 className={`text-base font-semibold ${colors.text} truncate`}>{account.email}</h2>
+                <h2 className={`text-base font-semibold ${colors.text} truncate`}>
+                  {account.email ? account.email : getAccountDisplayName(account)}
+                </h2>
                 <span className={`px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap shadow-sm ${
                   (account.usageData?.subscriptionInfo?.subscriptionTitle?.toUpperCase()?.includes('ENTERPRISE'))
                     ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-amber-500/30'
@@ -381,7 +383,7 @@ function AccountDetailModal({ account, onClose }) {
                 <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>
                   <div className={`text-xs ${colors.textMuted} mb-1`}>{t('detail.email')}</div>
                   <div className={`${colors.text} text-xs truncate`}>
-                    {account.usageData?.userInfo?.email || account.email}
+                    {account.usageData?.userInfo?.email || account.email || getAccountDisplayName(account)}
                   </div>
                 </div>
                 <div className={`p-3 rounded-lg ${colors.cardSecondary}`}>

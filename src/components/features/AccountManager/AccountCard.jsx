@@ -5,7 +5,7 @@ import { Checkbox } from '@mantine/core'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { getUsagePercent, getProgressBarColor } from './hooks/useAccountStats'
-import { getQuota, getUsed, getSubType, getSubPlan, formatUsage } from '../../../utils/accountStats'
+import { getQuota, getUsed, getSubType, getSubPlan, formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
 import ContextMenu from './ContextMenu'
 
 const AccountCard = memo(function AccountCard({
@@ -62,7 +62,7 @@ const AccountCard = memo(function AccountCard({
   // 复制账号 JSON
   const handleCopyJson = useCallback(() => {
     const exportData = {
-      email: account.email,
+      ...(account.email && { email: account.email }),
       provider: account.provider,
       accessToken: account.accessToken,
       refreshToken: account.refreshToken,
@@ -156,20 +156,22 @@ const AccountCard = memo(function AccountCard({
       </div>
 
       <div className="p-4 pt-9 flex-1 flex flex-col gap-2.5">
-        {/* 头像和邮箱 */}
+        {/* 头像和邮箱/用户ID */}
         <div className="flex items-start gap-2">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-base font-bold shadow-md ${
             account.provider === 'Google' ? colors.providerGoogle :
             account.provider === 'Github' ? colors.providerGithub :
             colors.badgeInfo
           }`}>
-            {account.email[0].toUpperCase()}
+            {getAccountDisplayName(account)[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 mb-0.5">
-              <span className={`font-medium ${colors.text} text-[13px] truncate`}>{maskEmail(account.email)}</span>
+              <span className={`font-medium ${colors.text} text-[13px] truncate`}>
+                {account.email ? maskEmail(account.email) : getAccountDisplayName(account)}
+              </span>
               <button 
-                onClick={() => onCopy(account.email, account.id)} 
+                onClick={() => onCopy(getAccountDisplayName(account), account.id)} 
                 className={`btn-icon p-1 rounded-lg ${colors.cardHover} flex-shrink-0 transition-all hover:scale-110`}
               >
                 {copiedId === account.id ? <Check size={11} className={colors.iconSuccess} /> : <Copy size={11} className={colors.textMuted} />}

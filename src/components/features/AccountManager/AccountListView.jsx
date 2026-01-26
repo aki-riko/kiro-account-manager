@@ -4,7 +4,7 @@ import { Users, Plus, RefreshCw, Repeat, Eye, Edit2, Trash2, Copy, UserX, Chevro
 import { Checkbox } from '@mantine/core'
 import { useApp } from '../../../hooks/useApp'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
-import { getQuota, getUsed, formatUsage } from '../../../utils/accountStats'
+import { getQuota, getUsed, formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
 import ContextMenu from './ContextMenu'
 
 // 单行组件
@@ -28,7 +28,7 @@ const ListRow = memo(function ListRow({
 
   const handleCopyJson = useCallback(() => {
     const exportData = {
-      email: account.email,
+      ...(account.email && { email: account.email }),
       provider: account.provider,
       accessToken: account.accessToken,
       refreshToken: account.refreshToken,
@@ -79,10 +79,12 @@ const ListRow = memo(function ListRow({
         }}
       />
       
-      {/* 邮箱 */}
+      {/* 邮箱/用户ID */}
       <div className="w-48 shrink-0">
         <div className="flex items-center gap-2">
-          <span className={`text-sm font-medium truncate ${colors.text}`}>{maskEmail(account.email)}</span>
+          <span className={`text-sm font-medium truncate ${colors.text}`}>
+            {account.email ? maskEmail(account.email) : getAccountDisplayName(account)}
+          </span>
           {isCurrent && <span className="text-xs px-1.5 py-0.5 bg-blue-500 text-white rounded shrink-0">当前</span>}
         </div>
         {account.label && <span className={`text-xs ${colors.textMuted} truncate block mt-0.5`}>{account.label}</span>}

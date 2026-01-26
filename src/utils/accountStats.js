@@ -1,5 +1,10 @@
 // 账号统计计算工具函数
 
+// 获取账号显示名称（email 或 user_id）
+export const getAccountDisplayName = (account) => {
+  return account.email || account.userId || account.user_id || 'Unknown'
+}
+
 // 智能格式化使用量：整数显示整数，小数保留2位（去掉末尾0）
 const formatUsage = (value) => {
   if (value == null) return '0'
@@ -92,4 +97,4 @@ export function getUsagePercent(used, quota) {
   return quota === 0 ? 0 : Math.min(100, (used / quota) * 100)
 }
 
-export { getQuota, getUsed, getSubType, getSubPlan, formatUsage }
+export { getQuota, getUsed, getSubType, getSubPlan, formatUsage, getAccountDisplayName }
