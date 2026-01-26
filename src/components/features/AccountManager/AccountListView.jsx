@@ -27,22 +27,7 @@ const ListRow = memo(function ListRow({
   }, [])
 
   const handleCopyJson = useCallback(() => {
-    const exportData = {
-      ...(account.email && { email: account.email }),
-      provider: account.provider,
-      accessToken: account.accessToken,
-      refreshToken: account.refreshToken,
-      ...(account.clientIdHash && { clientIdHash: account.clientIdHash }),
-      ...(account.clientId && { clientId: account.clientId }),
-      ...(account.clientSecret && { clientSecret: account.clientSecret }),
-      ...(account.region && { region: account.region }),
-      ...(account.label && { label: account.label }),
-      ...(account.authMethod && { authMethod: account.authMethod }),
-      ...(account.userId && { userId: account.userId }),
-      ...(account.tagLinks?.length && { tagLinks: account.tagLinks }),
-      ...(account.machineId && { machineId: account.machineId }),
-    }
-    onCopy(JSON.stringify(exportData, null, 2), account.id)
+    onCopy(JSON.stringify(account, null, 2), account.id)
   }, [account, onCopy])
 
   const getMenuItems = useCallback(() => [

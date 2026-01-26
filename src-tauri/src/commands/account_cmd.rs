@@ -416,12 +416,8 @@ pub fn export_accounts(state: State<AppState>, ids: Option<Vec<String>>) -> Stri
             serde_json::to_string_pretty(&selected).unwrap_or_else(|_| "[]".to_string())
         }
         _ => {
-            // 导出全部
-            let fixed: Vec<Account> = store.accounts.iter()
-                .cloned()
-                .map(fix_account)
-                .collect();
-            serde_json::to_string_pretty(&fixed).unwrap_or_else(|_| "[]".to_string())
+            // 没有选中任何账号，返回空数组
+            "[]".to_string()
         }
     }
 }

@@ -59,24 +59,9 @@ const AccountCard = memo(function AccountCard({
     setContextMenu({ x: e.clientX, y: e.clientY })
   }, [])
 
-  // 复制账号 JSON
+  // 复制账号 JSON（完整的 Account 数据）
   const handleCopyJson = useCallback(() => {
-    const exportData = {
-      ...(account.email && { email: account.email }),
-      provider: account.provider,
-      accessToken: account.accessToken,
-      refreshToken: account.refreshToken,
-      ...(account.authMethod && { authMethod: account.authMethod }),
-      ...(account.clientIdHash && { clientIdHash: account.clientIdHash }),
-      ...(account.clientId && { clientId: account.clientId }),
-      ...(account.clientSecret && { clientSecret: account.clientSecret }),
-      ...(account.region && { region: account.region }),
-      ...(account.userId && { userId: account.userId }),
-      ...(account.label && { label: account.label }),
-      ...(account.tagLinks?.length && { tagLinks: account.tagLinks }),
-      ...(account.machineId && { machineId: account.machineId }),
-    }
-    onCopy(JSON.stringify(exportData, null, 2), account.id)
+    onCopy(JSON.stringify(account, null, 2), account.id)
   }, [account, onCopy])
 
   // 状态光环颜色
