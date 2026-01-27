@@ -21,6 +21,7 @@ pub fn get_backup_path() -> PathBuf {
 }
 
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 pub fn get_macos_override_path() -> PathBuf {
     dirs::data_dir().unwrap_or_default()
         .join(".kiro-account-manager")
