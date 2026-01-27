@@ -93,7 +93,8 @@ export function useSwitchAccount(onLocalTokenChange) {
     
     try {
       // 先同步账号（刷新 token + 获取最新配额）
-      const refreshedAccount = await invoke('sync_account', { id: account.id })
+      const syncResult = await invoke('sync_account', { id: account.id })
+      const refreshedAccount = syncResult.account  // ✅ 修复：从 syncResult 中提取 account
       
       const settings = appSettings || {}
       await handleMachineGuid(refreshedAccount, settings)
