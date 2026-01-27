@@ -131,19 +131,28 @@ gh api -X DELETE repos/hj01857655/kiro-account-manager/git/refs/tags/vX.X.X
 gh release delete vX.X.X -R hj01857655/kiro-account-manager --yes
 ```
 
-#### 3. 删除公开仓库失败的 Actions 记录
+#### 3. 取消正在运行的 workflow（如果还在运行）
 ```bash
-# 批量删除失败的 Actions
-gh run list -R hj01857655/kiro-account-manager --status failure --limit 10 --json databaseId --jq '.[].databaseId' | ForEach-Object { gh run delete $_ -R hj01857655/kiro-account-manager }
+# 取消当前运行的 workflow
+gh run list -R hj01857655/kiro-account-manager --limit 1 --json databaseId --jq '.[0].databaseId' | ForEach-Object { gh run cancel $_ -R hj01857655/kiro-account-manager }
 ```
 
-#### 4. 删除私有仓库的 tag
+#### 4. 删除公开仓库失败/取消的 Actions 记录
+```bash
+# 等待取消完成
+Start-Sleep -Seconds 3
+
+# 批量删除失败和已取消的 Actions
+gh run list -R hj01857655/kiro-account-manager --limit 10 --json databaseId,status,conclusion --jq '.[] | select(.status == "completed" or .conclusion == "cancelled") | .databaseId' | ForEach-Object { gh run delete $_ -R hj01857655/kiro-account-manager }
+```
+
+#### 5. 删除私有仓库的 tag
 ```bash
 git tag -d vX.X.X
 git push origin --delete vX.X.X
 ```
 
-#### 5. 修复问题后，重新打 tag
+#### 6. 修复问题后，重新打 tag
 ```bash
 # 提交修复代码
 git add .
@@ -155,7 +164,7 @@ git tag vX.X.X
 git push origin vX.X.X
 ```
 
-#### 6. 在公开仓库重新打 tag 触发构建
+#### 7. 在公开仓库重新打 tag 触发构建
 ```bash
 # 获取公开仓库最新 commit SHA
 gh api repos/hj01857655/kiro-account-manager/commits/main --jq '.sha'
@@ -184,25 +193,31 @@ gh api -X POST repos/.../git/refs -f ref="refs/tags/v1.7.7" -f sha="..."
 ### ✅ 正确流程示例
 
 ```bash
-# 1. 清理公开仓库
+# 1. 取消正在运行的 workflow
+gh run list -R hj01857655/kiro-account-manager --limit 1 --json databaseId --jq '.[0].databaseId' | ForEach-Object { gh run cancel $_ -R hj01857655/kiro-account-manager }
+
+# 2. 等待取消完成并删除 Actions 记录
+Start-Sleep -Seconds 3
+gh run list -R hj01857655/kiro-account-manager --limit 10 --json databaseId,status,conclusion --jq '.[] | select(.status == "completed" or .conclusion == "cancelled") | .databaseId' | ForEach-Object { gh run delete $_ -R hj01857655/kiro-account-manager }
+
+# 3. 清理公开仓库
 gh api -X DELETE repos/hj01857655/kiro-account-manager/git/refs/tags/v1.7.7
 gh release delete v1.7.7 -R hj01857655/kiro-account-manager --yes
-gh run list -R hj01857655/kiro-account-manager --status failure --limit 10 --json databaseId --jq '.[].databaseId' | ForEach-Object { gh run delete $_ -R hj01857655/kiro-account-manager }
 
-# 2. 清理私有仓库
+# 4. 清理私有仓库
 git tag -d v1.7.7
 git push origin --delete v1.7.7
 
-# 3. 修复问题
+# 5. 修复问题
 git add src-tauri/Cargo.toml
 git commit -m "fix: 禁用 strip 避免 Tauri 更新器问题"
 git push origin dev
 
-# 4. 重新打 tag
+# 6. 重新打 tag
 git tag v1.7.7
 git push origin v1.7.7
 
-# 5. 触发构建
+# 7. 触发构建
 gh api repos/hj01857655/kiro-account-manager/commits/main --jq '.sha'
 gh api -X POST repos/hj01857655/kiro-account-manager/git/refs -f ref="refs/tags/v1.7.7" -f sha="<commit-sha>"
 ```
