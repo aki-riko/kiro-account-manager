@@ -53,8 +53,8 @@ export function useAutoSwitch(appSettings, settingsLoading) {
 
       // 先刷新当前账号状态获取最新余额
       try {
-        const updated = await invoke('sync_account', { id: currentAccount.id })
-        currentAccount = updated
+        const syncResult = await invoke('sync_account', { id: currentAccount.id })
+        currentAccount = syncResult.account
       } catch (e) {
         const errorMsg = String(e)
         if (errorMsg.includes('BANNED')) {
