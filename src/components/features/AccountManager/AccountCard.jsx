@@ -91,7 +91,7 @@ const AccountCard = memo(function AccountCard({
   return (
     <div
       onContextMenu={handleContextMenu}
-      className={`relative rounded-2xl border hover:shadow-lg flex flex-col ${glowColor} ${
+      className={`relative rounded-2xl border hover:shadow-lg flex flex-col h-[240px] ${glowColor} ${
       isSelected 
         ? colors.cardSelected
         : isCurrentAccount
