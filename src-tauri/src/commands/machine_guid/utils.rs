@@ -1,18 +1,16 @@
 // 机器码工具函数
 
 use std::path::PathBuf;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::Regex;
 use uuid::Uuid;
 use super::types::MachineGuidBackup;
 
 // 预编译正则表达式
-#[allow(clippy::non_std_lazy_statics)] // once_cell::Lazy 在 Rust 1.80+ 可用 LazyLock，但为了兼容性保留
-static UUID_REGEX: Lazy<Regex> = Lazy::new(|| {
+static UUID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").expect("Failed to compile UUID regex")
 });
-#[allow(clippy::non_std_lazy_statics)]
-static HEX32_REGEX: Lazy<Regex> = Lazy::new(|| {
+static HEX32_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[0-9a-f]{32}$").expect("Failed to compile HEX32 regex")
 });
 

@@ -276,7 +276,6 @@ impl AuthProvider for IdcProvider {
         &self.provider_id
     }
 
-    #[allow(clippy::return_self_not_must_use)] // trait 方法返回静态字符串
     fn get_auth_method(&self) -> &'static str {
         "IdC"
     }

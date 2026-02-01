@@ -247,13 +247,18 @@
 #### 参数传递优化 (1个)
 - ✅ `account.rs:493`: `reorder_groups(ids: Vec<String>)` → `reorder_groups(ids: &[String])` (needless_pass_by_value)
 
-#### 设计决策 - 添加 #[allow] (4个)
-- ✅ `commands/kiro_settings_cmd.rs:11`: `#[allow(clippy::struct_excessive_bools)]` - 设置结构体需要多个布尔字段
-- ✅ `commands/machine_guid/utils.rs:10,13`: `#[allow(clippy::non_std_lazy_statics)]` - 为了兼容性保留 once_cell::Lazy
-- ✅ `commands/machine_guid/windows.rs:69`: `#[allow(clippy::unnecessary_wraps)]` - 保持与其他平台接口一致
+#### 真正修复而非 #[allow] (4个)
+- ✅ `commands/machine_guid/utils.rs:10,13`: `once_cell::Lazy` → `std::sync::LazyLock` (non_std_lazy_statics)
+  - 升级到 Rust 标准库的 `LazyLock`（Rust 1.80+ 稳定）
+  - 移除 `once_cell` 依赖
+- ✅ `providers/base.rs:57`: `fn get_auth_method(&self) -> &'static str` 添加 `#[must_use]` (return_self_not_must_use)
+- ✅ `providers/social.rs:140`: 移除 `#[allow]` 注释
+- ✅ `providers/idc.rs:280`: 移除 `#[allow]` 注释
 
-#### 框架限制 - 添加 #[allow] (1个)
-- ✅ `kiro_auth_client.rs:39`: `#[allow(clippy::unused_async)]` - 使用 spawn_blocking 需要 async 上下文
+#### 合理的 #[allow] - 保留 (3个)
+- ✅ `commands/kiro_settings_cmd.rs:11`: `#[allow(clippy::struct_excessive_bools)]` - 设置结构体需要多个布尔字段，重构会破坏 API 兼容性
+- ✅ `commands/machine_guid/windows.rs:69`: `#[allow(clippy::unnecessary_wraps)]` - 保持与其他平台接口一致
+- ✅ `kiro_auth_client.rs:39`: `#[allow(clippy::unused_async)]` - 调用方期望 async 接口
 
 #### 生命周期优化 (2个)
 - ✅ `providers/base.rs:57`: `fn get_auth_method(&self) -> &str` → `&'static str`

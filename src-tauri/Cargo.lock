@@ -2268,7 +2268,6 @@ dependencies = [
  "dirs 5.0.1",
  "hex",
  "log",
- "once_cell",
  "open",
  "rand 0.8.5",
  "regex",
