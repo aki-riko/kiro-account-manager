@@ -1,0 +1,42 @@
+
+     |
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\commands\proxy_cmd.rs:72:9
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cast_possible_wrap
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\main.rs:43:5
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#wildcard_imports
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\main.rs:44:5
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#wildcard_imports
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\main.rs:45:5
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#wildcard_imports
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\main.rs:46:5
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#wildcard_imports
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\main.rs:47:5
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#wildcard_imports
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\main.rs:48:5
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#wildcard_imports
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\main.rs:50:5
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#wildcard_imports
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\main.rs:51:5
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#wildcard_imports
+  System.Management.Automation.RemoteException
+> warning: usage of wildcard import
+    --> src\main.rs:52:5
+

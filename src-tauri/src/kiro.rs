@@ -1,5 +1,7 @@
 // Kiro IDE 相关功能
 
+#![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
+
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 
@@ -7,7 +9,7 @@ use sha1::{Digest, Sha1};
 
 /// 根据 startUrl 计算 clientIdHash（与 Kiro IDE 源码一致）
 fn calculate_client_id_hash(start_url: &str) -> String {
-    let input = format!(r#"{{"startUrl":"{}"}}"#, start_url);
+    let input = format!(r#"{{"startUrl":"{start_url}"}}"#);
     let mut hasher = Sha1::new();
     hasher.update(input.as_bytes());
     hex::encode(hasher.finalize())
@@ -32,7 +34,7 @@ pub struct KiroLocalToken {
     // startUrl 包含在 clientSecret JWT 的 initiateLoginUri 字段中
 }
 
-/// IdC 客户端注册信息 (从 {clientIdHash}.json 读取)
+/// `IdC` 客户端注册信息 (从 {clientIdHash}.json 读取)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientRegistration {
@@ -58,7 +60,7 @@ pub async fn get_kiro_local_token() -> Option<KiroLocalToken> {
     }).await.ok().flatten()
 }
 
-/// 读取 IdC 客户端注册信息
+/// 读取 `IdC` 客户端注册信息
 pub async fn get_client_registration(client_id_hash: &str) -> Option<ClientRegistration> {
     let hash = client_id_hash.to_string();
     tokio::task::spawn_blocking(move || {
@@ -69,7 +71,7 @@ pub async fn get_client_registration(client_id_hash: &str) -> Option<ClientRegis
             .join(".aws")
             .join("sso")
             .join("cache")
-            .join(format!("{}.json", hash));
+            .join(format!("{hash}.json"));
         
         let content = std::fs::read_to_string(&path).ok()?;
         serde_json::from_str(&content).ok()
@@ -127,7 +129,7 @@ pub async fn read_kiro_accounts() -> Result<Vec<KiroAccountInfo>, String> {
                     let provider = token.provider.clone().unwrap_or_else(|| "Google".to_string());
                     
                     let mut account = KiroAccountInfo {
-                        email: "".to_string(), // 需要通过 API 获取
+                        email: String::new(), // 需要通过 API 获取
                         provider: provider.clone(),
                         auth_method: auth_method.to_string(),
                         access_token: token.access_token.clone(),
@@ -143,7 +145,7 @@ pub async fn read_kiro_accounts() -> Result<Vec<KiroAccountInfo>, String> {
                     // 如果是 IdC 账号，读取 client registration
                     if auth_method == "IdC" {
                         if let Some(ref hash) = token.client_id_hash {
-                            let client_path = cache_dir.join(format!("{}.json", hash));
+                            let client_path = cache_dir.join(format!("{hash}.json"));
                             if let Ok(client_content) = std::fs::read_to_string(&client_path) {
                                 if let Ok(client_reg) = serde_json::from_str::<ClientRegistration>(&client_content) {
                                     account.client_id = Some(client_reg.client_id);
@@ -163,7 +165,7 @@ pub async fn read_kiro_accounts() -> Result<Vec<KiroAccountInfo>, String> {
         }
         
         Ok(accounts)
-    }).await.map_err(|e| format!("读取失败: {}", e))?
+    }).await.map_err(|e| format!("读取失败: {e}"))?
 }
 
 
@@ -225,7 +227,7 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
             .join("cache");
         
         std::fs::create_dir_all(&dir_path)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
+            .map_err(|e| format!("Failed to create directory: {e}"))?;
         
         let file_path = dir_path.join("kiro-auth-token.json");
         let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
@@ -238,7 +240,7 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
             } else if provider == "Enterprise" {
                 start_url.clone().ok_or("Enterprise 账号必须提供 start_url")?
             } else {
-                return Err(format!("未知的 IdC Provider: {}", provider));
+                return Err(format!("未知的 IdC Provider: {provider}"));
             };
             
             // 计算 clientIdHash
@@ -268,14 +270,14 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
         };
         
         let content = serde_json::to_string_pretty(&token_data)
-            .map_err(|e| format!("Failed to serialize: {}", e))?;
+            .map_err(|e| format!("Failed to serialize: {e}"))?;
         
         // 原子写入：先写临时文件，再 rename
         let temp_file_path = dir_path.join("kiro-auth-token.json.tmp");
         std::fs::write(&temp_file_path, &content)
-            .map_err(|e| format!("Failed to write temp file: {}", e))?;
+            .map_err(|e| format!("Failed to write temp file: {e}"))?;
         std::fs::rename(&temp_file_path, &file_path)
-            .map_err(|e| format!("Failed to rename file: {}", e))?;
+            .map_err(|e| format!("Failed to rename file: {e}"))?;
         
         // IdC 账号还需要写入 Client Registration 文件
         if auth_method == "IdC" {
@@ -286,14 +288,14 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
                 } else if provider == "Enterprise" {
                     start_url.ok_or("Enterprise 账号必须提供 start_url")?
                 } else {
-                    return Err(format!("未知的 IdC Provider: {}", provider));
+                    return Err(format!("未知的 IdC Provider: {provider}"));
                 };
                 
                 // 计算 clientIdHash
                 let hash = calculate_client_id_hash(&actual_start_url);
                 
-                let client_reg_path = dir_path.join(format!("{}.json", hash));
-                let client_reg_temp_path = dir_path.join(format!("{}.json.tmp", hash));
+                let client_reg_path = dir_path.join(format!("{hash}.json"));
+                let client_reg_temp_path = dir_path.join(format!("{hash}.json.tmp"));
                 let client_expires = chrono::Utc::now() + chrono::Duration::days(90);
                 let client_reg_data = serde_json::json!({
                     "clientId": cid,
@@ -301,11 +303,11 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
                     "expiresAt": client_expires.to_rfc3339()
                 });
                 let client_reg_content = serde_json::to_string_pretty(&client_reg_data)
-                    .map_err(|e| format!("Failed to serialize client registration: {}", e))?;
+                    .map_err(|e| format!("Failed to serialize client registration: {e}"))?;
                 std::fs::write(&client_reg_temp_path, client_reg_content)
-                    .map_err(|e| format!("Failed to write client registration temp: {}", e))?;
+                    .map_err(|e| format!("Failed to write client registration temp: {e}"))?;
                 std::fs::rename(&client_reg_temp_path, &client_reg_path)
-                    .map_err(|e| format!("Failed to rename client registration: {}", e))?;
+                    .map_err(|e| format!("Failed to rename client registration: {e}"))?;
             } else {
                 return Err("IdC 账号必须提供 client_id 和 client_secret".to_string());
             }
@@ -313,9 +315,9 @@ pub async fn switch_kiro_account(params: SwitchAccountParams) -> Result<SwitchAc
         
         Ok(SwitchAccountResult {
             success: true,
-            message: format!("Switched to {} ({}) account", provider, auth_method),
+            message: format!("Switched to {provider} ({auth_method}) account"),
         })
-    }).await.map_err(|e| format!("Task failed: {}", e))?
+    }).await.map_err(|e| format!("Task failed: {e}"))?
 }
 
 

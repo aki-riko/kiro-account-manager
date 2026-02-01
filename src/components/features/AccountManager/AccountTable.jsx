@@ -23,12 +23,14 @@ const VirtualRow = memo(function VirtualRow({
   onCopy,
   onSwitch,
   onRefresh,
+  onRefreshToken,
   onEdit,
   onEditLabel,
   onDelete,
   onDeleteRemote,
   onAdd,
   refreshingId,
+  refreshingTokenId,
   switchingId,
   localToken,
   tagDefinitions,
@@ -52,11 +54,13 @@ const VirtualRow = memo(function VirtualRow({
             onCopy={onCopy}
             onSwitch={onSwitch}
             onRefresh={onRefresh}
+            onRefreshToken={onRefreshToken}
             onEdit={onEdit}
             onEditLabel={onEditLabel}
             onDelete={onDelete}
             onDeleteRemote={onDeleteRemote}
             refreshingId={refreshingId}
+            refreshingTokenId={refreshingTokenId}
             switchingId={switchingId}
             isCurrentAccount={localToken?.refreshToken && item.refreshToken === localToken.refreshToken}
             tagDefinitions={tagDefinitions}
@@ -71,6 +75,7 @@ const VirtualRow = memo(function VirtualRow({
   if (prev.row !== next.row || prev.columns !== next.columns) return false
   if (prev.copiedId !== next.copiedId) return false
   if (prev.refreshingId !== next.refreshingId) return false
+  if (prev.refreshingTokenId !== next.refreshingTokenId) return false
   if (prev.switchingId !== next.switchingId) return false
   if (prev.localToken !== next.localToken) return false
   if (prev.tagDefinitions !== next.tagDefinitions) return false
@@ -95,12 +100,14 @@ function AccountTable({
   onCopy,
   onSwitch,
   onRefresh,
+  onRefreshToken,
   onEdit,
   onEditLabel,
   onDelete,
   onDeleteRemote,
   onAdd,
   refreshingId,
+  refreshingTokenId,
   switchingId,
   localToken,
   tagDefinitions = [],
@@ -206,12 +213,14 @@ function AccountTable({
                     onCopy={onCopy}
                     onSwitch={onSwitch}
                     onRefresh={onRefresh}
+                    onRefreshToken={onRefreshToken}
                     onEdit={onEdit}
                     onEditLabel={onEditLabel}
                     onDelete={onDelete}
                     onDeleteRemote={onDeleteRemote}
                     onAdd={onAdd}
                     refreshingId={refreshingId}
+                    refreshingTokenId={refreshingTokenId}
                     switchingId={switchingId}
                     localToken={localToken}
                     tagDefinitions={tagDefinitions}

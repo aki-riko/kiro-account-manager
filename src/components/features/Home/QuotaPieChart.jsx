@@ -6,27 +6,19 @@ import { useApp } from '../../../hooks/useApp'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { getAccountDisplayName } from '../../../utils/accountStats'
 
+import { getQuota as getQuotaFromUtils } from '../../../utils/accountStats'
+
 // 饼图颜色
 const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316']
-
-// 获取账号配额
-const getQuota = (account) => {
-  // 封禁账号返回 0
-  const isBanned = account.status === 'banned' || account.status === '封禁' || account.status === '已封禁'
-  if (isBanned) return 0
-
-  const breakdown = account.usageData?.usageBreakdownList?.[0] || account.usageData?.usageBreakdown
-  return breakdown?.usageLimit ?? 0
-}
 
 export default function QuotaPieChart({ accounts }) {
   const { t, theme, colors } = useApp()
   const { maskEmail } = usePrivacy()
   const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
 
-  // 计算总配额
+  // 计算总配额（使用统一的 getQuota 函数）
   const totalQuota = useMemo(() => 
-    accounts.reduce((sum, a) => sum + getQuota(a), 0), 
+    accounts.reduce((sum, a) => sum + getQuotaFromUtils(a), 0), 
     [accounts]
   )
 
@@ -36,7 +28,7 @@ export default function QuotaPieChart({ accounts }) {
     
     // 按配额排序，取前8个
     const sorted = [...accounts]
-      .map(a => ({ email: a.email, quota: getQuota(a) }))
+      .map(a => ({ email: a.email, quota: getQuotaFromUtils(a) }))
       .sort((a, b) => b.quota - a.quota)
       .slice(0, 8)
     

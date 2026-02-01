@@ -1,0 +1,238 @@
+warning: it is more idiomatic to use `Option<&T>` instead of `&Option<T>`
+   --> src\commands\auth_cmd.rs:198:1
+    |
+198 |   fn update_auth_state(state: &State<'_, AppState>, email: &Option<String>, provider: &str, access_token: &str, refresh_token: &str) {
+    |   ^                                                        --------------- help: change this to: `Option<&String>`
+    |  _|
+    | |
+199 | |     let user = User {
+200 | |         id: uuid::Uuid::new_v4().to_string(),
+201 | |         email: email.clone(),
+...   |
+209 | |     *state.pending_login.lock().expect("Failed to acquire lock") = None;
+210 | | }
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#ref_option
+    = note: `-W clippy::ref-option` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::ref_option)]`
+
+warning: more than 3 bools in a struct
+  --> src\commands\kiro_settings_cmd.rs:11:1
+   |
+11 | / pub struct KiroSettings {
+12 | |     pub http_proxy: Option<String>,
+13 | |     pub model_selection: Option<String>,
+14 | |     pub enable_codebase_indexing: bool,
+...  |
+27 | |     pub notify_billing: bool,
+28 | | }
+   | |_^
+   |
+   = help: consider using a state machine or refactoring bools into two-variant enums
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#struct_excessive_bools
+   = note: `-W clippy::struct-excessive-bools` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::struct_excessive_bools)]`
+
+warning: unnecessary boolean `not` operation
+   --> src\commands\kiro_settings_cmd.rs:360:21
+    |
+360 | /                     if !custom.trim().is_empty() {
+361 | |                         let cmds: Vec<&str> = custom.lines()
+362 | |                             .map(str::trim)
+363 | |                             .filter(|s| !s.is_empty())
+...   |
+375 | |                         ])
+376 | |                     }
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#if_not_else
+    = note: `-W clippy::if-not-else` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::if_not_else)]`
+help: try
+    |
+360 ~                     if custom.trim().is_empty() {
+361 ~                         // 榛樿甯哥敤鍛戒护
+362 +                         serde_json::json!([
+363 +                             "npm *", "pnpm *", "yarn *", "bun *",
+364 +                             "git *", "cargo *", "rustup *",
+365 +                             "python *", "pip *", "uv *", "uvx *",
+366 +                             "node *", "npx *", "deno *",
+367 +                             "cat *", "ls *", "dir *", "cd *", "pwd",
+368 +                             "mkdir *", "touch *", "echo *"
+369 +                         ])
+370 +                     } else {
+371 +                         let cmds: Vec<&str> = custom.lines()
+372 +                             .map(str::trim)
+373 +                             .filter(|s| !s.is_empty())
+374 +                             .collect();
+375 +                         serde_json::json!(cmds)
+376 +                     }
+    |
+
+warning: this function's return value is unnecessary
+  --> src\commands\machine_guid\windows.rs:69:1
+   |
+69 | pub fn clear_override_inner() -> Result<(), String> { Ok(()) }
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_wraps
+   = note: `-W clippy::unnecessary-wraps` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::unnecessary_wraps)]`
+help: remove the return type...
+   |
+69 - pub fn clear_override_inner() -> Result<(), String> { Ok(()) }
+69 + pub fn clear_override_inner() -> () { Ok(()) }
+   |
+help: ...and then remove returned values
+   |
+69 - pub fn clear_override_inner() -> Result<(), String> { Ok(()) }
+69 + pub fn clear_override_inner() -> Result<(), String> {  }
+   |
+
+warning: called `map(<f>).unwrap_or(<a>)` on an `Option` value
+  --> src\commands\proxy_cmd.rs:92:13
+   |
+92 | /             proxy_server
+93 | |                 .split(';')
+94 | |                 .find(|s| s.starts_with("http="))
+95 | |                 .map(|s| s.trim_start_matches("http="))
+96 | |                 .unwrap_or(&proxy_server)
+   | |_________________________________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#map_unwrap_or
+   = note: `-W clippy::map-unwrap-or` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::map_unwrap_or)]`
+help: use `map_or(<a>, <f>)` instead
+   |
+95 -                 .map(|s| s.trim_start_matches("http="))
+95 +                 .map_or(&proxy_server, |s| s.trim_start_matches("http="))
+   |
+
+warning: called `map(<f>).unwrap_or_else(<g>)` on an `Option` value
+   --> src\commands\kiro_cli_cmd.rs:148:9
+    |
+148 | /         existing_index
+149 | |             .and_then(|idx| store.accounts.get(idx))
+150 | |             .map(|a| a.label.clone())
+151 | |             .unwrap_or_else(|| format!("浠?kiro-cli 瀵煎叆 ({})", cli_account.token_key))
+    | |_______________________________________________________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#map_unwrap_or
+help: try
+    |
+148 ~         existing_index
+149 ~             .and_then(|idx| store.accounts.get(idx)).map_or_else(|| format!("浠?kiro-cli 瀵煎叆 ({})", cli_account.token_key), |a| a.label.clone())
+    |
+
+warning: you should put bare URLs between `<`/`>` or make a proper Markdown link
+ --> src\kiro_auth_client.rs:7:9
+  |
+7 | /// 璐熻矗涓?https://prod.us-east-1.auth.desktop.kiro.dev 閫氫俊
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `<https://prod.us-east-1.auth.desktop.kiro.dev>`
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_markdown
+  = note: `-W clippy::doc-markdown` implied by `-W clippy::pedantic`
+  = help: to override `-W clippy::pedantic` add `#[allow(clippy::doc_markdown)]`
+
+warning: returning a `str` unnecessarily tied to the lifetime of arguments
+   --> src\providers\social.rs:139:34
+    |
+139 |     fn get_auth_method(&self) -> &str {
+    |                                  ^^^^ help: try: `&'static str`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_literal_bound
+    = note: `-W clippy::unnecessary-literal-bound` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::unnecessary_literal_bound)]`
+
+warning: calling `to_string` on `&&str`
+   --> src\providers\idc.rs:183:53
+    |
+183 | ...                   let _ = tx.send(Ok((code.to_string(), state_clone.clone())));
+    |                                           ^^^^^^^^^^^^^^^^ help: try dereferencing the receiver: `(*code).to_string()`
+    |
+    = help: `&str` implements `ToString` through a slower blanket impl, but `str` has a fast specialization of `ToString`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#inefficient_to_string
+    = note: `-W clippy::inefficient-to-string` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::inefficient_to_string)]`
+
+warning: returning a `str` unnecessarily tied to the lifetime of arguments
+   --> src\providers\idc.rs:279:34
+    |
+279 |     fn get_auth_method(&self) -> &str {
+    |                                  ^^^^ help: try: `&'static str`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_literal_bound
+
+warning: this `map_or` can be simplified
+  --> src\steering.rs:38:16
+   |
+38 |             if path.extension().map_or(false, |e| e == "md") {
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_map_or
+   = note: `#[warn(clippy::unnecessary_map_or)]` on by default
+help: use is_some_and instead
+   |
+38 -             if path.extension().map_or(false, |e| e == "md") {
+38 +             if path.extension().is_some_and(|e| e == "md") {
+   |
+
+warning: this argument is passed by value, but not consumed in the function body
+   --> src\account.rs:493:43
+    |
+493 |     pub fn reorder_groups(&mut self, ids: Vec<String>) -> bool {
+    |                                           ^^^^^^^^^^^ help: consider changing the type to: `&[String]`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_pass_by_value
+    = note: `-W clippy::needless-pass-by-value` implied by `-W clippy::pedantic`
+    = help: to override `-W clippy::pedantic` add `#[allow(clippy::needless_pass_by_value)]`
+
+warning: unused `async` for function with no await statements
+  --> src\kiro_auth_client.rs:39:5
+   |
+39 | /     pub async fn login(
+40 | |         &self,
+41 | |         provider: &str,
+42 | |         redirect_uri: &str,
+...  |
+59 | |         Ok(())
+60 | |     }
+   | |_____^
+   |
+   = help: consider removing the `async` from this function
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unused_async
+   = note: `-W clippy::unused-async` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::unused_async)]`
+
+warning: this type has been superseded by `LazyLock` in the standard library
+  --> src\commands\machine_guid\utils.rs:10:20
+   |
+10 | static UUID_REGEX: Lazy<Regex> = Lazy::new(|| {
+   |                    ^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#non_std_lazy_statics
+   = note: `-W clippy::non-std-lazy-statics` implied by `-W clippy::pedantic`
+   = help: to override `-W clippy::pedantic` add `#[allow(clippy::non_std_lazy_statics)]`
+help: use `std::sync::LazyLock` instead
+   |
+10 - static UUID_REGEX: Lazy<Regex> = Lazy::new(|| {
+10 + static UUID_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+   |
+
+warning: this type has been superseded by `LazyLock` in the standard library
+  --> src\commands\machine_guid\utils.rs:13:21
+   |
+13 | static HEX32_REGEX: Lazy<Regex> = Lazy::new(|| {
+   |                     ^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#non_std_lazy_statics
+help: use `std::sync::LazyLock` instead
+   |
+13 - static HEX32_REGEX: Lazy<Regex> = Lazy::new(|| {
+13 + static HEX32_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+   |
+
+warning: `kiro-account-manager` (bin "kiro-account-manager") generated 15 warnings (run `cargo clippy --fix --bin "kiro-account-manager"` to apply 10 suggestions)
+warning: `kiro-account-manager` (bin "kiro-account-manager" test) generated 15 warnings (15 duplicates)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.14s

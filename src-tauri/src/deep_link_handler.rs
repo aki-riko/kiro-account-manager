@@ -5,7 +5,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// OAuth 回调结果（state 已在 handle_deep_link 中验证）
+/// OAuth 回调结果（state 已在 `handle_deep_link` 中验证）
 #[derive(Debug, Clone)]
 pub struct OAuthCallbackResult {
     pub code: String,
@@ -25,7 +25,7 @@ pub struct DeepLinkCallbackWaiter {
 }
 
 impl DeepLinkCallbackWaiter {
-    /// 获取 redirect_uri (使用 Kiro 官方协议)
+    /// 获取 `redirect_uri` (使用 Kiro 官方协议)
     pub fn get_redirect_uri() -> String {
         "kiro://kiro.kiroAgent/authenticate-success".to_string()
     }
@@ -61,22 +61,16 @@ pub fn register_waiter(state: &str) -> DeepLinkCallbackWaiter {
 
 /// 处理 deep link URL（由 main.rs 调用）
 pub fn handle_deep_link(url: &str) -> bool {
-    let storage = match PENDING_SENDER.get() {
-        Some(s) => s,
-        None => return false,
-    };
+    let Some(storage) = PENDING_SENDER.get() else { return false };
     
     let mut guard = storage.lock().expect("Failed to acquire pending sender lock");
-    let (expected_state, tx) = match guard.take() {
-        Some(s) => s,
-        None => return false,
-    };
+    let Some((expected_state, tx)) = guard.take() else { return false };
     
     // 解析 URL
     let parsed = match url::Url::parse(url) {
         Ok(u) => u,
         Err(e) => {
-            let _ = tx.send(Err(format!("Invalid URL: {}", e)));
+            let _ = tx.send(Err(format!("Invalid URL: {e}")));
             return false;
         }
     };
@@ -93,27 +87,22 @@ pub fn handle_deep_link(url: &str) -> bool {
     // 检查错误
     if let Some(error) = params.get("error") {
         let desc = params.get("error_description")
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "Unknown error".to_string());
-        let _ = tx.send(Err(format!("OAuth error: {} - {}", error, desc)));
+            .map_or_else(|| "Unknown error".to_string(), std::string::ToString::to_string);
+        let _ = tx.send(Err(format!("OAuth error: {error} - {desc}")));
         return true;
     }
     
-    let code = match params.get("code") {
-        Some(c) => c.to_string(),
-        None => {
-            let _ = tx.send(Err("Missing code parameter".to_string()));
-            return true;
-        }
+    let Some(code) = params.get("code") else {
+        let _ = tx.send(Err("Missing code parameter".to_string()));
+        return true;
     };
+    let code = code.to_string();
 
-    let state = match params.get("state") {
-        Some(s) => s.to_string(),
-        None => {
-            let _ = tx.send(Err("Missing state parameter".to_string()));
-            return true;
-        }
+    let Some(state) = params.get("state") else {
+        let _ = tx.send(Err("Missing state parameter".to_string()));
+        return true;
     };
+    let state = state.to_string();
 
     // 验证 state
     if state != expected_state {

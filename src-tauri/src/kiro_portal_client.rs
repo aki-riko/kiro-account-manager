@@ -8,12 +8,12 @@ const KIRO_WEB_PORTAL: &str = "https://app.kiro.dev";
 
 pub fn cbor_encode<T: Serialize>(value: &T) -> Result<Vec<u8>, String> {
     serde_cbor::to_vec(value)
-        .map_err(|e| format!("CBOR encode error: {}", e))
+        .map_err(|e| format!("CBOR encode error: {e}"))
 }
 
 pub fn cbor_decode<T: for<'de> serde::Deserialize<'de>>(data: &[u8]) -> Result<T, String> {
     serde_cbor::from_slice(data)
-        .map_err(|e| format!("CBOR decode error: {}", e))
+        .map_err(|e| format!("CBOR decode error: {e}"))
 }
 
 // ============================================================
@@ -37,13 +37,13 @@ pub struct KiroPortalClient {
 }
 
 impl KiroPortalClient {
-    pub fn new() -> Self {
-        let client = build_http_client().expect("Failed to create HTTP client");
+    pub fn new() -> Result<Self, String> {
+        let client = build_http_client()?;
         
-        Self {
+        Ok(Self {
             client,
             endpoint: KIRO_WEB_PORTAL.to_string(),
-        }
+        })
     }
 
     /// 获取用户配额和用量信息（直接返回 JSON Value）
@@ -63,23 +63,23 @@ impl KiroPortalClient {
         };
 
         let body = cbor_encode(&request)?;
-        let cookie = format!("Idp={}; AccessToken={}", idp, access_token);
+        let cookie = format!("Idp={idp}; AccessToken={access_token}");
 
         let response = self.client
             .post(&url)
             .header("Content-Type", "application/cbor")
             .header("Accept", "application/cbor")
             .header("smithy-protocol", "rpc-v2-cbor")
-            .header("authorization", format!("Bearer {}", access_token))
+            .header("authorization", format!("Bearer {access_token}"))
             .header("Cookie", cookie)
             .body(body)
             .send()
             .await
-            .map_err(|e| format!("GetUserUsageAndLimits request failed: {}", e))?;
+            .map_err(|e| format!("GetUserUsageAndLimits request failed: {e}"))?;
 
         let status = response.status();
         let bytes = response.bytes().await
-            .map_err(|e| format!("Failed to read response: {}", e))?;
+            .map_err(|e| format!("Failed to read response: {e}"))?;
 
         if !status.is_success() {
             let error_msg = if let Ok(error) = cbor_decode::<serde_json::Value>(&bytes) {
@@ -90,7 +90,7 @@ impl KiroPortalClient {
             
             // 401 → token 过期，需要刷新（不打印日志，这是正常流程）
             if status.as_u16() == 401 {
-                return Err(format!("AUTH_ERROR: {}", error_msg));
+                return Err(format!("AUTH_ERROR: {error_msg}"));
             }
             
             // 423 Locked + AccountSuspendedException → 封禁（不打印日志）
@@ -99,14 +99,14 @@ impl KiroPortalClient {
                     let type_field = parsed.get("__type").and_then(|t| t.as_str()).unwrap_or("");
                     if type_field.contains("AccountSuspendedException") {
                         let message = parsed.get("message").and_then(|m| m.as_str()).unwrap_or("账号已被暂停");
-                        return Err(format!("BANNED: {}", message));
+                        return Err(format!("BANNED: {message}"));
                     }
                 }
             }
             
             // 其他错误打印日志
-            log::debug!("[KiroPortal] GetUserUsageAndLimits Status: {}", status);
-            log::debug!("[KiroPortal] Response:\n{}", error_msg);
+            log::debug!("[KiroPortal] GetUserUsageAndLimits Status: {status}");
+            log::debug!("[KiroPortal] Response:\n{error_msg}");
             
             // 403 处理
             if status.as_u16() == 403 {
@@ -117,14 +117,14 @@ impl KiroPortalClient {
                     
                     // 403 + reason 为 TEMPORARILY_SUSPENDED → 封禁
                     if reason == "TEMPORARILY_SUSPENDED" {
-                        return Err(format!("BANNED: {}", message));
+                        return Err(format!("BANNED: {message}"));
                     }
                 }
                 // 403 + 其他情况 → token 无效，需要刷新
-                return Err(format!("AUTH_ERROR: {}", error_msg));
+                return Err(format!("AUTH_ERROR: {error_msg}"));
             }
             
-            return Err(format!("GetUserUsageAndLimits failed ({}): {}", status, error_msg));
+            return Err(format!("GetUserUsageAndLimits failed ({status}): {error_msg}"));
         }
 
         // 直接解码为 JSON Value，不经过结构体

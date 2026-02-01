@@ -82,9 +82,9 @@ pub fn get_app_settings_inner() -> Result<AppSettings, String> {
         return Ok(default_settings);
     }
     let content = std::fs::read_to_string(&path)
-        .map_err(|e| format!("读取设置失败: {}", e))?;
+        .map_err(|e| format!("读取设置失败: {e}"))?;
     serde_json::from_str(&content)
-        .map_err(|e| format!("解析设置失败: {}", e))
+        .map_err(|e| format!("解析设置失败: {e}"))
 }
 
 pub fn save_settings_to_file(settings: &AppSettings) -> Result<(), String> {
@@ -93,9 +93,9 @@ pub fn save_settings_to_file(settings: &AppSettings) -> Result<(), String> {
         std::fs::create_dir_all(parent).ok();
     }
     let content = serde_json::to_string_pretty(settings)
-        .map_err(|e| format!("序列化失败: {}", e))?;
+        .map_err(|e| format!("序列化失败: {e}"))?;
     std::fs::write(&path, content)
-        .map_err(|e| format!("写入失败: {}", e))
+        .map_err(|e| format!("写入失败: {e}"))
 }
 
 fn save_app_settings_inner(updates: AppSettings) -> Result<(), String> {
@@ -131,14 +131,14 @@ fn save_app_settings_inner(updates: AppSettings) -> Result<(), String> {
 pub async fn get_app_settings() -> Result<AppSettings, String> {
     tokio::task::spawn_blocking(get_app_settings_inner)
         .await
-        .map_err(|e| format!("Task failed: {}", e))?
+        .map_err(|e| format!("Task failed: {e}"))?
 }
 
 #[tauri::command]
 pub async fn save_app_settings(settings: AppSettings) -> Result<(), String> {
     tokio::task::spawn_blocking(move || save_app_settings_inner(settings))
         .await
-        .map_err(|e| format!("Task failed: {}", e))?
+        .map_err(|e| format!("Task failed: {e}"))?
 }
 
 /// 获取自定义浏览器路径（供打开浏览器时使用）
@@ -207,9 +207,9 @@ fn get_usage_history_inner() -> Result<UsageHistory, String> {
         return Ok(UsageHistory::default());
     }
     let content = std::fs::read_to_string(&path)
-        .map_err(|e| format!("读取历史记录失败: {}", e))?;
+        .map_err(|e| format!("读取历史记录失败: {e}"))?;
     serde_json::from_str(&content)
-        .map_err(|e| format!("解析历史记录失败: {}", e))
+        .map_err(|e| format!("解析历史记录失败: {e}"))
 }
 
 fn save_usage_history_entry_inner(entry: UsageHistoryEntry) -> Result<(), String> {
@@ -237,9 +237,9 @@ fn save_usage_history_entry_inner(entry: UsageHistoryEntry) -> Result<(), String
     }
 
     let content = serde_json::to_string_pretty(&history)
-        .map_err(|e| format!("序列化失败: {}", e))?;
+        .map_err(|e| format!("序列化失败: {e}"))?;
     std::fs::write(&path, content)
-        .map_err(|e| format!("写入失败: {}", e))?;
+        .map_err(|e| format!("写入失败: {e}"))?;
     Ok(())
 }
 
@@ -247,12 +247,12 @@ fn save_usage_history_entry_inner(entry: UsageHistoryEntry) -> Result<(), String
 pub async fn get_usage_history() -> Result<UsageHistory, String> {
     tokio::task::spawn_blocking(get_usage_history_inner)
         .await
-        .map_err(|e| format!("Task failed: {}", e))?
+        .map_err(|e| format!("Task failed: {e}"))?
 }
 
 #[tauri::command]
 pub async fn save_usage_history_entry(entry: UsageHistoryEntry) -> Result<(), String> {
     tokio::task::spawn_blocking(move || save_usage_history_entry_inner(entry))
         .await
-        .map_err(|e| format!("Task failed: {}", e))?
+        .map_err(|e| format!("Task failed: {e}"))?
 }

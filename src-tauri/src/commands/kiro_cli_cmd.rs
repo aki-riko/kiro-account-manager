@@ -1,3 +1,5 @@
+#![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
+
 use crate::account::Account;
 use crate::kiro_cli_db::read_kiro_cli_accounts;
 use crate::kiro_portal_client::KiroPortalClient;
@@ -20,11 +22,7 @@ pub fn get_kiro_cli_default_path() -> Result<String, String> {
         .or_else(|_| std::env::var("USERPROFILE"))
         .map_err(|_| "无法获取用户主目录".to_string())?;
 
-    #[cfg(target_os = "windows")]
-    let default_path = format!("{}/.local/share/kiro-cli/data.sqlite3", home);
-
-    #[cfg(not(target_os = "windows"))]
-    let default_path = format!("{}/.local/share/kiro-cli/data.sqlite3", home);
+    let default_path = format!("{home}/.local/share/kiro-cli/data.sqlite3");
 
     // 检查文件是否存在
     if std::path::Path::new(&default_path).exists() {
@@ -41,19 +39,19 @@ pub async fn import_from_kiro_cli(
     db_path: String,
     state: State<'_, AppState>,
 ) -> Result<KiroCliImportResult, String> {
-    eprintln!("[Kiro CLI Import] 开始导入，数据库路径: {}", db_path);
+    eprintln!("[Kiro CLI Import] 开始导入，数据库路径: {db_path}");
 
     // 展开 ~ 为用户主目录
-    let expanded_path = if db_path.starts_with("~") {
+    let expanded_path = if db_path.starts_with('~') {
         let home = std::env::var("HOME")
             .or_else(|_| std::env::var("USERPROFILE"))
             .map_err(|_| "无法获取用户主目录".to_string())?;
-        db_path.replacen("~", &home, 1)
+        db_path.replacen('~', &home, 1)
     } else {
         db_path.clone()
     };
 
-    eprintln!("[Kiro CLI Import] 展开后的路径: {}", expanded_path);
+    eprintln!("[Kiro CLI Import] 展开后的路径: {expanded_path}");
 
     // 1. 读取 kiro-cli 数据库
     let cli_accounts = read_kiro_cli_accounts(&expanded_path)?;
@@ -67,11 +65,12 @@ pub async fn import_from_kiro_cli(
     }
     
     let cli_account = &cli_accounts[0];
-    eprintln!("[Kiro CLI Import] 读取到账号: auth_method={}, token_key={}", 
-        cli_account.auth_method, cli_account.token_key);
+    let auth_method = &cli_account.auth_method;
+    let token_key = &cli_account.token_key;
+    eprintln!("[Kiro CLI Import] 读取到账号: auth_method={auth_method}, token_key={token_key}");
 
     // 2. 调用 Kiro Portal API 获取配额
-    let portal_client = KiroPortalClient::new();
+    let portal_client = KiroPortalClient::new()?;
     
     // 判断 idp（根据 auth_method）
     let idp = if cli_account.auth_method == "social" {
@@ -88,11 +87,11 @@ pub async fn import_from_kiro_cli(
         Ok(usage) => {
             let email = usage.get("email")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
             
             let user_id = usage.get("userId")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
 
             // 判断 provider
             let provider = if cli_account.auth_method == "social" {
@@ -116,12 +115,12 @@ pub async fn import_from_kiro_cli(
             (email, user_id, provider.to_string(), Some(usage))
         }
         Err(e) => {
-            eprintln!("[Kiro CLI Import] 获取配额失败: {}", e);
+            eprintln!("[Kiro CLI Import] 获取配额失败: {e}");
             return Ok(KiroCliImportResult {
                 success: false,
                 is_new: false,
                 account: None,
-                error: Some(format!("获取账号信息失败: {}", e)),
+                error: Some(format!("获取账号信息失败: {e}")),
             });
         }
     };
@@ -145,14 +144,16 @@ pub async fn import_from_kiro_cli(
     let label = if is_new {
         format!("从 kiro-cli 导入 ({})", cli_account.token_key)
     } else {
-        // 保留原有的 label
-        store.accounts[existing_index.unwrap()].label.clone()
+        // 保留原有的 label（安全访问）
+        existing_index
+            .and_then(|idx| store.accounts.get(idx))
+            .map_or_else(|| format!("从 kiro-cli 导入 ({})", cli_account.token_key), |a| a.label.clone())
     };
     
-    let mut account = if email.is_some() {
-        Account::new(email.clone().unwrap(), label)
-    } else if user_id.is_some() {
-        Account::new_enterprise(user_id.clone().unwrap(), label)
+    let mut account = if let Some(e) = email.clone() {
+        Account::new(e, label)
+    } else if let Some(uid) = user_id.clone() {
+        Account::new_enterprise(uid, label)
     } else {
         return Ok(KiroCliImportResult {
             success: false,
@@ -165,7 +166,7 @@ pub async fn import_from_kiro_cli(
     // 5. 填充字段
     account.access_token = Some(cli_account.access_token.clone());
     account.refresh_token = Some(cli_account.refresh_token.clone());
-    account.expires_at = cli_account.expires_at.clone();
+    account.expires_at.clone_from(&cli_account.expires_at);
     account.provider = Some(provider);
     account.user_id = user_id;
     account.region = Some(cli_account.region.clone());
@@ -174,18 +175,18 @@ pub async fn import_from_kiro_cli(
     // 6. 根据认证类型填充字段
     if cli_account.auth_method == "social" {
         account.auth_method = Some("social".to_string());
-        account.profile_arn = cli_account.profile_arn.clone();
+        account.profile_arn.clone_from(&cli_account.profile_arn);
     } else {
         account.auth_method = Some("IdC".to_string());
-        account.client_id = cli_account.client_id.clone();
-        account.client_secret = cli_account.client_secret.clone();
+        account.client_id.clone_from(&cli_account.client_id);
+        account.client_secret.clone_from(&cli_account.client_secret);
     }
 
     // 7. 生成或保留 machine_id
     if let Some(idx) = existing_index {
         // 更新现有账号，保留 machine_id
-        account.machine_id = store.accounts[idx].machine_id.clone();
-        account.id = store.accounts[idx].id.clone();
+        account.machine_id.clone_from(&store.accounts[idx].machine_id);
+        account.id.clone_from(&store.accounts[idx].id);
         store.accounts[idx] = account.clone();
     } else {
         // 新账号，生成 machine_id
@@ -198,8 +199,9 @@ pub async fn import_from_kiro_cli(
     store.save_to_file();
     drop(store);
 
-    eprintln!("[Kiro CLI Import] 导入成功: is_new={}, email={:?}, user_id={:?}", 
-        is_new, account.email, account.user_id);
+    let email = &account.email;
+    let user_id = &account.user_id;
+    eprintln!("[Kiro CLI Import] 导入成功: is_new={is_new}, email={email:?}, user_id={user_id:?}");
 
     Ok(KiroCliImportResult {
         success: true,

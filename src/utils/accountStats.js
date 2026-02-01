@@ -34,11 +34,14 @@ const getQuota = (a) => {
   const trialActive = trialInfo?.freeTrialStatus === 'ACTIVE'
   const freeTrial = trialActive ? (trialInfo?.usageLimit ?? 0) : 0
   
-  // 检查每个奖励配额（所有奖励都计入，不管是否过期）
+  // 检查每个奖励配额（只计入未过期且状态为 ACTIVE 的奖励）
   const bonuses = Array.isArray(breakdown.bonuses) ? breakdown.bonuses : []
   let bonus = 0
   bonuses.forEach(b => {
-    bonus += b.usageLimit ?? 0
+    const expiry = b.expiresAt ? b.expiresAt * 1000 : Infinity
+    if (expiry > now && b.status === 'ACTIVE') {
+      bonus += b.usageLimit ?? 0
+    }
   })
   
   return main + freeTrial + bonus
@@ -57,11 +60,14 @@ const getUsed = (a) => {
   const trialActive = trialInfo?.freeTrialStatus === 'ACTIVE'
   const freeTrial = trialActive ? (trialInfo?.currentUsage ?? 0) : 0
   
-  // 检查每个奖励配额（所有奖励都计入，不管是否过期）
+  // 检查每个奖励配额（只计入未过期且状态为 ACTIVE 的奖励）
   const bonuses = Array.isArray(breakdown.bonuses) ? breakdown.bonuses : []
   let bonus = 0
   bonuses.forEach(b => {
-    bonus += b.currentUsage ?? 0
+    const expiry = b.expiresAt ? b.expiresAt * 1000 : Infinity
+    if (expiry > now && b.status === 'ACTIVE') {
+      bonus += b.currentUsage ?? 0
+    }
   })
   
   return main + freeTrial + bonus

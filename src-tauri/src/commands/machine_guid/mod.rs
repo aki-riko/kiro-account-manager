@@ -1,5 +1,7 @@
 // 系统机器码管理模块 - 支持 Windows/macOS/Linux
 
+#![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
+
 mod types;
 mod utils;
 
@@ -22,12 +24,12 @@ mod platform {
     pub fn backup_machine_guid_inner() -> Result<MachineGuidBackup, String> { Err(ERR.into()) }
     pub fn restore_machine_guid_inner() -> Result<String, String> { Err(ERR.into()) }
     pub fn reset_machine_guid_inner() -> Result<String, String> { Err(ERR.into()) }
-    pub fn set_custom_machine_guid_inner(_: String) -> Result<String, String> { Err(ERR.into()) }
+    pub fn set_custom_machine_guid_inner(_: &str) -> Result<String, String> { Err(ERR.into()) }
     pub fn clear_override_inner() -> Result<(), String> { Ok(()) }
 }
 
 async fn run<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
-    tokio::task::spawn_blocking(f).await.map_err(|e| format!("Task failed: {}", e))
+    tokio::task::spawn_blocking(f).await.map_err(|e| format!("Task failed: {e}"))
 }
 
 #[tauri::command]
@@ -57,7 +59,7 @@ pub async fn get_machine_guid_backup() -> Result<Option<MachineGuidBackup>, Stri
 
 #[tauri::command]
 pub async fn set_custom_machine_guid(new_guid: String) -> Result<String, String> {
-    run(move || platform::set_custom_machine_guid_inner(new_guid)).await?
+    run(move || platform::set_custom_machine_guid_inner(&new_guid)).await?
 }
 
 #[tauri::command]
@@ -77,7 +79,7 @@ pub async fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
         use std::process::Command;
         
         let exe_path = std::env::current_exe()
-            .map_err(|e| format!("获取程序路径失败: {}", e))?;
+            .map_err(|e| format!("获取程序路径失败: {e}"))?;
         
         // 使用 PowerShell 的 Start-Process -Verb RunAs 以管理员权限启动
         let _status = Command::new("powershell")
@@ -86,11 +88,11 @@ pub async fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
                 "-Command",
                 &format!(
                     "Start-Process -FilePath '{}' -Verb RunAs",
-                    exe_path.display().to_string().replace("'", "''")
+                    exe_path.display().to_string().replace('\'', "''")
                 )
             ])
             .spawn()
-            .map_err(|e| format!("启动管理员进程失败: {}", e))?;
+            .map_err(|e| format!("启动管理员进程失败: {e}"))?;
         
         // 等待一小段时间确保新进程启动
         std::thread::sleep(std::time::Duration::from_millis(500));
@@ -105,7 +107,7 @@ pub async fn restart_as_admin(app: tauri::AppHandle) -> Result<(), String> {
         use std::process::Command;
         
         let exe_path = std::env::current_exe()
-            .map_err(|e| format!("获取程序路径失败: {}", e))?;
+            .map_err(|e| format!("获取程序路径失败: {e}"))?;
         
         // 尝试使用 pkexec
         let result = Command::new("pkexec")

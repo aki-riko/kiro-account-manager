@@ -77,7 +77,7 @@ pub async fn get_usage_by_provider(
 ) -> Result<UsageResult, String> {
     // 统一使用 KiroPortalClient 的 GetUserUsageAndLimits 接口
     // provider 即 idp: Google / Github / BuilderId
-    let client = KiroPortalClient::new();
+    let client = KiroPortalClient::new()?;
     let usage_call = client.get_user_usage_and_limits(access_token, provider).await;
     parse_usage_result(usage_call)
 }
@@ -114,12 +114,12 @@ pub fn calc_expires_at(expires_in: i64) -> String {
     expires_at.format("%Y/%m/%d %H:%M:%S").to_string()
 }
 
-/// 根据 usage_result 计算账号状态
+/// 根据 `usage_result` 计算账号状态
 pub fn calc_status(is_banned: bool) -> String {
     if is_banned { "banned".to_string() } else { "active".to_string() }
 }
 
-/// 从 usage_data 中简单提取 email 和 user_id（不依赖结构体）
+/// 从 `usage_data` 中简单提取 `email` 和 `user_id`（不依赖结构体）
 pub fn extract_user_info(usage_data: &serde_json::Value) -> (Option<String>, Option<String>) {
     let user_info = usage_data.get("userInfo");
     
@@ -127,25 +127,25 @@ pub fn extract_user_info(usage_data: &serde_json::Value) -> (Option<String>, Opt
         .and_then(|u| u.get("email"))
         .and_then(|e| e.as_str())
         .filter(|s| !s.is_empty())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     
     let user_id = user_info
         .and_then(|u| u.get("userId"))
         .and_then(|id| id.as_str())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     
     (email, user_id)
 }
 
 /// 查找已存在的账号索引
-/// 使用 email + user_id + auth_method + provider 四字段组合精确去重
+/// 使用 `email` + `user_id` + `auth_method` + `provider` 四字段组合精确去重
 /// 只有当 4 个字段都相同时才认为是重复账号
 pub fn find_existing_account_idx(
     accounts: &[Account],
-    email: &Option<String>,
+    email: Option<&String>,
     provider: &str,
     _refresh_token: &str,
-    user_id: &Option<String>,
+    user_id: Option<&String>,
 ) -> Option<usize> {
     // 推断 auth_method
     let auth_method = if provider == "BuilderId" || provider == "Enterprise" {
@@ -156,8 +156,8 @@ pub fn find_existing_account_idx(
     
     // 使用 4 字段组合精确匹配
     accounts.iter().position(|a| {
-        let email_match = a.email == *email;
-        let user_id_match = a.user_id == *user_id;
+        let email_match = a.email.as_ref() == email;
+        let user_id_match = a.user_id.as_ref() == user_id;
         let auth_method_match = a.auth_method.as_deref() == Some(auth_method);
         let provider_match = a.provider.as_deref() == Some(provider);
         

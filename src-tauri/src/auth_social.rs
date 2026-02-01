@@ -1,6 +1,6 @@
 use crate::auth::{DesktopRefreshResponse, DESKTOP_AUTH_API};
 
-/// 生成PKCE code_verifier（32字节，base64url）
+/// 生成PKCE `code_verifier`（32字节，base64url）
 pub fn generate_code_verifier_social() -> String {
     use rand::Rng;
     let mut rng = rand::thread_rng();
@@ -8,7 +8,7 @@ pub fn generate_code_verifier_social() -> String {
     base64_url_encode(&bytes)
 }
 
-/// 生成PKCE code_challenge（SHA256哈希，base64url）
+/// 生成PKCE `code_challenge`（SHA256哈希，base64url）
 pub fn generate_code_challenge_social(verifier: &str) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
@@ -37,27 +37,27 @@ pub async fn exchange_social_code_for_token(
     });
 
     let kiro_ide_version = "0.6.18";
-    let user_agent = format!("KiroIDE-{}-{}", kiro_ide_version, machineid);
+    let user_agent = format!("KiroIDE-{kiro_ide_version}-{machineid}");
 
     let response = client
-        .post(format!("{}/oauth/token", DESKTOP_AUTH_API))
+        .post(format!("{DESKTOP_AUTH_API}/oauth/token"))
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
         .header("user-agent", user_agent)
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("OAuth token request failed: {}", e))?;
+        .map_err(|e| format!("OAuth token request failed: {e}"))?;
 
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
 
     if !status.is_success() {
-        return Err(format!("OAuth token exchange failed ({}): {}", status, body));
+        return Err(format!("OAuth token exchange failed ({status}): {body}"));
     }
 
     let token_resp: DesktopRefreshResponse = serde_json::from_str(&body)
-        .map_err(|e| format!("Failed to parse OAuth token response: {}", e))?;
+        .map_err(|e| format!("Failed to parse OAuth token response: {e}"))?;
 
     Ok(token_resp)
 }

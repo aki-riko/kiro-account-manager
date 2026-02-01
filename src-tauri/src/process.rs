@@ -1,12 +1,14 @@
 // 进程管理相关功能
 
+#![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
+
 use std::process::Command;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// 检查 Kiro IDE 是否正在运行（内部函数，同步）
 #[cfg(target_os = "windows")]
@@ -67,12 +69,12 @@ pub fn kill_kiro() -> Result<(), String> {
         .args(["/IM", "Kiro.exe", "/F"])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .map_err(|e| format!("Failed to execute taskkill: {}", e))?;
+        .map_err(|e| format!("Failed to execute taskkill: {e}"))?;
     
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if !stderr.contains("not found") && !stderr.contains("没有找到") {
-            return Err(format!("Failed to close Kiro IDE: {}", stderr));
+            return Err(format!("Failed to close Kiro IDE: {stderr}"));
         }
     }
     Ok(())
@@ -83,12 +85,12 @@ pub fn kill_kiro() -> Result<(), String> {
     let output = Command::new("pkill")
         .args(["-x", "Kiro"])
         .output()
-        .map_err(|e| format!("Failed to execute pkill: {}", e))?;
+        .map_err(|e| format!("Failed to execute pkill: {e}"))?;
     
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if !stderr.contains("No matching") {
-            return Err(format!("Failed to close Kiro IDE: {}", stderr));
+            return Err(format!("Failed to close Kiro IDE: {stderr}"));
         }
     }
     Ok(())
@@ -100,12 +102,12 @@ pub fn kill_kiro() -> Result<(), String> {
     let output = Command::new("pkill")
         .args(["-f", "kiro"])
         .output()
-        .map_err(|e| format!("Failed to execute pkill: {}", e))?;
+        .map_err(|e| format!("Failed to execute pkill: {e}"))?;
     
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if !stderr.is_empty() {
-            return Err(format!("Failed to close Kiro IDE: {}", stderr));
+            return Err(format!("Failed to close Kiro IDE: {stderr}"));
         }
     }
     Ok(())
@@ -128,7 +130,7 @@ pub fn launch_kiro() -> Result<(), String> {
     
     Command::new(&kiro_path)
         .spawn()
-        .map_err(|e| format!("Failed to start Kiro IDE: {}", e))?;
+        .map_err(|e| format!("Failed to start Kiro IDE: {e}"))?;
     
     Ok(())
 }
@@ -144,7 +146,7 @@ pub fn launch_kiro() -> Result<(), String> {
     Command::new("open")
         .args(["-a", "Kiro"])
         .spawn()
-        .map_err(|e| format!("Failed to start Kiro IDE: {}", e))?;
+        .map_err(|e| format!("Failed to start Kiro IDE: {e}"))?;
     
     Ok(())
 }
@@ -162,7 +164,7 @@ pub fn launch_kiro() -> Result<(), String> {
     if std::path::Path::new(kiro_path).exists() {
         Command::new(kiro_path)
             .spawn()
-            .map_err(|e| format!("Failed to start Kiro IDE: {}", e))?;
+            .map_err(|e| format!("Failed to start Kiro IDE: {e}"))?;
         return Ok(());
     }
     
@@ -172,7 +174,7 @@ pub fn launch_kiro() -> Result<(), String> {
         if std::path::Path::new(&local_path).exists() {
             Command::new(&local_path)
                 .spawn()
-                .map_err(|e| format!("Failed to start Kiro IDE: {}", e))?;
+                .map_err(|e| format!("Failed to start Kiro IDE: {e}"))?;
             return Ok(());
         }
     }
@@ -199,7 +201,7 @@ pub async fn close_kiro_ide() -> Result<bool, String> {
         Ok(was_running)
     })
     .await
-    .map_err(|e| format!("Task failed: {}", e))?
+    .map_err(|e| format!("Task failed: {e}"))?
 }
 
 /// 启动 Kiro IDE
@@ -207,5 +209,5 @@ pub async fn close_kiro_ide() -> Result<bool, String> {
 pub async fn start_kiro_ide() -> Result<(), String> {
     tokio::task::spawn_blocking(launch_kiro)
         .await
-        .map_err(|e| format!("Task failed: {}", e))?
+        .map_err(|e| format!("Task failed: {e}"))?
 }

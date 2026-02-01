@@ -1,5 +1,7 @@
 // 代理检测命令
 
+#![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,13 +71,13 @@ fn detect_tun_mode() -> (bool, Option<String>) {
 
 #[cfg(target_os = "windows")]
 fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
-    use winreg::enums::*;
+    use winreg::enums::HKEY_CURRENT_USER;
     use winreg::RegKey;
     
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let internet_settings = hkcu
         .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings")
-        .map_err(|e| format!("无法打开注册表: {}", e))?;
+        .map_err(|e| format!("无法打开注册表: {e}"))?;
     
     let proxy_enable: u32 = internet_settings.get_value("ProxyEnable").unwrap_or(0);
     let proxy_server: String = internet_settings.get_value("ProxyServer").unwrap_or_default();
@@ -90,9 +92,7 @@ fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
             proxy_server
                 .split(';')
                 .find(|s| s.starts_with("http="))
-                .map(|s| s.trim_start_matches("http="))
-                .unwrap_or(&proxy_server)
-                .to_string()
+                .map_or_else(|| proxy_server.clone(), |s| s.trim_start_matches("http=").to_string())
         } else {
             proxy_server.clone()
         };
@@ -142,7 +142,7 @@ fn detect_tun_mode() -> (bool, Option<String>) {
                         return (true, Some(iface.clone()));
                     }
                 }
-                current_iface = line.split(':').next().map(|s| s.to_string());
+                current_iface = line.split(':').next().map(std::string::ToString::to_string);
                 has_inet = false;
             } else if current_iface.is_some() && line.contains("inet ") && !line.contains("inet6") {
                 has_inet = true;
@@ -332,5 +332,5 @@ fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
 pub async fn detect_system_proxy() -> Result<SystemProxyInfo, String> {
     tokio::task::spawn_blocking(detect_system_proxy_inner)
         .await
-        .map_err(|e| format!("Task failed: {}", e))?
+        .map_err(|e| format!("Task failed: {e}"))?
 }

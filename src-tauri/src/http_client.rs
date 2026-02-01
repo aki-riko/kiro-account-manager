@@ -45,9 +45,9 @@ fn get_proxy_from_kiro_settings() -> Option<String> {
     })
     .and_then(|json| {
         json.get("http.proxy")
-            .and_then(|v| v.as_str())
+            .and_then(serde_json::Value::as_str)
             .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
     })
 }
 
@@ -69,7 +69,7 @@ pub fn build_http_client_with_timeout(timeout_secs: u64, connect_timeout_secs: u
         }
     }
     
-    builder.build().map_err(|e| format!("Failed to create HTTP client: {}", e))
+    builder.build().map_err(|e| format!("Failed to create HTTP client: {e}"))
 }
 
 /// 构建 HTTP 客户端（带 User-Agent）
@@ -86,5 +86,5 @@ pub fn build_http_client_with_user_agent(user_agent: &str) -> Result<Client, Str
         }
     }
     
-    builder.build().map_err(|e| format!("Failed to create HTTP client: {}", e))
+    builder.build().map_err(|e| format!("Failed to create HTTP client: {e}"))
 }

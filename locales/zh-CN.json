@@ -431,7 +431,7 @@
   "addAccount.machineIdPlaceholder": "留空自动生成",
 
   "import.title": "批量导入账号",
-  "import.subtitle": "支持 JSON 文件、SSO Token 和从 Kiro IDE 导入",
+  "import.subtitle": "支持 JSON 文件、从 Kiro IDE 导入和从 kiro-cli 导入",
   "import.jsonTab": "JSON 凭证导入",
   "import.ssoTab": "SSO Token 导入",
   "import.selectFile": "选择 JSON 文件",
@@ -473,6 +473,8 @@
 
   "accountCard.switchAccount": "切换账号",
   "accountCard.refresh": "刷新数据",
+  "accountCard.refreshQuota": "刷新配额",
+  "accountCard.refreshToken": "刷新 Token",
   "accountCard.viewDetails": "查看详情",
   "accountCard.editRemark": "编辑账号",
   "accountCard.delete": "删除",

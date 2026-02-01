@@ -36,7 +36,9 @@ function validateAccount(item, index) {
   let provider = item.provider
   if (!provider) {
     if (isSocial) {
-      provider = 'Google'
+      // Social 账号必须明确指定 provider
+      errors.push(`第${index + 1}条: Social 账号必须指定 provider (Google/Github)`)
+      return { valid: false, errors, type: null }
     } else {
       // IdC 账号：通过 startUrl 判断是 Enterprise 还是 BuilderId
       provider = item.startUrl ? 'Enterprise' : 'BuilderId'
@@ -57,6 +59,18 @@ function validateAccount(item, index) {
   if (isIdC && !['BuilderId', 'Enterprise'].includes(provider)) {
     errors.push(`第${index + 1}条: IdC 账号的 provider 应为 BuilderId/Enterprise`)
     return { valid: false, errors, type: null }
+  }
+
+  // 验证 Enterprise 必需字段
+  if (provider === 'Enterprise') {
+    if (!item.startUrl) {
+      errors.push(`第${index + 1}条: Enterprise 账号必须提供 startUrl`)
+      return { valid: false, errors, type: null }
+    }
+    if (!item.region) {
+      errors.push(`第${index + 1}条: Enterprise 账号必须提供 region`)
+      return { valid: false, errors, type: null }
+    }
   }
 
   return { valid: true, errors: [], type: isSocial ? 'social' : 'idc', inferredProvider: provider }
@@ -540,7 +554,7 @@ return (
                   <MantineButton variant="light" color="violet" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", region: "us-east-1", provider: "BuilderId", machineId: "" }], null, 2))}>
                     BuilderId 模板
                   </MantineButton>
-                  <MantineButton variant="light" color="grape" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", region: "ap-southeast-2", provider: "Enterprise", machineId: "" }], null, 2))}>
+                  <MantineButton variant="light" color="grape" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", region: "ap-southeast-2", startUrl: "", provider: "Enterprise", machineId: "" }], null, 2))}>
                     Enterprise 模板
                   </MantineButton>
                 </Group>

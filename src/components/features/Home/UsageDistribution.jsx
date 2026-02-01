@@ -1,22 +1,17 @@
 import { Card, Group, Stack, Text, Progress } from '@mantine/core'
 import { PieChart, BarChart2 } from 'lucide-react'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
-import { formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
+import { formatUsage, getAccountDisplayName, getQuota, getUsed } from '../../../utils/accountStats'
 
 // 使用率分布统计
 function UsageDistribution({ tokens, isLightTheme, colors, t }) {
   const { maskEmail } = usePrivacy()
   
-  // 计算使用率分组
+  // 计算使用率（使用统一的 getQuota 和 getUsed 函数）
   const getUsagePercent = (account) => {
-    // 封禁账号返回 0
-    const isBanned = account.status === 'banned' || account.status === '封禁' || account.status === '已封禁'
-    if (isBanned) return 0
-
-    const breakdown = account.usageData?.usageBreakdownList?.[0] || account.usageData?.usageBreakdown
-    const used = breakdown?.currentUsage ?? 0
-    const limit = breakdown?.usageLimit ?? 0
-    return limit > 0 ? (used / limit) * 100 : 0
+    const quota = getQuota(account)
+    const used = getUsed(account)
+    return quota > 0 ? (used / quota) * 100 : 0
   }
   
   const usageGroups = {
@@ -25,18 +20,11 @@ function UsageDistribution({ tokens, isLightTheme, colors, t }) {
     high: tokens.filter(a => getUsagePercent(a) >= 70).length
   }
   
-  // 账号配额排行（前5）
+  // 账号配额排行（前5，使用统一的 getQuota 和 getUsed 函数）
   const topAccounts = [...tokens]
     .map(a => {
-      // 封禁账号返回 0
-      const isBanned = a.status === 'banned' || a.status === '封禁' || a.status === '已封禁'
-      if (isBanned) {
-        return { email: a.email, used: 0, limit: 0, percent: 0, usedStr: '0', limitStr: '0' }
-      }
-
-      const breakdown = a.usageData?.usageBreakdownList?.[0] || a.usageData?.usageBreakdown
-      const used = breakdown?.currentUsage ?? 0
-      const limit = breakdown?.usageLimit ?? 0
+      const used = getUsed(a)
+      const limit = getQuota(a)
       return { 
         email: a.email, 
         used, 

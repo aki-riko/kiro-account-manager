@@ -91,7 +91,7 @@ impl AccountTagLink {
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     pub id: String,
-    /// email 字段（企业账号可能没有，用 user_id 代替）
+    /// email 字段（企业账号可能没有，用 `user_id` 代替）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
     // 账号密码（可选）
@@ -167,7 +167,7 @@ impl Account {
         }
     }
 
-    /// 创建 Enterprise 账号（没有 email，使用 user_id）
+    /// 创建 Enterprise 账号（没有 email，使用 `user_id`）
     pub fn new_enterprise(user_id: String, label: String) -> Self {
         let now: DateTime<Local> = Local::now();
         Self {
@@ -203,7 +203,7 @@ impl Account {
         self.provider.as_deref() == Some("Enterprise")
     }
 
-    /// 获取显示用的标识（Enterprise 用 user_id，其他用 email）
+    /// 获取显示用的标识（Enterprise 用 `user_id`，其他用 email）
     pub fn get_display_id(&self) -> String {
         if self.is_enterprise() {
             self.user_id.clone().unwrap_or_else(|| "Unknown".to_string())
@@ -248,13 +248,13 @@ impl AccountStore {
                     accounts
                 }
                 Err(e) => {
-                    eprintln!("[AccountStore] JSON 反序列化失败: {}", e);
-                    eprintln!("[AccountStore] 文件路径: {:?}", path);
+                    eprintln!("[AccountStore] JSON 反序列化失败: {e}");
+                    eprintln!("[AccountStore] 文件路径: {}", path.display());
                     Vec::new()
                 }
             }
         } else {
-            eprintln!("[AccountStore] 无法读取文件: {:?}", path);
+            eprintln!("[AccountStore] 无法读取文件: {}", path.display());
             Vec::new()
         }
     }
@@ -262,7 +262,7 @@ impl AccountStore {
     pub fn save_to_file(&self) -> bool {
         if let Some(parent) = self.file_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
-                eprintln!("[AccountStore] 创建目录失败: {}", e);
+                eprintln!("[AccountStore] 创建目录失败: {e}");
                 return false;
             }
         }
@@ -270,13 +270,13 @@ impl AccountStore {
         match serde_json::to_string_pretty(&self.accounts) {
             Ok(json) => {
                 if let Err(e) = std::fs::write(&self.file_path, json) {
-                    eprintln!("[AccountStore] 写入文件失败: {}", e);
+                    eprintln!("[AccountStore] 写入文件失败: {e}");
                     return false;
                 }
                 true
             }
             Err(e) => {
-                eprintln!("[AccountStore] 序列化失败: {}", e);
+                eprintln!("[AccountStore] 序列化失败: {e}");
                 false
             }
         }
@@ -434,20 +434,20 @@ impl GroupTagStore {
     pub fn save_to_file(&self) -> bool {
         if let Some(parent) = self.file_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
-                eprintln!("[GroupTagStore] 创建目录失败: {}", e);
+                eprintln!("[GroupTagStore] 创建目录失败: {e}");
                 return false;
             }
         }
         match serde_json::to_string_pretty(&self.data) {
             Ok(json) => {
                 if let Err(e) = std::fs::write(&self.file_path, json) {
-                    eprintln!("[GroupTagStore] 写入文件失败: {}", e);
+                    eprintln!("[GroupTagStore] 写入文件失败: {e}");
                     return false;
                 }
                 true
             }
             Err(e) => {
-                eprintln!("[GroupTagStore] 序列化失败: {}", e);
+                eprintln!("[GroupTagStore] 序列化失败: {e}");
                 false
             }
         }
@@ -459,6 +459,7 @@ impl GroupTagStore {
     }
 
     pub fn add_group(&mut self, name: String, color: Option<String>) -> Result<AccountGroup, String> {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)] // 分组数量不会超过 i32 范围
         let order = self.data.groups.len() as i32;
         let mut group = AccountGroup::new(name, color);
         group.order = order;
@@ -489,10 +490,13 @@ impl GroupTagStore {
         deleted
     }
 
-    pub fn reorder_groups(&mut self, ids: Vec<String>) -> bool {
+    pub fn reorder_groups(&mut self, ids: &[String]) -> bool {
         for (order, id) in ids.iter().enumerate() {
             if let Some(group) = self.data.groups.iter_mut().find(|g| &g.id == id) {
-                group.order = order as i32;
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)] // 分组数量不会超过 i32 范围
+                {
+                    group.order = order as i32;
+                }
             }
         }
         self.data.groups.sort_by_key(|g| g.order);

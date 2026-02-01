@@ -111,7 +111,7 @@ pub fn detect_browsers() -> Vec<DetectedBrowser> {
 }
 
 /// 使用自定义浏览器打开 URL
-/// browser_path 格式: "路径" 参数1 参数2... 或 路径 参数1 参数2...
+/// `browser_path` 格式: "路径" 参数1 参数2... 或 路径 参数1 参数2...
 /// 例如: "C:\Program Files\Google\Chrome\Application\chrome.exe" --incognito
 fn open_with_custom_browser(browser_path: &str, url: &str) -> Result<(), String> {
     let browser_path = browser_path.trim();
@@ -148,7 +148,7 @@ fn open_with_custom_browser(browser_path: &str, url: &str) -> Result<(), String>
     std::process::Command::new(exe_path)
         .args(&args)
         .spawn()
-        .map_err(|e| format!("打开自定义浏览器失败: {} (路径: {})", e, exe_path))?;
+        .map_err(|e| format!("打开自定义浏览器失败: {e} (路径: {exe_path})"))?;
 
     Ok(())
 }
@@ -160,13 +160,13 @@ fn open_with_default_browser(url: &str) -> Result<(), String> {
         std::process::Command::new("rundll32")
             .args(["url.dll,FileProtocolHandler", url])
             .spawn()
-            .map_err(|e| format!("打开浏览器失败: {}", e))?;
+            .map_err(|e| format!("打开浏览器失败: {e}"))?;
     }
 
     #[cfg(not(target_os = "windows"))]
     {
         open::that(url)
-            .map_err(|e| format!("打开浏览器失败: {}", e))?;
+            .map_err(|e| format!("打开浏览器失败: {e}"))?;
     }
 
     Ok(())

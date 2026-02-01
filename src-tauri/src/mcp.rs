@@ -73,10 +73,10 @@ impl McpConfig {
         }
         
         let content = fs::read_to_string(&path)
-            .map_err(|e| format!("读取配置文件失败: {}", e))?;
+            .map_err(|e| format!("读取配置文件失败: {e}"))?;
         
         serde_json::from_str(&content)
-            .map_err(|e| format!("解析配置文件失败: {}", e))
+            .map_err(|e| format!("解析配置文件失败: {e}"))
     }
 
     /// 保存配置文件
@@ -86,14 +86,14 @@ impl McpConfig {
         // 确保目录存在
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| format!("创建目录失败: {}", e))?;
+                .map_err(|e| format!("创建目录失败: {e}"))?;
         }
         
         let content = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("序列化配置失败: {}", e))?;
+            .map_err(|e| format!("序列化配置失败: {e}"))?;
         
         fs::write(&path, content)
-            .map_err(|e| format!("写入配置文件失败: {}", e))
+            .map_err(|e| format!("写入配置文件失败: {e}"))
     }
 
 }

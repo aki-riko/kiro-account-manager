@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(clippy::too_many_lines)] // main 函数包含应用初始化逻辑
 
 mod auth;
 mod auth_social;
@@ -40,16 +41,26 @@ use commands::group_tag_cmd::{
     get_tags, add_tag, update_tag, delete_tag,
     set_account_group, add_tag_to_account, remove_tag_from_account, set_account_tags, remove_account_tags
 };
-use commands::app_settings_cmd::*;
-use commands::auth_cmd::*;
-use commands::kiro_settings_cmd::*;
-use commands::machine_guid::*;
-use commands::mcp_cmd::*;
-use commands::kiro_cli_cmd::*;
+use commands::app_settings_cmd::{
+    get_app_settings, save_app_settings, get_usage_history, save_usage_history_entry,
+    bind_machine_id_to_account, unbind_machine_id_from_account, get_bound_machine_id, get_all_bound_machine_ids
+};
+use commands::auth_cmd::{get_current_user, logout, kiro_login, get_supported_providers, handle_kiro_social_callback};
+use commands::kiro_settings_cmd::{
+    get_kiro_settings, set_kiro_proxy, set_kiro_model, set_kiro_codebase_indexing, set_kiro_trusted_commands,
+    set_kiro_agent_autonomy, set_kiro_tab_autocomplete, set_kiro_usage_summary, set_kiro_code_references,
+    set_kiro_debug_logs, set_kiro_notification
+};
+use commands::machine_guid::{
+    get_system_machine_guid, backup_machine_guid, restore_machine_guid, reset_system_machine_guid,
+    get_machine_guid_backup, set_custom_machine_guid, clear_macos_override, generate_machine_guid, restart_as_admin
+};
+use commands::mcp_cmd::{get_mcp_config, save_mcp_server, delete_mcp_server, toggle_mcp_server, get_mcp_tool_stats};
+use commands::kiro_cli_cmd::{get_kiro_cli_default_path, import_from_kiro_cli};
 
-use commands::proxy_cmd::*;
-use commands::update_cmd::*;
-use commands::steering_cmd::*;
+use commands::proxy_cmd::detect_system_proxy;
+use commands::update_cmd::check_update;
+use commands::steering_cmd::{get_steering_files, get_steering_file, save_steering_file, delete_steering_file, create_steering_file};
 use kiro::{
     get_kiro_local_token, switch_kiro_account, read_kiro_accounts,
 };
@@ -78,7 +89,7 @@ fn main() {
         // 单实例插件：确保只有一个实例运行，deep-link 回调传递给已运行的实例
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // 当第二个实例尝试启动时，处理传入的参数（deep-link 回调）
-            for arg in argv.iter() {
+            for arg in &argv {
                 if arg.starts_with("kiro://") {
                     deep_link_handler::handle_deep_link(arg);
                 }

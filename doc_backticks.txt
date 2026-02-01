@@ -1,0 +1,47 @@
+
+> warning: item in documentation is missing backticks
+     --> src\commands\account_cmd.rs:546:8
+      |
+  546 | /// 娣诲姞 BuilderId 璐﹀彿
+      |          ^^^^^^^^^
+> warning: item in documentation is missing backticks
+   --> src\deep_link_handler.rs:8:25
+    |
+  8 | /// OAuth 鍥炶皟缁撴灉锛坰tate 宸插湪 handle_deep_link 涓獙璇侊級
+    |                                ^^^^^^^^^^^^^^^^
+> warning: item in documentation is missing backticks
+    --> src\deep_link_handler.rs:28:12
+     |
+  28 |     /// 鑾峰彇 redirect_uri (浣跨敤 Kiro 瀹樻柟鍗忚)
+     |              ^^^^^^^^^^^^
+> warning: item in documentation is missing backticks
+    --> src\kiro.rs:35:5
+     |
+  35 | /// IdC 瀹㈡埛绔敞鍐屼俊鎭?(浠?{clientIdHash}.json 璇诲彇)
+     |     ^^^
+> warning: item in documentation is missing backticks
+    --> src\kiro.rs:61:8
+     |
+  61 | /// 璇诲彇 IdC 瀹㈡埛绔敞鍐屼俊鎭?   |          ^^^
+     |
+> warning: item in documentation is missing backticks
+    --> src\providers\factory.rs:63:8
+     |
+  63 | /// 鍒涘缓 IdC Provider
+     |          ^^^
+> warning: item in documentation is missing backticks
+    --> src\account.rs:94:29
+     |
+  94 |     /// email 瀛楁锛堜紒涓氳处鍙峰彲鑳芥病鏈夛紝鐢?user_id 浠ｆ浛锛?   |                                          ^^^^^^^
+     |
+> warning: item in documentation is missing backticks
+     --> src\account.rs:170:38
+      |
+  170 |     /// 鍒涘缓 Enterprise 璐﹀彿锛堟病鏈?email锛屼娇鐢?user_id锛?    |                                                ^^^^^^^
+      |
+> warning: item in documentation is missing backticks
+     --> src\account.rs:206:31
+      |
+  206 |     /// 鑾峰彇鏄剧ず鐢ㄧ殑鏍囪瘑锛圗nterprise 鐢?user_id锛屽叾浠栫敤 email锛?    |                                         ^^^^^^^^^^^^^^^
+      |
+

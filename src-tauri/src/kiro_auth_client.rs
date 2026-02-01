@@ -4,36 +4,39 @@ use reqwest::Client;
 use serde::Deserialize;
 
 /// Kiro Authentication Service Client
-/// 负责与 https://prod.us-east-1.auth.desktop.kiro.dev 通信
+/// 负责与 <https://prod.us-east-1.auth.desktop.kiro.dev> 通信
 pub struct KiroAuthServiceClient {
     endpoint: String,
     client: Client,
 }
 
 impl KiroAuthServiceClient {
-    pub fn new(machine_id: &str) -> Self {
+    pub fn new(machine_id: &str) -> Result<Self, String> {
         let endpoint = "https://prod.us-east-1.auth.desktop.kiro.dev".to_string();
-        let user_agent = format!("KiroIDE-0.6.18-{}", machine_id);
+        let user_agent = format!("KiroIDE-0.6.18-{machine_id}");
 
-        let client = build_http_client_with_user_agent(&user_agent)
-            .expect("failed to build reqwest client");
+        let client = build_http_client_with_user_agent(&user_agent)?;
 
-        Self { endpoint, client }
+        Ok(Self { endpoint, client })
     }
 
     fn login_url(&self) -> String {
-        format!("{}/login", self.endpoint)
+        let endpoint = &self.endpoint;
+        format!("{endpoint}/login")
     }
 
     fn create_token_url(&self) -> String {
-        format!("{}/oauth/token", self.endpoint)
+        let endpoint = &self.endpoint;
+        format!("{endpoint}/oauth/token")
     }
 
     fn refresh_token_url(&self) -> String {
-        format!("{}/refreshToken", self.endpoint)
+        let endpoint = &self.endpoint;
+        format!("{endpoint}/refreshToken")
     }
 
     /// 打开浏览器到登录页面
+    #[allow(clippy::unused_async)] // 使用 spawn_blocking 执行同步操作，需要 async 上下文
     pub async fn login(
         &self,
         provider: &str,
@@ -86,27 +89,24 @@ impl KiroAuthServiceClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| format!("Kiro Auth Service request failed: {}", e))?;
+            .map_err(|e| format!("Kiro Auth Service request failed: {e}"))?;
 
         let status = resp.status();
         let bytes = resp
             .bytes()
             .await
-            .map_err(|e| format!("Kiro Auth Service read body failed: {}", e))?;
+            .map_err(|e| format!("Kiro Auth Service read body failed: {e}"))?;
         
         let body_str = String::from_utf8_lossy(&bytes);
         
         if !status.is_success() {
             return Err(format!(
-                "Kiro Auth Service token creation failed: {} - {}",
-                status,
-                body_str
+                "Kiro Auth Service token creation failed: {status} - {body_str}"
             ));
         }
 
         serde_json::from_slice::<T>(&bytes).map_err(|e| format!(
-            "Kiro Auth Service token creation parse failed: {}",
-            e
+            "Kiro Auth Service token creation parse failed: {e}"
         ))
     }
 
@@ -129,13 +129,13 @@ impl KiroAuthServiceClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| format!("Kiro Auth Service request failed: {}", e))?;
+            .map_err(|e| format!("Kiro Auth Service request failed: {e}"))?;
 
         let status = resp.status();
         let bytes = resp
             .bytes()
             .await
-            .map_err(|e| format!("Kiro Auth Service read body failed: {}", e))?;
+            .map_err(|e| format!("Kiro Auth Service read body failed: {e}"))?;
 
         let body_str = String::from_utf8_lossy(&bytes);
 
@@ -144,15 +144,12 @@ impl KiroAuthServiceClient {
                 return Err("RefreshToken 已过期或无效".to_string());
             }
             return Err(format!(
-                "Kiro Auth Service token refresh failed: {} - {}",
-                status,
-                body_str
+                "Kiro Auth Service token refresh failed: {status} - {body_str}"
             ));
         }
 
         serde_json::from_slice::<T>(&bytes).map_err(|e| format!(
-            "Kiro Auth Service token refresh parse failed: {}",
-            e
+            "Kiro Auth Service token refresh parse failed: {e}"
         ))
     }
 }

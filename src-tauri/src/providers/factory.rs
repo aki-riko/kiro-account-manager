@@ -60,7 +60,7 @@ pub fn create_social_provider(config: &ProviderConfig) -> SocialProvider {
     SocialProvider::new(&config.provider_id)
 }
 
-/// 创建 IdC Provider
+/// 创建 `IdC` Provider
 pub fn create_idc_provider(config: &ProviderConfig) -> IdcProvider {
     IdcProvider::new(&config.provider_id, &config.region, config.start_url.clone())
 }

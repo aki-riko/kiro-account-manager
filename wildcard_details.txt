@@ -1,0 +1,32 @@
+
+> warning: usage of wildcard import
+    --> src\commands\proxy_cmd.rs:72:9
+     |
+> warning: usage of wildcard import
+    --> src\main.rs:43:5
+     |
+> warning: usage of wildcard import
+    --> src\main.rs:44:5
+     |
+> warning: usage of wildcard import
+    --> src\main.rs:45:5
+     |
+> warning: usage of wildcard import
+    --> src\main.rs:46:5
+     |
+> warning: usage of wildcard import
+    --> src\main.rs:47:5
+     |
+> warning: usage of wildcard import
+    --> src\main.rs:48:5
+     |
+> warning: usage of wildcard import
+    --> src\main.rs:50:5
+     |
+> warning: usage of wildcard import
+    --> src\main.rs:51:5
+     |
+> warning: usage of wildcard import
+    --> src\main.rs:52:5
+     |
+

@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useMemo } from 'react'
-import { RefreshCw, Eye, Trash2, Copy, Check, Clock, Repeat, Edit2, UserX } from 'lucide-react'
+import { RefreshCw, Eye, Trash2, Copy, Check, Clock, Repeat, Edit2, UserX, Key, BarChart3 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Checkbox } from '@mantine/core'
 import { useTheme } from '../../../contexts/ThemeContext'
@@ -16,11 +16,13 @@ const AccountCard = memo(function AccountCard({
   onCopy,
   onSwitch,
   onRefresh,
+  onRefreshToken,
   onEdit,
   onEditLabel,
   onDelete,
   onDeleteRemote,
   refreshingId,
+  refreshingTokenId,
   switchingId,
   isCurrentAccount,
   tagDefinitions = [],
@@ -79,19 +81,20 @@ const AccountCard = memo(function AccountCard({
     { icon: Edit2, label: t('accountCard.editRemark'), onClick: () => onEditLabel(account) },
     { icon: Copy, label: t('accountCard.copyJson'), onClick: handleCopyJson },
     { divider: true },
-    { icon: RefreshCw, label: t('accountCard.refresh'), onClick: () => onRefresh(account.id), disabled: refreshingId === account.id },
+    { icon: Key, label: t('accountCard.refreshToken'), onClick: () => onRefreshToken?.(account.id), disabled: refreshingTokenId === account.id },
+    { icon: BarChart3, label: t('accountCard.refreshQuota'), onClick: () => onRefresh(account.id), disabled: refreshingId === account.id },
     { icon: Repeat, label: t('accountCard.switchAccount'), onClick: () => onSwitch(account), disabled: switchingId === account.id || isBanned },
     { divider: true },
     { icon: Trash2, label: t('accountCard.delete'), onClick: () => onDelete(account.id), danger: true },
     ...(account.provider !== 'Enterprise' && !isBanned && onDeleteRemote ? [
       { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
     ] : []),
-  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onSwitch, onDelete, onDeleteRemote, refreshingId, switchingId, isBanned])
+  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onSwitch, onDelete, onDeleteRemote, refreshingId, refreshingTokenId, switchingId, isBanned])
 
   return (
     <div
       onContextMenu={handleContextMenu}
-      className={`relative rounded-2xl border hover:shadow-lg flex flex-col h-[240px] ${glowColor} ${
+      className={`relative rounded-2xl border hover:shadow-lg flex flex-col min-h-[240px] ${glowColor} ${
       isSelected 
         ? colors.cardSelected
         : isCurrentAccount
@@ -275,28 +278,31 @@ const AccountCard = memo(function AccountCard({
           )}
         </div>
 
-        {/* Token 过期时间 */}
-        {account.expiresAt && (
-          <div className={`text-[11px] ${isExpired ? colors.dateExpired : colors.textMuted} flex items-center gap-1 px-2 py-1 rounded-lg ${colors.cardSecondary}`}>
-            <Clock size={10} />
-            <span>Token: {account.expiresAt}</span>
-            {isExpired && <span className={`${colors.dateExpired} font-medium`}>({t('accountCard.tokenExpired')})</span>}
-          </div>
-        )}
+        {/* 固定位置的附加信息区域 */}
+        <div className="flex flex-col gap-1.5">
+          {/* Token 过期时间 */}
+          {account.expiresAt && (
+            <div className={`text-[11px] ${isExpired ? colors.dateExpired : colors.textMuted} flex items-center gap-1 px-2 py-1 rounded-lg ${colors.cardSecondary}`}>
+              <Clock size={10} />
+              <span>Token: {account.expiresAt}</span>
+              {isExpired && <span className={`${colors.dateExpired} font-medium`}>({t('accountCard.tokenExpired')})</span>}
+            </div>
+          )}
 
-        {/* 机器码 */}
-        {account.machineId && (
-          <div className={`text-[11px] flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${colors.cardSecondary} shadow-sm`}>
-            <span className={`font-medium shrink-0 ${colors.machineIdText}`}>机器码:</span>
-            <span className={`font-mono text-[10px] break-all ${colors.machineIdTextSecondary}`}>{account.machineId}</span>
-            <button 
-              onClick={() => onCopy(account.machineId, `${account.id}-mid`)} 
-              className={`btn-icon p-1 rounded-lg flex-shrink-0 ${colors.cardHover} transition-all hover:scale-110`}
-            >
-              {copiedId === `${account.id}-mid` ? <Check size={11} className={colors.iconSuccess} /> : <Copy size={11} className={colors.machineIdIcon} />}
-            </button>
-          </div>
-        )}
+          {/* 机器码 */}
+          {account.machineId && (
+            <div className={`text-[11px] flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${colors.cardSecondary} shadow-sm`}>
+              <span className={`font-medium shrink-0 ${colors.machineIdText}`}>机器码:</span>
+              <span className={`font-mono text-[10px] break-all ${colors.machineIdTextSecondary}`}>{account.machineId}</span>
+              <button 
+                onClick={() => onCopy(account.machineId, `${account.id}-mid`)} 
+                className={`btn-icon p-1 rounded-lg flex-shrink-0 ${colors.cardHover} transition-all hover:scale-110`}
+              >
+                {copiedId === `${account.id}-mid` ? <Check size={11} className={colors.iconSuccess} /> : <Copy size={11} className={colors.machineIdIcon} />}
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* 底部操作栏 */}
         <div className={`mt-auto pt-3 border-t ${colors.cardBorder} flex items-center justify-between`}>
@@ -310,12 +316,20 @@ const AccountCard = memo(function AccountCard({
               <Eye size={16} />
             </button>
             <button
+              onClick={(e) => { e.stopPropagation(); onRefreshToken?.(account.id) }}
+              disabled={refreshingTokenId === account.id}
+              className={`p-2 rounded-lg ${colors.cardHover} ${colors.actionRefresh} disabled:opacity-50 transition-all hover:scale-110 shadow-sm`}
+              title={t('accountCard.refreshToken')}
+            >
+              <Key size={16} className={refreshingTokenId === account.id ? 'animate-spin' : ''} />
+            </button>
+            <button
               onClick={(e) => { e.stopPropagation(); onRefresh(account.id) }}
               disabled={refreshingId === account.id}
               className={`p-2 rounded-lg ${colors.cardHover} ${colors.actionRefresh} disabled:opacity-50 transition-all hover:scale-110 shadow-sm`}
-              title={t('accountCard.refresh')}
+              title={t('accountCard.refreshQuota')}
             >
-              <RefreshCw size={16} className={refreshingId === account.id ? 'animate-spin' : ''} />
+              <BarChart3 size={16} className={refreshingId === account.id ? 'animate-spin' : ''} />
             </button>
             {!isCurrentAccount && (
               <button
@@ -342,6 +356,7 @@ const AccountCard = memo(function AccountCard({
     prevSelected === nextSelected &&
     prevProps.copiedId === nextProps.copiedId &&
     prevProps.refreshingId === nextProps.refreshingId &&
+    prevProps.refreshingTokenId === nextProps.refreshingTokenId &&
     prevProps.switchingId === nextProps.switchingId &&
     prevProps.isCurrentAccount === nextProps.isCurrentAccount &&
     prevProps.tagDefinitions === nextProps.tagDefinitions

@@ -56,10 +56,10 @@ pub struct DesktopRefreshResponse {
 // 桌面端 API 方法
 // ============================================================
 
-/// 使用桌面端 API 刷新 Token（只需要 RefreshToken）
+/// 使用桌面端 API 刷新 Token（只需要 `RefreshToken`）
 pub async fn refresh_token_desktop(refresh_token: &str) -> Result<DesktopRefreshResponse, String> {
     let client = build_http_client()
-        .map_err(|e| format!("Failed to create client: {}", e))?;
+        .map_err(|e| format!("Failed to create client: {e}"))?;
     
     let body = serde_json::json!({
         "refreshToken": refresh_token
@@ -73,7 +73,7 @@ pub async fn refresh_token_desktop(refresh_token: &str) -> Result<DesktopRefresh
         }
         
         match client
-            .post(format!("{}/refreshToken", DESKTOP_AUTH_API))
+            .post(format!("{DESKTOP_AUTH_API}/refreshToken"))
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .json(&body)
@@ -86,21 +86,20 @@ pub async fn refresh_token_desktop(refresh_token: &str) -> Result<DesktopRefresh
                 
                 // 只在调试时输出状态码，不输出敏感的 token 内容
                 #[cfg(debug_assertions)]
-                println!("[Desktop] RefreshToken Status: {}", status);
+                println!("[Desktop] RefreshToken Status: {status}");
                 
                 if !status.is_success() {
                     if status.as_u16() == 401 {
                         return Err("RefreshToken 已过期或无效".to_string());
                     }
-                    return Err(format!("RefreshToken failed ({})", status));
+                    return Err(format!("RefreshToken failed ({status})"));
                 }
                 
                 return serde_json::from_str(&text)
-                    .map_err(|e| format!("Parse failed: {}", e));
+                    .map_err(|e| format!("Parse failed: {e}"));
             }
             Err(e) => {
-                last_error = format!("网络错误: {}", e);
-                continue;
+                last_error = format!("网络错误: {e}");
             }
         }
     }
@@ -110,33 +109,33 @@ pub async fn refresh_token_desktop(refresh_token: &str) -> Result<DesktopRefresh
 
 /// 使用桌面端 API 删除账号（从 AWS 服务端删除）
 pub async fn delete_account_desktop(access_token: &str, machine_id: &str) -> Result<(), String> {
-    let user_agent = format!("KiroIDE-0.6.18-{}", machine_id);
+    let user_agent = format!("KiroIDE-0.6.18-{machine_id}");
     
     let client = crate::http_client::build_http_client_with_user_agent(&user_agent)
-        .map_err(|e| format!("Failed to create client: {}", e))?;
+        .map_err(|e| format!("Failed to create client: {e}"))?;
     
     // Kiro Desktop 使用 DELETE /account 端点
-    let url = format!("{}/account", DESKTOP_AUTH_API);
+    let url = format!("{DESKTOP_AUTH_API}/account");
     
     #[cfg(debug_assertions)]
     println!("[Desktop] DeleteAccount request");
     
     let response = client
         .delete(&url)
-        .header("Authorization", format!("Bearer {}", access_token))
+        .header("Authorization", format!("Bearer {access_token}"))
         .header("User-Agent", &user_agent)
         .send()
         .await
-        .map_err(|e| format!("网络错误: {}", e))?;
+        .map_err(|e| format!("网络错误: {e}"))?;
     
     let status = response.status();
     
     #[cfg(debug_assertions)]
-    println!("[Desktop] DeleteAccount Status: {}", status);
+    println!("[Desktop] DeleteAccount Status: {status}");
     
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
-        return Err(format!("删除账号失败 ({}): {}", status, text));
+        return Err(format!("删除账号失败 ({status}): {text}"));
     }
     
     Ok(())

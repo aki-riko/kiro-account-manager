@@ -7,9 +7,11 @@ use uuid::Uuid;
 use super::types::MachineGuidBackup;
 
 // 预编译正则表达式
+#[allow(clippy::non_std_lazy_statics)] // once_cell::Lazy 在 Rust 1.80+ 可用 LazyLock，但为了兼容性保留
 static UUID_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").expect("Failed to compile UUID regex")
 });
+#[allow(clippy::non_std_lazy_statics)]
 static HEX32_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^[0-9a-f]{32}$").expect("Failed to compile HEX32 regex")
 });
@@ -55,8 +57,7 @@ pub fn format_as_uuid(hex: &str) -> String {
 pub fn read_backup_info() -> (bool, Option<String>) {
     std::fs::read_to_string(get_backup_path()).ok()
         .and_then(|c| serde_json::from_str::<MachineGuidBackup>(&c).ok())
-        .map(|b| (true, Some(b.backup_time)))
-        .unwrap_or((false, None))
+        .map_or((false, None), |b| (true, Some(b.backup_time)))
 }
 
 pub fn get_machine_guid_backup_inner() -> Result<Option<MachineGuidBackup>, String> {
@@ -67,8 +68,8 @@ pub fn get_machine_guid_backup_inner() -> Result<Option<MachineGuidBackup>, Stri
 
 pub fn save_backup(backup: &MachineGuidBackup) -> Result<(), String> {
     write_file_with_dir(&get_backup_path(), &serde_json::to_string_pretty(backup)
-        .map_err(|e| format!("序列化失败: {}", e))?)
-        .map_err(|e| format!("写入备份失败: {}", e))
+        .map_err(|e| format!("序列化失败: {e}"))?)
+        .map_err(|e| format!("写入备份失败: {e}"))
 }
 
 pub fn write_file_with_dir(path: &std::path::Path, content: &str) -> std::io::Result<()> {
@@ -79,6 +80,6 @@ pub fn write_file_with_dir(path: &std::path::Path, content: &str) -> std::io::Re
 pub fn load_backup() -> Result<MachineGuidBackup, String> {
     let path = get_backup_path();
     if !path.exists() { return Err("没有找到备份文件".to_string()); }
-    let content = std::fs::read_to_string(&path).map_err(|e| format!("读取备份失败: {}", e))?;
-    serde_json::from_str(&content).map_err(|e| format!("解析备份失败: {}", e))
+    let content = std::fs::read_to_string(&path).map_err(|e| format!("读取备份失败: {e}"))?;
+    serde_json::from_str(&content).map_err(|e| format!("解析备份失败: {e}"))
 }

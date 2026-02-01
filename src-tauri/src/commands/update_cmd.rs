@@ -1,5 +1,7 @@
 // 更新检查命令 - 支持代理
 
+#![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
+
 use serde::{Deserialize, Serialize};
 use reqwest::Proxy;
 
@@ -105,9 +107,9 @@ fn get_proxy_from_kiro_settings() -> Option<String> {
     })
     .and_then(|json| {
         json.get("http.proxy")
-            .and_then(|v| v.as_str())
+            .and_then(serde_json::Value::as_str)
             .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
     })
 }
 
@@ -119,11 +121,11 @@ fn build_http_client() -> Result<reqwest::Client, String> {
     // 尝试从 Kiro 设置获取代理
     if let Some(proxy_url) = get_proxy_from_kiro_settings() {
         let proxy = Proxy::all(&proxy_url)
-            .map_err(|e| format!("代理配置错误: {}", e))?;
+            .map_err(|e| format!("代理配置错误: {e}"))?;
         builder = builder.proxy(proxy);
     }
     
-    builder.build().map_err(|e| format!("创建 HTTP 客户端失败: {}", e))
+    builder.build().map_err(|e| format!("创建 HTTP 客户端失败: {e}"))
 }
 
 /// 获取当前平台的下载 URL
@@ -150,8 +152,8 @@ fn get_platform_download_url(platforms: &serde_json::Value) -> Option<String> {
     
     platforms.get(platform_key)
         .and_then(|p| p.get("url"))
-        .and_then(|u| u.as_str())
-        .map(|s| s.to_string())
+        .and_then(serde_json::Value::as_str)
+        .map(std::string::ToString::to_string)
 }
 
 #[tauri::command]
@@ -164,7 +166,7 @@ pub async fn check_update() -> Result<UpdateCheckResult, String> {
     let response = client.get(update_url)
         .send()
         .await
-        .map_err(|e| format!("请求更新信息失败: {}", e))?;
+        .map_err(|e| format!("请求更新信息失败: {e}"))?;
     
     if !response.status().is_success() {
         return Err(format!("服务器返回错误: {}", response.status()));
@@ -172,7 +174,7 @@ pub async fn check_update() -> Result<UpdateCheckResult, String> {
     
     let update_info: UpdateInfo = response.json()
         .await
-        .map_err(|e| format!("解析更新信息失败: {}", e))?;
+        .map_err(|e| format!("解析更新信息失败: {e}"))?;
     
     // 比较版本号
     let has_update = compare_versions(&current_version, &update_info.version);

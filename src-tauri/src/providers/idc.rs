@@ -63,9 +63,9 @@ impl AuthProvider for IdcProvider {
         let start_url = self.get_start_url();
 
         #[cfg(debug_assertions)]
-        println!("\n[IdC] Starting {} authentication (Authorization Code Flow)...", provider);
+        println!("\n[IdC] Starting {provider} authentication (Authorization Code Flow)...");
         #[cfg(debug_assertions)]
-        println!("[IdC] Region: {}, Start URL: {}", region, start_url);
+        println!("[IdC] Region: {region}, Start URL: {start_url}");
 
         // Step 1: 创建 AWS SSO 客户端
         let sso_client = AWSSSOClient::new(region);
@@ -81,12 +81,12 @@ impl AuthProvider for IdcProvider {
 
         // 启动本地服务器
         let server = tiny_http::Server::http("127.0.0.1:0")
-            .map_err(|e| format!("无法启动本地服务器: {}", e))?;
-        let port = server.server_addr().to_ip().map(|a| a.port()).unwrap_or(0);
-        let redirect_uri = format!("http://127.0.0.1:{}/oauth/callback", port);
+            .map_err(|e| format!("无法启动本地服务器: {e}"))?;
+        let port = server.server_addr().to_ip().map_or(0, |a| a.port());
+        let redirect_uri = format!("http://127.0.0.1:{port}/oauth/callback");
 
         #[cfg(debug_assertions)]
-        println!("[IdC] Local server started on port {}", port);
+        println!("[IdC] Local server started on port {port}");
 
         // Step 3: 注册客户端（Authorization Code Flow）
         #[cfg(debug_assertions)]
@@ -108,8 +108,8 @@ impl AuthProvider for IdcProvider {
             client_reg.client_id,
             urlencoding::encode(&redirect_uri),
             urlencoding::encode(&scopes),
-            &state,
-            &code_challenge
+            state,
+            code_challenge
         );
 
         #[cfg(debug_assertions)]
@@ -172,7 +172,7 @@ impl AuthProvider for IdcProvider {
                         if let Some(error) = params.get("error") {
                             if let Some(tx) = tx_clone.lock().expect("Failed to acquire callback lock").take() {
                                 let desc = params.get("error_description").unwrap_or(&"未知错误");
-                                let _ = tx.send(Err(format!("{}: {}", error, desc)));
+                                let _ = tx.send(Err(format!("{error}: {desc}")));
                             }
                             break;
                         }
@@ -180,7 +180,7 @@ impl AuthProvider for IdcProvider {
                         // 获取 code
                         if let Some(code) = params.get("code") {
                             if let Some(tx) = tx_clone.lock().expect("Failed to acquire callback lock").take() {
-                                let _ = tx.send(Ok((code.to_string(), state_clone.clone())));
+                                let _ = tx.send(Ok(((*code).to_string(), state_clone.clone())));
                             }
                         } else if let Some(tx) = tx_clone.lock().expect("Failed to acquire callback lock").take() {
                             let _ = tx.send(Err("未收到授权码".to_string()));
@@ -220,7 +220,7 @@ impl AuthProvider for IdcProvider {
         let client_id_hash = Self::compute_client_id_hash(start_url);
 
         #[cfg(debug_assertions)]
-        println!("[IdC] {} login successful!", provider);
+        println!("[IdC] {provider} login successful!");
 
         Ok(AuthResult {
             access_token: token_response.access_token,
@@ -276,7 +276,8 @@ impl AuthProvider for IdcProvider {
         &self.provider_id
     }
 
-    fn get_auth_method(&self) -> &str {
+    #[allow(clippy::return_self_not_must_use)] // trait 方法返回静态字符串
+    fn get_auth_method(&self) -> &'static str {
         "IdC"
     }
 }

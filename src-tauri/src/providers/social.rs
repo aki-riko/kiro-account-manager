@@ -69,14 +69,14 @@ impl AuthProvider for SocialProvider {
 
         // Step 4: 打开浏览器登录
         let machine_id = get_machine_id();
-        let client = KiroAuthServiceClient::new(&machine_id);
+        let client = KiroAuthServiceClient::new(&machine_id)?;
         client.login(provider, &redirect_uri, &code_challenge, &state).await?;
 
         // Step 5: 等待 deep link 回调
         let callback = tokio::task::spawn_blocking(move || waiter.wait_for_callback())
             .await
-            .map_err(|e| format!("Failed to join callback waiter: {}", e))?
-            .map_err(|e| format!("OAuth callback failed: {}", e))?;
+            .map_err(|e| format!("Failed to join callback waiter: {e}"))?
+            .map_err(|e| format!("OAuth callback failed: {e}"))?;
 
         // Step 6: 交换 token
         let token_response: SocialTokenResponse = client
@@ -108,7 +108,7 @@ impl AuthProvider for SocialProvider {
     async fn refresh_token(&self, refresh_token: &str, metadata: RefreshMetadata) -> Result<AuthResult, String> {
         // 优先使用账号的 machineId，没有则用系统机器码
         let machine_id = metadata.machine_id.unwrap_or_else(get_machine_id);
-        let client = KiroAuthServiceClient::new(&machine_id);
+        let client = KiroAuthServiceClient::new(&machine_id)?;
         let token_response: SocialRefreshResponse = client.refresh_token(refresh_token).await?;
 
         let expires_at = chrono::Local::now() + chrono::Duration::seconds(token_response.expires_in);
@@ -136,7 +136,8 @@ impl AuthProvider for SocialProvider {
         &self.provider_id
     }
 
-    fn get_auth_method(&self) -> &str {
+    #[allow(clippy::return_self_not_must_use)] // trait 方法返回静态字符串
+    fn get_auth_method(&self) -> &'static str {
         "social"
     }
 }

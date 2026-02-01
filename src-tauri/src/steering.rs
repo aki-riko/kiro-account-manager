@@ -31,17 +31,17 @@ impl SteeringManager {
 
         let mut files = vec![];
         
-        for entry in fs::read_dir(&dir).map_err(|e| format!("读取目录失败: {}", e))? {
-            let entry = entry.map_err(|e| format!("读取条目失败: {}", e))?;
+        for entry in fs::read_dir(&dir).map_err(|e| format!("读取目录失败: {e}"))? {
+            let entry = entry.map_err(|e| format!("读取条目失败: {e}"))?;
             let path = entry.path();
             
-            if path.extension().map(|e| e == "md").unwrap_or(false) {
+            if path.extension().is_some_and(|e| e == "md") {
                 let file_name = path.file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_default();
                 
                 let metadata = fs::metadata(&path).ok();
-                let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+                let size = metadata.as_ref().map_or(0, std::fs::Metadata::len);
                 let modified_at = metadata
                     .and_then(|m| m.modified().ok())
                     .map(|t| {
@@ -69,14 +69,14 @@ impl SteeringManager {
         let path = dir.join(file_name);
         
         if !path.exists() {
-            return Err(format!("Steering 文件不存在: {}", file_name));
+            return Err(format!("Steering 文件不存在: {file_name}"));
         }
         
         let content = fs::read_to_string(&path)
-            .map_err(|e| format!("读取文件失败: {}", e))?;
+            .map_err(|e| format!("读取文件失败: {e}"))?;
         
         let metadata = fs::metadata(&path).ok();
-        let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+        let size = metadata.as_ref().map_or(0, std::fs::Metadata::len);
         let modified_at = metadata
             .and_then(|m| m.modified().ok())
             .map(|t| {
@@ -99,7 +99,7 @@ impl SteeringManager {
         
         let path = dir.join(file_name);
         fs::write(&path, content)
-            .map_err(|e| format!("写入失败: {}", e))
+            .map_err(|e| format!("写入失败: {e}"))
     }
 
     /// 删除 steering 文件
@@ -109,7 +109,7 @@ impl SteeringManager {
         
         if path.exists() {
             fs::remove_file(&path)
-                .map_err(|e| format!("删除失败: {}", e))?;
+                .map_err(|e| format!("删除失败: {e}"))?;
         }
         
         Ok(())
@@ -123,11 +123,11 @@ impl SteeringManager {
         let path = dir.join(file_name);
         
         if path.exists() {
-            return Err(format!("文件已存在: {}", file_name));
+            return Err(format!("文件已存在: {file_name}"));
         }
         
         fs::write(&path, content)
-            .map_err(|e| format!("写入失败: {}", e))?;
+            .map_err(|e| format!("写入失败: {e}"))?;
         
         Self::load(file_name)
     }

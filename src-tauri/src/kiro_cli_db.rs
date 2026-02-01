@@ -29,7 +29,7 @@ pub struct DeviceRegistration {
 pub fn read_kiro_cli_accounts(db_path: &str) -> Result<Vec<KiroCliAccount>, String> {
     // 检查文件是否存在
     if !Path::new(db_path).exists() {
-        return Err(format!("数据库文件不存在: {}", db_path));
+        return Err(format!("数据库文件不存在: {db_path}"));
     }
 
     // 打开数据库（只读模式）
@@ -37,7 +37,7 @@ pub fn read_kiro_cli_accounts(db_path: &str) -> Result<Vec<KiroCliAccount>, Stri
         db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     )
-    .map_err(|e| format!("无法打开数据库: {}", e))?;
+    .map_err(|e| format!("无法打开数据库: {e}"))?;
 
     let mut accounts = Vec::new();
 
@@ -96,17 +96,17 @@ fn read_token_from_db(conn: &Connection, key: &str) -> SqliteResult<KiroCliAccou
 
     let expires_at = token_data["expires_at"]
         .as_str()
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
 
     let profile_arn = token_data["profile_arn"]
         .as_str()
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
 
     let scopes = token_data["scopes"]
         .as_array()
         .map(|arr| {
             arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                 .collect()
         });
 

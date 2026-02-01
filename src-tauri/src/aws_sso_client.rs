@@ -61,7 +61,7 @@ pub struct TokenResponse {
 
 impl AWSSSOClient {
     pub fn new(region: &str) -> Self {
-        let base_url = format!("https://oidc.{}.amazonaws.com", region);
+        let base_url = format!("https://oidc.{region}.amazonaws.com");
         let client = build_http_client().expect("Failed to create HTTP client");
 
         Self {
@@ -85,7 +85,7 @@ impl AWSSSOClient {
         let url = format!("{}/client/register", self.base_url);
         
         let scopes: Vec<String> = GRANT_SCOPES.iter()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect();
         
         let body = serde_json::json!({
@@ -109,9 +109,9 @@ impl AWSSSOClient {
             .map_err(|e| {
                 // 网络错误可能是 region 不正确
                 if e.to_string().contains("dns error") || e.to_string().contains("connection") {
-                    format!("无法连接到 AWS SSO 服务。\n\n可能的原因：\n1. Region 选择错误（请确认您的 IAM Identity Center 所在的 Region）\n2. 网络连接问题\n3. Start URL 格式错误\n\n错误详情: {}", e)
+                    format!("无法连接到 AWS SSO 服务。\n\n可能的原因：\n1. Region 选择错误（请确认您的 IAM Identity Center 所在的 Region）\n2. 网络连接问题\n3. Start URL 格式错误\n\n错误详情: {e}")
                 } else {
-                    format!("Client registration failed: {}", e)
+                    format!("Client registration failed: {e}")
                 }
             })?;
 
@@ -127,16 +127,16 @@ impl AWSSSOClient {
                     return Err("Start URL 无效。请检查您输入的 IAM Identity Center Start URL 是否正确。\n\n示例格式：https://d-1234567890.awsapps.com/start".to_string());
                 }
                 // 其他 400 错误可能是 region 不匹配
-                return Err(format!("注册客户端失败 (400 Bad Request)\n\n可能的原因：\n1. Region 选择错误（请确认您的 IAM Identity Center 所在的 Region）\n2. Start URL 格式错误\n\n错误详情: {}", text));
+                return Err(format!("注册客户端失败 (400 Bad Request)\n\n可能的原因：\n1. Region 选择错误（请确认您的 IAM Identity Center 所在的 Region）\n2. Start URL 格式错误\n\n错误详情: {text}"));
             }
-            return Err(format!("Client registration failed ({}): {}", status, text));
+            return Err(format!("Client registration failed ({status}): {text}"));
         }
 
         #[cfg(debug_assertions)]
         println!("[AWS SSO] Client registered successfully");
         
         serde_json::from_str(&text)
-            .map_err(|e| format!("Failed to parse client registration: {}", e))
+            .map_err(|e| format!("Failed to parse client registration: {e}"))
     }
 
     /// 使用授权码交换 Token
@@ -168,20 +168,20 @@ impl AWSSSOClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| format!("Token creation failed: {}", e))?;
+            .map_err(|e| format!("Token creation failed: {e}"))?;
 
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
 
         if !status.is_success() {
-            return Err(format!("Token creation failed ({}): {}", status, text));
+            return Err(format!("Token creation failed ({status}): {text}"));
         }
 
         #[cfg(debug_assertions)]
         log::debug!("[AWS SSO] Token created successfully");
 
         serde_json::from_str(&text)
-            .map_err(|e| format!("Failed to parse token response: {}", e))
+            .map_err(|e| format!("Failed to parse token response: {e}"))
     }
 
     /// 刷新 Token
@@ -209,9 +209,9 @@ impl AWSSSOClient {
             .map_err(|e| {
                 // 网络错误可能是 region 不正确
                 if e.to_string().contains("dns error") || e.to_string().contains("connection") {
-                    format!("无法连接到 AWS SSO 服务。\n\n可能的原因：\n1. Region 选择错误（请确认账号注册时使用的 Region）\n2. 网络连接问题\n\n错误详情: {}", e)
+                    format!("无法连接到 AWS SSO 服务。\n\n可能的原因：\n1. Region 选择错误（请确认账号注册时使用的 Region）\n2. 网络连接问题\n\n错误详情: {e}")
                 } else {
-                    format!("Token refresh request failed: {}", e)
+                    format!("Token refresh request failed: {e}")
                 }
             })?;
 
@@ -220,11 +220,11 @@ impl AWSSSOClient {
 
         // 只打印非 200 的响应
         if !status.is_success() {
-            log::debug!("[AWS SSO] RefreshToken Status: {}", status);
+            log::debug!("[AWS SSO] RefreshToken Status: {status}");
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
                 log::debug!("[AWS SSO] RefreshToken Response:\n{}", serde_json::to_string_pretty(&json).unwrap_or(text.clone()));
             } else {
-                log::debug!("[AWS SSO] RefreshToken Response: {}", text);
+                log::debug!("[AWS SSO] RefreshToken Response: {text}");
             }
         }
 
@@ -235,14 +235,14 @@ impl AWSSSOClient {
             if status.as_u16() == 400 {
                 // 400 错误可能是 region 不匹配或 refresh token 无效
                 if text.to_lowercase().contains("invalid") && text.to_lowercase().contains("refresh") {
-                    return Err(format!("RefreshToken 无效或已过期。\n\n可能的原因：\n1. Region 选择错误（请确认账号注册时使用的 Region）\n2. RefreshToken 已过期\n3. ClientId 或 ClientSecret 不匹配\n\n错误详情: {}", text));
+                    return Err(format!("RefreshToken 无效或已过期。\n\n可能的原因：\n1. Region 选择错误（请确认账号注册时使用的 Region）\n2. RefreshToken 已过期\n3. ClientId 或 ClientSecret 不匹配\n\n错误详情: {text}"));
                 }
-                return Err(format!("Token refresh failed (400 Bad Request)\n\n可能的原因：\n1. Region 选择错误\n2. RefreshToken 无效\n\n错误详情: {}", text));
+                return Err(format!("Token refresh failed (400 Bad Request)\n\n可能的原因：\n1. Region 选择错误\n2. RefreshToken 无效\n\n错误详情: {text}"));
             }
-            return Err(format!("Token refresh failed ({}): {}", status, text));
+            return Err(format!("Token refresh failed ({status}): {text}"));
         }
 
         serde_json::from_str(&text)
-            .map_err(|e| format!("Failed to parse token response: {}", e))
+            .map_err(|e| format!("Failed to parse token response: {e}"))
     }
 }

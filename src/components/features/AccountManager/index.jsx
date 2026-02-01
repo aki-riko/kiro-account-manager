@@ -46,6 +46,7 @@ function AccountManager({ onNavigate }) {
     usageRange: null
   })
   const [sortBy, setSortBy] = useState('trialAsc')
+  const [refreshingTokenId, setRefreshingTokenId] = useState(null)
   
   // 当前登录的本地 token
   const [localToken, setLocalToken] = useState(null)
@@ -121,12 +122,40 @@ function AccountManager({ onNavigate }) {
         showError(t('accounts.accountBanned'))
       } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
         showError(t('accounts.tokenInvalid'))
+      } else if (errorMsg.includes('error sending request') || errorMsg.includes('connection') || errorMsg.includes('network') || errorMsg.includes('timeout')) {
+        showError('❌ 网络连接失败\n\n可能原因：\n• 网络不稳定\n• 代理设置有误\n• 防火墙拦截\n\n解决方法：\n1. 检查网络连接\n2. 检查代理设置\n3. 关闭防火墙或添加白名单')
       } else {
         showError(errorMsg.slice(0, 100))
       }
     }
     return result
   }, [handleRefreshStatus, t])
+
+  // 刷新 Token
+  const handleRefreshToken = useCallback(async (id) => {
+    setRefreshingTokenId(id)
+    try {
+      const account = await invoke('refresh_account_token', { id })
+      showSuccess('Token 刷新成功')
+      // 重新加载账号列表
+      await loadAccounts()
+      return { success: true, account }
+    } catch (e) {
+      const errorMsg = String(e)
+      if (errorMsg.includes('BANNED')) {
+        showError('账号已封禁')
+      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
+        showError('Token 无效，刷新失败')
+      } else if (errorMsg.includes('error sending request') || errorMsg.includes('connection') || errorMsg.includes('network') || errorMsg.includes('timeout')) {
+        showError('❌ 网络连接失败\n\n可能原因：\n• 网络不稳定\n• 代理设置有误\n• 防火墙拦截\n\n解决方法：\n1. 检查网络连接\n2. 检查代理设置\n3. 关闭防火墙或添加白名单')
+      } else {
+        showError(errorMsg.slice(0, 100))
+      }
+      return { success: false, error: errorMsg }
+    } finally {
+      setRefreshingTokenId(null)
+    }
+  }, [loadAccounts])
 
   // 获取所有标签（从标签定义中获取）
   const allTags = useMemo(() => {
@@ -246,18 +275,30 @@ function AccountManager({ onNavigate }) {
   
   // 删除单个账号
   const handleDelete = useCallback(async (id) => {
-    const confirmed = await showConfirm(t('accounts.delete'), t('accounts.confirmDelete'))
-    if (confirmed) {
-      await invoke('delete_account', { id })
-      loadAccounts()
+    // 防呆：检查是否是当前账号
+    const account = accounts.find(a => a.id === id)
+    const isCurrent = localToken?.refreshToken && account?.refreshToken === localToken.refreshToken
+    
+    if (isCurrent) {
+      const confirmed = await showConfirm(
+        '⚠️ 删除当前账号',
+        '您正在删除当前使用的账号！\n\n删除后 Kiro IDE 将无法使用，需要重新登录。\n\n确定要删除吗？'
+      )
+      if (!confirmed) return
+    } else {
+      const confirmed = await showConfirm(t('accounts.delete'), t('accounts.confirmDelete'))
+      if (!confirmed) return
     }
-  }, [showConfirm, loadAccounts, t])
+    
+    await invoke('delete_account', { id })
+    loadAccounts()
+  }, [accounts, localToken, showConfirm, loadAccounts, t])
 
   // 远程删除账号（从 AWS 服务端注销）
   const handleDeleteRemote = useCallback(async (account) => {
     const confirmed = await showConfirm(
-      t('accountCard.deleteRemote'),
-      t('accountCard.deleteRemoteConfirm')
+      '⚠️ ' + t('accountCard.deleteRemote'),
+      '远程删除将从 AWS 服务端注销此账号！\n\n此操作不可恢复，账号将永久失效。\n\n' + t('accountCard.deleteRemoteConfirm')
     )
     if (confirmed) {
       try {
@@ -272,13 +313,26 @@ function AccountManager({ onNavigate }) {
   // 批量删除
   const onBatchDelete = useCallback(async () => {
     if (selectedIds.length === 0) return
-    const confirmed = await showConfirm(t('accounts.batchDelete'), t('accounts.confirmDeleteMultiple', { count: selectedIds.length }))
-    if (confirmed) {
-      await invoke('delete_accounts', { ids: selectedIds })
-      setSelectedIds([])
-      loadAccounts()
+    
+    // 防呆：检查是否包含当前账号
+    const currentAccount = accounts.find(a => localToken?.refreshToken && a.refreshToken === localToken.refreshToken)
+    const includesCurrent = currentAccount && selectedIds.includes(currentAccount.id)
+    
+    if (includesCurrent) {
+      const confirmed = await showConfirm(
+        '⚠️ 批量删除包含当前账号',
+        `您选择了 ${selectedIds.length} 个账号，其中包含当前使用的账号！\n\n删除后 Kiro IDE 将无法使用，需要重新登录。\n\n确定要删除吗？`
+      )
+      if (!confirmed) return
+    } else {
+      const confirmed = await showConfirm(t('accounts.batchDelete'), t('accounts.confirmDeleteMultiple', { count: selectedIds.length }))
+      if (!confirmed) return
     }
-  }, [selectedIds, showConfirm, loadAccounts, t])
+    
+    await invoke('delete_accounts', { ids: selectedIds })
+    setSelectedIds([])
+    loadAccounts()
+  }, [accounts, selectedIds, localToken, showConfirm, loadAccounts, t])
 
   return (
     <div className={cn('h-full flex flex-col', colors.main)}>
@@ -338,12 +392,14 @@ function AccountManager({ onNavigate }) {
           onCopy={handleCopy}
           onSwitch={handleSwitchAccount}
           onRefresh={handleRefreshWithNotify}
+          onRefreshToken={handleRefreshToken}
           onEdit={setEditingAccount}
           onEditLabel={setEditingLabelAccount}
           onDelete={handleDelete}
           onDeleteRemote={handleDeleteRemote}
           onAdd={() => setShowImportModal(true)}
           refreshingId={refreshingId}
+          refreshingTokenId={refreshingTokenId}
           switchingId={switchingId}
           localToken={localToken}
           tagDefinitions={tagDefinitions}
@@ -359,6 +415,7 @@ function AccountManager({ onNavigate }) {
           onSelectOne={handleSelectOne}
           onSwitch={handleSwitchAccount}
           onRefresh={handleRefreshWithNotify}
+          onRefreshToken={handleRefreshToken}
           onEdit={setEditingAccount}
           onEditLabel={setEditingLabelAccount}
           onDelete={handleDelete}
@@ -366,6 +423,7 @@ function AccountManager({ onNavigate }) {
           onCopy={handleCopy}
           onAdd={() => setShowAddModal(true)}
           refreshingId={refreshingId}
+          refreshingTokenId={refreshingTokenId}
           switchingId={switchingId}
           localToken={localToken}
           tagDefinitions={tagDefinitions}

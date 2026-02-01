@@ -54,5 +54,5 @@ pub trait AuthProvider: Send + Sync {
     fn get_provider_id(&self) -> &str;
     
     /// 获取认证方式
-    fn get_auth_method(&self) -> &str;
+    fn get_auth_method(&self) -> &'static str;
 }

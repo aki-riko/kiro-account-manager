@@ -1,5 +1,7 @@
 // 分组与标签管理命令
 
+#![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递 State
+
 use tauri::State;
 use crate::state::AppState;
 use crate::account::{AccountGroup, AccountTag, AccountTagLink};
@@ -27,7 +29,7 @@ pub fn update_group(state: State<AppState>, id: String, name: Option<String>, co
 pub fn delete_group(state: State<AppState>, id: String) -> bool {
     // 删除分组时，清除所有账号的 group_id
     let mut store = state.store.lock().expect("Failed to acquire store lock");
-    for account in store.accounts.iter_mut() {
+    for account in &mut store.accounts {
         if account.group_id.as_deref() == Some(&id) {
             account.group_id = None;
         }
@@ -39,7 +41,7 @@ pub fn delete_group(state: State<AppState>, id: String) -> bool {
 
 #[tauri::command]
 pub fn reorder_groups(state: State<AppState>, ids: Vec<String>) -> bool {
-    state.group_tag_store.lock().expect("Failed to acquire group_tag_store lock").reorder_groups(ids)
+    state.group_tag_store.lock().expect("Failed to acquire group_tag_store lock").reorder_groups(&ids)
 }
 
 // ============================================================
@@ -65,7 +67,7 @@ pub fn update_tag(state: State<AppState>, id: String, name: Option<String>, colo
 pub fn delete_tag(state: State<AppState>, id: String) -> bool {
     // 删除标签时，从所有账号中移除该标签
     let mut store = state.store.lock().expect("Failed to acquire store lock");
-    for account in store.accounts.iter_mut() {
+    for account in &mut store.accounts {
         account.tag_links.retain(|l| l.tag_id != id);
     }
     store.save_to_file();

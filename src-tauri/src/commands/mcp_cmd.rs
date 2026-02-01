@@ -1,5 +1,7 @@
 // MCP 服务器管理命令
 
+#![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
+
 use crate::mcp::{McpConfig, McpServer};
 
 /// 获取 MCP 配置
@@ -83,7 +85,7 @@ pub async fn toggle_mcp_server(name: String, disabled: bool) -> Result<(), Strin
             }
             mcp_config.save()
         } else {
-            Err(format!("服务器 {} 不存在", name))
+            Err(format!("服务器 {name} 不存在"))
         }
     })
     .await

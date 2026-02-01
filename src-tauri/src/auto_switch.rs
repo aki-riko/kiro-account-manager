@@ -25,7 +25,7 @@ impl SwitchStrategy {
         }
     }
 
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::RoundRobin => "round_robin",
             Self::MostQuota => "most_quota",
@@ -73,11 +73,12 @@ impl AccountSwitcher {
         // 从 usage_data 中解析配额信息
         if let Some(ref data) = account.usage_data {
             if let Some(usage) = data.get("usage") {
-                let current = usage.get("current").and_then(|v| v.as_i64()).unwrap_or(0);
-                let limit = usage.get("limit").and_then(|v| v.as_i64()).unwrap_or(0);
+                let current = usage.get("current").and_then(serde_json::Value::as_i64).unwrap_or(0);
+                let limit = usage.get("limit").and_then(serde_json::Value::as_i64).unwrap_or(0);
                 if limit > 0 {
-                    let usage_percent = (current as f32 / limit as f32) * 100.0;
-                    return usage_percent >= self.threshold as f32;
+                    #[allow(clippy::cast_precision_loss)] // i64 → f64 转换用于百分比计算，精度损失可接受
+                    let usage_percent = (current as f64 / limit as f64) * 100.0;
+                    return usage_percent >= f64::from(self.threshold);
                 }
             }
         }
@@ -112,8 +113,9 @@ impl AccountSwitcher {
                         // 从 usage_data 中解析剩余配额
                         if let Some(ref data) = a.usage_data {
                             if let Some(usage) = data.get("usage") {
-                                let current = usage.get("current").and_then(|v| v.as_i64()).unwrap_or(0);
-                                let limit = usage.get("limit").and_then(|v| v.as_i64()).unwrap_or(0);
+                                let current = usage.get("current").and_then(serde_json::Value::as_i64).unwrap_or(0);
+                                let limit = usage.get("limit").and_then(serde_json::Value::as_i64).unwrap_or(0);
+                                #[allow(clippy::cast_possible_truncation)] // i64 → i32 转换用于排序，配额值不会超过 i32 范围
                                 return (limit - current) as i32;
                             }
                         }

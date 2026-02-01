@@ -1,5 +1,7 @@
 // Auth 相关命令 - 直接存储 usage_data
 
+#![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递 State
+
 use tauri::{Emitter, State};
 use crate::state::AppState;
 use crate::account::Account;
@@ -28,7 +30,7 @@ pub async fn kiro_login(
     region: Option<String>, // 新增：支持自定义 region（Enterprise 用）
 ) -> Result<String, String> {
     let mut config = get_provider_config(&provider)
-        .ok_or_else(|| format!("Unsupported provider: {}", provider))?;
+        .ok_or_else(|| format!("Unsupported provider: {provider}"))?;
     
     // 如果传入了自定义 start_url，覆盖默认值
     if let Some(url) = start_url {
@@ -70,28 +72,28 @@ async fn login_social(
     let _final_email = new_email.clone().ok_or("获取邮箱失败，请检查账号状态")?;
 
     let mut store = state.store.lock().expect("Failed to acquire lock");
-    let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &provider_id, &auth_result.refresh_token, &user_id);
+    let existing_idx = find_existing_account_idx(&store.accounts, new_email.as_ref(), &provider_id, &auth_result.refresh_token, user_id.as_ref());
     
     let account = if let Some(idx) = existing_idx {
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(auth_result.access_token.clone());
         existing.refresh_token = Some(auth_result.refresh_token.clone());
-        existing.email = new_email.clone();
-        existing.user_id = user_id.clone();
+        existing.email.clone_from(&new_email);
+        existing.user_id.clone_from(&user_id);
         existing.expires_at = Some(auth_result.expires_at.clone());
-        existing.profile_arn = auth_result.profile_arn.clone();
-        existing.label = format!("Kiro {} 账号", provider_id);
+        existing.profile_arn.clone_from(&auth_result.profile_arn);
+        existing.label = format!("Kiro {provider_id} 账号");
         existing.usage_data = Some(usage_result.usage_data);
         existing.status = calc_status(usage_result.is_banned);
         existing.clone()
     } else {
         let final_email = new_email.ok_or("获取邮箱失败")?;
-        let mut account = Account::new(final_email.clone(), format!("Kiro {} 账号", provider_id));
+        let mut account = Account::new(final_email.clone(), format!("Kiro {provider_id} 账号"));
         account.access_token = Some(auth_result.access_token.clone());
         account.refresh_token = Some(auth_result.refresh_token.clone());
         account.provider = Some(provider_id.clone());
         account.auth_method = Some("social".to_string());
-        account.user_id = user_id.clone();
+        account.user_id.clone_from(&user_id);
         account.expires_at = Some(auth_result.expires_at.clone());
         account.profile_arn = auth_result.profile_arn;
         account.usage_data = Some(usage_result.usage_data);
@@ -104,11 +106,11 @@ async fn login_social(
     drop(store);
 
     let display_id = account.get_display_id();
-    update_auth_state(&state, &account.email, &provider_id, &auth_result.access_token, &auth_result.refresh_token);
-    println!("\n[{}] LOGIN SUCCESS: {}", auth_method, display_id);
+    update_auth_state(&state, account.email.as_ref(), &provider_id, &auth_result.access_token, &auth_result.refresh_token);
+    println!("\n[{auth_method}] LOGIN SUCCESS: {display_id}");
 
     let _ = app_handle.emit("login-success", account.id.clone());
-    Ok(format!("{} login completed for {}", auth_method, provider_id))
+    Ok(format!("{auth_method} login completed for {provider_id}"))
 }
 
 async fn login_idc(
@@ -139,21 +141,21 @@ async fn login_idc(
     };
 
     let mut store = state.store.lock().expect("Failed to acquire lock");
-    let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &provider_id, &auth_result.refresh_token, &user_id);
+    let existing_idx = find_existing_account_idx(&store.accounts, new_email.as_ref(), &provider_id, &auth_result.refresh_token, user_id.as_ref());
     
     let account = if let Some(idx) = existing_idx {
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(auth_result.access_token.clone());
         existing.refresh_token = Some(auth_result.refresh_token.clone());
-        existing.email = new_email.clone();
-        existing.user_id = user_id.clone();
+        existing.email.clone_from(&new_email);
+        existing.user_id.clone_from(&user_id);
         existing.provider = Some(provider_id.clone()); // 确保 provider 不变
         existing.expires_at = Some(auth_result.expires_at.clone());
         existing.client_id_hash = auth_result.client_id_hash;
         existing.client_id = auth_result.client_id;
         existing.client_secret = auth_result.client_secret;
         existing.region = auth_result.region;
-        existing.start_url = auth_result.start_url.clone();  // 保存 start_url
+        existing.start_url.clone_from(&auth_result.start_url);  // 保存 start_url
         existing.sso_session_id = auth_result.sso_session_id;
         existing.id_token = auth_result.id_token;
         existing.profile_arn = auth_result.profile_arn;
@@ -161,7 +163,7 @@ async fn login_idc(
         existing.status = calc_status(usage_result.is_banned);
         existing.clone()
     } else {
-        let mut account = Account::new(final_email.clone(), format!("Kiro {} 账号", provider_id));
+        let mut account = Account::new(final_email.clone(), format!("Kiro {provider_id} 账号"));
         account.access_token = Some(auth_result.access_token.clone());
         account.refresh_token = Some(auth_result.refresh_token.clone());
         account.provider = Some(provider_id.clone());
@@ -172,7 +174,7 @@ async fn login_idc(
         account.client_id = auth_result.client_id;
         account.client_secret = auth_result.client_secret;
         account.region = auth_result.region;
-        account.start_url = auth_result.start_url.clone();  // 保存 start_url
+        account.start_url.clone_from(&auth_result.start_url);  // 保存 start_url
         account.sso_session_id = auth_result.sso_session_id;
         account.id_token = auth_result.id_token;
         account.profile_arn = auth_result.profile_arn;
@@ -186,18 +188,18 @@ async fn login_idc(
     drop(store);
 
     let display_id = account.get_display_id();
-    update_auth_state(&state, &account.email, &provider_id, &auth_result.access_token, &auth_result.refresh_token);
-    println!("\n[{}] LOGIN SUCCESS: {}", auth_method, display_id);
+    update_auth_state(&state, account.email.as_ref(), &provider_id, &auth_result.access_token, &auth_result.refresh_token);
+    println!("\n[{auth_method}] LOGIN SUCCESS: {display_id}");
 
     let _ = app_handle.emit("login-success", account.id.clone());
-    Ok(format!("{} login completed for {}", auth_method, display_id))
+    Ok(format!("{auth_method} login completed for {display_id}"))
 }
 
-fn update_auth_state(state: &State<'_, AppState>, email: &Option<String>, provider: &str, access_token: &str, refresh_token: &str) {
+fn update_auth_state(state: &State<'_, AppState>, email: Option<&String>, provider: &str, access_token: &str, refresh_token: &str) {
     let user = User {
         id: uuid::Uuid::new_v4().to_string(),
-        email: email.clone(),
-        name: email.as_ref().and_then(|e| e.split('@').next()).unwrap_or("User").to_string(),
+        email: email.cloned(),
+        name: email.and_then(|e| e.split('@').next()).unwrap_or("User").to_string(),
         avatar: None,
         provider: provider.to_string(),
     };
@@ -241,14 +243,14 @@ pub async fn handle_kiro_social_callback(
     let final_email = new_email.clone().ok_or("获取邮箱失败，请检查账号状态")?;
 
     let mut store = state.store.lock().expect("Failed to acquire lock");
-    let existing_idx = find_existing_account_idx(&store.accounts, &new_email, &pending.provider, &token_response.refresh_token, &user_id);
+    let existing_idx = find_existing_account_idx(&store.accounts, new_email.as_ref(), &pending.provider, &token_response.refresh_token, user_id.as_ref());
     
     let account = if let Some(idx) = existing_idx {
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(token_response.access_token.clone());
         existing.refresh_token = Some(token_response.refresh_token.clone());
-        existing.email = new_email.clone();
-        existing.user_id = user_id.clone();
+        existing.email.clone_from(&new_email);
+        existing.user_id.clone_from(&user_id);
         existing.usage_data = Some(usage_result.usage_data);
         existing.status = calc_status(usage_result.is_banned);
         existing.clone()
@@ -269,9 +271,9 @@ pub async fn handle_kiro_social_callback(
     drop(store);
     
     let display_id = account.get_display_id();
-    update_auth_state(&state, &account.email, &pending.provider, &token_response.access_token, &token_response.refresh_token);
+    update_auth_state(&state, account.email.as_ref(), &pending.provider, &token_response.access_token, &token_response.refresh_token);
     let _ = app_handle.emit("login-success", account.id);
-    println!("Social callback login completed: {}", display_id);
+    println!("Social callback login completed: {display_id}");
     Ok(())
 }
 

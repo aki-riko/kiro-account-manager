@@ -149,11 +149,11 @@ function AccountDetailModal({ account, onClose }) {
   const freeTrialQuota = trialActive ? (freeTrialInfo?.usageLimit || 0) : 0
   const freeTrialUsed = trialActive ? (freeTrialInfo?.currentUsage || 0) : 0
   
-  // 检查每个奖励是否过期
+  // 检查每个奖励是否过期（只计入未过期且状态为 ACTIVE 的奖励）
   let bonusQuota = 0, bonusUsed = 0
   bonuses.forEach(b => {
     const expiry = b.expiresAt ? b.expiresAt * 1000 : Infinity
-    if (expiry > now && b.status !== 'EXPIRED') {
+    if (expiry > now && b.status === 'ACTIVE') {
       bonusQuota += b.usageLimit || 0
       bonusUsed += b.currentUsage || 0
     }
