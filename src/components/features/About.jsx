@@ -218,21 +218,74 @@ function About() {
           p="lg"
           styles={{ root: { backgroundColor: 'transparent' } }}
         >
-          <Group gap="xs" justify="center" mb="lg">
-            <Coffee size={18} className="text-amber-500" />
-            <Text size="md" fw={500} className={colors.text}>{t('about.donate')}</Text>
-          </Group>
-          <Group justify="center" gap="xl">
-            <Stack gap="xs" align="center" style={{ cursor: 'pointer' }} onClick={() => setPreviewImg(alipayQR)}>
-              <Image src={alipayQR} alt={t('about.alipay')} w={112} h={112} radius="md" className="hover:scale-105 transition-transform" />
-              <Text size="sm" className={colors.textMuted}>{t('about.alipay')}</Text>
-            </Stack>
-            <Stack gap="xs" align="center" style={{ cursor: 'pointer' }} onClick={() => setPreviewImg(wechatQR)}>
-              <Image src={wechatQR} alt={t('about.wechat')} w={112} h={112} radius="md" className="hover:scale-105 transition-transform" />
-              <Text size="sm" className={colors.textMuted}>{t('about.wechat')}</Text>
-            </Stack>
-          </Group>
-          <Text size="xs" className={colors.textMuted} ta="center" mt="md">{t('about.clickToEnlarge')}</Text>
+          <Stack gap="md">
+            {/* 标题 */}
+            <Group gap="xs" justify="center">
+              <Coffee size={20} className="text-amber-500" />
+              <Text size="lg" fw={600} className={colors.text}>{t('about.donate')}</Text>
+            </Group>
+
+            {/* 描述 */}
+            <Text size="sm" className={colors.text} ta="center" style={{ lineHeight: 1.6 }}>
+              {t('about.donateDesc')}
+            </Text>
+
+            {/* 赞助福利 */}
+            <div className={`${colors.cardSecondary} rounded-xl p-4`}>
+              <Text size="sm" fw={500} className={colors.text} mb="xs">
+                💖 {t('about.sponsorBenefits')}
+              </Text>
+              <List
+                size="sm"
+                spacing="xs"
+                className={colors.textMuted}
+                styles={{
+                  itemWrapper: { width: '100%' },
+                  itemLabel: { fontSize: '0.875rem' }
+                }}
+              >
+                <List.Item>✅ {t('about.benefit1')}</List.Item>
+                <List.Item>✅ {t('about.benefit2')}</List.Item>
+                <List.Item>✅ {t('about.benefit3')}</List.Item>
+              </List>
+            </div>
+
+            {/* 二维码 */}
+            <Group justify="center" gap="xl" mt="sm">
+              <Stack gap="xs" align="center" style={{ cursor: 'pointer' }} onClick={() => setPreviewImg(alipayQR)}>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-blue-500 rounded-lg blur-md opacity-0 group-hover:opacity-30 transition-opacity" />
+                  <Image 
+                    src={alipayQR} 
+                    alt={t('about.alipay')} 
+                    w={120} 
+                    h={120} 
+                    radius="md" 
+                    className="relative hover:scale-105 transition-transform shadow-md" 
+                  />
+                </div>
+                <Text size="sm" fw={500} className={colors.text}>{t('about.alipay')}</Text>
+              </Stack>
+              <Stack gap="xs" align="center" style={{ cursor: 'pointer' }} onClick={() => setPreviewImg(wechatQR)}>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-green-500 rounded-lg blur-md opacity-0 group-hover:opacity-30 transition-opacity" />
+                  <Image 
+                    src={wechatQR} 
+                    alt={t('about.wechat')} 
+                    w={120} 
+                    h={120} 
+                    radius="md" 
+                    className="relative hover:scale-105 transition-transform shadow-md" 
+                  />
+                </div>
+                <Text size="sm" fw={500} className={colors.text}>{t('about.wechat')}</Text>
+              </Stack>
+            </Group>
+
+            <Text size="xs" className={colors.textMuted} ta="center" mt="xs">
+              {t('about.clickToEnlarge')}
+            </Text>
+          </Stack>
         </Card>
 
         {/* 底部 */}
