@@ -103,7 +103,7 @@ export default function AnnouncementModal() {
           <div className={`text-base leading-relaxed ${colors.text}`}>
             {announcement.content?.map((text, i) => (
               <p key={i} className={i === 0 ? 'mb-4 font-medium text-red-500' : 'mb-3'}>
-                {i === 0 && '⚠️ '}{text}
+                {text}
               </p>
             ))}
           </div>
@@ -215,17 +215,6 @@ export default function AnnouncementModal() {
             <span className="text-sm">我已阅读并知晓以上内容</span>
           </label>
           <div className="flex gap-3">
-            <button
-              onClick={() => handleClose(true)}
-              disabled={!agreed}
-              className={`flex-1 py-3 rounded-xl border font-medium transition-all ${
-                agreed 
-                  ? `${colors.cardBorder} ${colors.text} ${colors.cardHover}`
-                  : `${colors.cardBorder} ${colors.textMuted} cursor-not-allowed opacity-50`
-              }`}
-            >
-              {t('announcement.dontRemind')}
-            </button>
             <button
               onClick={() => handleClose(false)}
               disabled={!agreed}
