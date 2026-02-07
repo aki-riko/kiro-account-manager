@@ -8,52 +8,24 @@ function WelcomeModal() {
   const { t, colors } = useApp()
   const [open, setOpen] = useState(false)
   const [previewImg, setPreviewImg] = useState(null)
+  const [isFirstTime, setIsFirstTime] = useState(false)
 
   useEffect(() => {
-    const welcomeData = localStorage.getItem('welcome_data')
+    const hasShownBefore = localStorage.getItem('welcome_shown')
     
-    if (!welcomeData) {
-      // 首次使用，显示欢迎弹窗
+    if (!hasShownBefore) {
+      // 首次使用，显示完整版（免费声明 + 赞助）
+      setIsFirstTime(true)
       setOpen(true)
-      localStorage.setItem('welcome_data', JSON.stringify({
-        firstShown: Date.now(),
-        count: 1
-      }))
+      localStorage.setItem('welcome_shown', 'true')
     } else {
-      // 已显示过，检查是否需要再次显示
-      const data = JSON.parse(welcomeData)
-      const daysPassed = (Date.now() - data.firstShown) / (1000 * 60 * 60 * 24)
-      
-      // 7 天后再显示一次（且只显示过 1 次）
-      if (daysPassed >= 7 && data.count === 1) {
-        setOpen(true)
-        localStorage.setItem('welcome_data', JSON.stringify({
-          ...data,
-          count: 2
-        }))
-      }
+      // 之后每次启动，只显示免费声明
+      setIsFirstTime(false)
+      setOpen(true)
     }
   }, [])
 
-  const handleClose = (dontShowAgain = false) => {
-    if (dontShowAgain) {
-      // 永久不再显示
-      const data = JSON.parse(localStorage.getItem('welcome_data') || '{}')
-      localStorage.setItem('welcome_data', JSON.stringify({
-        ...data,
-        count: 999  // 设置为 999 表示永久不显示
-      }))
-    }
-    setOpen(false)
-  }
-
-  const handleViewSponsor = () => {
-    // 标记为已查看赞助
-    const data = JSON.parse(localStorage.getItem('welcome_data') || '{}')
-    localStorage.setItem('welcome_data', JSON.stringify({
-      ...data,
-      count: 999  // 已查看赞助，不再显示
-    }))
+  const handleClose = () => {
     setOpen(false)
   }
 
@@ -64,7 +36,7 @@ function WelcomeModal() {
       <div className={`${colors.card} rounded-2xl w-full max-w-[520px] shadow-2xl border ${colors.cardBorder} relative`}>
         {/* 关闭按钮 */}
         <button
-          onClick={() => handleClose(false)}
+          onClick={handleClose}
           className={`absolute right-4 top-4 w-8 h-8 rounded-full flex items-center justify-center hover:scale-110 transition-transform ${colors.cardHover}`}
         >
           <X size={18} className={colors.text} />
@@ -88,10 +60,10 @@ function WelcomeModal() {
 
             <div>
               <h2 className={`text-xl font-semibold ${colors.text}`}>
-                🎉 欢迎使用 Kiro Account Manager
+                {isFirstTime ? '🎉 欢迎使用 Kiro Account Manager' : '⚠️ 重要提示'}
               </h2>
               <p className={`text-sm ${colors.textMuted} mt-1`}>
-                完全免费开源的 Kiro IDE 账号管理工具
+                {isFirstTime ? '完全免费开源的 Kiro IDE 账号管理工具' : '本软件永久免费'}
               </p>
             </div>
           </div>
@@ -111,70 +83,66 @@ function WelcomeModal() {
             </div>
           </div>
 
-          {/* 赞助信息 */}
-          <div>
-            <p className={`text-sm font-medium ${colors.text} mb-2`}>
-              <Coffee size={16} className="inline text-amber-500 mr-1" />
-              💖 支持开源项目持续维护
-            </p>
-            <div className={`${colors.cardSecondary} rounded-xl p-3 space-y-2`}>
-              <p className={`text-sm ${colors.textMuted}`}>如果这个工具帮到了你，可以请我喝杯咖啡 ☕</p>
-              <p className={`text-sm ${colors.textMuted}`}>赞助用户将获得：</p>
-              <div className="space-y-1">
-                <p className={`text-sm ${colors.text}`}>⚡ 闪电响应：Issues 24小时内回复</p>
-                <p className={`text-sm ${colors.text}`}>🎯 优先开发：你的建议优先实现</p>
-                <p className={`text-sm ${colors.text}`}>🔧 加急修复：Bug 1-3天内解决</p>
-              </div>
-              
-              {/* 二维码 */}
-              <div className="flex justify-center gap-6 pt-3">
-                <div 
-                  className="flex flex-col items-center gap-2 cursor-pointer group"
-                  onClick={() => setPreviewImg(alipayQR)}
-                >
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-blue-500 rounded-lg blur-md opacity-0 group-hover:opacity-30 transition-opacity" />
-                    <img 
-                      src={alipayQR} 
-                      alt="支付宝" 
-                      className="relative w-20 h-20 rounded-lg shadow-md hover:scale-105 transition-transform"
-                    />
-                  </div>
-                  <p className={`text-xs ${colors.text}`}>支付宝</p>
+          {/* 赞助信息（仅首次显示） */}
+          {isFirstTime && (
+            <div>
+              <p className={`text-sm font-medium ${colors.text} mb-2`}>
+                <Coffee size={16} className="inline text-amber-500 mr-1" />
+                💖 支持开源项目持续维护
+              </p>
+              <div className={`${colors.cardSecondary} rounded-xl p-3 space-y-2`}>
+                <p className={`text-sm ${colors.textMuted}`}>如果这个工具帮到了你，可以请我喝杯咖啡 ☕</p>
+                <p className={`text-sm ${colors.textMuted}`}>赞助用户将获得：</p>
+                <div className="space-y-1">
+                  <p className={`text-sm ${colors.text}`}>⚡ 闪电响应：Issues 24小时内回复</p>
+                  <p className={`text-sm ${colors.text}`}>🎯 优先开发：你的建议优先实现</p>
+                  <p className={`text-sm ${colors.text}`}>🔧 加急修复：Bug 1-3天内解决</p>
                 </div>
-                <div 
-                  className="flex flex-col items-center gap-2 cursor-pointer group"
-                  onClick={() => setPreviewImg(wechatQR)}
-                >
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-green-500 rounded-lg blur-md opacity-0 group-hover:opacity-30 transition-opacity" />
-                    <img 
-                      src={wechatQR} 
-                      alt="微信支付" 
-                      className="relative w-20 h-20 rounded-lg shadow-md hover:scale-105 transition-transform"
-                    />
+                
+                {/* 二维码 */}
+                <div className="flex justify-center gap-6 pt-3">
+                  <div 
+                    className="flex flex-col items-center gap-2 cursor-pointer group"
+                    onClick={() => setPreviewImg(alipayQR)}
+                  >
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-blue-500 rounded-lg blur-md opacity-0 group-hover:opacity-30 transition-opacity" />
+                      <img 
+                        src={alipayQR} 
+                        alt="支付宝" 
+                        className="relative w-20 h-20 rounded-lg shadow-md hover:scale-105 transition-transform"
+                      />
+                    </div>
+                    <p className={`text-xs ${colors.text}`}>支付宝</p>
                   </div>
-                  <p className={`text-xs ${colors.text}`}>微信支付</p>
+                  <div 
+                    className="flex flex-col items-center gap-2 cursor-pointer group"
+                    onClick={() => setPreviewImg(wechatQR)}
+                  >
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-green-500 rounded-lg blur-md opacity-0 group-hover:opacity-30 transition-opacity" />
+                      <img 
+                        src={wechatQR} 
+                        alt="微信支付" 
+                        className="relative w-20 h-20 rounded-lg shadow-md hover:scale-105 transition-transform"
+                      />
+                    </div>
+                    <p className={`text-xs ${colors.text}`}>微信支付</p>
+                  </div>
                 </div>
+                <p className={`text-xs ${colors.textMuted} text-center pt-1`}>点击图片可放大查看</p>
               </div>
-              <p className={`text-xs ${colors.textMuted} text-center pt-1`}>点击图片可放大查看</p>
             </div>
-          </div>
+          )}
         </div>
 
         {/* 底部按钮 */}
         <div className={`px-6 py-4 ${colors.dialogFooter} flex justify-end gap-3`}>
           <button
-            onClick={() => handleClose(true)}
-            className={`px-5 py-2.5 text-sm font-medium rounded-xl transition-all ${colors.btnSecondary}`}
-          >
-            不再提醒
-          </button>
-          <button
-            onClick={() => handleClose(true)}
+            onClick={handleClose}
             className="px-5 py-2.5 text-sm font-medium rounded-xl text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-[0.98]"
           >
-            开始使用
+            {isFirstTime ? '开始使用' : '我知道了'}
           </button>
         </div>
       </div>
