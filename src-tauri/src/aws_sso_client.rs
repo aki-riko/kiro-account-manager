@@ -229,8 +229,9 @@ impl AWSSSOClient {
         }
 
         if !status.is_success() {
+            // 401 错误：直接返回服务器的错误信息
             if status.as_u16() == 401 {
-                return Err("RefreshToken 已过期或无效".to_string());
+                return Err(format!("AUTH_ERROR: {}", text));
             }
             if status.as_u16() == 400 {
                 // 400 错误可能是 region 不匹配或 refresh token 无效

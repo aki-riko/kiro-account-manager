@@ -140,8 +140,9 @@ impl KiroAuthServiceClient {
         let body_str = String::from_utf8_lossy(&bytes);
 
         if !status.is_success() {
+            // 401 错误：直接返回服务器的错误信息
             if status.as_u16() == 401 {
-                return Err("RefreshToken 已过期或无效".to_string());
+                return Err(format!("AUTH_ERROR: {}", body_str));
             }
             return Err(format!(
                 "Kiro Auth Service token refresh failed: {status} - {body_str}"

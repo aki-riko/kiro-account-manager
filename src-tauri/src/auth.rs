@@ -89,10 +89,11 @@ pub async fn refresh_token_desktop(refresh_token: &str) -> Result<DesktopRefresh
                 println!("[Desktop] RefreshToken Status: {status}");
                 
                 if !status.is_success() {
+                    // 401 错误：直接返回服务器的错误信息
                     if status.as_u16() == 401 {
-                        return Err("RefreshToken 已过期或无效".to_string());
+                        return Err(format!("AUTH_ERROR: {}", text));
                     }
-                    return Err(format!("RefreshToken failed ({status})"));
+                    return Err(format!("RefreshToken failed ({status}): {text}"));
                 }
                 
                 return serde_json::from_str(&text)
