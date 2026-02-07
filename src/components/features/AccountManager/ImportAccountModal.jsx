@@ -61,17 +61,7 @@ function validateAccount(item, index) {
     return { valid: false, errors, type: null }
   }
 
-  // 验证 Enterprise 必需字段
-  if (provider === 'Enterprise') {
-    if (!item.startUrl) {
-      errors.push(`第${index + 1}条: Enterprise 账号必须提供 startUrl`)
-      return { valid: false, errors, type: null }
-    }
-    if (!item.region) {
-      errors.push(`第${index + 1}条: Enterprise 账号必须提供 region`)
-      return { valid: false, errors, type: null }
-    }
-  }
+  // Enterprise 账号不需要额外验证（region 可选，默认 us-east-1）
 
   return { valid: true, errors: [], type: isSocial ? 'social' : 'idc', inferredProvider: provider }
 }
@@ -225,9 +215,9 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
             accessToken: item.accessToken || null
           })
         } else {
-          // IdC 账号：根据 provider 调用对应的命令
-          const commandName = provider === 'Enterprise' ? 'add_account_by_enterprise' : 'add_account_by_builderid'
+          // IdC 账号：统一调用 add_account_by_idc
           const params = {
+            provider,  // BuilderId 或 Enterprise
             refreshToken: item.refreshToken,
             clientId: item.clientId,
             clientSecret: item.clientSecret,
@@ -235,15 +225,11 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
             machineId: item.machineId || null,
             accessToken: item.accessToken || null,
             password: item.password || null,
-            clientIdHash: null  // JSON 导入时不提供，由后端根据 startUrl 计算
+            startUrl: item.startUrl || null,  // Enterprise 可能需要
+            clientIdHash: item.clientIdHash || null  // Enterprise 可以用 clientIdHash 代替 startUrl
           }
 
-          // Enterprise 需要 startUrl 参数，BuilderId 不需要
-          if (provider === 'Enterprise') {
-            params.startUrl = item.startUrl || null
-          }
-
-          result = await invoke(commandName, { params })
+          result = await invoke('add_account_by_idc', params)
         }
 
         const account = result.account
@@ -297,9 +283,9 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
       try {
         let result
         if (account.authMethod === 'IdC') {
-          // IdC 账号：根据 provider 调用对应的命令
-          const commandName = account.provider === 'Enterprise' ? 'add_account_by_enterprise' : 'add_account_by_builderid'
+          // IdC 账号：统一调用 add_account_by_idc
           const params = {
+            provider: account.provider,  // BuilderId 或 Enterprise
             refreshToken: account.refreshToken,
             clientId: account.clientId,
             clientSecret: account.clientSecret,
@@ -307,15 +293,11 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
             machineId: null,
             accessToken: account.accessToken || null,
             password: null,
+            startUrl: null,  // 从 Kiro 导入时不需要 startUrl（使用 clientIdHash）
             clientIdHash: account.clientIdHash || null  // 使用 Kiro 提供的 clientIdHash
           }
 
-          // Enterprise 需要 startUrl 参数，BuilderId 不需要
-          if (account.provider === 'Enterprise') {
-            params.startUrl = null  // 从 Kiro 导入时不需要 startUrl（使用 clientIdHash）
-          }
-
-          result = await invoke(commandName, { params })
+          result = await invoke('add_account_by_idc', params)
         } else {
           result = await invoke('add_account_by_social', {
             refreshToken: account.refreshToken,
@@ -548,13 +530,13 @@ return (
                   <FileButton onChange={handleFileSelect} accept=".json">
                     {(props) => <MantineButton {...props} variant="light" leftSection={<FileJson size={16} />}>{t('import.selectFile')}</MantineButton>}
                   </FileButton>
-                  <MantineButton variant="light" color="blue" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", provider: "Google", machineId: "" }], null, 2))}>
+                  <MantineButton variant="light" color="blue" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", provider: "Google" }], null, 2))}>
                     Social 模板
                   </MantineButton>
-                  <MantineButton variant="light" color="violet" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", region: "us-east-1", provider: "BuilderId", machineId: "" }], null, 2))}>
+                  <MantineButton variant="light" color="violet" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", provider: "BuilderId" }], null, 2))}>
                     BuilderId 模板
                   </MantineButton>
-                  <MantineButton variant="light" color="grape" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", region: "ap-southeast-2", startUrl: "", provider: "Enterprise", machineId: "" }], null, 2))}>
+                  <MantineButton variant="light" color="grape" size="sm" onClick={() => setJsonText(JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", provider: "Enterprise" }], null, 2))}>
                     Enterprise 模板
                   </MantineButton>
                 </Group>
