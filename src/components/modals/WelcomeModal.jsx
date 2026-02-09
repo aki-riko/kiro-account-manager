@@ -17,12 +17,14 @@ function WelcomeModal() {
     if (lastShown !== today) {
       // 今天还没显示过，显示弹窗
       setOpen(true)
-      localStorage.setItem('welcome_last_shown', today)
     }
   }, [])
 
   const handleClose = () => {
     setOpen(false)
+    // 用户关闭弹窗时才记录今天已显示
+    const today = new Date().toDateString()
+    localStorage.setItem('welcome_last_shown', today)
   }
 
   if (!open) return null
