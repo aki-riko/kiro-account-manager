@@ -2,24 +2,34 @@ import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
-import { FileText, RefreshCw, Trash2, Save, Plus, X } from 'lucide-react'
+import { FileText, RefreshCw, Trash2, Save, Plus, X, Globe, FolderOpen } from 'lucide-react'
 import { TextInput, Select, Textarea } from '@mantine/core'
+import {
+  getThemeAccent,
+  getSolidAccentButton,
+  getGradientAccentButton,
+  getThemeSurfaceStyles,
+} from './themeAccent'
 
-// 解析 front-matter
+// 解析 front-matter（v0.9.2: inclusion + name + description + fileMatchPattern）
 const parseFrontMatter = (content) => {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
-  if (!match) return { inclusion: 'always', filePattern: '', body: content }
+  if (!match) return { inclusion: 'always', filePattern: '', name: '', description: '', body: content }
   const [, fm, body] = match
   return {
     inclusion: fm.match(/inclusion:\s*(\w+)/)?.[1] || 'always',
     filePattern: fm.match(/fileMatchPattern:\s*['"]?([^'"\n]+)['"]?/)?.[1] || '',
+    name: fm.match(/name:\s*['"]?([^'"\n]+)['"]?/)?.[1]?.trim() || '',
+    description: fm.match(/description:\s*['"]?([^'"\n]+)['"]?/)?.[1]?.trim() || '',
     body
   }
 }
 
-// 组装 front-matter
-const buildContent = (inclusion, filePattern, body) => {
+// 组装 front-matter（v0.9.2: inclusion + name + description + fileMatchPattern）
+const buildContent = (inclusion, filePattern, body, name, description) => {
   let fm = `---\ninclusion: ${inclusion}`
+  if (name?.trim()) fm += `\nname: "${name.trim()}"`
+  if (description?.trim()) fm += `\ndescription: "${description.trim()}"`
   if (inclusion === 'fileMatch' && filePattern.trim()) fm += `\nfileMatchPattern: '${filePattern.trim()}'`
   return fm + '\n---\n' + body
 }
@@ -27,25 +37,32 @@ const buildContent = (inclusion, filePattern, body) => {
 // 格式化文件大小
 const formatSize = (bytes) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
 
-// inclusion 标签颜色映射
-const getInclusionStyle = (inclusion, colors) => {
-  const styles = {
-    always: colors.badgeSuccess,
-    fileMatch: colors.badgeInfo,
-    manual: colors.badgeWarning
+// scope 徽章
+const ScopeBadge = ({ scope, accent }) => {
+  if (scope === 'project') {
+    return (
+      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-500 border border-amber-500/30">
+        <FolderOpen size={10} />项目
+      </span>
+    )
   }
-  return styles[inclusion] || colors.cardSecondary
+  return (
+    <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${accent.scopeBadge}`}>
+      <Globe size={10} />用户
+    </span>
+  )
 }
 
-function SteeringPanel({ onCountChange }) {
+function SteeringPanel({ onCountChange, projectDir }) {
   const { t, theme, colors } = useApp()
   const { showConfirm, showError } = useDialog()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
-  
+  const surface = getThemeSurfaceStyles(theme)
+  const accent = getThemeAccent(theme)
+
   const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedFile, setSelectedFile] = useState(null)
-  const [editState, setEditState] = useState({ content: '', inclusion: 'always', filePattern: '' })
+  const [editState, setEditState] = useState({ content: '', inclusion: 'always', filePattern: '', name: '', description: '' })
   const [saving, setSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -53,7 +70,7 @@ function SteeringPanel({ onCountChange }) {
   const loadFiles = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await invoke('get_steering_files')
+      const data = await invoke('get_steering_files', { projectDir: projectDir || null })
       setFiles(data)
       onCountChange?.(data?.length || 0)
     } catch (e) {
@@ -61,15 +78,20 @@ function SteeringPanel({ onCountChange }) {
     } finally {
       setLoading(false)
     }
-  }, [onCountChange])
+  }, [onCountChange, projectDir])
 
-  useEffect(() => { loadFiles() }, [loadFiles])
+  useEffect(() => {
+    setSelectedFile(null)
+    setEditState({ content: '', inclusion: 'always', filePattern: '', name: '', description: '' })
+    setHasChanges(false)
+    loadFiles()
+  }, [loadFiles])
 
   const handleSelect = async (file) => {
     if (hasChanges && !await showConfirm(t('steering.unsavedChanges'), t('steering.confirmSwitch'))) return
     setSelectedFile(file)
     const parsed = parseFrontMatter(file.content)
-    setEditState({ content: parsed.body, inclusion: parsed.inclusion, filePattern: parsed.filePattern })
+    setEditState({ content: parsed.body, inclusion: parsed.inclusion, filePattern: parsed.filePattern, name: parsed.name, description: parsed.description })
     setHasChanges(false)
   }
 
@@ -77,7 +99,7 @@ function SteeringPanel({ onCountChange }) {
     const newState = { ...editState, [key]: value }
     setEditState(newState)
     if (selectedFile) {
-      const newContent = buildContent(newState.inclusion, newState.filePattern, newState.content)
+      const newContent = buildContent(newState.inclusion, newState.filePattern, newState.content, newState.name, newState.description)
       setHasChanges(newContent !== selectedFile.content)
     }
   }
@@ -86,9 +108,14 @@ function SteeringPanel({ onCountChange }) {
     if (!selectedFile) return
     setSaving(true)
     try {
-      const fullContent = buildContent(editState.inclusion, editState.filePattern, editState.content)
-      await invoke('save_steering_file', { fileName: selectedFile.fileName, content: fullContent })
-      setFiles(files.map(f => f.fileName === selectedFile.fileName ? { ...f, content: fullContent } : f))
+      const fullContent = buildContent(editState.inclusion, editState.filePattern, editState.content, editState.name, editState.description)
+      await invoke('save_steering_file', {
+        fileName: selectedFile.fileName,
+        content: fullContent,
+        scope: selectedFile.scope,
+        projectDir: projectDir || null
+      })
+      setFiles(files.map(f => (f.fileName === selectedFile.fileName && f.scope === selectedFile.scope) ? { ...f, content: fullContent } : f))
       setSelectedFile({ ...selectedFile, content: fullContent })
       setHasChanges(false)
     } catch (e) {
@@ -98,14 +125,20 @@ function SteeringPanel({ onCountChange }) {
     }
   }
 
-  const handleDelete = async (fileName) => {
-    if (!await showConfirm(t('steering.confirmDelete'), t('steering.confirmDeleteFile', { fileName }))) return
+  const handleDelete = async (file) => {
+    if (!await showConfirm(t('steering.confirmDelete'), t('steering.confirmDeleteFile', { fileName: file.fileName }))) return
     try {
-      await invoke('delete_steering_file', { fileName })
-      setFiles(files.filter(f => f.fileName !== fileName))
-      if (selectedFile?.fileName === fileName) {
+      await invoke('delete_steering_file', {
+        fileName: file.fileName,
+        scope: file.scope,
+        projectDir: projectDir || null
+      })
+      const newFiles = files.filter(f => !(f.fileName === file.fileName && f.scope === file.scope))
+      setFiles(newFiles)
+      onCountChange?.(newFiles.length)
+      if (selectedFile?.fileName === file.fileName && selectedFile?.scope === file.scope) {
         setSelectedFile(null)
-        setEditState({ content: '', inclusion: 'always', filePattern: '' })
+        setEditState({ content: '', inclusion: 'always', filePattern: '', name: '', description: '' })
         setHasChanges(false)
       }
     } catch (e) {
@@ -113,12 +146,19 @@ function SteeringPanel({ onCountChange }) {
     }
   }
 
-  const handleCreate = async (fileName, inclusion, filePattern) => {
-    const name = fileName.endsWith('.md') ? fileName : `${fileName}.md`
-    const content = buildContent(inclusion, filePattern, '\n<!-- 在此添加你的 steering 规则 -->\n')
+  const handleCreate = async (fileName, inclusion, filePattern, scope, name, description) => {
+    const fName = fileName.endsWith('.md') ? fileName : `${fileName}.md`
+    const content = buildContent(inclusion, filePattern, '\n<!-- 在此添加你的 steering 规则 -->\n', name, description)
     try {
-      const newFile = await invoke('create_steering_file', { fileName: name, content })
-      setFiles([...files, newFile])
+      const newFile = await invoke('create_steering_file', {
+        fileName: fName,
+        content,
+        scope,
+        projectDir: projectDir || null
+      })
+      const newFiles = [...files, newFile]
+      setFiles(newFiles)
+      onCountChange?.(newFiles.length)
       setShowCreateModal(false)
       handleSelect(newFile)
     } catch (e) {
@@ -136,7 +176,7 @@ function SteeringPanel({ onCountChange }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <RefreshCw className="animate-spin text-blue-500" size={24} />
+        <RefreshCw className={`animate-spin ${accent.text}`} size={24} />
       </div>
     )
   }
@@ -151,7 +191,7 @@ function SteeringPanel({ onCountChange }) {
         onDelete={handleDelete}
         onRefresh={loadFiles}
         onCreate={() => setShowCreateModal(true)}
-        isLightTheme={isLightTheme}
+        accent={accent}
         colors={colors}
         t={t}
       />
@@ -168,9 +208,11 @@ function SteeringPanel({ onCountChange }) {
             onContentChange={(v) => updateEditState('content', v)}
             onInclusionChange={(v) => updateEditState('inclusion', v)}
             onFilePatternChange={(v) => updateEditState('filePattern', v)}
+            onNameChange={(v) => updateEditState('name', v)}
+            onDescriptionChange={(v) => updateEditState('description', v)}
             onSave={handleSave}
-            isLightTheme={isLightTheme}
-            theme={theme}
+            surface={surface}
+            accent={accent}
             colors={colors}
             t={t}
           />
@@ -189,118 +231,72 @@ function SteeringPanel({ onCountChange }) {
           inclusionOptions={inclusionOptions}
           onCreate={handleCreate}
           onClose={() => setShowCreateModal(false)}
-          isLightTheme={isLightTheme}
+          accent={accent}
           colors={colors}
           t={t}
+          hasProjectDir={!!projectDir}
         />
       )}
     </div>
   )
 }
 
-// 文件列表组件
-function FileList({ files, selectedFile, onSelect, onDelete, onRefresh, onCreate, isLightTheme, colors, t }) {
-  // 按 inclusion 分组
-  const groupedFiles = {
-    always: files.filter(f => parseFrontMatter(f.content).inclusion === 'always'),
-    auto: files.filter(f => parseFrontMatter(f.content).inclusion === 'auto'),
-    fileMatch: files.filter(f => parseFrontMatter(f.content).inclusion === 'fileMatch'),
-    manual: files.filter(f => parseFrontMatter(f.content).inclusion === 'manual'),
-  }
+// inclusion 模式配色映射
+const getInclusionStyles = (accent) => ({
+  always:    { color: 'text-green-500',  bg: 'bg-green-500/15', border: 'border-green-500/30', dot: 'bg-green-500', label: '始终' },
+  auto:      { color: accent.text, bg: accent.bgSoft, border: accent.borderSoft, dot: accent.solidBg, label: '自动' },
+  fileMatch: { color: accent.text, bg: accent.bgSoft, border: accent.borderSoft, dot: accent.solidBg, label: '匹配' },
+  manual:    { color: 'text-orange-500', bg: 'bg-orange-500/15', border: 'border-orange-500/30', dot: 'bg-orange-500', label: '手动' },
+})
 
-  const renderFileGroup = (title, files, icon, badgeColor) => {
-    if (files.length === 0) return null
-    return (
-      <div className="mb-8">
-        {/* 分组标题 */}
-        <div className={`flex items-center gap-3 px-4 py-3 mb-4 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder} shadow-sm`}>
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/10">
-            {icon}
-          </div>
-          <span className={`text-sm font-bold ${colors.text} tracking-wide flex-1`}>{title}</span>
-          <span className={`text-xs px-3 py-1 rounded-full bg-gradient-to-r ${badgeColor} text-white font-semibold shadow-sm`}>
-            {files.length}
-          </span>
-        </div>
-        
-        {/* 文件列表 */}
-        <div className="space-y-3">
-          {files.map(file => {
-            const parsed = parseFrontMatter(file.content)
-            const isSelected = selectedFile?.fileName === file.fileName
-            return (
-              <div
-                key={file.fileName}
-                onClick={() => onSelect(file)}
-                className={`p-4 rounded-xl cursor-pointer group transition-all duration-200 ${
-                  isSelected 
-                    ? `bg-gradient-to-r from-blue-500/20 to-purple-500/10 ring-2 ring-blue-500/60 shadow-xl border-2 border-blue-500/50 scale-[1.02]` 
-                    : `${colors.card} border ${colors.cardBorder} ${colors.cardHover} hover:shadow-lg hover:scale-[1.01]`
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3 mb-2.5">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className={`flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${
-                      isSelected ? 'bg-blue-500/20' : 'bg-gray-500/10'
-                    }`}>
-                      <FileText 
-                        size={18} 
-                        className={`flex-shrink-0 ${isSelected ? 'text-blue-500' : colors.textMuted}`} 
-                      />
-                    </div>
-                    <span className={`font-bold text-sm ${isSelected ? 'text-blue-500' : colors.text} truncate`}>
-                      {file.fileName.replace('.md', '')}
-                    </span>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onDelete(file.fileName) }}
-                    className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-red-500/20 flex-shrink-0 transition-all duration-200 hover:scale-110"
-                    title="删除"
-                  >
-                    <Trash2 size={16} className="text-red-500" />
-                  </button>
-                </div>
-                <div className={`flex items-center gap-2.5 text-xs ${colors.textMuted} ml-11`}>
-                  <span className={`px-2 py-1 rounded-md ${colors.cardSecondary} font-medium`}>
-                    {formatSize(file.size)}
-                  </span>
-                  {parsed.filePattern && (
-                    <>
-                      <span className="opacity-50">•</span>
-                      <code className={`px-2.5 py-1 rounded-md bg-blue-500/10 border border-blue-500/30 font-mono text-xs text-blue-400`}>
-                        {parsed.filePattern}
-                      </code>
-                    </>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
+// inclusion 徽章
+const InclusionBadge = ({ inclusion, accent }) => {
+  const styles = getInclusionStyles(accent)
+  const s = styles[inclusion] || styles.always
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${s.bg} ${s.color} border ${s.border}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+      {s.label}
+    </span>
+  )
+}
+
+// 文件列表组件
+function FileList({ files, selectedFile, onSelect, onDelete, onRefresh, onCreate, accent, colors, t }) {
+  const accentSolidButtonClass = getSolidAccentButton(accent)
+  const inclusionStyles = getInclusionStyles(accent)
+  // 按 inclusion 分组（保持顺序）
+  const groups = [
+    { key: 'always',    label: '始终包含' },
+    { key: 'auto',      label: '自动激活' },
+    { key: 'fileMatch', label: '文件匹配' },
+    { key: 'manual',    label: '手动引用' },
+  ].map(g => ({
+    ...g,
+    files: files.filter(f => parseFrontMatter(f.content).inclusion === g.key),
+    style: inclusionStyles[g.key],
+  })).filter(g => g.files.length > 0)
 
   return (
     <div className={`w-80 flex flex-col ${colors.card} border ${colors.cardBorder} rounded-2xl overflow-hidden shadow-lg`}>
       <div className={`p-4 border-b ${colors.cardBorder} flex items-center justify-between`}>
         <div className="flex items-center gap-2">
-          <FileText size={18} className="text-blue-500" />
-          <span className={`text-sm font-semibold ${colors.text}`}>Steering 规则</span>
+          <FileText size={18} className={accent.text} />
+          <span className={`text-sm font-semibold ${colors.text}`}>Steering</span>
           <span className={`text-xs ${colors.textMuted}`}>({files.length})</span>
         </div>
         <div className="flex gap-2">
-          <button 
-            onClick={onCreate} 
+          <button
+            onClick={onCreate}
             className={`p-2 rounded-lg ${colors.cardHover} transition-colors`}
-            title="新建规则"
+            title={t('steering.newSteering')}
           >
-            <Plus size={16} className="text-green-500" />
+              <Plus size={16} className={accent.text} />
           </button>
-          <button 
-            onClick={onRefresh} 
+          <button
+            onClick={onRefresh}
             className={`p-2 rounded-lg ${colors.cardHover} transition-colors`}
-            title="刷新列表"
+            title={t('common.refresh')}
           >
             <RefreshCw size={16} className={colors.textMuted} />
           </button>
@@ -313,38 +309,80 @@ function FileList({ files, selectedFile, onSelect, onDelete, onRefresh, onCreate
             <p className="text-sm">{t('steering.noFiles')}</p>
             <button
               onClick={onCreate}
-              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
+              className={`mt-4 px-4 py-2 rounded-lg text-sm transition-colors ${accentSolidButtonClass}`}
             >
-              创建第一个规则
+              {t('steering.newSteering')}
             </button>
           </div>
         ) : (
-          <>
-            {renderFileGroup(
-              '始终包含',
-              groupedFiles.always,
-              <div className="w-3 h-3 rounded-full bg-green-500 shadow-lg shadow-green-500/50" />,
-              'from-green-500 to-emerald-600'
-            )}
-            {renderFileGroup(
-              '自动激活',
-              groupedFiles.auto,
-              <div className="w-3 h-3 rounded-full bg-purple-500 shadow-lg shadow-purple-500/50" />,
-              'from-purple-500 to-pink-600'
-            )}
-            {renderFileGroup(
-              '文件匹配',
-              groupedFiles.fileMatch,
-              <div className="w-3 h-3 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50" />,
-              'from-blue-500 to-indigo-600'
-            )}
-            {renderFileGroup(
-              '手动引用',
-              groupedFiles.manual,
-              <div className="w-3 h-3 rounded-full bg-orange-500 shadow-lg shadow-orange-500/50" />,
-              'from-orange-500 to-amber-600'
-            )}
-          </>
+          <div className="space-y-5">
+            {groups.map(group => (
+              <div key={group.key}>
+                {/* 分组标题 - 紧凑风格 */}
+                <div className={`flex items-center gap-2 mb-2 px-1`}>
+                  <span className={`w-2 h-2 rounded-full ${group.style.dot}`} />
+                  <span className={`text-xs font-semibold ${colors.textMuted} uppercase tracking-wider`}>{group.label}</span>
+                  <span className={`text-[10px] ${colors.textMuted} opacity-60`}>{group.files.length}</span>
+                  <div className={`flex-1 h-px ${colors.cardBorder} opacity-50`} />
+                </div>
+
+                {/* 文件卡片 */}
+                <div className="space-y-2">
+                  {group.files.map(file => {
+                    const parsed = parseFrontMatter(file.content)
+                    const isSelected = selectedFile?.fileName === file.fileName && selectedFile?.scope === file.scope
+                    return (
+                      <div
+                        key={`${file.scope}-${file.fileName}`}
+                        onClick={() => onSelect(file)}
+                        className={`p-3 rounded-xl cursor-pointer group transition-all duration-200 ${
+                          isSelected
+                            ? `${accent.bg} ring-2 ${accent.ring} shadow-lg border ${accent.border}`
+                            : `${colors.card} border ${colors.cardBorder} ${colors.cardHover} hover:shadow-md`
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                            <div className={`flex items-center justify-center w-7 h-7 rounded-lg flex-shrink-0 transition-colors ${
+                              isSelected ? accent.bg : colors.cardSecondary
+                            }`}>
+                              <FileText size={15} className={isSelected ? accent.text : colors.textMuted} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className={`font-semibold text-sm ${isSelected ? accent.text : colors.text} truncate block leading-tight`}>
+                                {parsed.name || file.fileName.replace('.md', '')}
+                              </span>
+                              {parsed.description && (
+                                <span className={`text-xs ${colors.textMuted} truncate block mt-0.5 leading-tight`}>{parsed.description}</span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(file) }}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 flex-shrink-0 transition-all duration-200"
+                            title={t('common.delete')}
+                          >
+                            <Trash2 size={14} className="text-red-500" />
+                          </button>
+                        </div>
+                        <div className={`flex items-center gap-2 text-xs ${colors.textMuted} mt-2 ml-9.5 flex-wrap`} style={{ marginLeft: '2.375rem' }}>
+                          <ScopeBadge scope={file.scope} accent={accent} />
+                          <span className={`px-1.5 py-0.5 rounded ${colors.cardSecondary} text-[10px] font-medium`}>
+                            {formatSize(file.size)}
+                          </span>
+                          {parsed.filePattern && (
+                            <code className={`px-1.5 py-0.5 rounded ${accent.bgSoft} border ${accent.borderSoft} font-mono text-[10px] ${accent.textSoft} truncate max-w-[120px]`}>
+                              {parsed.filePattern}
+                            </code>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
@@ -352,56 +390,89 @@ function FileList({ files, selectedFile, onSelect, onDelete, onRefresh, onCreate
 }
 
 // 编辑器组件
-function Editor({ file, editState, hasChanges, saving, inclusionOptions, onContentChange, onInclusionChange, onFilePatternChange, onSave, isLightTheme, theme, colors, t }) {
+function Editor({ file, editState, hasChanges, saving, inclusionOptions, onContentChange, onInclusionChange, onFilePatternChange, onNameChange, onDescriptionChange, onSave, surface, accent, colors, t }) {
+  const accentSolidButtonClass = getSolidAccentButton(accent)
   return (
     <>
       <div className={`p-4 border-b ${colors.cardBorder} flex items-center justify-between`}>
         <div className="flex items-center gap-2">
           <h3 className={`font-semibold ${colors.text}`}>{file.fileName}</h3>
-          {hasChanges && <span className="text-xs text-orange-500">● 未保存</span>}
+          <ScopeBadge scope={file.scope} accent={accent} />
+          {hasChanges && <span className="text-xs text-orange-500">● {t('steering.save')}</span>}
         </div>
         <button
           onClick={onSave}
           disabled={!hasChanges || saving}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            hasChanges ? 'bg-blue-500 text-white hover:bg-blue-600' : colors.btnDisabled
+            hasChanges ? accentSolidButtonClass : colors.btnDisabled
           } disabled:opacity-50`}
         >
           <Save size={14} />
           {saving ? t('steering.saving') : t('steering.save')}
         </button>
       </div>
-      <div className={`px-4 py-3 border-b ${colors.cardBorder} flex items-center gap-4`}>
-        <div className="flex items-center gap-2">
-          <span className={`text-xs ${colors.textMuted}`}>{t('steering.inclusionMode')}:</span>
-          <Select
-            value={editState.inclusion}
-            onChange={onInclusionChange}
-            data={inclusionOptions.map(opt => ({ value: opt.value, label: opt.label }))}
-            size="xs"
-            classNames={{
-              input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
-              dropdown: `${colors.card} border ${colors.cardBorder}`,
-              option: `${colors.text}`
-            }}
-            styles={{ input: { minWidth: '120px', borderRadius: '0.5rem' } }}
-          />
-        </div>
-        {editState.inclusion === 'fileMatch' && (
+      {/* frontmatter 编辑区 */}
+      <div className={`px-4 py-3 border-b ${colors.cardBorder} space-y-2`}>
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <span className={`text-xs ${colors.textMuted}`}>{t('steering.filePattern')}:</span>
+            <span className={`text-xs ${colors.textMuted}`}>{t('steering.inclusionMode')}:</span>
+            <Select
+              value={editState.inclusion}
+              onChange={onInclusionChange}
+              data={inclusionOptions.map(opt => ({ value: opt.value, label: opt.label }))}
+              size="xs"
+              classNames={{
+                input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
+                dropdown: `${colors.card} border ${colors.cardBorder}`,
+                option: `${colors.text}`
+              }}
+              styles={{ input: { minWidth: '120px', borderRadius: '0.5rem' } }}
+            />
+          </div>
+          {editState.inclusion === 'fileMatch' && (
+            <div className="flex items-center gap-2">
+              <span className={`text-xs ${colors.textMuted}`}>{t('steering.filePattern')}:</span>
+              <TextInput
+                value={editState.filePattern}
+                onChange={(e) => onFilePatternChange(e.target.value)}
+                placeholder="**/*.jsx"
+                size="xs"
+                classNames={{
+                  input: `${colors.text} ${colors.input} ${colors.inputFocus}`
+                }}
+                styles={{ input: { width: '128px', borderRadius: '0.5rem' } }}
+              />
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className={`text-xs ${colors.textMuted}`}>{t('steering.fmName')}:</span>
             <TextInput
-              value={editState.filePattern}
-              onChange={(e) => onFilePatternChange(e.target.value)}
-              placeholder="**/*.jsx"
+              value={editState.name}
+              onChange={(e) => onNameChange(e.target.value)}
+              placeholder={t('steering.fmNamePlaceholder')}
               size="xs"
               classNames={{
                 input: `${colors.text} ${colors.input} ${colors.inputFocus}`
               }}
-              styles={{ input: { width: '128px', borderRadius: '0.5rem' } }}
+              styles={{ input: { width: '140px', borderRadius: '0.5rem' } }}
             />
           </div>
-        )}
+          <div className="flex items-center gap-2 flex-1">
+            <span className={`text-xs ${colors.textMuted}`}>{t('steering.fmDescription')}:</span>
+            <TextInput
+              value={editState.description}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              placeholder={t('steering.fmDescriptionPlaceholder')}
+              size="xs"
+              classNames={{
+                input: `${colors.text} ${colors.input} ${colors.inputFocus}`
+              }}
+              styles={{ input: { flex: 1, minWidth: '200px', borderRadius: '0.5rem' } }}
+            />
+          </div>
+        </div>
       </div>
       <div className="flex-1 p-4 overflow-hidden">
         <Textarea
@@ -412,15 +483,8 @@ function Editor({ file, editState, hasChanges, saving, inclusionOptions, onConte
             input: `${colors.inputFocus}`
           }}
           styles={{
-            root: {
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-            },
-            wrapper: {
-              flex: 1,
-              display: 'flex',
-            },
+            root: { height: '100%', display: 'flex', flexDirection: 'column' },
+            wrapper: { flex: 1, display: 'flex' },
             input: {
               flex: 1,
               height: '100%',
@@ -431,15 +495,9 @@ function Editor({ file, editState, hasChanges, saving, inclusionOptions, onConte
               lineHeight: '1.5',
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
               resize: 'none',
-              color: isLightTheme 
-                ? (theme === 'purple' ? '#4c1d95' : '#1f2937')
-                : '#e5e7eb',
-              backgroundColor: isLightTheme 
-                ? (theme === 'purple' ? 'rgba(233, 213, 255, 0.4)' : 'rgba(243, 244, 246, 0.5)')
-                : 'rgba(30, 30, 50, 0.5)',
-              borderColor: isLightTheme 
-                ? (theme === 'purple' ? 'rgba(196, 181, 253, 0.6)' : 'rgba(209, 213, 219, 0.5)')
-                : 'rgba(255, 255, 255, 0.1)',
+              color: surface.editorText,
+              backgroundColor: surface.editorBg,
+              borderColor: surface.editorBorder,
             }
           }}
         />
@@ -449,14 +507,18 @@ function Editor({ file, editState, hasChanges, saving, inclusionOptions, onConte
 }
 
 // 创建弹窗组件
-function CreateModal({ inclusionOptions, onCreate, onClose, isLightTheme, colors, t }) {
+function CreateModal({ inclusionOptions, onCreate, onClose, accent, colors, t, hasProjectDir }) {
+  const accentGradientButtonClass = getGradientAccentButton(accent)
   const [fileName, setFileName] = useState('')
   const [inclusion, setInclusion] = useState('always')
   const [filePattern, setFilePattern] = useState('')
+  const [scope, setScope] = useState('user')
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div 
+      <div
         className={`${colors.card} rounded-2xl w-full max-w-[380px] shadow-2xl border ${colors.cardBorder} overflow-hidden`}
         onClick={e => e.stopPropagation()}
         style={{ animation: 'dialogIn 0.2s ease-out' }}
@@ -464,7 +526,7 @@ function CreateModal({ inclusionOptions, onCreate, onClose, isLightTheme, colors
         <div className={`flex items-center justify-between px-5 py-4 ${colors.dialogHeader}`}>
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl ${colors.info} flex items-center justify-center`}>
-              <FileText size={20} className="text-blue-500" />
+              <FileText size={20} className={accent.text} />
             </div>
             <h2 className={`text-base font-semibold ${colors.text}`}>{t('steering.newSteering')}</h2>
           </div>
@@ -490,13 +552,62 @@ function CreateModal({ inclusionOptions, onCreate, onClose, isLightTheme, colors
           </div>
 
           <div>
+            <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{t('steering.fmName')}</label>
+            <TextInput
+              placeholder={t('steering.fmNamePlaceholder')}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              size="md"
+              classNames={{
+                input: `${colors.text} ${colors.input} ${colors.inputFocus}`
+              }}
+              styles={{ input: { borderRadius: '0.5rem' } }}
+            />
+          </div>
+
+          <div>
+            <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{t('steering.fmDescription')}</label>
+            <TextInput
+              placeholder={t('steering.fmDescriptionPlaceholder')}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              size="md"
+              classNames={{
+                input: `${colors.text} ${colors.input} ${colors.inputFocus}`
+              }}
+              styles={{ input: { borderRadius: '0.5rem' } }}
+            />
+          </div>
+
+          {hasProjectDir && (
+            <div>
+              <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{t('kiroConfig.scope')}</label>
+              <Select
+                value={scope}
+                onChange={setScope}
+                data={[
+                  { value: 'user', label: t('kiroConfig.scopeUser') },
+                  { value: 'project', label: t('kiroConfig.scopeProject') },
+                ]}
+                size="md"
+                classNames={{
+                  input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
+                  dropdown: `${colors.card} border ${colors.cardBorder}`,
+                  option: `${colors.text}`
+                }}
+                styles={{ input: { borderRadius: '0.5rem' } }}
+              />
+            </div>
+          )}
+
+          <div>
             <label className={`block text-xs font-medium ${colors.textMuted} mb-1.5`}>{t('steering.inclusionMode')}</label>
             <Select
               value={inclusion}
               onChange={setInclusion}
-              data={inclusionOptions.map(opt => ({ 
-                value: opt.value, 
-                label: `${opt.label} - ${opt.desc}` 
+              data={inclusionOptions.map(opt => ({
+                value: opt.value,
+                label: `${opt.label} - ${opt.desc}`
               }))}
               size="md"
               classNames={{
@@ -525,16 +636,14 @@ function CreateModal({ inclusionOptions, onCreate, onClose, isLightTheme, colors
           )}
 
           <button
-            onClick={() => onCreate(fileName, inclusion, filePattern)}
+            onClick={() => onCreate(fileName, inclusion, filePattern, scope, name.trim(), description.trim())}
             disabled={!fileName.trim()}
-            className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl text-sm font-medium shadow-lg shadow-blue-500/25 hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+            className={`w-full px-4 py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] ${accentGradientButtonClass}`}
           >
             {t('common.add')}
           </button>
         </div>
       </div>
-
-
     </div>
   )
 }
