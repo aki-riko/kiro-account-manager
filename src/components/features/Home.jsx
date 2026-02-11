@@ -15,9 +15,11 @@ import AccountQuotaDetail from './Home/AccountQuotaDetail'
 import UsageDistribution from './Home/UsageDistribution'
 import QuotaPieChart from './Home/QuotaPieChart'
 import UsageTrendChart from './Home/UsageTrendChart'
+import { getThemeAccent } from './KiroConfig/themeAccent'
 
 function Home({ onNavigate }) {
   const { t, theme, colors } = useApp()
+  const accent = getThemeAccent(theme)
   const { showError } = useDialog()
   const { maskEmail } = usePrivacy()
   const { 
@@ -62,28 +64,23 @@ function Home({ onNavigate }) {
     }
   }, [currentAccount, refreshingAccount, refreshAccount, showError, t])
 
-  const isLightTheme = useMemo(() => 
-    theme === 'light' || theme === 'purple' || theme === 'green',
-    [theme]
-  )
-
   // 缓存 statCards，避免每次 render 都重新创建
   const statCards = useMemo(() => [
-    { icon: Users, iconBg: colors.badgeInfo, iconColor: 'text-blue-500', value: stats.total, label: t('home.totalAccounts'), delay: 'delay-100' },
-    { icon: Shield, iconBg: colors.badgeSuccess, iconColor: 'text-green-500', value: `${stats.active}/${stats.banned}`, label: t('home.activeVsBanned'), delay: 'delay-200' },
-    { icon: Zap, iconBg: colors.badgePurple, iconColor: 'text-purple-500', value: stats.proPlus + stats.pro, label: t('home.proAccounts'), delay: 'delay-300' },
+    { icon: Users, iconBg: colors.badgeInfo, iconColor: accent.text, value: stats.total, label: t('home.totalAccounts'), delay: 'delay-100' },
+    { icon: Shield, iconBg: colors.badgeSuccess, iconColor: accent.text, value: `${stats.active}/${stats.banned}`, label: t('home.activeVsBanned'), delay: 'delay-200' },
+    { icon: Zap, iconBg: colors.badgePurple, iconColor: accent.text, value: stats.proPlus + stats.pro, label: t('home.proAccounts'), delay: 'delay-300' },
     { icon: TrendingUp, iconBg: colors.badgeWarning, iconColor: 'text-orange-500', value: `${stats.usagePercent}%`, label: t('home.usagePercent'), delay: 'delay-400' },
     { 
       icon: Server, 
       iconBg: colors.badgeCyan, 
-      iconColor: 'text-cyan-500',
+      iconColor: accent.text,
       value: mcpToolCount, 
       label: 'MCP 工具', 
       delay: 'delay-500',
       onClick: () => onNavigate?.('kiroConfig'),
       warning: mcpToolCount > 50
     },
-  ], [colors, stats, mcpToolCount, t, onNavigate])
+  ], [colors, accent.text, stats, mcpToolCount, t, onNavigate])
 
   if (loading) {
     return <LoadingSkeleton colors={colors} />
@@ -99,7 +96,7 @@ function Home({ onNavigate }) {
         {/* Header */}
         <div className="mb-8 animate-bounce-in">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/25 animate-float">
+            <div className={`w-12 h-12 bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} rounded-2xl flex items-center justify-center shadow-lg ${accent.shadow} animate-float`}>
               <Sparkles size={24} className="text-white" />
             </div>
             <h1 className={`text-2xl font-bold ${colors.text}`}>{t('home.title')}</h1>
@@ -120,7 +117,6 @@ function Home({ onNavigate }) {
             localToken={localToken}
             refreshing={refreshing}
             handleRefresh={handleRefresh}
-            isLightTheme={isLightTheme}
             colors={colors}
             t={t}
           />
@@ -128,7 +124,6 @@ function Home({ onNavigate }) {
           {/* 配额总览 */}
           <QuotaOverviewCard 
             stats={stats}
-            isLightTheme={isLightTheme}
             colors={colors}
             t={t}
           />
@@ -142,7 +137,7 @@ function Home({ onNavigate }) {
             refreshingAccount={refreshingAccount}
             handleRefreshCurrentAccount={handleRefreshCurrentAccount}
             maskEmail={maskEmail}
-            isLightTheme={isLightTheme}
+            theme={theme}
             colors={colors}
             t={t}
           />
@@ -152,7 +147,6 @@ function Home({ onNavigate }) {
         {tokens.length > 0 && (
           <UsageDistribution 
             tokens={tokens}
-            isLightTheme={isLightTheme}
             colors={colors}
             t={t}
           />

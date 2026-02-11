@@ -2,10 +2,14 @@ import { Card, Group, Stack, Text, Progress } from '@mantine/core'
 import { PieChart, BarChart2 } from 'lucide-react'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { formatUsage, getAccountDisplayName, getQuota, getUsed } from '../../../utils/accountStats'
+import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 // 使用率分布统计
-function UsageDistribution({ tokens, isLightTheme, colors, t }) {
+function UsageDistribution({ tokens, colors, t }) {
   const { maskEmail } = usePrivacy()
+  const { theme } = useApp()
+  const accent = getThemeAccent(theme)
   
   // 计算使用率（使用统一的 getQuota 和 getUsed 函数）
   const getUsagePercent = (account) => {
@@ -48,7 +52,7 @@ function UsageDistribution({ tokens, isLightTheme, colors, t }) {
         withBorder
       >
         <Group gap="xs" mb="md">
-          <PieChart size={18} className="text-blue-500" />
+          <PieChart size={18} className={accent.text} />
           <Text fw={600} className={colors.text}>{t('stats.usageDistribution')}</Text>
         </Group>
         <Stack gap="md">
@@ -90,7 +94,7 @@ function UsageDistribution({ tokens, isLightTheme, colors, t }) {
         withBorder
       >
         <Group gap="xs" mb="md">
-          <BarChart2 size={18} className="text-indigo-500" />
+          <BarChart2 size={18} className={accent.text} />
           <Text fw={600} className={colors.text}>{t('stats.accountUsage')}</Text>
         </Group>
         <Stack gap="sm">

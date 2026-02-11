@@ -1,8 +1,12 @@
 import { Card, Progress, Group, Stack, Text, Badge } from '@mantine/core'
 import { TrendingUp } from 'lucide-react'
+import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 // 配额总览卡片
-function QuotaOverviewCard({ stats, isLightTheme, colors, t }) {
+function QuotaOverviewCard({ stats, colors, t }) {
+  const { theme } = useApp()
+  const accent = getThemeAccent(theme)
   const getProgressColor = (percent) => {
     if (percent > 80) return 'red'
     if (percent > 50) return 'yellow'
@@ -25,7 +29,7 @@ function QuotaOverviewCard({ stats, isLightTheme, colors, t }) {
     >
       <Group gap="sm" mb="md">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colors.cardSecondary}`}>
-          <TrendingUp size={20} className="text-emerald-500" />
+          <TrendingUp size={20} className={accent.text} />
         </div>
         <Text fw={600} className={colors.text}>{t('home.quotaOverview')}</Text>
       </Group>

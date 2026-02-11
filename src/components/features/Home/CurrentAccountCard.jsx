@@ -1,8 +1,12 @@
 import { Card, Badge, Group, Stack, Text, ActionIcon, Tooltip } from '@mantine/core'
 import { RefreshCw, Users, Clock } from 'lucide-react'
+import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 // 当前账号卡片
-function CurrentAccountCard({ localToken, refreshing, handleRefresh, isLightTheme, colors, t }) {
+function CurrentAccountCard({ localToken, refreshing, handleRefresh, colors, t }) {
+  const { theme } = useApp()
+  const accent = getThemeAccent(theme)
   return (
     <Card
       className="card-glow animate-scale-in delay-300"
@@ -32,7 +36,7 @@ function CurrentAccountCard({ localToken, refreshing, handleRefresh, isLightThem
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg transition-transform hover:scale-105 flex-shrink-0 ${
               localToken.provider === 'Google' ? 'bg-gradient-to-br from-red-500 to-orange-500 shadow-red-500/25' :
               localToken.provider === 'Github' ? 'bg-gradient-to-br from-gray-700 to-gray-900 shadow-gray-500/25' :
-              'bg-gradient-to-br from-blue-500 to-purple-600 shadow-blue-500/25'
+              `bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} ${accent.shadow}`
             }`}>
               {localToken.provider?.[0] || 'K'}
             </div>
@@ -54,7 +58,7 @@ function CurrentAccountCard({ localToken, refreshing, handleRefresh, isLightThem
             </Stack>
             
             {/* Hover 显示 Token 详情 */}
-            <TokenDetailPopover localToken={localToken} isLightTheme={isLightTheme} colors={colors} t={t} />
+            <TokenDetailPopover localToken={localToken} colors={colors} t={t} />
           </Group>
         ) : (
           <Stack align="center" gap="sm" py="lg">
@@ -71,7 +75,7 @@ function CurrentAccountCard({ localToken, refreshing, handleRefresh, isLightThem
 }
 
 // Token 详情悬浮框
-function TokenDetailPopover({ localToken, isLightTheme, colors, t }) {
+function TokenDetailPopover({ localToken, colors, t }) {
   return (
     <Card
       className="absolute left-16 top-0 w-72 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none"

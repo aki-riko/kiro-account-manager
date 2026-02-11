@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Calendar } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 export default function UsageTrendChart({ accounts, stats }) {
   const { t, theme, colors } = useApp()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const accent = getThemeAccent(theme)
   const [usageHistory, setUsageHistory] = useState([])
 
   // 加载并保存历史记录
@@ -57,7 +58,7 @@ export default function UsageTrendChart({ accounts, stats }) {
       withBorder
     >
       <Group gap="xs" mb="md">
-        <Calendar size={18} className="text-cyan-500" />
+        <Calendar size={18} className={accent.text} />
         <Text fw={600} className={colors.text}>{t('stats.usageTrend')}</Text>
       </Group>
 
@@ -109,15 +110,15 @@ export default function UsageTrendChart({ accounts, stats }) {
               <>
                 <defs>
                   <linearGradient id="usageGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
+                    <stop offset="0%" stopColor="var(--mantine-primary-color-filled)" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="var(--mantine-primary-color-filled)" stopOpacity="0" />
                   </linearGradient>
                 </defs>
                 <path d={fillPath} fill="url(#usageGradient)" />
                 <polyline
                   points={points}
                   fill="none"
-                  stroke="#3B82F6"
+                  stroke="var(--mantine-primary-color-filled)"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -130,7 +131,7 @@ export default function UsageTrendChart({ accounts, stats }) {
                     <circle
                       key={i}
                       cx={x} cy={y} r="3"
-                      fill="#3B82F6"
+                      fill="var(--mantine-primary-color-filled)"
                       className="hover:r-5 transition-all cursor-pointer"
                     >
                       <title>{h.date}: {t('stats.totalUsed')} {h.totalUsed}</title>
@@ -164,7 +165,7 @@ export default function UsageTrendChart({ accounts, stats }) {
       {/* 图例 */}
       <Group justify="center" gap="md" mt="xs">
         <Group gap="xs">
-          <div className="w-3 h-3 rounded-full bg-blue-500" />
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--mantine-primary-color-filled)' }} />
           <Text size="xs" className={colors.textMuted}>{t('stats.totalUsed')}</Text>
         </Group>
       </Group>

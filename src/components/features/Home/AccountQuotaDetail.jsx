@@ -1,6 +1,7 @@
 import { Card, Group, Stack, Text, Badge, Progress, ActionIcon, Tooltip } from '@mantine/core'
 import { RefreshCw } from 'lucide-react'
 import { getAccountDisplayName } from '../../../utils/accountStats'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 // 当前账号配额详情
 function AccountQuotaDetail({ 
@@ -9,10 +10,11 @@ function AccountQuotaDetail({
   refreshingAccount, 
   handleRefreshCurrentAccount, 
   maskEmail,
-  isLightTheme, 
+  theme,
   colors, 
   t 
 }) {
+  const accent = getThemeAccent(theme)
   const usageData = currentAccount.usageData
   const breakdown = usageData?.usageBreakdownList?.[0] || usageData?.usageBreakdown
   const subInfo = usageData?.subscriptionInfo
@@ -55,18 +57,18 @@ function AccountQuotaDetail({
       withBorder
     >
       {/* 头部 */}
-      <AccountHeader 
-        currentAccount={currentAccount}
-        userInfo={userInfo}
-        subInfo={subInfo}
-        daysUntilReset={daysUntilReset}
-        refreshingAccount={refreshingAccount}
-        handleRefreshCurrentAccount={handleRefreshCurrentAccount}
-        maskEmail={maskEmail}
-        isLightTheme={isLightTheme}
-        colors={colors}
-        t={t}
-      />
+        <AccountHeader 
+          currentAccount={currentAccount}
+          userInfo={userInfo}
+          subInfo={subInfo}
+          daysUntilReset={daysUntilReset}
+          refreshingAccount={refreshingAccount}
+          handleRefreshCurrentAccount={handleRefreshCurrentAccount}
+          maskEmail={maskEmail}
+          accent={accent}
+          colors={colors}
+          t={t}
+        />
       
       <Stack p="lg" gap="md">
         {/* 本月用量进度 */}
@@ -74,7 +76,7 @@ function AccountQuotaDetail({
           currentPercent={currentPercent}
           currentUsed={currentUsed}
           currentQuota={currentQuota}
-          isLightTheme={isLightTheme}
+          accent={accent}
           colors={colors}
           t={t}
         />
@@ -85,20 +87,19 @@ function AccountQuotaDetail({
             <SubscriptionDetails 
               subInfo={subInfo}
               overageConfig={overageConfig}
-              isLightTheme={isLightTheme}
               colors={colors}
               t={t}
             />
           )}
-          <AccountInfo 
-            currentAccount={currentAccount}
-            userInfo={userInfo}
-            breakdown={breakdown}
-            nextDateReset={nextDateReset}
-            isLightTheme={isLightTheme}
-            colors={colors}
-            t={t}
-          />
+        <AccountInfo 
+          currentAccount={currentAccount}
+          userInfo={userInfo}
+          breakdown={breakdown}
+          nextDateReset={nextDateReset}
+          accent={accent}
+          colors={colors}
+          t={t}
+        />
         </Group>
 
         {/* 额度明细 */}
@@ -108,7 +109,7 @@ function AccountQuotaDetail({
           mainPercent={mainPercent}
           freeTrial={freeTrial}
           bonuses={bonuses}
-          isLightTheme={isLightTheme}
+          accent={accent}
           colors={colors}
           t={t}
         />
@@ -118,7 +119,7 @@ function AccountQuotaDetail({
 }
 
 // 账号头部
-function AccountHeader({ currentAccount, userInfo, subInfo, daysUntilReset, refreshingAccount, handleRefreshCurrentAccount, maskEmail, isLightTheme, colors, t }) {
+function AccountHeader({ currentAccount, userInfo, subInfo, daysUntilReset, refreshingAccount, handleRefreshCurrentAccount, maskEmail, colors, t, accent }) {
   return (
     <Group 
       justify="space-between" 
@@ -130,7 +131,7 @@ function AccountHeader({ currentAccount, userInfo, subInfo, daysUntilReset, refr
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md flex-shrink-0 ${
           currentAccount.provider === 'Google' ? 'bg-gradient-to-br from-red-500 to-orange-500' :
           currentAccount.provider === 'Github' ? 'bg-gradient-to-br from-gray-700 to-gray-900' :
-          'bg-gradient-to-br from-blue-500 to-purple-600'
+          `bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo}`
         }`}>
           {currentAccount.provider?.[0] || 'K'}
         </div>
@@ -177,17 +178,17 @@ function AccountHeader({ currentAccount, userInfo, subInfo, daysUntilReset, refr
 }
 
 // 本月用量进度
-function MonthlyUsageProgress({ currentPercent, currentUsed, currentQuota, isLightTheme, colors, t }) {
+function MonthlyUsageProgress({ currentPercent, currentUsed, currentQuota, accent, colors, t }) {
   const getProgressColor = () => {
     if (currentPercent > 80) return 'red'
     if (currentPercent > 50) return 'yellow'
     return 'blue'
   }
 
-  const getPercentColor = () => {
-    if (currentPercent > 80) return 'rgb(239, 68, 68)'
-    if (currentPercent > 50) return 'rgb(245, 158, 11)'
-    return 'rgb(59, 130, 246)' // 保留蓝色功能色
+  const getPercentColorClass = () => {
+    if (currentPercent > 80) return colors.quotaHigh
+    if (currentPercent > 50) return colors.quotaMedium
+    return accent.text
   }
 
   return (
@@ -204,7 +205,7 @@ function MonthlyUsageProgress({ currentPercent, currentUsed, currentQuota, isLig
           <Text 
             size="lg" 
             fw={700}
-            style={{ color: getPercentColor() }}
+            className={getPercentColorClass()}
           >
             {currentPercent}%
           </Text>
@@ -225,7 +226,7 @@ function MonthlyUsageProgress({ currentPercent, currentUsed, currentQuota, isLig
 }
 
 // 订阅详情
-function SubscriptionDetails({ subInfo, overageConfig, isLightTheme, colors, t }) {
+function SubscriptionDetails({ subInfo, overageConfig, colors, t }) {
   return (
     <Card
       padding="sm"
@@ -250,8 +251,7 @@ function SubscriptionDetails({ subInfo, overageConfig, isLightTheme, colors, t }
           <Text size="xs" className={colors.textMuted}>{t('home.overage')}</Text>
           <Text 
             size="xs" 
-            style={{ color: subInfo.overageCapability === 'OVERAGE_CAPABLE' ? 'rgb(34, 197, 94)' : undefined }}
-            className={subInfo.overageCapability === 'OVERAGE_CAPABLE' ? '' : colors.textMuted}
+            className={subInfo.overageCapability === 'OVERAGE_CAPABLE' ? colors.iconSuccess : colors.textMuted}
           >
             {subInfo.overageCapability === 'OVERAGE_CAPABLE' ? '✓' : '✗'}
           </Text>
@@ -260,8 +260,7 @@ function SubscriptionDetails({ subInfo, overageConfig, isLightTheme, colors, t }
           <Text size="xs" className={colors.textMuted}>{t('home.upgrade')}</Text>
           <Text 
             size="xs"
-            style={{ color: subInfo.upgradeCapability === 'UPGRADE_CAPABLE' ? 'rgb(34, 197, 94)' : undefined }}
-            className={subInfo.upgradeCapability === 'UPGRADE_CAPABLE' ? '' : colors.textMuted}
+            className={subInfo.upgradeCapability === 'UPGRADE_CAPABLE' ? colors.iconSuccess : colors.textMuted}
           >
             {subInfo.upgradeCapability === 'UPGRADE_CAPABLE' ? '✓' : '✗'}
           </Text>
@@ -271,8 +270,7 @@ function SubscriptionDetails({ subInfo, overageConfig, isLightTheme, colors, t }
             <Text size="xs" className={colors.textMuted}>{t('home.status')}</Text>
             <Text 
               size="xs"
-              style={{ color: overageConfig.overageStatus === 'ENABLED' ? 'rgb(34, 197, 94)' : undefined }}
-              className={overageConfig.overageStatus === 'ENABLED' ? '' : colors.textMuted}
+              className={overageConfig.overageStatus === 'ENABLED' ? colors.iconSuccess : colors.textMuted}
             >
               {overageConfig.overageStatus === 'ENABLED' ? t('home.enabled') : t('home.disabled')}
             </Text>
@@ -284,7 +282,7 @@ function SubscriptionDetails({ subInfo, overageConfig, isLightTheme, colors, t }
 }
 
 // 账户信息
-function AccountInfo({ currentAccount, userInfo, breakdown, nextDateReset, isLightTheme, colors, t }) {
+function AccountInfo({ currentAccount, userInfo, breakdown, nextDateReset, accent, colors, t }) {
   return (
     <Card
       padding="sm"
@@ -296,7 +294,7 @@ function AccountInfo({ currentAccount, userInfo, breakdown, nextDateReset, isLig
         fw={500} 
         tt="uppercase" 
         mb="xs"
-        className="text-purple-500"
+        className={accent.text}
       >
         {t('home.accountInfo')}
       </Text>
@@ -331,7 +329,7 @@ function AccountInfo({ currentAccount, userInfo, breakdown, nextDateReset, isLig
 }
 
 // 额度明细
-function QuotaBreakdown({ mainUsed, mainLimit, mainPercent, freeTrial, bonuses, isLightTheme, colors, t }) {
+function QuotaBreakdown({ mainUsed, mainLimit, mainPercent, freeTrial, bonuses, accent, colors, t }) {
   return (
     <Card
       padding="sm"
@@ -343,7 +341,7 @@ function QuotaBreakdown({ mainUsed, mainLimit, mainPercent, freeTrial, bonuses, 
       </Text>
       <Stack gap="xs">
         {/* 基础额度 */}
-        <QuotaRow label={t('home.base')} used={mainUsed} limit={mainLimit} percent={mainPercent} color="blue" isLightTheme={isLightTheme} colors={colors} />
+        <QuotaRow label={t('home.base')} used={mainUsed} limit={mainLimit} percent={mainPercent} color="blue" accent={accent} colors={colors} />
 
         {/* 试用额度 */}
         {freeTrial && freeTrial.usageLimit > 0 && (
@@ -354,7 +352,7 @@ function QuotaBreakdown({ mainUsed, mainLimit, mainPercent, freeTrial, bonuses, 
             percent={freeTrial.usageLimit > 0 ? ((freeTrial.currentUsage ?? 0) / freeTrial.usageLimit * 100) : 0}
             color="purple" 
             expiry={freeTrial.freeTrialExpiry}
-            isLightTheme={isLightTheme} 
+            accent={accent}
             colors={colors}
             t={t}
           />
@@ -370,7 +368,7 @@ function QuotaBreakdown({ mainUsed, mainLimit, mainPercent, freeTrial, bonuses, 
             percent={bonus.usageLimit > 0 ? ((bonus.currentUsage ?? 0) / bonus.usageLimit * 100) : 0}
             color="amber" 
             expiry={bonus.expiresAt}
-            isLightTheme={isLightTheme} 
+            accent={accent}
             colors={colors}
             t={t}
           />
@@ -381,18 +379,18 @@ function QuotaBreakdown({ mainUsed, mainLimit, mainPercent, freeTrial, bonuses, 
 }
 
 // 额度行
-function QuotaRow({ label, used, limit, percent, color, expiry, isLightTheme, colors, t }) {
+function QuotaRow({ label, used, limit, percent, color, expiry, accent, colors, t }) {
   const colorMap = {
     blue: { 
-      dot: 'bg-blue-500', 
-      bar: 'bg-blue-500', 
+      dot: accent.solidBg, 
+      bar: accent.solidBg, 
       text: colors.textMuted, 
       barBg: colors.cardSecondary
     },
     purple: { 
-      dot: 'bg-purple-500', 
-      bar: 'bg-purple-500', 
-      text: 'text-purple-500', 
+      dot: accent.solidBg, 
+      bar: accent.solidBg, 
+      text: accent.text, 
       barBg: colors.badgePurple
     },
     amber: { 
