@@ -41,6 +41,7 @@ ciborium = "0.2"
 serde_cbor = "0.11"
 regex = "1.10"
 hex = "0.4"
+encoding_rs = "0.8"
 async-trait = "0.1"
 dirs = "5"
 rusqlite = { version = "0.32", features = ["bundled"] }
