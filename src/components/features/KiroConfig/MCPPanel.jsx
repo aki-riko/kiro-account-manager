@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
-import { Server, Plus, Edit2, Trash2, Terminal } from 'lucide-react'
+import { Server, Plus, Edit2, Trash2, Terminal, Search, X } from 'lucide-react'
 import { TextInput } from '@mantine/core'
 import AddMCPModal from '../MCPManager/AddMCPModal'
 import EditMCPModal from '../MCPManager/EditMCPModal'
+import { getThemeAccent, getGradientAccentButton } from './themeAccent'
 
 // 搜索框组件
-function SearchInput({ value, onChange, placeholder, colors }) {
+function SearchInput({ value, onChange, placeholder, colors, t, accent }) {
   return (
     <div className="flex-1 max-w-xs">
       <TextInput
@@ -16,10 +17,19 @@ function SearchInput({ value, onChange, placeholder, colors }) {
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         size="sm"
-        leftSection={<span className="text-sm">🔍</span>}
-        rightSection={value ? <button onClick={() => onChange('')} className="text-sm">✕</button> : null}
+        leftSection={<Search size={16} className={colors.textMuted} />}
+        rightSection={value ? (
+          <button
+            type="button"
+            aria-label={t('common.clear')}
+            onClick={() => onChange('')}
+            className={`p-1 rounded ${colors.cardHover} cursor-pointer transition-colors duration-200 focus:ring-2 ${accent.ring}`}
+          >
+            <X size={14} className={colors.textMuted} />
+          </button>
+        ) : null}
         classNames={{
-          input: `${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-1 transition-all`
+          input: `${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-1 transition-colors duration-200`
         }}
       />
     </div>
@@ -28,7 +38,8 @@ function SearchInput({ value, onChange, placeholder, colors }) {
 
 function MCPPanel({ onCountChange }) {
   const { t, theme, colors } = useApp()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const accent = getThemeAccent(theme)
+  const accentGradientButtonClass = getGradientAccentButton(accent)
   const { showConfirm } = useDialog()
   const [servers, setServers] = useState({})
   const [loading, setLoading] = useState(true)
@@ -117,7 +128,7 @@ function MCPPanel({ onCountChange }) {
           <span className={`text-sm ${colors.textMuted}`}>{filteredServers.length}/{serverList.length}</span>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg text-sm font-medium hover:from-purple-600 hover:to-pink-700 flex items-center gap-1.5"
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 ${accentGradientButtonClass}`}
           >
             <Plus size={14} />{t('mcp.add')}
           </button>
@@ -140,7 +151,7 @@ function MCPPanel({ onCountChange }) {
                 key={name}
                 name={name}
                 config={config}
-                isLightTheme={isLightTheme}
+                accent={accent}
                 colors={colors}
                 t={t}
                 onToggle={(disabled) => handleToggle(name, disabled)}
@@ -168,7 +179,7 @@ function MCPPanel({ onCountChange }) {
 }
 
 // MCP 服务器卡片
-function MCPServerItem({ name, config, isLightTheme, colors, onToggle, onEdit, onDelete, t }) {
+function MCPServerItem({ name, config, accent, colors, onToggle, onEdit, onDelete, t }) {
   const isDisabled = config.disabled
   const commandStr = [config.command, ...(config.args || [])].join(' ')
   const envCount = Object.keys(config.env || {}).length
@@ -179,7 +190,7 @@ function MCPServerItem({ name, config, isLightTheme, colors, onToggle, onEdit, o
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
         isDisabled ? colors.cardSecondary : colors.badgeActive
       }`}>
-        <Server size={20} className={isDisabled ? colors.textMuted : 'text-green-500'} />
+        <Server size={20} className={isDisabled ? colors.textMuted : accent.text} />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -202,7 +213,7 @@ function MCPServerItem({ name, config, isLightTheme, colors, onToggle, onEdit, o
             )}
             {autoApproveCount > 0 && (
               <span className={`px-1.5 py-0.5 rounded ${colors.badgeSuccess}`}>
-                {t('mcpManager.autoApprove')} {autoApproveCount} {t('mcpManager.tools')}
+                {config.autoApprove?.includes('*') ? `${t('mcpManager.autoApprove')} *` : `${t('mcpManager.autoApprove')} ${autoApproveCount} ${t('mcpManager.tools')}`}
               </span>
             )}
           </div>

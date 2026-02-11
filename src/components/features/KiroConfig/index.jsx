@@ -1,24 +1,50 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { open } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../../../hooks/useApp'
-import { Server, Settings2, FileText } from 'lucide-react'
+import { Server, Settings2, FileText, Puzzle, Bot, Zap, FolderOpen, X } from 'lucide-react'
 import MCPPanel from './MCPPanel'
 import SteeringPanel from './SteeringPanel'
+import SkillsPanel from './SkillsPanel'
+import AgentsPanel from './AgentsPanel'
+import PowersPanel from './PowersPanel'
+import { getThemeAccent } from './themeAccent'
 
 function KiroConfig() {
   const { t, theme, colors } = useApp()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const accent = getThemeAccent(theme)
   const [activeTab, setActiveTab] = useState('mcp')
   const [mcpCount, setMcpCount] = useState(0)
   const [steeringCount, setSteeringCount] = useState(0)
+  const [skillsCount, setSkillsCount] = useState(0)
+  const [agentsCount, setAgentsCount] = useState(0)
+  const [powersCount, setPowersCount] = useState(0)
+  const [projectDir, setProjectDir] = useState(null)
 
-  // 初始加载 steering 数量
+  // 初始加载数量
   useEffect(() => {
-    invoke('get_steering_files').then(files => setSteeringCount(files?.length || 0)).catch(() => {})
-  }, [])
+    invoke('get_steering_files', { projectDir: projectDir }).then(files => setSteeringCount(files?.length || 0)).catch(() => {})
+    invoke('get_skills', { projectDir: projectDir }).then(skills => setSkillsCount(skills?.length || 0)).catch(() => {})
+    invoke('get_custom_agents', { projectDir: projectDir }).then(agents => setAgentsCount(agents?.length || 0)).catch(() => {})
+    invoke('get_powers').then(powers => setPowersCount(powers?.length || 0)).catch(() => {})
+  }, [projectDir])
+
+  const handleSelectProjectDir = async () => {
+    try {
+      const selected = await open({ directory: true, multiple: false, title: t('kiroConfig.selectProjectDir') })
+      if (selected) {
+        setProjectDir(selected)
+      }
+    } catch (e) {
+      console.error('选择项目目录失败:', e)
+    }
+  }
 
   const TABS = [
     { id: 'mcp', label: t('kiroConfig.mcp'), icon: Server, count: mcpCount },
+    { id: 'powers', label: t('kiroConfig.powers'), icon: Zap, count: powersCount },
+    { id: 'agents', label: t('kiroConfig.agents'), icon: Bot, count: agentsCount },
+    { id: 'skills', label: t('kiroConfig.skills'), icon: Puzzle, count: skillsCount },
     { id: 'steering', label: t('kiroConfig.steering'), icon: FileText, count: steeringCount },
   ]
 
@@ -28,14 +54,38 @@ function KiroConfig() {
       {/* 头部 */}
       <div className={`${colors.card} border-b ${colors.cardBorder} px-6 py-4`}>
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+          <div className={`w-10 h-10 bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} rounded-xl flex items-center justify-center shadow-lg ${accent.shadow}`}>
             <Settings2 size={20} className="text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className={`text-xl font-bold ${colors.text}`}>{t('kiroConfig.title')}</h1>
             <p className={`text-sm ${colors.textMuted}`}>
               {t('kiroConfig.subtitle')}
             </p>
+          </div>
+          {/* 项目目录选择器 */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSelectProjectDir}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${colors.cardHover} border ${colors.cardBorder} ${colors.text}`}
+              title={t('kiroConfig.selectProjectDir')}
+            >
+              <FolderOpen size={16} className="text-amber-500" />
+              {projectDir ? (
+                <span className="max-w-[200px] truncate text-xs">{projectDir.split(/[/\\]/).pop()}</span>
+              ) : (
+                <span className={`text-xs ${colors.textMuted}`}>{t('kiroConfig.noProjectDir')}</span>
+              )}
+            </button>
+            {projectDir && (
+              <button
+                onClick={() => setProjectDir(null)}
+                className={`p-1.5 rounded-lg ${colors.cardHover} transition-colors`}
+                title={t('kiroConfig.clearProjectDir')}
+              >
+                <X size={14} className={colors.textMuted} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -70,7 +120,10 @@ function KiroConfig() {
       {/* 内容区 */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'mcp' && <MCPPanel onCountChange={setMcpCount} />}
-        {activeTab === 'steering' && <SteeringPanel onCountChange={setSteeringCount} />}
+        {activeTab === 'steering' && <SteeringPanel onCountChange={setSteeringCount} projectDir={projectDir} />}
+        {activeTab === 'skills' && <SkillsPanel onCountChange={setSkillsCount} projectDir={projectDir} />}
+        {activeTab === 'agents' && <AgentsPanel onCountChange={setAgentsCount} projectDir={projectDir} />}
+        {activeTab === 'powers' && <PowersPanel onCountChange={setPowersCount} />}
       </div>
       </div>
     </div>
