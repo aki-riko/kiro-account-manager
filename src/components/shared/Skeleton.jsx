@@ -71,8 +71,7 @@ export function AccountListSkeleton({ count = 8 }) {
 
 // 表格行骨架屏
 export function AccountTableRowSkeleton() {
-  const { colors, theme } = useTheme()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const { colors } = useTheme()
 
   return (
     <div className={`flex items-center gap-3 px-4 py-2.5 border-b ${colors.cardBorder}`}>
@@ -119,8 +118,7 @@ export function AccountTableRowSkeleton() {
 
 // 表格视图骨架屏
 export function AccountTableSkeleton({ count = 8 }) {
-  const { colors, theme } = useTheme()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const { colors } = useTheme()
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden p-6">

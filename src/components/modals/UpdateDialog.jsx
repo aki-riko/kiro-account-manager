@@ -5,8 +5,7 @@ import { Modal, Stack, Group, Text, Button, Progress, Alert } from '@mantine/cor
 import { useApp } from '../../hooks/useApp'
 
 function UpdateDialog({ updateInfo, update, onClose }) {
-  const { t, theme, colors } = useApp()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const { t, colors } = useApp()
   const [installing, setInstalling] = useState(false)
   const [downloadComplete, setDownloadComplete] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(null)

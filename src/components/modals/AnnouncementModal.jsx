@@ -14,8 +14,7 @@ const QQ_GROUP = '1020204332'
 const QQ_GROUP_URL = 'https://qm.qq.com/q/Vh7mUrNpa8'
 
 export default function AnnouncementModal() {
-  const { t, theme, colors } = useApp()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const { t, colors } = useApp()
   const [show, setShow] = useState(false)
   const [announcement, setAnnouncement] = useState(null)
   const [agreed, setAgreed] = useState(false)

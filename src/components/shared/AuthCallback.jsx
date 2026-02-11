@@ -3,8 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../hooks/useApp'
 
 export default function AuthCallback() {
-  const { t, theme, colors } = useApp()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const { t, colors } = useApp()
   const [status, setStatus] = useState('loading')
   const [message, setMessage] = useState('')
 
