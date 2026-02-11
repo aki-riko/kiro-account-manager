@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Tabs, Textarea, Stack, Group, Alert, Progress, FileButton, Button as MantineButton } from '@mantine/core'
 import { Upload, FileJson, AlertCircle, CheckCircle, Loader2, Database, RefreshCw, LogIn } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 import { getConcurrency } from '../../../utils/concurrency'
 import { getAccountDisplayName } from '../../../utils/accountStats'
 import {
@@ -20,12 +21,12 @@ function validateAccount(item, index) {
   const errors = []
   const refreshToken = item.refreshToken
   if (!refreshToken) {
-    errors.push(`第${index + 1}条: 缺少 refreshToken`)
+    errors.push(`第 ${index + 1} 条: 缺少 refreshToken`)
     return { valid: false, errors, type: null }
   }
 
   if (!refreshToken.startsWith('aor')) {
-    errors.push(`第${index + 1}条: refreshToken 格式无效（应以 aor 开头）`)
+    errors.push(`第 ${index + 1} 条: refreshToken 格式无效（应以 aor 开头）`)
     return { valid: false, errors, type: null }
   }
 
@@ -37,7 +38,7 @@ function validateAccount(item, index) {
   if (!provider) {
     if (isSocial) {
       // Social 账号必须明确指定 provider
-      errors.push(`第${index + 1}条: Social 账号必须指定 provider (Google/Github)`)
+      errors.push(`第 ${index + 1} 条: Social 账号必须指定 provider (Google/Github)`)
       return { valid: false, errors, type: null }
     } else {
       // IdC 账号：通过 startUrl 判断是 Enterprise 还是 BuilderId
@@ -47,28 +48,30 @@ function validateAccount(item, index) {
 
   const validProviders = ['Google', 'Github', 'BuilderId', 'Enterprise']
   if (!validProviders.includes(provider)) {
-    errors.push(`第${index + 1}条: provider 必须是 ${validProviders.join('/')}`)
+    errors.push(`第 ${index + 1} 条: provider 必须是 ${validProviders.join('/')}`)
     return { valid: false, errors, type: null }
   }
 
   if (isSocial && !['Google', 'Github'].includes(provider)) {
-    errors.push(`第${index + 1}条: Social 账号的 provider 应为 Google/Github`)
+    errors.push(`第 ${index + 1} 条: Social 账号的 provider 应为 Google/Github`)
     return { valid: false, errors, type: null }
   }
 
   if (isIdC && !['BuilderId', 'Enterprise'].includes(provider)) {
-    errors.push(`第${index + 1}条: IdC 账号的 provider 应为 BuilderId/Enterprise`)
+    errors.push(`第 ${index + 1} 条: IdC 账号的 provider 应为 BuilderId/Enterprise`)
     return { valid: false, errors, type: null }
   }
 
-  // Enterprise 账号不需要额外验证（region 可选，默认 us-east-1）
+  // Enterprise 账号不需要额外校验（region 可选，默认 us-east-1）
 
   return { valid: true, errors: [], type: isSocial ? 'social' : 'idc', inferredProvider: provider }
 }
 
 function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
-  const { t, colors } = useApp()
+  const { t, colors, theme } = useApp()
+  const accent = getThemeAccent(theme)
   const [activeTab, setActiveTab] = useState('json')
+  const [osType, setOsType] = useState('')
   const [jsonText, setJsonText] = useState('')
   const [parseResult, setParseResult] = useState(null)
   const [importing, setImporting] = useState(false)
@@ -89,13 +92,46 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
   const [kiroCliDetecting, setKiroCliDetecting] = useState(false)
   const [kiroCliImporting, setKiroCliImporting] = useState(false)
   const [kiroCliResult, setKiroCliResult] = useState(null)
+  const isWindowsOs = osType === 'windows'
+
+  useEffect(() => {
+    let isMounted = true
+
+    const detectOsType = async () => {
+      try {
+        const info = await invoke('get_system_machine_guid')
+        if (isMounted && info?.osType) {
+          setOsType(info.osType)
+          return
+        }
+      } catch (_) {
+        // ignore and fallback to userAgent detection
+      }
+
+      if (!isMounted) return
+      const userAgent = (navigator.userAgent || '').toLowerCase()
+      if (userAgent.includes('windows')) {
+        setOsType('windows')
+      } else if (userAgent.includes('mac os') || userAgent.includes('macos')) {
+        setOsType('macos')
+      } else if (userAgent.includes('linux')) {
+        setOsType('linux')
+      }
+    }
+
+    detectOsType()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   // 自动检测 kiro-cli 数据库路径
   useEffect(() => {
     if (activeTab === 'kiro-cli' && !kiroCliDbPath) {
       detectKiroCliPath()
     }
-  }, [activeTab])
+  }, [activeTab, kiroCliDbPath])
 
   const detectKiroCliPath = async () => {
     setKiroCliDetecting(true)
@@ -226,7 +262,7 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
             accessToken: item.accessToken || null,
             password: item.password || null,
             startUrl: item.startUrl || null,  // Enterprise 可能需要
-            clientIdHash: item.clientIdHash || null  // Enterprise 可以用 clientIdHash 代替 startUrl
+            clientIdHash: item.clientIdHash || null  // Enterprise 可用 clientIdHash 替代 startUrl
           }
 
           result = await invoke('add_account_by_idc', params)
@@ -395,7 +431,7 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }) {
 
     {result.updated && result.updated.length > 0 && (
       <Alert icon={<CheckCircle size={20} />} color="blue" variant="light">
-        <div className={`font-medium ${colors.text}`}>🔄 更新 {result.updated.length} 个账号</div>
+        <div className={`font-medium ${colors.text}`}>📝 更新 {result.updated.length} 个账号</div>
         {result.updated.length > 0 && (
           <div className={`text-sm mt-2 ${colors.text}`}>{result.updated.map(s => s.email).join(', ')}</div>
         )}
@@ -420,8 +456,8 @@ return (
     <DialogContent maxWidth="700px">
       <DialogHeader>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10 flex items-center justify-center shadow-md">
-            <Upload size={20} className="text-indigo-400" strokeWidth={2} />
+          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} flex items-center justify-center shadow-md ${accent.shadow}`}>
+            <Upload size={20} className="text-white" strokeWidth={2} />
           </div>
           <div>
             <DialogTitle>{t('import.title')}</DialogTitle>
@@ -442,7 +478,11 @@ return (
                 variant="light"
               >
                 <div className={`text-sm font-medium ${colors.text}`}>
-                  {kiroCliResult.success ? `成功导入 ${kiroCliResult.count} 个账号` : '导入失败'}
+                  {kiroCliResult.success
+                    ? (kiroCliResult.isNew
+                      ? `✅ 新增账号: ${kiroCliResult.email}`
+                      : `📝 更新账号: ${kiroCliResult.email}`)
+                    : '❌ 导入失败'}
                 </div>
                 {kiroCliResult.error && (
                   <div className={`text-xs mt-1 ${colors.textMuted}`}>{kiroCliResult.error}</div>
@@ -485,10 +525,9 @@ return (
                 <button
                   onClick={() => setActiveTab('json')}
                   className={`py-2 px-3 text-sm rounded-lg transition-all duration-200 font-medium ${activeTab === 'json'
-                      ? `${colors.card} shadow-sm ring-1 ${colors.ringColor}`
-                      : colors.cardHover
+                      ? `${colors.card} shadow-sm ring-1 ${colors.ringColor} ${colors.text}`
+                      : `${colors.cardHover} ${colors.textMuted}`
                     }`}
-                  style={{ color: activeTab === 'json' ? undefined : 'rgb(229, 231, 235)' }}
                 >
                   <div className="flex items-center justify-center gap-2">
                     <FileJson size={16} />
@@ -498,27 +537,25 @@ return (
                 <button
                   onClick={() => setActiveTab('kiro')}
                   className={`py-2 px-3 text-sm rounded-lg transition-all duration-200 font-medium ${activeTab === 'kiro'
-                      ? `${colors.card} shadow-sm ring-1 ${colors.ringColor}`
-                      : colors.cardHover
+                      ? `${colors.card} shadow-sm ring-1 ${colors.ringColor} ${colors.text}`
+                      : `${colors.cardHover} ${colors.textMuted}`
                     }`}
-                  style={{ color: activeTab === 'kiro' ? undefined : 'rgb(229, 231, 235)' }}
                 >
                   <div className="flex items-center justify-center gap-2">
                     <Database size={16} />
-                    <span>从 Kiro 导入</span>
+                    <span>{t('import.kiroTab')}</span>
                   </div>
                 </button>
                 <button
                   onClick={() => setActiveTab('kiro-cli')}
                   className={`py-2 px-3 text-sm rounded-lg transition-all duration-200 font-medium ${activeTab === 'kiro-cli'
-                      ? `${colors.card} shadow-sm ring-1 ${colors.ringColor}`
-                      : colors.cardHover
+                      ? `${colors.card} shadow-sm ring-1 ${colors.ringColor} ${colors.text}`
+                      : `${colors.cardHover} ${colors.textMuted}`
                     }`}
-                  style={{ color: activeTab === 'kiro-cli' ? undefined : 'rgb(229, 231, 235)' }}
                 >
                   <div className="flex items-center justify-center gap-2">
                     <Database size={16} />
-                    <span>从 kiro-cli 导入</span>
+                    <span>{t('import.kiroCliTab')}</span>
                   </div>
                 </button>
               </div>
@@ -589,7 +626,7 @@ return (
                 {kiroLoading ? (
                   <div className={`p-5 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder}`}>
                     <div className="flex items-center gap-3">
-                      <Loader2 size={20} className="animate-spin text-blue-500" />
+                      <Loader2 size={20} className={`animate-spin ${accent.text}`} />
                       <div className={`text-sm ${colors.text}`}>正在检测 Kiro IDE 账号...</div>
                     </div>
                   </div>
@@ -650,29 +687,41 @@ return (
             <Tabs.Panel value="kiro-cli" pt="md" className="px-6 pb-4">
               <Stack gap="lg">
                 <Alert color="violet" variant="light">
-                  <div className={`text-sm font-medium ${colors.text}`}>从 kiro-cli 数据库导入账号</div>
+                  <div className={`text-sm font-medium ${colors.text}`}>{t('import.kiroCliTitle')}</div>
                   <div className={`text-xs mt-1 ${colors.textMuted}`}>
-                    读取 kiro-cli 的 SQLite 数据库（~/.local/share/kiro-cli/data.sqlite3）
+                    {t('import.kiroCliHint')}
+                  </div>
+                  <div className={`text-xs mt-1 ${colors.textMuted}`}>
+                    {t('import.kiroCliInstallPrefix')} <code>{t('import.kiroCliInstallCommand')}</code>
                   </div>
                 </Alert>
+
+                {isWindowsOs && (
+                  <Alert icon={<AlertCircle size={16} />} color="orange" variant="light">
+                    <div className={`text-sm font-medium ${colors.text}`}>{t('import.kiroCliWindowsWslTitle')}</div>
+                    <div className={`text-xs mt-1 ${colors.textMuted}`}>
+                      {t('import.kiroCliWindowsWslHint')}
+                    </div>
+                  </Alert>
+                )}
 
                 {kiroCliDetecting ? (
                   <div className={`p-5 rounded-xl ${colors.cardSecondary} border ${colors.cardBorder}`}>
                     <div className="flex items-center gap-3">
-                      <Loader2 size={20} className="animate-spin text-violet-500" />
-                      <div className={`text-sm ${colors.text}`}>正在检测 kiro-cli 数据库...</div>
+                      <Loader2 size={20} className={`animate-spin ${accent.text}`} />
+                      <div className={`text-sm ${colors.text}`}>{t('import.kiroCliDetecting')}</div>
                     </div>
                   </div>
                 ) : kiroCliDetected ? (
                   <Alert icon={<CheckCircle size={16} />} color="teal" variant="light">
-                    <div className={`text-sm font-medium ${colors.text}`}>检测到 kiro-cli 数据库</div>
+                    <div className={`text-sm font-medium ${colors.text}`}>{t('import.kiroCliDetected')}</div>
                     <div className={`text-xs mt-1 ${colors.textMuted}`}>{kiroCliDbPath}</div>
                   </Alert>
                 ) : (
                   <Alert icon={<AlertCircle size={16} />} color="gray" variant="light">
-                    <div className={`text-sm ${colors.text}`}>未检测到 kiro-cli 数据库</div>
+                    <div className={`text-sm ${colors.text}`}>{t('import.kiroCliNotDetected')}</div>
                     <div className={`text-xs mt-1 ${colors.textMuted}`}>
-                      请手动输入数据库路径或浏览选择
+                      {t('import.kiroCliPathHintManual')}
                     </div>
                   </Alert>
                 )}
@@ -681,7 +730,7 @@ return (
                   <Stack gap="md">
                     <div>
                       <label className={`text-sm font-medium ${colors.text} block mb-2`}>
-                        数据库路径
+                        {t('import.kiroCliPathLabel')}
                       </label>
                       <div className="flex gap-2">
                         <input
@@ -691,7 +740,7 @@ return (
                             setKiroCliDbPath(e.target.value)
                             setKiroCliDetected(false)
                           }}
-                          placeholder="~/.local/share/kiro-cli/data.sqlite3"
+                          placeholder={t('import.kiroCliPathPlaceholder')}
                           className={`flex-1 px-4 py-3 border rounded-xl ${colors.text} ${colors.input} ${colors.inputFocus} focus:ring-2 transition-all`}
                         />
                         <FileButton
@@ -709,13 +758,13 @@ return (
                               variant="light"
                               className="px-4"
                             >
-                              浏览
+                              {t('import.browse')}
                             </MantineButton>
                           )}
                         </FileButton>
                       </div>
                       <div className={`text-xs mt-1 ${colors.textMuted}`}>
-                        {kiroCliDetected ? '已自动检测到数据库路径' : '请手动输入或浏览选择数据库文件'}
+                        {kiroCliDetected ? t('import.kiroCliPathHintDetected') : t('import.kiroCliPathHintManual')}
                       </div>
                     </div>
 
@@ -728,8 +777,8 @@ return (
                         <div className={`text-sm font-medium ${colors.text}`}>
                           {kiroCliResult.success 
                             ? (kiroCliResult.isNew 
-                                ? `✅ 新增账号: ${kiroCliResult.email}` 
-                                : `🔄 更新账号: ${kiroCliResult.email}`)
+                                ? `✅ 新增账号: ${kiroCliResult.email}`
+                                : `📝 更新账号: ${kiroCliResult.email}`)
                             : '❌ 导入失败'}
                         </div>
                         {kiroCliResult.error && (
@@ -856,3 +905,5 @@ return (
 }
 
 export default ImportAccountModal
+
+

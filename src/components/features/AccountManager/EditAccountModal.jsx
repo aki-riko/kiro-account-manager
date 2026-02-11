@@ -8,6 +8,7 @@ import { setAccountTags, setAccountGroup, getGroups, addGroup } from '../../../a
 import { getAccountDisplayName } from '../../../utils/accountStats'
 import { TagSelector } from './GroupTagManager'
 import { TokenJsonView } from './TokenJsonView'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 import {
   DialogRoot,
   DialogContent,
@@ -25,7 +26,8 @@ const PRESET_COLORS = [
 ]
 
 function GroupSelector({ groups, value, onChange, onGroupsChange }) {
-  const { t, colors } = useApp()
+  const { t, colors, theme } = useApp()
+  const accent = getThemeAccent(theme)
   const [newGroupName, setNewGroupName] = useState('')
   const [showInput, setShowInput] = useState(false)
 
@@ -62,7 +64,7 @@ function GroupSelector({ groups, value, onChange, onGroupsChange }) {
         <button
           onClick={handleAddGroup}
           disabled={!newGroupName.trim()}
-          className="p-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 disabled:opacity-50"
+          className={`p-2.5 ${accent.solidBg} text-white rounded-xl ${accent.solidHoverBg} disabled:opacity-50`}
         >
           <Check size={16} />
         </button>
@@ -90,7 +92,7 @@ function GroupSelector({ groups, value, onChange, onGroupsChange }) {
       </select>
       <button
         onClick={() => setShowInput(true)}
-        className="p-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600"
+        className={`p-2.5 ${accent.solidBg} text-white rounded-xl ${accent.solidHoverBg}`}
       >
         <Plus size={16} />
       </button>
@@ -99,7 +101,8 @@ function GroupSelector({ groups, value, onChange, onGroupsChange }) {
 }
 
 function EditAccountModal({ account, onClose, onSuccess }) {
-  const { t, colors } = useApp()
+  const { t, colors, theme } = useApp()
+  const accent = getThemeAccent(theme)
   const { showError } = useDialog()
   
   const [form, setForm] = useState({
@@ -148,7 +151,7 @@ function EditAccountModal({ account, onClose, onSuccess }) {
   return (
     <DialogRoot open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent maxWidth="480px">
-        <DialogHeader icon={Folder} iconColor="text-emerald-400" iconBg="bg-gradient-to-br from-emerald-500/20 to-teal-500/10">
+        <DialogHeader icon={Folder} iconColor={accent.text} iconBg={accent.iconBadgeBg}>
           <DialogTitle>{t('editAccount.title')}</DialogTitle>
           <DialogDescription>{getAccountDisplayName(account)}</DialogDescription>
         </DialogHeader>

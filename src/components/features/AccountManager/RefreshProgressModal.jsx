@@ -1,8 +1,10 @@
 import { RefreshCw } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 function RefreshProgressModal({ refreshProgress }) {
-  const { t, colors } = useApp()
+  const { t, colors, theme } = useApp()
+  const accent = getThemeAccent(theme)
 
   if (!refreshProgress || refreshProgress.total === 0) return null
 
@@ -13,17 +15,17 @@ function RefreshProgressModal({ refreshProgress }) {
         style={{ animation: 'modalBounceIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
       >
         <div className={`px-5 py-4 border-b ${colors.cardBorder} ${colors.cardSecondary} flex items-center gap-2`}>
-          <RefreshCw size={18} className="text-blue-500 animate-spin" />
+          <RefreshCw size={18} className={`${accent.text} animate-spin`} />
           <h2 className={`font-semibold ${colors.text}`}>{t('refresh.title')}</h2>
         </div>
         <div className="p-5 space-y-4">
           <div>
             <div className={`flex justify-between text-sm mb-2`}>
               <span className={colors.textMuted}>{t('refresh.progress')}</span>
-              <span className="text-blue-500 font-medium">{refreshProgress.current}/{refreshProgress.total}</span>
+              <span className={`${accent.text} font-medium`}>{refreshProgress.current}/{refreshProgress.total}</span>
             </div>
             <div className={`h-2 ${colors.cardSecondary} rounded-full overflow-hidden`}>
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(refreshProgress.current / refreshProgress.total) * 100}%` }} />
+              <div className={`h-full ${accent.solidBg} rounded-full`} style={{ width: `${(refreshProgress.current / refreshProgress.total) * 100}%` }} />
             </div>
           </div>
           {refreshProgress.currentEmail && (

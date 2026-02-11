@@ -4,6 +4,7 @@ import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { getTags, setAccountTags } from '../../../api/groupTag'
 import { invoke } from '@tauri-apps/api/core'
+import { getThemeAccent, getGradientAccentButton } from '../KiroConfig/themeAccent'
 import {
   DialogRoot,
   DialogContent,
@@ -21,7 +22,9 @@ const PRESET_COLORS = [
 ]
 
 function BatchTagModal({ accountIds, accounts = [], onClose, onSuccess }) {
-  const { t, colors } = useApp()
+  const { t, colors, theme } = useApp()
+  const accent = getThemeAccent(theme)
+  const accentGradientButtonClass = getGradientAccentButton(accent)
   const { showError } = useDialog()
   
   const [tags, setTags] = useState([])
@@ -117,7 +120,7 @@ function BatchTagModal({ accountIds, accounts = [], onClose, onSuccess }) {
   return (
     <DialogRoot open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent maxWidth="480px">
-        <DialogHeader icon={Tag} iconColor="text-purple-400" iconBg="bg-gradient-to-br from-purple-500/20 to-pink-500/10">
+        <DialogHeader icon={Tag} iconColor={accent.text} iconBg={accent.iconBadgeBg}>
           <DialogTitle>{t('tags.batchSet')}</DialogTitle>
           <DialogDescription>{accountIds.length} 个账号</DialogDescription>
         </DialogHeader>
@@ -194,7 +197,7 @@ function BatchTagModal({ accountIds, accounts = [], onClose, onSuccess }) {
                 type="button" 
                 onClick={handleAddTag} 
                 disabled={!newTagName.trim()}
-                className="px-4 py-3 bg-purple-500 text-white rounded-xl text-sm hover:bg-purple-600 disabled:opacity-50 transition-all shadow-lg shadow-purple-500/30 hover:shadow-xl disabled:shadow-none"
+                className={`px-4 py-3 ${accent.solidBg} text-white rounded-xl text-sm ${accent.solidHoverBg} disabled:opacity-50 transition-all shadow-lg ${accent.shadow} hover:shadow-xl disabled:shadow-none`}
                 title={t('tags.addTag')}
               >
                 <Plus size={18} />
@@ -212,10 +215,7 @@ function BatchTagModal({ accountIds, accounts = [], onClose, onSuccess }) {
             onClick={handleSubmit}
             disabled={loading}
             loading={loading}
-            style={{
-              background: 'linear-gradient(to right, rgb(168, 85, 247), rgb(236, 72, 153))',
-              boxShadow: '0 10px 15px -3px rgba(168, 85, 247, 0.3)'
-            }}
+            className={accentGradientButtonClass}
           >
             {loading ? t('common.saving') : t('common.confirm')}
           </Button>

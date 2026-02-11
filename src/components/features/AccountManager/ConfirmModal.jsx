@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle, XCircle, Info, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 import {
   DialogRoot,
   DialogContent,
@@ -33,7 +34,8 @@ function ConfirmModal({
   cancelText,
   loading = false,
 }) {
-  const { t, colors } = useApp()
+  const { t, colors, theme } = useApp()
+  const accent = getThemeAccent(theme)
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
   
@@ -62,8 +64,8 @@ function ConfirmModal({
     },
     info: {
       icon: Info,
-      iconColor: 'text-blue-400',
-      iconBg: 'bg-gradient-to-br from-blue-500/20 to-indigo-500/10',
+      iconColor: accent.text,
+      iconBg: accent.iconBadgeBg,
       btnVariant: 'primary',
     },
   }
@@ -87,7 +89,7 @@ function ConfirmModal({
             <div className="mt-4">
               <button
                 onClick={() => setExpanded(!expanded)}
-                className={`flex items-center gap-1.5 text-xs ${colors.textMuted} hover:text-blue-500 transition-colors`}
+                className={`flex items-center gap-1.5 text-xs ${colors.textMuted} ${accent.textHover} transition-colors`}
               >
                 {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 {expanded ? '收起原始响应' : '查看原始响应'}
