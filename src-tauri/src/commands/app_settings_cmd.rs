@@ -18,6 +18,10 @@ pub struct AppSettings {
     pub bind_machine_id_to_account: Option<bool>,  // true=绑定模式（每个账号固定机器码），false=随机模式
     // 隐私模式：脱敏显示邮箱
     pub privacy_mode: Option<bool>,
+    // 自动换号设置
+    pub auto_switch_enabled: Option<bool>,
+    pub auto_switch_threshold: Option<f64>,
+    pub auto_switch_interval: Option<i32>,
     // Kiro IDE 开关设置（用户偏好）
     pub enable_codebase_indexing: Option<bool>,
     pub enable_tab_autocomplete: Option<bool>,
@@ -28,6 +32,14 @@ pub struct AppSettings {
     pub notify_failure: Option<bool>,
     pub notify_success: Option<bool>,
     pub notify_billing: Option<bool>,
+    // 新增 Kiro IDE 设置
+    pub trusted_tools: Option<Vec<String>>,
+    pub reference_tracker: Option<bool>,
+    pub configure_mcp: Option<String>,
+    pub telemetry_content_collection: Option<bool>,
+    pub telemetry_usage_analytics: Option<bool>,
+    pub telemetry_edit_stats: Option<bool>,
+    pub telemetry_feedback: Option<bool>,
 }
 
 // 兼容旧配置文件中的 redeem_server 字段（已废弃）
@@ -46,6 +58,10 @@ impl Default for AppSettings {
             browser_path: None,
             bind_machine_id_to_account: Some(true),
             privacy_mode: Some(true),  // 默认开启
+            // 自动换号默认值
+            auto_switch_enabled: Some(false),
+            auto_switch_threshold: Some(1.0),
+            auto_switch_interval: Some(5),
             // Kiro IDE 开关默认值
             enable_codebase_indexing: Some(true),
             enable_tab_autocomplete: Some(true),
@@ -56,6 +72,13 @@ impl Default for AppSettings {
             notify_failure: Some(true),
             notify_success: Some(true),
             notify_billing: Some(true),
+            trusted_tools: None,
+            reference_tracker: Some(false),
+            configure_mcp: Some("Enabled".to_string()),
+            telemetry_content_collection: Some(false),
+            telemetry_usage_analytics: Some(false),
+            telemetry_edit_stats: Some(false),
+            telemetry_feedback: Some(false),
         }
     }
 }
@@ -112,7 +135,12 @@ fn save_app_settings_inner(updates: AppSettings) -> Result<(), String> {
     if updates.browser_path.is_some() { current.browser_path = updates.browser_path; }
     if updates.bind_machine_id_to_account.is_some() { current.bind_machine_id_to_account = updates.bind_machine_id_to_account; }
     if updates.privacy_mode.is_some() { current.privacy_mode = updates.privacy_mode; }
-    
+
+    // 自动换号设置
+    if updates.auto_switch_enabled.is_some() { current.auto_switch_enabled = updates.auto_switch_enabled; }
+    if updates.auto_switch_threshold.is_some() { current.auto_switch_threshold = updates.auto_switch_threshold; }
+    if updates.auto_switch_interval.is_some() { current.auto_switch_interval = updates.auto_switch_interval; }
+
     // Kiro IDE 开关设置
     if updates.enable_codebase_indexing.is_some() { current.enable_codebase_indexing = updates.enable_codebase_indexing; }
     if updates.enable_tab_autocomplete.is_some() { current.enable_tab_autocomplete = updates.enable_tab_autocomplete; }
@@ -123,6 +151,13 @@ fn save_app_settings_inner(updates: AppSettings) -> Result<(), String> {
     if updates.notify_failure.is_some() { current.notify_failure = updates.notify_failure; }
     if updates.notify_success.is_some() { current.notify_success = updates.notify_success; }
     if updates.notify_billing.is_some() { current.notify_billing = updates.notify_billing; }
+    if updates.trusted_tools.is_some() { current.trusted_tools = updates.trusted_tools; }
+    if updates.reference_tracker.is_some() { current.reference_tracker = updates.reference_tracker; }
+    if updates.configure_mcp.is_some() { current.configure_mcp = updates.configure_mcp; }
+    if updates.telemetry_content_collection.is_some() { current.telemetry_content_collection = updates.telemetry_content_collection; }
+    if updates.telemetry_usage_analytics.is_some() { current.telemetry_usage_analytics = updates.telemetry_usage_analytics; }
+    if updates.telemetry_edit_stats.is_some() { current.telemetry_edit_stats = updates.telemetry_edit_stats; }
+    if updates.telemetry_feedback.is_some() { current.telemetry_feedback = updates.telemetry_feedback; }
     
     save_settings_to_file(&current)
 }

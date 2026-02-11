@@ -2,6 +2,7 @@
 
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
 
+use crate::cmd_output::decode_cmd_output;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,7 +29,7 @@ fn detect_tun_mode() -> (bool, Option<String>) {
         .output();
     
     if let Ok(output) = output {
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let stdout = decode_cmd_output(&output.stdout).trim().to_string();
         if !stdout.is_empty() {
             // 取第一个活跃的 TUN 网卡
             if let Some(name) = stdout.lines().next() {
@@ -43,7 +44,7 @@ fn detect_tun_mode() -> (bool, Option<String>) {
         .output();
     
     if let Ok(output) = output {
-        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stdout = decode_cmd_output(&output.stdout);
         
         // 排除常见物理网卡名
         let physical_names = ["以太网", "ethernet", "wlan", "wi-fi", "bluetooth", "蓝牙", "本地连接"];
