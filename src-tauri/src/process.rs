@@ -1,5 +1,6 @@
 // 进程管理相关功能
 
+use crate::cmd_output::decode_cmd_output;
 use std::process::Command;
 
 #[cfg(target_os = "windows")]
@@ -17,7 +18,7 @@ pub fn check_kiro_running() -> bool {
         .output();
     
     match output {
-        Ok(out) => String::from_utf8_lossy(&out.stdout).contains("Kiro.exe"),
+        Ok(out) => decode_cmd_output(&out.stdout).contains("Kiro.exe"),
         Err(_) => false
     }
 }
@@ -70,7 +71,7 @@ pub fn kill_kiro() -> Result<(), String> {
         .map_err(|e| format!("Failed to execute taskkill: {e}"))?;
     
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = decode_cmd_output(&output.stderr);
         if !stderr.contains("not found") && !stderr.contains("没有找到") {
             return Err(format!("Failed to close Kiro IDE: {stderr}"));
         }

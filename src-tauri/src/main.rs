@@ -19,7 +19,11 @@ mod process;
 mod providers;
 mod state;
 mod steering;
+mod skills;
+mod custom_agents;
+mod powers;
 mod account;
+mod cmd_output;
 
 use account::{AccountStore, GroupTagStore};
 use auth::AuthState;
@@ -48,7 +52,8 @@ use commands::auth_cmd::{get_current_user, logout, kiro_login, get_supported_pro
 use commands::kiro_settings_cmd::{
     get_kiro_settings, set_kiro_proxy, set_kiro_model, set_kiro_codebase_indexing, set_kiro_trusted_commands,
     set_kiro_agent_autonomy, set_kiro_tab_autocomplete, set_kiro_usage_summary, set_kiro_code_references,
-    set_kiro_debug_logs, set_kiro_notification
+    set_kiro_debug_logs, set_kiro_notification,
+    set_kiro_trusted_tools, set_kiro_reference_tracker, set_kiro_configure_mcp, set_kiro_telemetry
 };
 use commands::machine_guid::{
     get_system_machine_guid, backup_machine_guid, restore_machine_guid, reset_system_machine_guid,
@@ -60,6 +65,9 @@ use commands::kiro_cli_cmd::{get_kiro_cli_default_path, import_from_kiro_cli};
 use commands::proxy_cmd::detect_system_proxy;
 use commands::update_cmd::check_update;
 use commands::steering_cmd::{get_steering_files, get_steering_file, save_steering_file, delete_steering_file, create_steering_file};
+use commands::skills_cmd::{get_skills, get_skill, save_skill, delete_skill, create_skill};
+use commands::custom_agents_cmd::{get_custom_agents, get_custom_agent, save_custom_agent, delete_custom_agent, create_custom_agent};
+use commands::powers_cmd::{get_powers, get_power, install_power, uninstall_power, get_power_registries, get_recommended_powers};
 use kiro::{
     get_kiro_local_token, switch_kiro_account, read_kiro_accounts,
 };
@@ -238,6 +246,10 @@ fn main() {
             set_kiro_code_references,
             set_kiro_debug_logs,
             set_kiro_notification,
+            set_kiro_trusted_tools,
+            set_kiro_reference_tracker,
+            set_kiro_configure_mcp,
+            set_kiro_telemetry,
             // 应用设置命令
             get_app_settings,
             save_app_settings,
@@ -277,7 +289,26 @@ fn main() {
             get_steering_file,
             save_steering_file,
             delete_steering_file,
-            create_steering_file
+            create_steering_file,
+            // Skills 管理命令
+            get_skills,
+            get_skill,
+            save_skill,
+            delete_skill,
+            create_skill,
+            // Custom Agents 管理命令
+            get_custom_agents,
+            get_custom_agent,
+            save_custom_agent,
+            delete_custom_agent,
+            create_custom_agent,
+            // Powers 管理命令
+            get_powers,
+            get_power,
+            install_power,
+            uninstall_power,
+            get_power_registries,
+            get_recommended_powers
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
