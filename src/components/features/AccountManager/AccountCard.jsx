@@ -6,6 +6,7 @@ import { useTheme } from '../../../contexts/ThemeContext'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { getUsagePercent, getProgressBarColor } from './hooks/useAccountStats'
 import { getQuota, getUsed, getSubType, getSubPlan, formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 const AccountCard = memo(function AccountCard({
   account,
@@ -24,9 +25,11 @@ const AccountCard = memo(function AccountCard({
   tagDefinitions = [],
   groupDefinitions = [],
   onContextMenuOpen,
+  index = 0,
 }) {
   const { t } = useTranslation()
   const { theme, colors } = useTheme()
+  const accent = getThemeAccent(theme)
   const { maskEmail } = usePrivacy()
   
   // 从 Set 中计算是否选中
@@ -68,8 +71,8 @@ const AccountCard = memo(function AccountCard({
   return (
     <div
       onContextMenu={handleContextMenu}
-      className={`relative rounded-2xl border hover:shadow-lg flex flex-col min-h-[240px] ${glowColor} ${
-      isSelected 
+      className={`relative rounded-2xl border hover:shadow-lg flex flex-col min-h-[240px] animate-stagger transition-all duration-300 ${glowColor} ${
+      isSelected
         ? colors.cardSelected
         : isCurrentAccount
           ? colors.cardCurrent
@@ -79,6 +82,7 @@ const AccountCard = memo(function AccountCard({
               ? colors.cardWarning
               : colors.cardNormal
     }`}
+      style={{ animationDelay: `${Math.min(index, 20) * 30}ms` }}
     >
       {/* 选择框 */}
       <div className="absolute top-3 left-3 z-10">
@@ -139,11 +143,11 @@ const AccountCard = memo(function AccountCard({
             (subType.includes('ENTERPRISE') || subPlan.toUpperCase().includes('ENTERPRISE'))
               ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
               : (subType.includes('PRO+') || subPlan.includes('PRO+'))
-                ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                ? `bg-gradient-to-r ${accent.gradientFrom} ${accent.gradientTo} text-white`
                 : (subType.includes('PRO') || subPlan.includes('PRO'))
-                  ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white'
+                  ? `${accent.solidBg} text-white`
                   : (subPlan.toUpperCase().includes('KIRO'))
-                    ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white'
+                    ? `${accent.bgSoft} ${accent.text}`
                     : colors.badgeDisabled
           }`}>
             {subPlan || 'Free'}

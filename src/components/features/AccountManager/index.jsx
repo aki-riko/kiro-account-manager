@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { Upload } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { useAccounts } from './hooks/useAccounts'
@@ -9,6 +10,7 @@ import { applyFilters } from './utils/filterUtils'
 import { cn } from '../../../utils/cn'
 import { showSuccess, showError } from '../../../utils/toast.jsx'
 import { getAccountDisplayName } from '../../../utils/accountStats'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 import AccountHeader from './AccountHeader'
 import AccountTable from './AccountTable'
 import AccountListView from './AccountListView'
@@ -21,7 +23,8 @@ import ConfirmModal from './ConfirmModal'
 import { AccountListSkeleton, AccountTableSkeleton } from '../../shared/Skeleton'
 
 function AccountManager({ onNavigate }) {
-  const { t, colors } = useApp()
+  const { t, colors, theme } = useApp()
+  const accent = getThemeAccent(theme)
   const { showConfirm } = useDialog()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
@@ -262,8 +265,13 @@ function AccountManager({ onNavigate }) {
     setViewMode(mode)
     localStorage.setItem('accountViewMode', mode)
   }, [])
-  const handleSelectAll = useCallback((checked) => { setSelectedIds(checked ? filteredAccounts.map(a => a.id) : []) }, [filteredAccounts])
-  const handleSelectOne = useCallback((id, checked) => { setSelectedIds(prev => checked ? [...prev, id] : prev.filter(i => i !== id)) }, [])
+  const handleSelectAll = useCallback((checked) => {
+    setSelectedIds(checked ? filteredAccounts.map(a => a.id) : [])
+  }, [filteredAccounts])
+
+  const handleSelectOne = useCallback((id, checked) => {
+    setSelectedIds(prev => checked ? [...prev, id] : prev.filter(i => i !== id))
+  }, [])
   const handleCopy = useCallback((text, id) => { 
     navigator.clipboard.writeText(text).catch(e => console.error('Copy failed:', e))
     setCopiedId(id)
@@ -376,10 +384,39 @@ function AccountManager({ onNavigate }) {
         onViewModeChange={handleViewModeChange}
         advancedFilters={advancedFilters}
         onAdvancedFiltersChange={setAdvancedFilters}
+        totalCount={filteredAccounts.length}
+        onSelectAll={handleSelectAll}
       />
       <div className="flex-1 flex flex-col min-h-0">
       {loading ? (
         viewMode === 'card' ? <AccountListSkeleton count={8} /> : <AccountTableSkeleton count={8} />
+      ) : filteredAccounts.length === 0 ? (
+        <div className={`flex-1 flex items-center justify-center ${colors.main}`}>
+          <div className="text-center max-w-md px-6">
+            <div className={`w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} flex items-center justify-center shadow-lg ${accent.shadow} animate-float`}>
+              <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
+                <path d="M20 4C12 4 6 10 6 18C6 22 8 25 8 25C8 25 7 28 7 30C7 32 8 34 10 34C11 34 12 33 13 32C14 33 16 34 20 34C24 34 26 33 27 32C28 33 29 34 30 34C32 34 33 32 33 30C33 28 32 25 32 25C32 25 34 22 34 18C34 10 28 4 20 4ZM14 20C12.5 20 11 18.5 11 17C11 15.5 12.5 14 14 14C15.5 14 17 15.5 17 17C17 18.5 15.5 20 14 20ZM26 20C24.5 20 23 18.5 23 17C23 15.5 24.5 14 26 14C27.5 14 29 15.5 29 17C29 18.5 27.5 20 26 20Z" fill="white"/>
+              </svg>
+            </div>
+            <h3 className={`text-xl font-bold ${colors.text} mb-2`}>
+              {searchTerm || selectedGroup || selectedTag || selectedStatus ? '没有找到匹配的账号' : '还没有账号'}
+            </h3>
+            <p className={`text-sm ${colors.textMuted} mb-6`}>
+              {searchTerm || selectedGroup || selectedTag || selectedStatus
+                ? '试试调整筛选条件或搜索关键词'
+                : '导入账号开始管理你的 Kiro IDE 账户'}
+            </p>
+            {!searchTerm && !selectedGroup && !selectedTag && !selectedStatus && (
+              <button
+                onClick={() => setShowImportModal(true)}
+                className={`px-6 py-3 rounded-xl text-sm font-medium text-white bg-gradient-to-r ${accent.gradientFrom} ${accent.gradientTo} shadow-lg ${accent.shadow} hover:shadow-xl transition-all duration-200 hover:scale-105 flex items-center gap-2 mx-auto`}
+              >
+                <Upload size={18} />
+                导入账号
+              </button>
+            )}
+          </div>
+        </div>
       ) : viewMode === 'card' ? (
         <AccountTable
           accounts={filteredAccounts}

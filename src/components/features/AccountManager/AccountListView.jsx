@@ -6,6 +6,7 @@ import { useApp } from '../../../hooks/useApp'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { getQuota, getUsed, formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
 import ContextMenu from './ContextMenu'
+import { getThemeAccent, isLightTheme as checkIsLightTheme } from '../KiroConfig/themeAccent'
 
 // 单行组件
 const ListRow = memo(function ListRow({
@@ -45,9 +46,10 @@ const ListRow = memo(function ListRow({
   ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onSwitch, onDelete, onDeleteRemote, isRefreshing, isSwitching, isBanned])
 
   return (
-    <div 
+    <div
       onContextMenu={handleContextMenu}
-      className={`flex items-center gap-3 px-4 h-[56px] border-b ${colors.cardBorder} ${isCurrent ? colors.cardCurrent : ''} ${colors.cardHover} cursor-context-menu`}
+      className={`flex items-center gap-3 px-4 h-[56px] border-b ${colors.cardBorder} ${isCurrent ? colors.cardCurrent : ''} ${colors.cardHover} cursor-context-menu animate-stagger`}
+      style={{ animationDelay: `${Math.min(account._index || 0, 20) * 30}ms` }}
     >
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)} items={getMenuItems()} isLightTheme={isLightTheme} />
@@ -173,8 +175,9 @@ function AccountListView({
   accounts, totalCount, selectedIds, selectedIdsSet, onSelectAll, onSelectOne, onSwitch, onRefresh, onEdit, onEditLabel, onDelete, onDeleteRemote, onCopy, onAdd, refreshingId, switchingId, localToken, tagDefinitions = [], groupDefinitions = [], copiedId, sortBy, onSortChange,
 }) {
   const { t, theme, colors } = useApp()
+  const accent = getThemeAccent(theme)
   const { maskEmail } = usePrivacy()
-  const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+  const isLightTheme = checkIsLightTheme(theme)
   const scrollRef = useRef(null)
 
   // 优化：如果父组件传递了 selectedIdsSet，直接使用；否则创建
@@ -250,12 +253,12 @@ function AccountListView({
         <div className="w-48">邮箱</div>
         <div className="w-20 text-center">账号类型</div>
         <div className="w-20 text-center">订阅类型</div>
-        <div className="w-24 cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('usage')}>
+        <div className={`w-24 cursor-pointer ${accent.text} select-none`} onClick={() => handleSort('usage')}>
           配额<SortIcon field="usage" />
         </div>
         <div className="w-12 text-center">状态</div>
         <div className="w-14 text-center text-red-500">机器码</div>
-        <div className="w-28 cursor-pointer hover:text-blue-500 select-none" onClick={() => handleSort('trial')}>
+        <div className={`w-28 cursor-pointer ${accent.text} select-none`} onClick={() => handleSort('trial')}>
           token|试用过期<SortIcon field="trial" />
         </div>
         <div className="w-16">分组</div>
