@@ -4,9 +4,11 @@ import { listen } from '@tauri-apps/api/event'
 import { Loader, ArrowRight } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import { Button } from '../ui/button'
+import { getThemeAccent } from './KiroConfig/themeAccent'
 
 function Login({ onLogin }) {
-  const { t, colors } = useApp()
+  const { t, colors, theme } = useApp()
+  const accent = getThemeAccent(theme)
   const [loadingProvider, setLoadingProvider] = useState(null)
   const [error, setError] = useState('')
   const [showEnterpriseModal, setShowEnterpriseModal] = useState(false)
@@ -113,7 +115,7 @@ function Login({ onLogin }) {
       id: 'Github',
       name: 'GitHub',
       icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" className={colors.text}>
           <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
         </svg>
       ),
@@ -135,19 +137,19 @@ function Login({ onLogin }) {
   ]
 
   return (
-    <div className="h-full flex flex-col items-center justify-center bg-black relative overflow-hidden">
+    <div className={`h-full flex flex-col items-center justify-center ${colors.main} relative overflow-hidden`}>
       <div className="relative z-10 w-full flex flex-col items-center px-8">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3" style={{ marginBottom: '50px' }}>
-          <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
-            <path d="M20 4C12 4 6 10 6 18C6 22 8 25 8 25C8 25 7 28 7 30C7 32 8 34 10 34C11 34 12 33 13 32C14 33 16 34 20 34C24 34 26 33 27 32C28 33 29 34 30 34C32 34 33 32 33 30C33 28 32 25 32 25C32 25 34 22 34 18C34 10 28 4 20 4ZM14 20C12.5 20 11 18.5 11 17C11 15.5 12.5 14 14 14C15.5 14 17 15.5 17 17C17 18.5 15.5 20 14 20ZM26 20C24.5 20 23 18.5 23 17C23 15.5 24.5 14 26 14C27.5 14 29 15.5 29 17C29 18.5 27.5 20 26 20Z" fill="white"/>
-          </svg>
-          <span 
-            className="text-4xl font-bold text-transparent tracking-wide" 
-            style={{ 
+          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} flex items-center justify-center shadow-lg ${accent.shadow}`}>
+            <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
+              <path d="M20 4C12 4 6 10 6 18C6 22 8 25 8 25C8 25 7 28 7 30C7 32 8 34 10 34C11 34 12 33 13 32C14 33 16 34 20 34C24 34 26 33 27 32C28 33 29 34 30 34C32 34 33 32 33 30C33 28 32 25 32 25C32 25 34 22 34 18C34 10 28 4 20 4ZM14 20C12.5 20 11 18.5 11 17C11 15.5 12.5 14 14 14C15.5 14 17 15.5 17 17C17 18.5 15.5 20 14 20ZM26 20C24.5 20 23 18.5 23 17C23 15.5 24.5 14 26 14C27.5 14 29 15.5 29 17C29 18.5 27.5 20 26 20Z" fill="white"/>
+            </svg>
+          </div>
+          <span
+            className={`text-4xl font-bold ${colors.text} tracking-wide`}
+            style={{
               fontFamily: 'system-ui, -apple-system, sans-serif',
-              WebkitTextStroke: '2px white',
-              textStroke: '2px white'
             }}
           >
             KIRO
@@ -155,13 +157,13 @@ function Login({ onLogin }) {
         </div>
 
         {/* Title */}
-        <h1 className="text-xl font-normal text-gray-300 text-center" style={{ marginBottom: '30px' }}>
+        <h1 className={`text-xl font-normal ${colors.textMuted} text-center`} style={{ marginBottom: '30px' }}>
           Choose a way to sign in/sign up
         </h1>
 
         {/* Error */}
         {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm text-center max-w-[375px]">
+          <div className={`mb-6 p-4 ${colors.error} border ${colors.errorBorder} rounded-xl text-sm text-center max-w-[375px]`}>
             {error}
           </div>
         )}
@@ -175,30 +177,30 @@ function Login({ onLogin }) {
               disabled={!!loadingProvider}
               className={`
                 group w-full h-[68px] px-8 rounded-xl
-                bg-[#252525] border border-[#333]
+                ${colors.card} border-2 ${colors.cardBorder}
                 flex items-center justify-center
                 transition-all duration-200 relative
-                ${loadingProvider === provider.id 
-                  ? 'opacity-50 cursor-not-allowed' 
-                  : 'hover:bg-gradient-to-r hover:from-purple-900/40 hover:to-purple-800/30 hover:border-purple-700/50'
+                ${loadingProvider === provider.id
+                  ? 'opacity-50 cursor-not-allowed'
+                  : `${colors.cardHover} hover:shadow-lg ${accent.hoverBorder}`
                 }
                 ${loadingProvider && loadingProvider !== provider.id ? 'opacity-30' : ''}
               `}
             >
               <div className="flex items-center gap-4">
                 {loadingProvider === provider.id ? (
-                  <Loader size={28} className="text-white animate-spin" />
+                  <Loader size={28} className={accent.text} />
                 ) : (
                   provider.icon
                 )}
-                <span className="text-xl font-normal text-white">
+                <span className={`text-xl font-normal ${colors.text}`}>
                   {provider.name}
                 </span>
               </div>
               {loadingProvider === provider.id ? (
-                <span className="text-sm text-gray-500 absolute right-8">Loading...</span>
+                <span className={`text-sm ${colors.textMuted} absolute right-8`}>Loading...</span>
               ) : (
-                <div className="flex items-center gap-2 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute right-8">
+                <div className={`flex items-center gap-2 ${colors.textMuted} opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute right-8`}>
                   <span className="text-sm">Sign in</span>
                   <ArrowRight size={16} />
                 </div>
@@ -208,21 +210,21 @@ function Login({ onLogin }) {
         </div>
 
         {/* Footer */}
-        <div className="text-xs text-gray-600 text-center leading-relaxed max-w-[500px]" style={{ marginTop: '50px' }}>
+        <div className={`text-xs ${colors.textMuted} text-center leading-relaxed max-w-[500px]`} style={{ marginTop: '50px' }}>
           By signing in and using Kiro, you agree to the{' '}
-          <a href="https://aws.amazon.com/agreement/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+          <a href="https://aws.amazon.com/agreement/" target="_blank" rel="noopener noreferrer" className={`${accent.text} hover:underline`}>
             AWS Customer Agreement
           </a>
           {' '}(or other agreement with us governing your use of AWS services),{' '}
-          <a href="https://aws.amazon.com/service-terms/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+          <a href="https://aws.amazon.com/service-terms/" target="_blank" rel="noopener noreferrer" className={`${accent.text} hover:underline`}>
             Service Terms
           </a>
           ,{' '}
-          <a href="https://aws.amazon.com/privacy/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+          <a href="https://aws.amazon.com/privacy/" target="_blank" rel="noopener noreferrer" className={`${accent.text} hover:underline`}>
             Privacy Notice
           </a>
           , and{' '}
-          <a href="https://aws.amazon.com/legal/aws-ip-license-terms/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+          <a href="https://aws.amazon.com/legal/aws-ip-license-terms/" target="_blank" rel="noopener noreferrer" className={`${accent.text} hover:underline`}>
             AWS Intellectual Property License
           </a>
           .
@@ -307,8 +309,8 @@ function Login({ onLogin }) {
             {/* Header */}
             <div className="px-6 pt-6 pb-2">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-indigo-500/10 flex items-center justify-center">
-                  <Loader size={24} className="text-blue-400 animate-spin" />
+                <div className={`w-12 h-12 rounded-2xl ${accent.iconBadgeBg} flex items-center justify-center`}>
+                  <Loader size={24} className={`${accent.text} animate-spin`} />
                 </div>
                 <h2 className={`text-lg font-semibold ${colors.text}`}>等待授权</h2>
               </div>

@@ -7,6 +7,7 @@ import { useApp } from '../../hooks/useApp'
 import { useDialog } from '../../contexts/DialogContext'
 import { useAppSettings } from '../../contexts/AppSettingsContext'
 import { usePrivacy } from '../../contexts/PrivacyContext'
+import { getThemeAccent, isLightTheme as checkIsLightTheme } from './KiroConfig/themeAccent'
 
 // AI 模型配置
 const AI_MODELS = [
@@ -23,7 +24,7 @@ function Settings() {
     const { updateSettings: updateAppSettings } = useAppSettings()
     const { privacyMode, setPrivacyMode } = usePrivacy()
     // 用于 SVG 箭头颜色（浅色主题用深色）
-    const isLightTheme = theme === 'light' || theme === 'purple' || theme === 'green'
+    const isLightTheme = checkIsLightTheme(theme)
 
     const [aiModel, setAiModel] = useState('claude-sonnet-4.5')
     const [lockModel, setLockModel] = useState(true)
@@ -58,6 +59,15 @@ function Settings() {
     const [notifySuccess, setNotifySuccess] = useState(true)
     const [notifyBilling, setNotifyBilling] = useState(true)
 
+    // 新增 Kiro IDE 设置
+    const [trustedTools, setTrustedTools] = useState('')
+    const [referenceTracker, setReferenceTracker] = useState(false)
+    const [configureMcp, setConfigureMcp] = useState('Enabled')
+    const [telemetryContentCollection, setTelemetryContentCollection] = useState(false)
+    const [telemetryUsageAnalytics, setTelemetryUsageAnalytics] = useState(false)
+    const [telemetryEditStats, setTelemetryEditStats] = useState(false)
+    const [telemetryFeedback, setTelemetryFeedback] = useState(false)
+
     // 自动换号设置
     const [autoSwitchEnabled, setAutoSwitchEnabled] = useState(false)
     const [autoSwitchThreshold, setAutoSwitchThreshold] = useState(1)
@@ -69,6 +79,20 @@ function Settings() {
     // 系统机器码
     const [systemMachineInfo, setSystemMachineInfo] = useState(null)
     const [machineGuidAction, setMachineGuidAction] = useState(null) // 'reset'
+
+    const accountToggleContainerClass = `${colors.card} ${colors.cardHover} border ${colors.cardBorder} ${colors.text}`
+    const accent = getThemeAccent(theme)
+    const themeAccentBorderClass = `${accent.border} shadow-md ${accent.shadow}`
+    const themeAccentDotClass = accent.solidBg
+    const themeAccentTextClass = accent.text
+    const themeAccentButtonClass = `${accent.solidBg} text-white ${accent.solidHoverBg} ${accent.border}`
+
+    const resolveOsLabel = (osType) => {
+        if (osType === 'windows') return 'Windows'
+        if (osType === 'macos') return 'macOS'
+        if (osType === 'linux') return 'Linux'
+        return osType || t('common.unknown')
+    }
 
 
 
@@ -106,6 +130,14 @@ function Settings() {
                 setNotifyFailure(kiroSettings.notifyFailure ?? true)
                 setNotifySuccess(kiroSettings.notifySuccess ?? true)
                 setNotifyBilling(kiroSettings.notifyBilling ?? true)
+                // 新增设置
+                setTrustedTools((kiroSettings.trustedTools || []).join(', '))
+                setReferenceTracker(kiroSettings.referenceTracker ?? false)
+                setConfigureMcp(kiroSettings.configureMcp || 'Enabled')
+                setTelemetryContentCollection(kiroSettings.telemetryContentCollection ?? false)
+                setTelemetryUsageAnalytics(kiroSettings.telemetryUsageAnalytics ?? false)
+                setTelemetryEditStats(kiroSettings.telemetryEditStats ?? false)
+                setTelemetryFeedback(kiroSettings.telemetryFeedback ?? false)
             }
             // 从应用设置读取
             if (appSettings) {
@@ -350,6 +382,51 @@ function Settings() {
         }
     }
 
+    // 信任工具处理（逗号分隔字符串 → 数组）
+    const handleTrustedToolsSave = async (value) => {
+        setTrustedTools(value)
+        const tools = value.split(',').map(s => s.trim()).filter(Boolean)
+        try {
+            await invoke('set_kiro_trusted_tools', { tools })
+            await saveAppSettings({ trustedTools: tools })
+        } catch (err) {
+            await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
+        }
+    }
+
+    // 代码引用追踪
+    const handleReferenceTrackerChange = async (checked) => {
+        setReferenceTracker(checked)
+        try {
+            await invoke('set_kiro_reference_tracker', { enabled: checked })
+            await saveAppSettings({ referenceTracker: checked })
+        } catch (err) {
+            await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
+        }
+    }
+
+    // MCP 配置开关
+    const handleConfigureMcpChange = async (mode) => {
+        setConfigureMcp(mode)
+        try {
+            await invoke('set_kiro_configure_mcp', { mode })
+            await saveAppSettings({ configureMcp: mode })
+        } catch (err) {
+            await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
+        }
+    }
+
+    // 遥测设置
+    const handleTelemetryChange = async (ideKey, checked, setter, appField) => {
+        setter(checked)
+        try {
+            await invoke('set_kiro_telemetry', { key: ideKey, enabled: checked })
+            await saveAppSettings({ [appField]: checked })
+        } catch (err) {
+            await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
+        }
+    }
+
     // 验证浏览器路径（基础检查）
     const isValidBrowserPath = (path) => {
         if (!path) return true // 允许空值（使用默认浏览器）
@@ -520,7 +597,7 @@ function Settings() {
             <div className="bg-glow bg-glow-1" />
             <div className="bg-glow bg-glow-2" />
 
-            <div className="max-w-3xl w-full relative">
+            <div className="max-w-5xl w-full relative">
                 {/* Header */}
                 <div className="mb-8 animate-slide-in-left">
                     <div className="flex items-center gap-3 mb-2">
@@ -538,40 +615,39 @@ function Settings() {
                 <Card
                     className="card-glow animate-slide-in-left delay-100"
                     shadow="sm"
-                    padding="lg"
+                    padding="md"
                     radius="xl"
                     withBorder
                     style={{ marginBottom: '1.5rem' }}
                 >
-                    <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.theme')}</h2>
-                    <p className={`text-sm ${colors.textMuted} mb-4`}>{t('settings.themeDesc')}</p>
-
-                    <div className="grid grid-cols-4 gap-3">
-                        {themeOptions.map((opt, index) => {
-                            const Icon = opt.icon
-                            const isActive = theme === opt.key
-                            return (
-                                <button
-                                    key={opt.key}
-                                    onClick={() => setTheme(opt.key)}
-                                    className={`relative p-4 rounded-xl border-2 hover:scale-105 ${isActive
-                                        ? 'border-blue-500 shadow-lg shadow-blue-500/20'
-                                        : `${colors.cardBorder} ${colors.cardHover} ${colors.card}`
-                                        }`}
-                                    style={{ animationDelay: `${index * 0.05}s` }}
-                                >
-                                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${opt.color} flex items-center justify-center mx-auto mb-2 transition-transform group-hover:scale-110`}>
-                                        <Icon size={20} className="text-white" />
-                                    </div>
-                                    <div className={`text-sm font-medium ${colors.text}`}>{opt.name}</div>
-                                    {isActive && (
-                                        <div className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center animate-scale-in">
-                                            <Check size={12} className="text-white" />
+                    <div className="flex items-center gap-3">
+                        <span className={`text-sm font-medium ${colors.text} flex-shrink-0`}>{t('settings.theme')}</span>
+                        <div className="flex gap-2 flex-1">
+                            {themeOptions.map((opt) => {
+                                const Icon = opt.icon
+                                const isActive = theme === opt.key
+                                return (
+                                    <button
+                                        key={opt.key}
+                                        onClick={() => setTheme(opt.key)}
+                                        className={`relative flex items-center gap-2 px-3 py-2 rounded-xl border-2 hover:scale-105 transition-all ${isActive
+                                            ? themeAccentBorderClass
+                                            : `${colors.cardBorder} ${colors.cardHover} ${colors.card}`
+                                            }`}
+                                    >
+                                        <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${opt.color} flex items-center justify-center`}>
+                                            <Icon size={14} className="text-white" />
                                         </div>
-                                    )}
-                                </button>
-                            )
-                        })}
+                                        <span className={`text-xs font-medium ${colors.text}`}>{opt.name}</span>
+                                        {isActive && (
+                                            <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center animate-scale-in ${themeAccentDotClass}`}>
+                                                <Check size={10} className="text-white" />
+                                            </div>
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </div>
                     </div>
                 </Card>
 
@@ -587,230 +663,260 @@ function Settings() {
                     <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.kiroSettings')}</h2>
                     <p className={`text-sm ${colors.textMuted} mb-4`}>{t('settings.kiroSettingsDesc')}</p>
 
-                    {/* AI 模型 */}
-                    <div className="mb-4">
-                        <label className={`block text-sm ${colors.textMuted} mb-2`}>
-                            {t('settings.aiModel')} {savingModel && <span className="text-blue-500 text-xs ml-2">{t('settings.saving')}</span>}
-                        </label>
-                        <Select
-                            value={aiModel}
-                            onChange={handleApplyModel}
-                            disabled={savingModel}
-                            data={AI_MODELS.map(model => ({
-                                value: model.value,
-                                label: model.recommended ? `${model.label} (⭐ ${t('common.recommended')})` : model.label
-                            }))}
-                            classNames={{
-                                input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
-                                dropdown: `${colors.card} border ${colors.cardBorder}`,
-                                option: `${colors.text}`
-                            }}
-                        />
-                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                        {/* 左列：下拉选项 + 代理 */}
+                        <div className="space-y-4">
+                            {/* AI 模型 */}
+                            <div>
+                                <label className={`block text-sm ${colors.textMuted} mb-1.5`}>
+                                    {t('settings.aiModel')} {savingModel && <span className={`text-xs ml-2 ${themeAccentTextClass}`}>{t('settings.saving')}</span>}
+                                </label>
+                                <Select
+                                    value={aiModel}
+                                    onChange={handleApplyModel}
+                                    disabled={savingModel}
+                                    data={AI_MODELS.map(model => ({
+                                        value: model.value,
+                                        label: model.recommended ? `${model.label} (⭐ ${t('common.recommended')})` : model.label
+                                    }))}
+                                    classNames={{
+                                        input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
+                                        dropdown: `${colors.card} border ${colors.cardBorder}`,
+                                        option: `${colors.text}`
+                                    }}
+                                />
+                            </div>
 
-                    {/* 锁定模型 */}
-                    <label className={`flex items-start gap-3 cursor-pointer rounded-xl p-4 hover:scale-[1.01] mb-4 border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                        <Switch
-                            checked={lockModel}
-                            onChange={(e) => handleLockModelChange(e.currentTarget.checked)}
-                            classNames={{ track: 'cursor-pointer' }}
-                        />
-                        <Lock size={16} className={`${colors.textMuted} mt-0.5 flex-shrink-0`} />
-                        <div>
-                            <span className={`text-sm font-medium ${colors.text}`}>{t('settings.lockModel')}</span>
-                            <p className={`text-xs ${colors.textMuted} mt-0.5`}>{t('settings.lockModelDesc')}</p>
+                            {/* 锁定模型 */}
+                            <label className={`flex items-center gap-3 cursor-pointer rounded-lg p-3 border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                <Switch
+                                    checked={lockModel}
+                                    onChange={(e) => handleLockModelChange(e.currentTarget.checked)}
+                                    size="sm"
+                                />
+                                <Lock size={14} className={colors.textMuted} />
+                                <div>
+                                    <span className={`text-sm ${colors.text}`}>{t('settings.lockModel')}</span>
+                                    <p className={`text-xs ${colors.textMuted}`}>{t('settings.lockModelDesc')}</p>
+                                </div>
+                            </label>
+
+                            {/* Agent 自主模式 */}
+                            <div>
+                                <label className={`block text-sm ${colors.textMuted} mb-1.5`}>{t('settings.agentAutonomy')}</label>
+                                <Select
+                                    value={agentAutonomy}
+                                    onChange={handleAgentAutonomyChange}
+                                    data={[
+                                        { value: 'Supervised', label: t('settings.agentSupervised') },
+                                        { value: 'Autopilot', label: t('settings.agentAutopilot') }
+                                    ]}
+                                    classNames={{
+                                        input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
+                                        dropdown: `${colors.card} border ${colors.cardBorder}`,
+                                        option: `${colors.text}`
+                                    }}
+                                />
+                            </div>
+
+                            {/* 信任命令 */}
+                            <div>
+                                <label className={`block text-sm ${colors.textMuted} mb-1.5`}>{t('settings.trustedCommands')}</label>
+                                <Select
+                                    value={trustedCommandsMode}
+                                    onChange={handleTrustedCommandsModeChange}
+                                    data={[
+                                        { value: 'none', label: t('settings.trustedCommandsNone') },
+                                        { value: 'common', label: t('settings.trustedCommandsCommon') },
+                                        { value: 'all', label: t('settings.trustedCommandsAll') }
+                                    ]}
+                                    classNames={{
+                                        input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
+                                        dropdown: `${colors.card} border ${colors.cardBorder}`,
+                                        option: `${colors.text}`
+                                    }}
+                                />
+                                {trustedCommandsMode === 'common' && (
+                                    <Textarea
+                                        value={customTrustedCommands}
+                                        onChange={(e) => handleCustomTrustedCommandsChange(e.currentTarget.value)}
+                                        placeholder="npm *&#10;git *&#10;cargo *"
+                                        classNames={{
+                                            input: `${colors.text} ${colors.input} ${colors.inputFocus} font-mono text-sm mt-2`
+                                        }}
+                                        rows={3}
+                                        autosize={false}
+                                    />
+                                )}
+                                <p className={`text-xs ${colors.textMuted} mt-1`}>{t('settings.trustedCommandsDesc')}</p>
+                            </div>
+
+                            {/* 信任工具 */}
+                            <div>
+                                <label className={`block text-sm ${colors.textMuted} mb-1.5`}>{t('settings.trustedTools')}</label>
+                                <TextInput
+                                    value={trustedTools}
+                                    onChange={(e) => setTrustedTools(e.currentTarget.value)}
+                                    onBlur={(e) => handleTrustedToolsSave(e.currentTarget.value)}
+                                    placeholder={t('settings.trustedToolsPlaceholder')}
+                                    classNames={{
+                                        input: `${colors.text} ${colors.input} ${colors.inputFocus}`
+                                    }}
+                                />
+                                <p className={`text-xs ${colors.textMuted} mt-1`}>{t('settings.trustedToolsDesc')}</p>
+                            </div>
+
+                            {/* MCP 配置 */}
+                            <div>
+                                <label className={`block text-sm ${colors.textMuted} mb-1.5`}>{t('settings.configureMCP')}</label>
+                                <Select
+                                    value={configureMcp}
+                                    onChange={handleConfigureMcpChange}
+                                    data={[
+                                        { value: 'Enabled', label: t('settings.configureMCPEnabled') },
+                                        { value: 'Disabled', label: t('settings.configureMCPDisabled') }
+                                    ]}
+                                    classNames={{
+                                        input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
+                                        dropdown: `${colors.card} border ${colors.cardBorder}`,
+                                        option: `${colors.text}`
+                                    }}
+                                />
+                            </div>
+
+                            {/* HTTP 代理 */}
+                            <div>
+                                <label className={`block text-sm ${colors.textMuted} mb-1.5`}>{t('settings.httpProxy')}</label>
+                                <div className="flex gap-2">
+                                    <TextInput
+                                        value={httpProxy}
+                                        onChange={(e) => setHttpProxy(e.currentTarget.value)}
+                                        placeholder="http://127.0.0.1:7897"
+                                        classNames={{
+                                            input: `${colors.text} ${colors.input} ${colors.inputFocus}`
+                                        }}
+                                        className="flex-1"
+                                    />
+                                    <button
+                                        onClick={handleDetectProxy}
+                                        disabled={detectingProxy}
+                                        className={`btn-icon px-3 py-2 border rounded-lg ${colors.card} ${colors.cardHover} border ${colors.cardBorder} ${colors.text} flex items-center gap-1 text-xs`}
+                                        title={t('settings.detectProxyTitle')}
+                                    >
+                                        {detectingProxy ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
+                                        {t('settings.detect')}
+                                    </button>
+                                    <button
+                                        onClick={handleApplyProxy}
+                                        disabled={savingProxy || !proxyChanged}
+                                        className={`btn-icon px-3 py-2 rounded-lg flex items-center gap-1 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed border ${proxyChanged
+                                            ? themeAccentButtonClass
+                                            : `${colors.cardSecondary} ${colors.textMuted} ${colors.cardBorder}`
+                                            }`}
+                                    >
+                                        {savingProxy ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                                        {savingProxy ? t('settings.saving') : t('settings.apply')}
+                                    </button>
+                                </div>
+                                <p className={`text-xs ${colors.textMuted} mt-1`}>{t('settings.proxyTip')}</p>
+                            </div>
                         </div>
-                    </label>
 
-                    {/* Agent 自主模式 */}
-                    <div className="mb-4">
-                        <label className={`block text-sm ${colors.textMuted} mb-2`}>{t('settings.agentAutonomy')}</label>
-                        <Select
-                            value={agentAutonomy}
-                            onChange={handleAgentAutonomyChange}
-                            data={[
-                                { value: 'Supervised', label: t('settings.agentSupervised') },
-                                { value: 'Autopilot', label: t('settings.agentAutopilot') }
-                            ]}
-                            classNames={{
-                                input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
-                                dropdown: `${colors.card} border ${colors.cardBorder}`,
-                                option: `${colors.text}`
-                            }}
-                        />
-                    </div>
+                        {/* 右列：功能开关 + 通知 + 遥测 */}
+                        <div className="space-y-3">
+                            {/* 功能开关 */}
+                            <span className={`text-sm ${colors.textMuted} block`}>{t('settings.agentSettingsDesc')}</span>
+                            <div className="grid grid-cols-2 gap-2">
+                                <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                    <Switch checked={enableCodebaseIndexing} onChange={(e) => handleCodebaseIndexingChange(e.currentTarget.checked)} size="xs" />
+                                    <span className={`text-xs ${colors.text}`}>{t('settings.enableCodebaseIndexing')}</span>
+                                </label>
+                                <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                    <Switch checked={enableTabAutocomplete} onChange={(e) => handleTabAutocompleteChange(e.currentTarget.checked)} size="xs" />
+                                    <span className={`text-xs ${colors.text}`}>{t('settings.enableTabAutocomplete')}</span>
+                                </label>
+                                <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                    <Switch checked={usageSummary} onChange={(e) => handleUsageSummaryChange(e.currentTarget.checked)} size="xs" />
+                                    <span className={`text-xs ${colors.text}`}>{t('settings.usageSummary')}</span>
+                                </label>
+                                <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                    <Switch checked={codeReferences} onChange={(e) => handleCodeReferencesChange(e.currentTarget.checked)} size="xs" />
+                                    <span className={`text-xs ${colors.text}`}>{t('settings.codeReferences')}</span>
+                                </label>
+                                <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                    <Switch checked={enableDebugLogs} onChange={(e) => handleDebugLogsChange(e.currentTarget.checked)} size="xs" />
+                                    <span className={`text-xs ${colors.text}`}>{t('settings.enableDebugLogs')}</span>
+                                </label>
+                                <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                    <Switch checked={referenceTracker} onChange={(e) => handleReferenceTrackerChange(e.currentTarget.checked)} size="xs" />
+                                    <span className={`text-xs ${colors.text}`}>{t('settings.referenceTracker')}</span>
+                                </label>
+                            </div>
 
-                    {/* 信任命令 */}
-                    <div className="mb-4">
-                        <label className={`block text-sm ${colors.textMuted} mb-2`}>{t('settings.trustedCommands')}</label>
-                        <Select
-                            value={trustedCommandsMode}
-                            onChange={handleTrustedCommandsModeChange}
-                            data={[
-                                { value: 'none', label: t('settings.trustedCommandsNone') },
-                                { value: 'common', label: t('settings.trustedCommandsCommon') },
-                                { value: 'all', label: t('settings.trustedCommandsAll') }
-                            ]}
-                            classNames={{
-                                input: `${colors.text} ${colors.input} ${colors.inputFocus}`,
-                                dropdown: `${colors.card} border ${colors.cardBorder}`,
-                                option: `${colors.text}`
-                            }}
-                        />
-                        {trustedCommandsMode === 'common' && (
-                            <Textarea
-                                value={customTrustedCommands}
-                                onChange={(e) => handleCustomTrustedCommandsChange(e.currentTarget.value)}
-                                placeholder="npm *&#10;git *&#10;cargo *"
-                                classNames={{
-                                    input: `${colors.text} ${colors.input} ${colors.inputFocus} font-mono text-sm mt-3`
-                                }}
-                                rows={4}
-                                autosize={false}
-                            />
-                        )}
-                        <p className={`text-xs ${colors.textMuted} mt-2`}>{t('settings.trustedCommandsDesc')}</p>
-                    </div>
+                            {/* 通知设置 */}
+                            <div className={`pt-3 border-t border-dashed ${colors.cardBorder}`}>
+                                <span className={`text-sm ${colors.textMuted} mb-2 block`}>{t('settings.notifications')}</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                        <Switch checked={notifyActionRequired} onChange={(e) => handleNotificationChange('kiroAgent.notifications.agent.actionRequired', e.currentTarget.checked, setNotifyActionRequired)} size="xs" />
+                                        <span className={`text-xs ${colors.text}`}>{t('settings.notifyActionRequired')}</span>
+                                    </label>
+                                    <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                        <Switch checked={notifyFailure} onChange={(e) => handleNotificationChange('kiroAgent.notifications.agent.failure', e.currentTarget.checked, setNotifyFailure)} size="xs" />
+                                        <span className={`text-xs ${colors.text}`}>{t('settings.notifyFailure')}</span>
+                                    </label>
+                                    <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                        <Switch checked={notifySuccess} onChange={(e) => handleNotificationChange('kiroAgent.notifications.agent.success', e.currentTarget.checked, setNotifySuccess)} size="xs" />
+                                        <span className={`text-xs ${colors.text}`}>{t('settings.notifySuccess')}</span>
+                                    </label>
+                                    <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                        <Switch checked={notifyBilling} onChange={(e) => handleNotificationChange('kiroAgent.notifications.billing', e.currentTarget.checked, setNotifyBilling)} size="xs" />
+                                        <span className={`text-xs ${colors.text}`}>{t('settings.notifyBilling')}</span>
+                                    </label>
+                                </div>
+                            </div>
 
-                    {/* 功能开关 - 2列布局 */}
-                    <div className="grid grid-cols-2 gap-2 mb-4">
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                            <Switch
-                                checked={enableCodebaseIndexing}
-                                onChange={(e) => handleCodebaseIndexingChange(e.currentTarget.checked)}
-                                size="sm"
-                            />
-                            <span className={`text-sm ${colors.text}`}>{t('settings.enableCodebaseIndexing')}</span>
-                        </label>
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                            <Switch
-                                checked={enableTabAutocomplete}
-                                onChange={(e) => handleTabAutocompleteChange(e.currentTarget.checked)}
-                                size="sm"
-                            />
-                            <span className={`text-sm ${colors.text}`}>{t('settings.enableTabAutocomplete')}</span>
-                        </label>
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                            <Switch
-                                checked={usageSummary}
-                                onChange={(e) => handleUsageSummaryChange(e.currentTarget.checked)}
-                                size="sm"
-                            />
-                            <span className={`text-sm ${colors.text}`}>{t('settings.usageSummary')}</span>
-                        </label>
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                            <Switch
-                                checked={codeReferences}
-                                onChange={(e) => handleCodeReferencesChange(e.currentTarget.checked)}
-                                size="sm"
-                            />
-                            <span className={`text-sm ${colors.text}`}>{t('settings.codeReferences')}</span>
-                        </label>
-                        <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                            <Switch
-                                checked={enableDebugLogs}
-                                onChange={(e) => handleDebugLogsChange(e.currentTarget.checked)}
-                                size="sm"
-                            />
-                            <span className={`text-sm ${colors.text}`}>{t('settings.enableDebugLogs')}</span>
-                        </label>
-                    </div>
-
-                    {/* 通知设置 */}
-                    <div className={`pt-4 border-t border-dashed ${colors.cardBorder}`}>
-                        <span className={`text-sm ${colors.textMuted} mb-3 block`}>{t('settings.notifications')}</span>
-                        <div className="grid grid-cols-2 gap-2">
-                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                                <Switch
-                                    checked={notifyActionRequired}
-                                    onChange={(e) => handleNotificationChange('kiroAgent.notifications.agent.actionRequired', e.currentTarget.checked, setNotifyActionRequired)}
-                                    size="sm"
-                                />
-                                <span className={`text-sm ${colors.text}`}>{t('settings.notifyActionRequired')}</span>
-                            </label>
-                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                                <Switch
-                                    checked={notifyFailure}
-                                    onChange={(e) => handleNotificationChange('kiroAgent.notifications.agent.failure', e.currentTarget.checked, setNotifyFailure)}
-                                    size="sm"
-                                />
-                                <span className={`text-sm ${colors.text}`}>{t('settings.notifyFailure')}</span>
-                            </label>
-                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                                <Switch
-                                    checked={notifySuccess}
-                                    onChange={(e) => handleNotificationChange('kiroAgent.notifications.agent.success', e.currentTarget.checked, setNotifySuccess)}
-                                    size="sm"
-                                />
-                                <span className={`text-sm ${colors.text}`}>{t('settings.notifySuccess')}</span>
-                            </label>
-                            <label className={`flex items-center gap-3 cursor-pointer p-2.5 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
-                                <Switch
-                                    checked={notifyBilling}
-                                    onChange={(e) => handleNotificationChange('kiroAgent.notifications.billing', e.currentTarget.checked, setNotifyBilling)}
-                                    size="sm"
-                                />
-                                <span className={`text-sm ${colors.text}`}>{t('settings.notifyBilling')}</span>
-                            </label>
+                            {/* 遥测与隐私 */}
+                            <div className={`pt-3 border-t border-dashed ${colors.cardBorder}`}>
+                                <span className={`text-sm ${colors.textMuted} mb-2 block`}>{t('settings.telemetry')}</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                        <Switch checked={telemetryContentCollection} onChange={(e) => handleTelemetryChange('telemetry.dataSharingAndPromptLogging.contentCollectionForServiceImprovement', e.currentTarget.checked, setTelemetryContentCollection, 'telemetryContentCollection')} size="xs" />
+                                        <span className={`text-xs ${colors.text}`}>{t('settings.telemetryContentCollection')}</span>
+                                    </label>
+                                    <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                        <Switch checked={telemetryUsageAnalytics} onChange={(e) => handleTelemetryChange('telemetry.dataSharingAndPromptLogging.usageAnalyticsAndPerformanceMetrics', e.currentTarget.checked, setTelemetryUsageAnalytics, 'telemetryUsageAnalytics')} size="xs" />
+                                        <span className={`text-xs ${colors.text}`}>{t('settings.telemetryUsageAnalytics')}</span>
+                                    </label>
+                                    <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                        <Switch checked={telemetryEditStats} onChange={(e) => handleTelemetryChange('telemetry.editStats.enabled', e.currentTarget.checked, setTelemetryEditStats, 'telemetryEditStats')} size="xs" />
+                                        <span className={`text-xs ${colors.text}`}>{t('settings.telemetryEditStats')}</span>
+                                    </label>
+                                    <label className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border ${colors.cardBorder} ${colors.cardSecondary} ${colors.cardHover}`}>
+                                        <Switch checked={telemetryFeedback} onChange={(e) => handleTelemetryChange('telemetry.feedback.enabled', e.currentTarget.checked, setTelemetryFeedback, 'telemetryFeedback')} size="xs" />
+                                        <span className={`text-xs ${colors.text}`}>{t('settings.telemetryFeedback')}</span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-
-                    {/* HTTP 代理 */}
-                    <div className={`mt-5 pt-5 border-t border-dashed ${colors.cardBorder}`}>
-                        <label className={`block text-sm ${colors.textMuted} mb-2`}>{t('settings.httpProxy')}</label>
-                        <div className="flex gap-3">
-                            <TextInput
-                                value={httpProxy}
-                                onChange={(e) => setHttpProxy(e.currentTarget.value)}
-                                placeholder="http://127.0.0.1:7897"
-                                classNames={{
-                                    input: `${colors.text} ${colors.input} ${colors.inputFocus}`
-                                }}
-                                className="flex-1"
-                            />
-                            <button
-                                onClick={handleDetectProxy}
-                                disabled={detectingProxy}
-                                className={`btn-icon px-4 py-3 border rounded-xl ${colors.card} ${colors.cardHover} border ${colors.cardBorder} ${colors.text} flex items-center gap-2`}
-                                title={t('settings.detectProxyTitle')}
-                            >
-                                {detectingProxy ? <RefreshCw size={16} className="animate-spin" /> : <Search size={16} />}
-                                {t('settings.detect')}
-                            </button>
-                            <button
-                                onClick={handleApplyProxy}
-                                disabled={savingProxy || !proxyChanged}
-                                className={`btn-icon px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed border ${proxyChanged
-                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500'
-                                    : `${colors.cardSecondary} ${colors.textMuted} ${colors.cardBorder}`
-                                    }`}
-                            >
-                                {savingProxy ? <RefreshCw size={16} className="animate-spin" /> : <Check size={16} />}
-                                {savingProxy ? t('settings.saving') : t('settings.apply')}
-                            </button>
-                        </div>
-                        <p className={`text-xs ${colors.textMuted} mt-2`}>{t('settings.proxyTip')}</p>
                     </div>
                 </Card>
 
-                {/* 账号设置 */}
+                {/* 账号设置 + 浏览器设置 并排 */}
+                <div className="grid grid-cols-2 gap-4" style={{ marginBottom: '1.5rem' }}>
                 <Card
                     className="card-glow animate-slide-in-left delay-200"
                     shadow="sm"
                     padding="lg"
                     radius="xl"
                     withBorder
-                    style={{ marginBottom: '1.5rem' }}
                 >
                     <h2 className={`text-lg font-semibold ${colors.text} mb-1`}>{t('settings.account')}</h2>
                     <p className={`text-sm ${colors.textMuted} mb-4`}>{t('settings.accountDesc')}</p>
 
                     {/* 自动刷新 Token + 刷新间隔 */}
                     <div className="flex items-center gap-3 mb-4">
-                        <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border flex-shrink-0 ${autoRefresh
-                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-500'
-                            : `${colors.card} ${colors.cardHover} border ${colors.cardBorder} ${colors.text}`
-                            }`} title={t('settings.autoRefreshDesc')}>
+                        <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border flex-shrink-0 ${accountToggleContainerClass}`} title={t('settings.autoRefreshDesc')}>
                             <Switch
                                 checked={autoRefresh}
                                 onChange={(e) => handleAutoRefreshChange(e.currentTarget.checked)}
@@ -842,10 +948,7 @@ function Settings() {
 
                     {/* 机器码设置 - 勾选框 + 二选一下拉框 */}
                     <div className="flex items-center gap-3 mb-4">
-                        <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border flex-shrink-0 ${autoChangeMachineId
-                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-500'
-                            : `${colors.card} ${colors.cardHover} border ${colors.cardBorder} ${colors.text}`
-                            }`} title={t('settings.autoChangeMachineIdDesc')}>
+                        <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border flex-shrink-0 ${accountToggleContainerClass}`} title={t('settings.autoChangeMachineIdDesc')}>
                             <Switch
                                 checked={autoChangeMachineId}
                                 onChange={(e) => handleAutoChangeMachineIdChange(e.currentTarget.checked)}
@@ -873,10 +976,7 @@ function Settings() {
                     </div>
 
                     {/* 隐私模式 */}
-                    <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border mb-4 ${privacyMode
-                        ? 'bg-blue-500/20 border-blue-500/50 text-blue-500'
-                        : `${colors.card} ${colors.cardHover} border ${colors.cardBorder} ${colors.text}`
-                        }`} title={t('settings.privacyModeDesc')}>
+                    <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border mb-4 ${accountToggleContainerClass}`} title={t('settings.privacyModeDesc')}>
                         <Switch
                             checked={privacyMode}
                             onChange={(e) => setPrivacyMode(e.currentTarget.checked)}
@@ -888,11 +988,8 @@ function Settings() {
                     </label>
 
                     {/* 自动换号 */}
-                    <div className="flex items-center gap-3">
-                        <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border flex-shrink-0 ${autoSwitchEnabled
-                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-500'
-                            : `${colors.card} ${colors.cardHover} border ${colors.cardBorder} ${colors.text}`
-                            }`} title={t('settings.autoSwitchDesc')}>
+                    <div>
+                        <label className={`flex items-center gap-2 cursor-pointer px-4 py-3 rounded-xl border mb-2 ${accountToggleContainerClass}`} title={t('settings.autoSwitchDesc')}>
                             <Switch
                                 checked={autoSwitchEnabled}
                                 onChange={(e) => handleAutoSwitchEnabledChange(e.currentTarget.checked)}
@@ -902,7 +999,7 @@ function Settings() {
                             <span className="text-sm font-medium whitespace-nowrap">{t('settings.autoSwitch')}</span>
                         </label>
                         <div className="flex items-center gap-2">
-                            <span className={`text-sm ${colors.textMuted} whitespace-nowrap`}>{t('settings.autoSwitchThreshold')}</span>
+                            <span className={`text-xs ${colors.textMuted} whitespace-nowrap`}>{t('settings.autoSwitchThreshold')}</span>
                             <NumberInput
                                 value={autoSwitchThreshold}
                                 onChange={handleAutoSwitchThresholdChange}
@@ -910,11 +1007,10 @@ function Settings() {
                                 min={0}
                                 step={0.1}
                                 classNames={{
-                                    input: `${colors.text} ${colors.input} ${colors.inputFocus} text-center w-20`
+                                    input: `${colors.text} ${colors.input} ${colors.inputFocus} text-center w-16`
                                 }}
+                                size="xs"
                             />
-                        </div>
-                        <div className="relative flex-1">
                             <Select
                                 value={String(autoSwitchInterval)}
                                 onChange={(value) => handleAutoSwitchIntervalChange(value)}
@@ -932,6 +1028,8 @@ function Settings() {
                                     dropdown: `${colors.card} border ${colors.cardBorder}`,
                                     option: `${colors.text}`
                                 }}
+                                className="flex-1"
+                                size="xs"
                             />
                         </div>
                     </div>
@@ -944,10 +1042,9 @@ function Settings() {
                     padding="lg"
                     radius="xl"
                     withBorder
-                    style={{ marginBottom: '1.5rem' }}
                 >
                     <div className="flex items-center gap-2 mb-1">
-                        <Globe size={18} className="text-blue-500" />
+                        <Globe size={18} className={themeAccentTextClass} />
                         <h2 className={`text-lg font-semibold ${colors.text}`}>{t('settings.browser')}</h2>
                     </div>
                     <p className={`text-sm ${colors.textMuted} mb-4`}>
@@ -978,7 +1075,7 @@ function Settings() {
                                 onClick={handleApplyBrowser}
                                 disabled={savingBrowser || !browserChanged}
                                 className={`btn-icon px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed border ${browserChanged
-                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500'
+                                    ? themeAccentButtonClass
                                     : `${colors.cardSecondary} ${colors.textMuted} ${colors.cardBorder}`
                                     }`}
                             >
@@ -1010,7 +1107,7 @@ function Settings() {
                                         <div className="flex gap-2 ml-3">
                                             <button
                                                 onClick={() => handleSelectBrowser(browser, true)}
-                                                className="btn-icon px-3 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                                                className={`btn-icon px-3 py-1.5 text-xs rounded-lg transition-colors border ${themeAccentButtonClass}`}
                                             >
                                                 {t('settings.selectBrowser')}
                                             </button>
@@ -1025,6 +1122,7 @@ function Settings() {
                         {t('settings.browserTip')}
                     </p>
                 </Card>
+                </div>
 
                 {/* 系统机器码管理 */}
                 <Card
@@ -1040,7 +1138,7 @@ function Settings() {
                         <h2 className={`text-lg font-semibold ${colors.text}`}>{t('settings.systemMachineGuid')}</h2>
                         {systemMachineInfo?.osType && (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${colors.textMuted} border ${colors.cardBorder} ${colors.cardSecondary}`}>
-                                {systemMachineInfo.osType === 'windows' ? 'Windows' : systemMachineInfo.osType === 'macos' ? 'macOS' : 'Linux'}
+                                {resolveOsLabel(systemMachineInfo.osType)}
                             </span>
                         )}
                     </div>
@@ -1107,9 +1205,9 @@ function Settings() {
                     {/* macOS 提示 */}
                     {systemMachineInfo?.osType === 'macos' && (
                         <div className={`flex items-start gap-3 ${colors.info} rounded-xl p-4 mb-4 border ${colors.infoBorder}`}>
-                            <Shield size={18} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                            <Shield size={18} className={`${themeAccentTextClass} flex-shrink-0 mt-0.5`} />
                             <div className={`text-xs ${colors.textMuted}`}>
-                                <p className="font-medium text-blue-500 mb-1">{t('settings.macOSNote')}</p>
+                                <p className={`font-medium ${themeAccentTextClass} mb-1`}>{t('settings.macOSNote')}</p>
                                 <p>{t('settings.macOSNoteDesc')}</p>
                             </div>
                         </div>
