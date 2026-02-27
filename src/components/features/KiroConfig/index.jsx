@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../../../hooks/useApp'
-import { Server, Settings2, FileText, Puzzle, Bot, Zap, FolderOpen, X } from 'lucide-react'
+import { Server, Settings2, FileText, Puzzle, Bot, Zap, FolderOpen, Link2, X } from 'lucide-react'
 import MCPPanel from './MCPPanel'
 import SteeringPanel from './SteeringPanel'
 import SkillsPanel from './SkillsPanel'
+import HooksPanel from './HooksPanel'
 import AgentsPanel from './AgentsPanel'
 import PowersPanel from './PowersPanel'
 import { getThemeAccent } from './themeAccent'
@@ -15,19 +16,22 @@ function KiroConfig() {
   const accent = getThemeAccent(theme)
   const [activeTab, setActiveTab] = useState('mcp')
   const [mcpCount, setMcpCount] = useState(0)
-  const [steeringCount, setSteeringCount] = useState(0)
+
   const [skillsCount, setSkillsCount] = useState(0)
+  const [hooksCount, setHooksCount] = useState(0)
   const [agentsCount, setAgentsCount] = useState(0)
   const [powersCount, setPowersCount] = useState(0)
   const [projectDir, setProjectDir] = useState(null)
 
   // 初始加载数量
   useEffect(() => {
-    invoke('get_steering_files', { projectDir: projectDir }).then(files => setSteeringCount(files?.length || 0)).catch(() => {})
-    invoke('get_skills', { projectDir: projectDir }).then(skills => setSkillsCount(skills?.length || 0)).catch(() => {})
-    invoke('get_custom_agents', { projectDir: projectDir }).then(agents => setAgentsCount(agents?.length || 0)).catch(() => {})
+    invoke('get_steering_files', { projectDir }).then(files => setSteeringCount(files?.length || 0)).catch(() => {})
+    invoke('get_skills', { projectDir }).then(skills => setSkillsCount(skills?.length || 0)).catch(() => {})
+    invoke('get_custom_agents', { projectDir }).then(agents => setAgentsCount(agents?.length || 0)).catch(() => {})
+    invoke('get_hooks', { projectDir }).then(hooks => setHooksCount(hooks?.length || 0)).catch(() => {})
     invoke('get_powers').then(powers => setPowersCount(powers?.length || 0)).catch(() => {})
   }, [projectDir])
+
 
   const handleSelectProjectDir = async () => {
     try {
@@ -45,6 +49,7 @@ function KiroConfig() {
     { id: 'powers', label: t('kiroConfig.powers'), icon: Zap, count: powersCount },
     { id: 'agents', label: t('kiroConfig.agents'), icon: Bot, count: agentsCount },
     { id: 'skills', label: t('kiroConfig.skills'), icon: Puzzle, count: skillsCount },
+    { id: 'hooks', label: t('kiroConfig.hooks'), icon: Link2, count: hooksCount },
     { id: 'steering', label: t('kiroConfig.steering'), icon: FileText, count: steeringCount },
   ]
 
@@ -53,7 +58,7 @@ function KiroConfig() {
       <div className="flex-1 flex flex-col min-h-0">
       {/* 头部 */}
       <div className={`${colors.card} border-b ${colors.cardBorder} px-6 py-4`}>
-        <div className="flex items-center gap-3 mb-4">
+
           <div className={`w-10 h-10 bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} rounded-xl flex items-center justify-center shadow-lg ${accent.shadow}`}>
             <Settings2 size={20} className="text-white" />
           </div>
@@ -122,10 +127,11 @@ function KiroConfig() {
         {activeTab === 'mcp' && <MCPPanel onCountChange={setMcpCount} />}
         {activeTab === 'steering' && <SteeringPanel onCountChange={setSteeringCount} projectDir={projectDir} />}
         {activeTab === 'skills' && <SkillsPanel onCountChange={setSkillsCount} projectDir={projectDir} />}
+        {activeTab === 'hooks' && <HooksPanel onCountChange={setHooksCount} projectDir={projectDir} />}
         {activeTab === 'agents' && <AgentsPanel onCountChange={setAgentsCount} projectDir={projectDir} />}
         {activeTab === 'powers' && <PowersPanel onCountChange={setPowersCount} />}
       </div>
-      </div>
+
     </div>
   )
 }

@@ -20,6 +20,7 @@ mod providers;
 mod state;
 mod steering;
 mod skills;
+mod hooks;
 mod custom_agents;
 mod powers;
 mod account;
@@ -66,8 +67,10 @@ use commands::proxy_cmd::detect_system_proxy;
 use commands::update_cmd::check_update;
 use commands::steering_cmd::{get_steering_files, get_steering_file, save_steering_file, delete_steering_file, create_steering_file};
 use commands::skills_cmd::{get_skills, get_skill, save_skill, delete_skill, create_skill};
+use commands::hooks_cmd::{get_hooks, get_hook, save_hook, delete_hook, create_hook};
 use commands::custom_agents_cmd::{get_custom_agents, get_custom_agent, save_custom_agent, delete_custom_agent, create_custom_agent};
 use commands::powers_cmd::{get_powers, get_power, install_power, uninstall_power, get_power_registries, get_recommended_powers};
+
 use kiro::{
     get_kiro_local_token, switch_kiro_account, read_kiro_accounts,
 };
@@ -296,6 +299,12 @@ fn main() {
             save_skill,
             delete_skill,
             create_skill,
+            // Hooks 管理命令
+            get_hooks,
+            get_hook,
+            save_hook,
+            delete_hook,
+            create_hook,
             // Custom Agents 管理命令
             get_custom_agents,
             get_custom_agent,
