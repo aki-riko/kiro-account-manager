@@ -11,7 +11,7 @@ import {
   getThemeSurfaceStyles,
 } from './themeAccent'
 
-// 解析 agent front-matter（v0.9.2 完整 schema: name, description, tools, model, includeMcpJson, includePowers）
+// 解析 agent front-matter（v0.10.32 完整 schema: name, description, tools, model, includeMcpJson, includePowers）
 const parseAgentFrontMatter = (content) => {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
   if (!match) return { name: '', description: '', tools: [], model: '', includeMcpJson: false, includePowers: false, body: content }
@@ -41,7 +41,7 @@ const parseAgentFrontMatter = (content) => {
   }
 }
 
-// 组装 agent front-matter（v0.9.2 完整 schema）
+// 组装 agent front-matter（v0.10.32 完整 schema）
 const buildAgentContent = ({ name, description, tools, model, includeMcpJson, includePowers }, body) => {
   let fm = '---'
   if (name) fm += `\nname: "${name}"`
@@ -81,7 +81,7 @@ const ScopeBadge = ({ scope, accent }) => {
   )
 }
 
-// Kiro v0.9.2 可用的工具标签
+// Kiro v0.10.32 可用的工具标签
 const AVAILABLE_TOOL_TAGS = [
   '*',
   'read', 'edit', 'browser', 'terminal', 'search', 'mcp',
@@ -90,7 +90,7 @@ const AVAILABLE_TOOL_TAGS = [
   'semanticRename', 'smartRelocate', 'discloseContext',
 ]
 
-// Kiro v0.9.2 可用的模型
+// Kiro v0.10.32 可用的模型
 const AVAILABLE_MODELS = [
   { value: '', label: '默认（跟随主对话）' },
   { value: 'claude-sonnet-4', label: 'Claude Sonnet 4' },

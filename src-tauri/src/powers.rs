@@ -1,4 +1,4 @@
-// Powers 管理（v0.9.2 registry-v2: ~/.kiro/powers/）
+// Powers 管理（v0.10.32 registry-v2: ~/.kiro/powers/）
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -11,7 +11,7 @@ import {
   getThemeSurfaceStyles,
 } from './themeAccent'
 
-// 解析 front-matter（v0.9.2: inclusion + name + description + fileMatchPattern）
+// 解析 front-matter（v0.10.32: inclusion + name + description + fileMatchPattern）
 const parseFrontMatter = (content) => {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
   if (!match) return { inclusion: 'always', filePattern: '', name: '', description: '', body: content }
@@ -25,7 +25,7 @@ const parseFrontMatter = (content) => {
   }
 }
 
-// 组装 front-matter（v0.9.2: inclusion + name + description + fileMatchPattern）
+// 组装 front-matter（v0.10.32: inclusion + name + description + fileMatchPattern）
 const buildContent = (inclusion, filePattern, body, name, description) => {
   let fm = `---\ninclusion: ${inclusion}`
   if (name?.trim()) fm += `\nname: "${name.trim()}"`
