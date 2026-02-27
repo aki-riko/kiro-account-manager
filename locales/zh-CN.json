@@ -701,6 +701,7 @@
   "hooks.fileName": "文件名",
   "hooks.fileNamePlaceholder": "例如: my-workflow",
   "hooks.fileNameHint": "自动添加 .kiro.hook 后缀",
+  "hooks.projectOnly": "仅支持项目级 Hooks（<project>/.kiro/hooks/）",
   "hooks.selectToEdit": "选择一个 Hook 文件进行编辑",
   "hooks.unsavedChanges": "未保存的更改",
   "hooks.confirmSwitch": "有未保存的更改，确定切换？",

@@ -125,21 +125,24 @@ function HooksPanel({ onCountChange, projectDir }) {
 
   return (
     <div className="h-full flex gap-4 p-4">
-      <div className={`w-80 flex flex-col ${colors.card} border ${colors.cardBorder} rounded-2xl overflow-hidden shadow-lg`}>
-        <div className={`p-4 border-b ${colors.cardBorder} flex items-center justify-between`}>
-          <div className="flex items-center gap-2">
+      <div className={`w-80 flex flex-col ${colors.card} border ${colors.cardBorder} rounded-2xl overflow-hidden shadow-lg max-w-full`}>
+        <div className={`p-4 border-b ${colors.cardBorder}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
             <Link2 size={18} className={accent.text} />
             <span className={`text-sm font-semibold ${colors.text}`}>{t('hooks.title')}</span>
             <span className={`text-xs ${colors.textMuted}`}>({hooks.length})</span>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setShowCreateModal(true)} className={`p-2 rounded-lg ${colors.cardHover} transition-colors cursor-pointer`} title={t('hooks.newHook')}>
-              <Plus size={16} className={accent.text} />
-            </button>
-            <button onClick={loadHooks} className={`p-2 rounded-lg ${colors.cardHover} transition-colors cursor-pointer`} title={t('common.refresh')}>
-              <RefreshCw size={16} className={colors.textMuted} />
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setShowCreateModal(true)} className={`p-2 rounded-lg ${colors.cardHover} transition-colors cursor-pointer`} title={t('hooks.newHook')}>
+                <Plus size={16} className={accent.text} />
+              </button>
+              <button onClick={loadHooks} className={`p-2 rounded-lg ${colors.cardHover} transition-colors cursor-pointer`} title={t('common.refresh')}>
+                <RefreshCw size={16} className={colors.textMuted} />
+              </button>
+            </div>
           </div>
+          <div className={`mt-2 text-[11px] ${colors.textMuted} leading-relaxed`}>{t('hooks.projectOnly')}</div>
         </div>
 
         <div className="flex-1 overflow-auto p-4">
@@ -298,9 +301,7 @@ function CreateHookModal({ onCreate, onClose, colors, t, accent, accentGradientB
           </div>
 
 
-
           <button
-            onClick={() => onCreate(fileName.trim())}
             disabled={!fileName.trim()}
             className={`w-full px-4 py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] cursor-pointer ${accentGradientButtonClass}`}
           >
