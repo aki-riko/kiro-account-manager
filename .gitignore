@@ -49,3 +49,6 @@ enterprise-import.json
 src-tauri/clippy_warnings.txt
 1.json
 nul
+
+# Worktrees
+.worktrees/
