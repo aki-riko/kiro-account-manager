@@ -9,6 +9,9 @@ target/
 # IDE
 .idea/
 .vscode/
+.kiro/
+.claude/
+screenshots/
 *.swp
 *.swo
 
