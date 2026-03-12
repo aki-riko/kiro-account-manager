@@ -84,15 +84,42 @@ pub fn get_kiro_cli_default_path() -> Result<String, String> {
         .or_else(|_| std::env::var("USERPROFILE"))
         .map_err(|_| "无法获取用户主目录".to_string())?;
 
-    let default_path = format!("{home}/.local/share/kiro-cli/data.sqlite3");
+    let mut candidates = Vec::new();
 
-    // 检查文件是否存在
-    if std::path::Path::new(&default_path).exists() {
-        Ok(default_path)
+    if cfg!(target_os = "macos") {
+        candidates.push(std::path::PathBuf::from(&home)
+            .join("Library")
+            .join("Application Support")
+            .join("kiro-cli")
+            .join("data.sqlite3"));
+    } else if cfg!(target_os = "windows") {
+        candidates.push(std::path::PathBuf::from(&home)
+            .join(".local")
+            .join("share")
+            .join("kiro-cli")
+            .join("data.sqlite3"));
     } else {
-        // 文件不存在，返回空字符串（前端会显示占位符）
-        Ok(String::new())
+        if let Ok(xdg_data_home) = std::env::var("XDG_DATA_HOME") {
+            candidates.push(std::path::PathBuf::from(xdg_data_home)
+                .join("kiro-cli")
+                .join("data.sqlite3"));
+        }
+        candidates.push(std::path::PathBuf::from(&home)
+            .join(".local")
+            .join("share")
+            .join("kiro-cli")
+            .join("data.sqlite3"));
     }
+
+    for path in candidates {
+        if path.exists() {
+            return Ok(path.to_string_lossy().to_string());
+        }
+    }
+
+    // 文件不存在，返回空字符串（前端会显示占位符）
+    Ok(String::new())
+}
 }
 
 /// 从 kiro-cli 数据库导入账号
