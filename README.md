@@ -38,7 +38,9 @@
 
 ## 📥 下载
 
-**最新版本**：[v1.8.3](https://github.com/hj01857655/kiro-account-manager/releases/latest)
+**最新版本**：请前往 [Releases](https://github.com/hj01857655/kiro-account-manager/releases/latest)（自动保持最新）
+
+> 以下下载链接可能滞后，以 Releases 为准。
 
 | 平台 | 架构 | 文件格式 | 下载链接 |
 |------|------|---------|---------|
