@@ -17,10 +17,8 @@ const ListRow = memo(function ListRow({
   isCurrent,
   isRefreshing,
   isSwitching,
-  tagDefinitions,
-  groupDefinitions,
-  tagMap = null,
-  groupMap = null,
+  tagMap,
+  groupMap,
   colors,
   isLightTheme,
   t,
@@ -43,14 +41,6 @@ const ListRow = memo(function ListRow({
   const isUnavailable = isUnavailableStatus(account.status)
   const statusMeta = getAccountStatusMeta(account.status, t)
 
-  const resolvedGroupMap = useMemo(
-    () => groupMap ?? new Map(groupDefinitions.map(group => [group.id, group])),
-    [groupMap, groupDefinitions],
-  )
-  const resolvedTagMap = useMemo(
-    () => tagMap ?? new Map(tagDefinitions.map(tag => [tag.id, tag])),
-    [tagMap, tagDefinitions],
-  )
 
   const handleContextMenu = useCallback((e) => {
     e.preventDefault()
@@ -154,7 +144,7 @@ const ListRow = memo(function ListRow({
 
       <div className="w-16 shrink-0">
         {account.groupId ? (() => {
-          const group = resolvedGroupMap.get(account.groupId)
+const group = groupMap.get(account.groupId)
           return group ? (
             <span
               className="text-[10px] px-1.5 py-0.5 rounded font-medium truncate block max-w-full"
@@ -171,7 +161,7 @@ const ListRow = memo(function ListRow({
         {account.tagLinks?.length > 0 ? (
           <div className="flex items-center gap-1 flex-wrap">
             {account.tagLinks.slice(0, 3).map(tagLink => {
-              const tag = resolvedTagMap.get(tagLink.tagId)
+const tag = tagMap.get(tagLink.tagId)
               const tagName = tag?.name || tagLink.tagName || '未知标签'
               const tagColor = tag?.color || '#888888'
               const linkedAt = tagLink.linkedAt
@@ -234,8 +224,6 @@ function AccountListView({
   // 优化：如果父组件传递了 selectedIdsSet，直接使用；否则创建
   const _selectedIdsSet = selectedIdsSet || useMemo(() => new Set(selectedIds), [selectedIds])
   const localRefreshToken = localToken?.refreshToken
-  const tagMap = useMemo(() => new Map(tagDefinitions.map(tag => [tag.id, tag])), [tagDefinitions])
-  const groupMap = useMemo(() => new Map(groupDefinitions.map(group => [group.id, group])), [groupDefinitions])
 
   const rowVirtualizer = useVirtualizer({
     count: accounts.length,
