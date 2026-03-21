@@ -2,11 +2,24 @@
 pub enum KiroEvent {
     Text(String),
     Thinking(String),
-    ToolUseStart { id: String, name: String },
-    ToolUseInputDelta { id: String, input_delta: String },
-    ToolUseStop { id: String },
-    Usage { input_tokens: i32, output_tokens: i32 },
-    ContextUsage { percentage: f32 },
+    ToolUseStart {
+        id: String,
+        name: String,
+    },
+    ToolUseInputDelta {
+        id: String,
+        input_delta: String,
+    },
+    ToolUseStop {
+        id: String,
+    },
+    Usage {
+        input_tokens: i32,
+        output_tokens: i32,
+    },
+    ContextUsage {
+        percentage: f32,
+    },
     Citation {
         text: Option<String>,
         link: String,
@@ -246,16 +259,10 @@ pub fn aggregate_kiro_response(raw: &str) -> AggregatedKiroResponse {
                 KiroEvent::ContextUsage { percentage } => {
                     aggregated.context_usage_percentage = Some(percentage);
                 }
-                KiroEvent::Citation {
-                    text,
-                    link,
-                    target,
-                } => {
-                    aggregated.citations.push(AggregatedCitation {
-                        text,
-                        link,
-                        target,
-                    });
+                KiroEvent::Citation { text, link, target } => {
+                    aggregated
+                        .citations
+                        .push(AggregatedCitation { text, link, target });
                 }
             }
         }
@@ -353,11 +360,7 @@ fn parse_citation_event(value: &serde_json::Value) -> Option<AggregatedCitation>
         .map(str::to_string);
     ensure_citation_target_supported(&target)?;
 
-    Some(AggregatedCitation {
-        text,
-        link,
-        target,
-    })
+    Some(AggregatedCitation { text, link, target })
 }
 
 fn ensure_citation_target_supported(target: &serde_json::Value) -> Option<()> {
@@ -370,7 +373,11 @@ fn ensure_citation_target_supported(target: &serde_json::Value) -> Option<()> {
         return Some(());
     }
 
-    if target.get("location").and_then(|item| item.as_u64()).is_some() {
+    if target
+        .get("location")
+        .and_then(|item| item.as_u64())
+        .is_some()
+    {
         return Some(());
     }
 

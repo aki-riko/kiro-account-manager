@@ -23,7 +23,6 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::Duration,
 };
 use tauri::{AppHandle, Manager};
 use tokio::{
@@ -31,6 +30,8 @@ use tokio::{
     sync::{oneshot, Mutex as AsyncMutex},
     task::JoinHandle,
 };
+
+use crate::http_client::{build_http_client_with_timeout, is_supported_kiro_region};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -188,15 +189,6 @@ impl GatewayStatus {
 }
 
 fn ensure_config_valid(config: &GatewayConfig) -> Result<(), String> {
-    const ALLOWED_REGIONS: &[&str] = &[
-        "us-east-1",
-        "eu-central-1",
-        "us-west-2",
-        "ap-northeast-1",
-        "ap-southeast-1",
-        "us-gov-west-1",
-    ];
-
     if config.host.trim().is_empty() {
         return Err("监听地址不能为空".to_string());
     }
@@ -208,14 +200,28 @@ fn ensure_config_valid(config: &GatewayConfig) -> Result<(), String> {
     if region.is_empty() {
         return Err("region 不能为空".to_string());
     }
-    if !ALLOWED_REGIONS.contains(&region) {
+    if !is_supported_kiro_region(region) {
         return Err(format!("region 不受支持: {region}"));
     }
     match config.account_mode.as_str() {
-        "single" if config.account_id.as_deref().unwrap_or_default().trim().is_empty() => {
+        "single"
+            if config
+                .account_id
+                .as_deref()
+                .unwrap_or_default()
+                .trim()
+                .is_empty() =>
+        {
             return Err("single 模式必须选择账号".to_string());
         }
-        "group" if config.group_id.as_deref().unwrap_or_default().trim().is_empty() => {
+        "group"
+            if config
+                .group_id
+                .as_deref()
+                .unwrap_or_default()
+                .trim()
+                .is_empty() =>
+        {
             return Err("group 模式必须选择分组".to_string());
         }
         "single" | "group" => {}
@@ -224,10 +230,19 @@ fn ensure_config_valid(config: &GatewayConfig) -> Result<(), String> {
         }
         _ => return Err("accountMode 必须是 single/group".to_string()),
     }
-    if !matches!(config.log_level.as_str(), "debug" | "info" | "warn" | "error") {
+    if !matches!(
+        config.log_level.as_str(),
+        "debug" | "info" | "warn" | "error"
+    ) {
         return Err("logLevel 必须是 debug/info/warn/error".to_string());
     }
-    if config.access_token.as_deref().unwrap_or_default().trim().is_empty() {
+    if config
+        .access_token
+        .as_deref()
+        .unwrap_or_default()
+        .trim()
+        .is_empty()
+    {
         return Err("必须配置客户端 API Key".to_string());
     }
     for entry in &config.allowed_ips {
@@ -274,12 +289,14 @@ fn request_log_path() -> Result<PathBuf, String> {
 }
 
 fn gateway_data_dir() -> PathBuf {
-    dirs::data_dir().unwrap_or_else(|| {
-        let home = std::env::var("USERPROFILE")
-            .or_else(|_| std::env::var("HOME"))
-            .unwrap_or_else(|_| ".".to_string());
-        PathBuf::from(home)
-    }).join(CONFIG_DIR)
+    dirs::data_dir()
+        .unwrap_or_else(|| {
+            let home = std::env::var("USERPROFILE")
+                .or_else(|_| std::env::var("HOME"))
+                .unwrap_or_else(|_| ".".to_string());
+            PathBuf::from(home)
+        })
+        .join(CONFIG_DIR)
 }
 
 fn ensure_gateway_data_dir() -> Result<PathBuf, String> {
@@ -314,7 +331,8 @@ pub fn save_gateway_config(config: &GatewayConfig) -> Result<(), String> {
     let normalized = normalize_config(config);
     ensure_config_valid(&normalized)?;
     let path = config_path()?;
-    let content = serde_json::to_string_pretty(&normalized).map_err(|e| format!("序列化配置失败: {e}"))?;
+    let content =
+        serde_json::to_string_pretty(&normalized).map_err(|e| format!("序列化配置失败: {e}"))?;
     fs::write(path, content).map_err(|e| format!("写入配置失败: {e}"))
 }
 
@@ -325,11 +343,14 @@ pub fn append_gateway_request_log(entry: &GatewayRequestLogEntry) -> Result<(), 
         .append(true)
         .open(path)
         .map_err(|e| format!("打开请求日志失败: {e}"))?;
-    let serialized = serde_json::to_string(entry).map_err(|e| format!("序列化请求日志失败: {e}"))?;
+    let serialized =
+        serde_json::to_string(entry).map_err(|e| format!("序列化请求日志失败: {e}"))?;
     writeln!(file, "{serialized}").map_err(|e| format!("写入请求日志失败: {e}"))
 }
 
-pub fn get_gateway_request_logs(limit: Option<usize>) -> Result<Vec<GatewayRequestLogEntry>, String> {
+pub fn get_gateway_request_logs(
+    limit: Option<usize>,
+) -> Result<Vec<GatewayRequestLogEntry>, String> {
     let path = request_log_path()?;
     if !path.exists() {
         return Ok(Vec::new());
@@ -473,9 +494,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
     let request_count = Arc::new(AtomicU64::new(0));
     let last_error = Arc::new(AsyncMutex::new(None));
 
-    let http = Client::builder()
-        .timeout(Duration::from_secs(120))
-        .build()
+    let http = build_http_client_with_timeout(120, 10)
         .map_err(|e| format!("初始化 HTTP 客户端失败: {e}"))?;
 
     let state = RouterState {
@@ -496,10 +515,13 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    let server = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
-        .with_graceful_shutdown(async {
-            let _ = shutdown_rx.await;
-        });
+    let server = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        let _ = shutdown_rx.await;
+    });
 
     let server_task = tokio::spawn(async move {
         if let Err(e) = server.await {
@@ -628,7 +650,9 @@ mod tests {
 
     #[test]
     fn gateway_request_logs_round_trip_recent_entries() {
-        let _guard = REQUEST_LOG_TEST_MUTEX.lock().expect("request log test mutex should lock");
+        let _guard = REQUEST_LOG_TEST_MUTEX
+            .lock()
+            .expect("request log test mutex should lock");
         let path = request_log_path().expect("request log path should resolve");
         let backup = fs::read_to_string(&path).ok();
 
@@ -676,8 +700,14 @@ mod tests {
         assert_eq!(logs.len(), 2);
         assert_eq!(logs[0].request_index, 2);
         assert_eq!(logs[1].request_index, 1);
-        assert_eq!(logs[0].request_body.as_deref(), Some(r#"{"method":"tools/list"}"#));
-        assert_eq!(logs[1].response_body.as_deref(), Some(r#"{"id":"resp_123"}"#));
+        assert_eq!(
+            logs[0].request_body.as_deref(),
+            Some(r#"{"method":"tools/list"}"#)
+        );
+        assert_eq!(
+            logs[1].response_body.as_deref(),
+            Some(r#"{"id":"resp_123"}"#)
+        );
 
         match backup {
             Some(content) => fs::write(&path, content).expect("request log backup should restore"),
@@ -691,7 +721,9 @@ mod tests {
 
     #[test]
     fn clear_gateway_request_logs_removes_log_file() {
-        let _guard = REQUEST_LOG_TEST_MUTEX.lock().expect("request log test mutex should lock");
+        let _guard = REQUEST_LOG_TEST_MUTEX
+            .lock()
+            .expect("request log test mutex should lock");
         let path = request_log_path().expect("request log path should resolve");
         let backup = fs::read_to_string(&path).ok();
 
@@ -714,7 +746,8 @@ mod tests {
             error: None,
             request_body: Some(r#"{"model":"claude-sonnet-4-6"}"#.to_string()),
             response_body: Some(r#"{"id":"resp_456"}"#.to_string()),
-        }).expect("request log entry should append");
+        })
+        .expect("request log entry should append");
 
         clear_gateway_request_logs().expect("request log file should clear");
         assert!(!path.exists(), "request log file should be removed");
@@ -849,7 +882,10 @@ mod tests {
         };
 
         let err = ensure_config_valid(&config).expect_err("local mode should fail");
-        assert!(err.contains("不再支持 local 模式"), "unexpected error: {err}");
+        assert!(
+            err.contains("不再支持 local 模式"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
@@ -881,14 +917,18 @@ mod tests {
             ..GatewayConfig::default()
         };
 
-        let err = ensure_config_valid(&config).expect_err("remote access without api key should fail");
+        let err =
+            ensure_config_valid(&config).expect_err("remote access without api key should fail");
         assert!(err.contains("API Key"), "unexpected error: {err}");
     }
 
     #[tokio::test]
     async fn runtime_serves_health_over_real_http() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener should bind");
-        let port = listener.local_addr().expect("local addr should resolve").port();
+        let port = listener
+            .local_addr()
+            .expect("local addr should resolve")
+            .port();
         drop(listener);
 
         let config = GatewayConfig {
@@ -914,7 +954,10 @@ mod tests {
     #[tokio::test]
     async fn runtime_rejects_unauthenticated_responses_requests_over_real_http() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener should bind");
-        let port = listener.local_addr().expect("local addr should resolve").port();
+        let port = listener
+            .local_addr()
+            .expect("local addr should resolve")
+            .port();
         drop(listener);
 
         let config = GatewayConfig {
@@ -948,7 +991,10 @@ mod tests {
     #[tokio::test]
     async fn runtime_requires_client_api_key_even_when_local_only() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener should bind");
-        let port = listener.local_addr().expect("local addr should resolve").port();
+        let port = listener
+            .local_addr()
+            .expect("local addr should resolve")
+            .port();
         drop(listener);
 
         let config = GatewayConfig {

@@ -9,24 +9,43 @@ use rand::{seq::SliceRandom, thread_rng};
 use regex::Regex;
 use reqwest::Client;
 use serde_json::{json, Value};
-use std::{collections::{HashMap, HashSet}, convert::Infallible, net::{IpAddr, SocketAddr}, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::Infallible,
+    net::{IpAddr, SocketAddr},
+    time::Instant,
+};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use url::Url;
 
 use crate::{
     account::{Account, AccountStore},
-    commands::common::{calc_expires_at, calc_status, get_usage_by_provider, refresh_token_by_provider, RefreshResult},
+    commands::common::{
+        calc_expires_at, calc_status, get_usage_by_provider, refresh_token_by_provider,
+        RefreshResult,
+    },
+    commands::machine_guid::get_machine_id,
+    http_client::{
+        build_kiro_custom_user_agent, resolve_kiro_upstream_region,
+        should_send_codewhisperer_optout,
+    },
 };
 
 use super::{
     append_gateway_request_log,
-    converter::{build_kiro_payload, get_available_models, normalize_anthropic_request, normalize_responses_request},
-    GatewayRequestLogEntry,
-    models::{AnthropicContentBlock, AnthropicMessagesRequest, AnthropicMessagesResponse, AnthropicUsage, ModelsResponse, NormalizedMessage, ToolCall, ToolCallFunction, WebSearchToolOptions, NormalizedRequest},
+    converter::{
+        build_kiro_payload, get_available_models, normalize_anthropic_request,
+        normalize_responses_request,
+    },
+    models::{
+        AnthropicContentBlock, AnthropicMessagesRequest, AnthropicMessagesResponse, AnthropicUsage,
+        ModelsResponse, NormalizedMessage, NormalizedRequest, ToolCall, ToolCallFunction,
+        WebSearchToolOptions,
+    },
     stream::{self, aggregate_kiro_response, extract_json, parse_kiro_event_full, KiroEvent},
     thinking_parser::{SegmentType, ThinkingParser},
-    GatewayConfig, ResponseFormat, RouterState, DEFAULT_AGENT_MODE,
+    GatewayConfig, GatewayRequestLogEntry, ResponseFormat, RouterState, DEFAULT_AGENT_MODE,
 };
 
 #[derive(Debug, Clone)]
@@ -35,6 +54,9 @@ struct UpstreamCredentials {
     profile_arn: Option<String>,
     region: String,
     source_label: String,
+    user_agent: String,
+    auth_method: Option<String>,
+    send_opt_out: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -132,10 +154,7 @@ fn write_request_log(
     request_body: Option<&str>,
     response_body: Option<&str>,
 ) {
-    let duration_ms = started_at
-        .elapsed()
-        .as_millis()
-        .min(u128::from(u64::MAX)) as u64;
+    let duration_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
     let entry = GatewayRequestLogEntry {
         occurred_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         request_index,
@@ -195,13 +214,11 @@ async fn gateway_error_with_log(
     response_body: Option<&str>,
 ) -> Response {
     *state.last_error.lock().await = Some(message.to_string());
-    let logged_response_body =
-        response_body.map(str::to_string).or_else(|| Some(serialize_logged_value(&build_gateway_error_body(
-            format,
-            status,
-            error_type,
-            message,
-        ))));
+    let logged_response_body = response_body.map(str::to_string).or_else(|| {
+        Some(serialize_logged_value(&build_gateway_error_body(
+            format, status, error_type, message,
+        )))
+    });
     write_request_log(
         request_index,
         endpoint,
@@ -225,7 +242,9 @@ pub async fn proxy_handler(
     payload: Value,
     format: ResponseFormat,
 ) -> Response {
-    let request_index = state.request_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let request_index = state
+        .request_count
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let endpoint = request_endpoint(format);
     let started_at = Instant::now();
     let raw_request_body = payload.to_string();
@@ -384,9 +403,11 @@ pub async fn proxy_handler(
                 &outcome.aggregated,
                 &outcome.server_tool_calls,
             ),
-            ResponseFormat::Responses => {
-                build_responses_response(&request.model, &outcome.aggregated, &outcome.server_tool_calls)
-            }
+            ResponseFormat::Responses => build_responses_response(
+                &request.model,
+                &outcome.aggregated,
+                &outcome.server_tool_calls,
+            ),
         };
         let response_body = serialize_logged_value(&response);
         write_request_log(
@@ -405,32 +426,34 @@ pub async fn proxy_handler(
         return Json(response).into_response();
     }
 
-    let upstream_payload = match build_kiro_payload(&state.http, &request, upstream.profile_arn.clone()).await {
-        Ok(payload) => payload,
-        Err(message) => {
-            let sanitized = sanitize_error(&message);
-            return gateway_error_with_log(
-                &state,
-                format,
-                request_index,
-                endpoint,
-                client_addr,
-                Some(&request),
-                Some(&upstream),
-                started_at,
-                StatusCode::BAD_REQUEST,
-                "invalid_request_error",
-                &sanitized,
-                Some(raw_request_body.as_str()),
-                None,
-            )
-            .await;
-        }
-    };
+    let upstream_payload =
+        match build_kiro_payload(&state.http, &request, upstream.profile_arn.clone()).await {
+            Ok(payload) => payload,
+            Err(message) => {
+                let sanitized = sanitize_error(&message);
+                return gateway_error_with_log(
+                    &state,
+                    format,
+                    request_index,
+                    endpoint,
+                    client_addr,
+                    Some(&request),
+                    Some(&upstream),
+                    started_at,
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request_error",
+                    &sanitized,
+                    Some(raw_request_body.as_str()),
+                    None,
+                )
+                .await;
+            }
+        };
     let upstream_request_body = serde_json::to_string_pretty(&upstream_payload)
         .unwrap_or_else(|_| "[failed to serialize upstream payload]".to_string());
 
-    let upstream_resp = match send_generate_request(&state.http, &upstream, &upstream_payload).await {
+    let upstream_resp = match send_generate_request(&state.http, &upstream, &upstream_payload).await
+    {
         Ok(resp) => resp,
         Err((status, error_type, message, upstream_response_body)) => {
             return gateway_error_with_log(
@@ -538,7 +561,9 @@ pub async fn mcp_proxy_handler(
     headers: HeaderMap,
     payload: Value,
 ) -> Response {
-    let request_index = state.request_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let request_index = state
+        .request_count
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let started_at = Instant::now();
     let raw_request_body = payload.to_string();
 
@@ -627,15 +652,17 @@ pub async fn mcp_proxy_handler(
     };
 
     let upstream_url = format!("https://q.{}.amazonaws.com/mcp", upstream.region);
-    let upstream_resp = match state
-        .http
-        .post(upstream_url)
-        .header("Authorization", format!("Bearer {}", upstream.access_token))
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json")
-        .json(&payload)
-        .send()
-        .await
+    let upstream_resp = match with_kiro_upstream_headers(
+        state.http.post(upstream_url),
+        &upstream,
+        "application/json",
+        false,
+        false,
+        true,
+    )
+    .json(&payload)
+    .send()
+    .await
     {
         Ok(resp) => resp,
         Err(error) => {
@@ -709,7 +736,10 @@ pub async fn mcp_proxy_handler(
     if let Some(value) = content_type {
         builder = builder.header(header::CONTENT_TYPE, value);
     } else {
-        builder = builder.header(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        builder = builder.header(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
     }
 
     let logged_response_body = String::from_utf8_lossy(&body).to_string();
@@ -726,16 +756,14 @@ pub async fn mcp_proxy_handler(
         Some(raw_request_body.as_str()),
         Some(logged_response_body.as_str()),
     );
-    builder
-        .body(Body::from(body))
-        .unwrap_or_else(|error| {
-            gateway_error_response(
-                ResponseFormat::Responses,
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "api_error",
-                &format!("构建 MCP 响应失败: {error}"),
-            )
-        })
+    builder.body(Body::from(body)).unwrap_or_else(|error| {
+        gateway_error_response(
+            ResponseFormat::Responses,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "api_error",
+            &format!("构建 MCP 响应失败: {error}"),
+        )
+    })
 }
 
 async fn execute_request_with_server_tools(
@@ -747,7 +775,11 @@ async fn execute_request_with_server_tools(
     let web_search_options = request
         .tools
         .as_ref()
-        .and_then(|tools| tools.iter().find(|tool| tool.tool_type.starts_with("web_search_")))
+        .and_then(|tools| {
+            tools
+                .iter()
+                .find(|tool| tool.tool_type.starts_with("web_search_"))
+        })
         .and_then(|tool| tool.web_search.clone());
     let _max_uses = web_search_options
         .as_ref()
@@ -757,15 +789,16 @@ async fn execute_request_with_server_tools(
     let mut server_tool_calls = Vec::new();
 
     for _ in 0..8 {
-        let upstream_payload = build_kiro_payload(&state.http, &working_request, upstream.profile_arn.clone())
-            .await
-            .map_err(|message| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    "invalid_request_error",
-                    sanitize_error(&message),
-                )
-            })?;
+        let upstream_payload =
+            build_kiro_payload(&state.http, &working_request, upstream.profile_arn.clone())
+                .await
+                .map_err(|message| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        "invalid_request_error",
+                        sanitize_error(&message),
+                    )
+                })?;
         let upstream_resp = send_generate_request(&state.http, upstream, &upstream_payload)
             .await
             .map_err(|(status, error_type, message, _)| (status, error_type, message))?;
@@ -791,14 +824,14 @@ async fn execute_request_with_server_tools(
             });
         }
 
-
         working_request
             .messages
             .push(normalized_assistant_message_from_aggregated(&aggregated));
 
         let mut tool_result_blocks = Vec::new();
         for (id, name, arguments) in web_search_calls {
-            let input = serde_json::from_str(&arguments).unwrap_or_else(|_| json!({ "query": arguments }));
+            let input =
+                serde_json::from_str(&arguments).unwrap_or_else(|_| json!({ "query": arguments }));
             let mcp_arguments = build_web_search_mcp_arguments(&input);
             let mcp_result = call_mcp_tool(&state.http, upstream, &name, mcp_arguments).await?;
             let (result_content, tool_result_text) =
@@ -843,23 +876,25 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
         upstream.region
     );
 
-    let upstream_resp = http
-        .post(upstream_url)
-        .header("Authorization", format!("Bearer {}", upstream.access_token))
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/vnd.amazon.eventstream")
-        .header("x-amzn-kiro-agent-mode", DEFAULT_AGENT_MODE)
-        .json(upstream_payload)
-        .send()
-        .await
-        .map_err(|error| {
-            (
-                StatusCode::BAD_GATEWAY,
-                "api_error",
-                sanitize_error(&format!("上游请求失败: {error}")),
-                None,
-            )
-        })?;
+    let upstream_resp = with_kiro_upstream_headers(
+        http.post(upstream_url),
+        upstream,
+        "application/vnd.amazon.eventstream",
+        true,
+        true,
+        false,
+    )
+    .json(upstream_payload)
+    .send()
+    .await
+    .map_err(|error| {
+        (
+            StatusCode::BAD_GATEWAY,
+            "api_error",
+            sanitize_error(&format!("上游请求失败: {error}")),
+            None,
+        )
+    })?;
 
     if !upstream_resp.status().is_success() {
         let status = upstream_resp.status();
@@ -869,6 +904,47 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
     }
 
     Ok(upstream_resp)
+}
+
+fn is_external_idp_auth_method(auth_method: Option<&str>) -> bool {
+    auth_method.is_some_and(|value| value.trim().eq_ignore_ascii_case("external_idp"))
+}
+
+fn with_kiro_upstream_headers(
+    builder: reqwest::RequestBuilder,
+    upstream: &UpstreamCredentials,
+    accept: &str,
+    include_opt_out: bool,
+    include_agent_mode: bool,
+    include_profile_arn_header: bool,
+) -> reqwest::RequestBuilder {
+    let mut builder = builder
+        .header("Authorization", format!("Bearer {}", upstream.access_token))
+        .header("Content-Type", "application/json")
+        .header("Accept", accept)
+        .header(header::USER_AGENT, upstream.user_agent.clone())
+        .header("x-amz-user-agent", upstream.user_agent.clone());
+
+    if include_opt_out && upstream.send_opt_out {
+        builder = builder.header("x-amzn-codewhisperer-optout", "true");
+    }
+    if include_agent_mode {
+        builder = builder.header("x-amzn-kiro-agent-mode", DEFAULT_AGENT_MODE);
+    }
+    if include_profile_arn_header {
+        if let Some(profile_arn) = upstream
+            .profile_arn
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            builder = builder.header("x-amzn-kiro-profile-arn", profile_arn);
+        }
+    }
+    if is_external_idp_auth_method(upstream.auth_method.as_deref()) {
+        builder = builder.header("TokenType", "EXTERNAL_IDP");
+    }
+
+    builder
 }
 
 async fn call_mcp_tool(
@@ -888,21 +964,24 @@ async fn call_mcp_tool(
         }
     });
 
-    let response = http
-        .post(upstream_url)
-        .header("Authorization", format!("Bearer {}", upstream.access_token))
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json")
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|error| {
-            (
-                StatusCode::BAD_GATEWAY,
-                "api_error",
-                sanitize_error(&format!("MCP 上游请求失败: {error}")),
-            )
-        })?;
+    let response = with_kiro_upstream_headers(
+        http.post(upstream_url),
+        upstream,
+        "application/json",
+        false,
+        false,
+        true,
+    )
+    .json(&payload)
+    .send()
+    .await
+    .map_err(|error| {
+        (
+            StatusCode::BAD_GATEWAY,
+            "api_error",
+            sanitize_error(&format!("MCP 上游请求失败: {error}")),
+        )
+    })?;
 
     let status = response.status();
     let body = response.text().await.map_err(|error| {
@@ -917,14 +996,19 @@ async fn call_mcp_tool(
         return Err((mapped_status, error_type, message));
     }
 
-    let value: Value = serde_json::from_str(&body).unwrap_or_else(|_| json!({ "result": { "content": [{ "type": "text", "text": body }] } }));
+    let value: Value = serde_json::from_str(&body)
+        .unwrap_or_else(|_| json!({ "result": { "content": [{ "type": "text", "text": body }] } }));
     if let Some(error) = value.get("error") {
         let message = error
             .get("message")
             .and_then(Value::as_str)
             .unwrap_or("MCP 工具调用失败")
             .to_string();
-        return Err((StatusCode::BAD_GATEWAY, "api_error", sanitize_error(&message)));
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            "api_error",
+            sanitize_error(&message),
+        ));
     }
 
     Ok(value.get("result").cloned().unwrap_or(value))
@@ -934,7 +1018,11 @@ fn has_server_web_search_tool(request: &NormalizedRequest) -> bool {
     request
         .tools
         .as_ref()
-        .map(|tools| tools.iter().any(|tool| tool.tool_type.starts_with("web_search_")))
+        .map(|tools| {
+            tools
+                .iter()
+                .any(|tool| tool.tool_type.starts_with("web_search_"))
+        })
         .unwrap_or(false)
 }
 
@@ -1028,13 +1116,23 @@ fn domain_matches_filters(item: &Value, options: Option<&WebSearchToolOptions>) 
         return true;
     };
 
-    if let Some(allowed) = options.allowed_domains.as_ref().filter(|items| !items.is_empty()) {
-        if !allowed.iter().any(|entry| domain_matches_rule(&domain, entry)) {
+    if let Some(allowed) = options
+        .allowed_domains
+        .as_ref()
+        .filter(|items| !items.is_empty())
+    {
+        if !allowed
+            .iter()
+            .any(|entry| domain_matches_rule(&domain, entry))
+        {
             return false;
         }
     }
     if let Some(blocked) = options.blocked_domains.as_ref() {
-        if blocked.iter().any(|entry| domain_matches_rule(&domain, entry)) {
+        if blocked
+            .iter()
+            .any(|entry| domain_matches_rule(&domain, entry))
+        {
             return false;
         }
     }
@@ -1056,7 +1154,10 @@ fn domain_matches_rule(domain: &str, rule: &str) -> bool {
 fn normalize_anthropic_web_search_result(item: Value) -> Value {
     match item {
         Value::Object(mut map) => {
-            map.insert("type".to_string(), Value::String("web_search_result".to_string()));
+            map.insert(
+                "type".to_string(),
+                Value::String("web_search_result".to_string()),
+            );
             Value::Object(map)
         }
         other => other,
@@ -1066,7 +1167,10 @@ fn normalize_anthropic_web_search_result(item: Value) -> Value {
 fn ip_matches_allowlist(ip: IpAddr, allowlist: &[String]) -> bool {
     allowlist.iter().any(|entry| {
         let entry = entry.trim();
-        entry.parse::<IpAddr>().map(|allowed| allowed == ip).unwrap_or(false)
+        entry
+            .parse::<IpAddr>()
+            .map(|allowed| allowed == ip)
+            .unwrap_or(false)
             || entry
                 .parse::<ipnet::IpNet>()
                 .map(|network| network.contains(&ip))
@@ -1086,7 +1190,11 @@ fn normalize_request(format: ResponseFormat, payload: &Value) -> Result<Normaliz
 }
 
 fn verify_client_auth(headers: &HeaderMap, config: &GatewayConfig) -> Result<(), String> {
-    let Some(expected) = config.access_token.as_ref().filter(|token| !token.trim().is_empty()) else {
+    let Some(expected) = config
+        .access_token
+        .as_ref()
+        .filter(|token| !token.trim().is_empty())
+    else {
         return Err("客户端 API Key 未配置".to_string());
     };
 
@@ -1095,7 +1203,9 @@ fn verify_client_auth(headers: &HeaderMap, config: &GatewayConfig) -> Result<(),
         .and_then(|value| value.to_str().ok())
         .map(str::trim)
         .and_then(|value| value.strip_prefix("Bearer ").or(Some(value)));
-    let api_key = headers.get("x-api-key").and_then(|value| value.to_str().ok());
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok());
 
     if authorization == Some(expected.as_str()) || api_key == Some(expected.as_str()) {
         Ok(())
@@ -1161,7 +1271,13 @@ async fn resolve_managed_account_credentials(
                     is_auth_error = usage.is_auth_error;
                 }
 
-                persist_account_refresh(account, &refresh, usage_data.clone(), is_banned, is_auth_error);
+                persist_account_refresh(
+                    account,
+                    &refresh,
+                    usage_data.clone(),
+                    is_banned,
+                    is_auth_error,
+                );
 
                 if (is_banned || is_auth_error) && index + 1 < accounts.len() {
                     last_error = format!("账号 {} 已不可用，尝试下一个账号", account.label);
@@ -1169,25 +1285,45 @@ async fn resolve_managed_account_credentials(
                 }
 
                 if let Some(usage_data) = usage_data {
-                    if usage_exceeds_threshold(&usage_data, config.threshold) && index + 1 < accounts.len() {
-                        last_error = format!("账号 {} 已达到阈值 {}%，尝试下一个账号", account.label, config.threshold);
+                    if usage_exceeds_threshold(&usage_data, config.threshold)
+                        && index + 1 < accounts.len()
+                    {
+                        last_error = format!(
+                            "账号 {} 已达到阈值 {}%，尝试下一个账号",
+                            account.label, config.threshold
+                        );
                         continue;
                     }
                 }
 
+                let machine_id = account
+                    .machine_id
+                    .clone()
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(get_machine_id);
+                let profile_arn = refresh.profile_arn.or_else(|| account.profile_arn.clone());
+                let region = resolve_kiro_upstream_region(
+                    profile_arn.as_deref(),
+                    account.region.as_deref(),
+                    &config.region,
+                );
+
                 return Ok(UpstreamCredentials {
                     access_token: refresh.access_token,
-                    profile_arn: refresh.profile_arn.or_else(|| account.profile_arn.clone()),
-                    region: account
-                        .region
-                        .clone()
-                        .filter(|region| !region.trim().is_empty())
-                        .unwrap_or_else(|| config.region.clone()),
+                    profile_arn,
+                    region,
                     source_label: format_managed_upstream_source(config, account),
+                    user_agent: build_kiro_custom_user_agent(&machine_id),
+                    auth_method: account.auth_method.clone(),
+                    send_opt_out: should_send_codewhisperer_optout(),
                 });
             }
             Err(error) => {
-                last_error = format!("刷新账号 {} 失败: {}", account.label, sanitize_error(&error));
+                last_error = format!(
+                    "刷新账号 {} 失败: {}",
+                    account.label,
+                    sanitize_error(&error)
+                );
             }
         }
     }
@@ -1198,9 +1334,17 @@ async fn resolve_managed_account_credentials(
 fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> String {
     let account_label = if !account.label.trim().is_empty() {
         account.label.trim().to_string()
-    } else if let Some(email) = account.email.as_ref().filter(|value| !value.trim().is_empty()) {
+    } else if let Some(email) = account
+        .email
+        .as_ref()
+        .filter(|value| !value.trim().is_empty())
+    {
         email.trim().to_string()
-    } else if let Some(user_id) = account.user_id.as_ref().filter(|value| !value.trim().is_empty()) {
+    } else if let Some(user_id) = account
+        .user_id
+        .as_ref()
+        .filter(|value| !value.trim().is_empty())
+    {
         user_id.trim().to_string()
     } else {
         account.id.clone()
@@ -1240,7 +1384,11 @@ fn persist_account_refresh(
     is_auth_error: bool,
 ) {
     let mut store = AccountStore::new();
-    if let Some(target) = store.accounts.iter_mut().find(|candidate| candidate.id == account.id) {
+    if let Some(target) = store
+        .accounts
+        .iter_mut()
+        .find(|candidate| candidate.id == account.id)
+    {
         target.access_token = Some(refresh.access_token.clone());
         target.refresh_token = refresh.refresh_token.clone();
         target.expires_at = Some(calc_expires_at(refresh.expires_in));
@@ -1285,8 +1433,14 @@ fn extract_usage_totals(usage_data: &Value) -> Option<(i64, i64)> {
         .get("usageBreakdownList")
         .and_then(Value::as_array)?
         .first()?;
-    let current = breakdown.get("currentUsage").and_then(Value::as_i64).unwrap_or(0);
-    let limit = breakdown.get("usageLimit").and_then(Value::as_i64).unwrap_or(0);
+    let current = breakdown
+        .get("currentUsage")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let limit = breakdown
+        .get("usageLimit")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
     Some((current, limit))
 }
 
@@ -1299,7 +1453,11 @@ fn extract_plain_text(value: Option<&Value>) -> String {
                 item.get("text")
                     .and_then(Value::as_str)
                     .map(str::to_string)
-                    .or_else(|| item.get("content").and_then(Value::as_str).map(str::to_string))
+                    .or_else(|| {
+                        item.get("content")
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                    })
             })
             .collect::<Vec<_>>()
             .join("\n"),
@@ -1556,7 +1714,10 @@ fn extract_web_search_sources(server_tool_calls: &[ServerToolCall]) -> Vec<WebSe
     let mut seen = HashSet::new();
     let mut sources = Vec::new();
 
-    for call in server_tool_calls.iter().filter(|call| call.name == "web_search") {
+    for call in server_tool_calls
+        .iter()
+        .filter(|call| call.name == "web_search")
+    {
         let Some(results) = call.result_content.as_array() else {
             continue;
         };
@@ -1667,7 +1828,11 @@ fn build_responses_web_search_call(call: &ServerToolCall) -> Value {
     })
 }
 
-fn build_responses_response(model: &str, aggregated: &stream::AggregatedKiroResponse, server_tool_calls: &[ServerToolCall]) -> Value {
+fn build_responses_response(
+    model: &str,
+    aggregated: &stream::AggregatedKiroResponse,
+    server_tool_calls: &[ServerToolCall],
+) -> Value {
     build_responses_response_with_ids(
         model,
         aggregated,
@@ -1769,7 +1934,8 @@ fn stream_completed_response(
         match format {
             ResponseFormat::Anthropic => {
                 let message_id = format!("msg_{}", short_uuid());
-                let blocks = build_anthropic_content_blocks(&outcome.aggregated, &outcome.server_tool_calls);
+                let blocks =
+                    build_anthropic_content_blocks(&outcome.aggregated, &outcome.server_tool_calls);
                 let start = json!({
                     "type": "message_start",
                     "message": {
@@ -1870,7 +2036,10 @@ fn stream_completed_response(
 
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/event-stream"))
+        .header(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/event-stream"),
+        )
         .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
         .header(header::CONNECTION, HeaderValue::from_static("keep-alive"))
         .body(Body::from_stream(ReceiverStream::new(rx)))
@@ -1900,7 +2069,9 @@ fn map_upstream_error(status: StatusCode, body: &str) -> (StatusCode, &'static s
             StatusCode::TOO_MANY_REQUESTS
         } else if explicit_error_type == Some("invalid_request_error") {
             StatusCode::BAD_REQUEST
-        } else if text.contains("throttlingexception") || text.contains("servicequotaexceededexception") {
+        } else if text.contains("throttlingexception")
+            || text.contains("servicequotaexceededexception")
+        {
             StatusCode::TOO_MANY_REQUESTS
         } else if text.contains("accessdeniedexception") {
             StatusCode::FORBIDDEN
@@ -1919,7 +2090,9 @@ fn map_upstream_error(status: StatusCode, body: &str) -> (StatusCode, &'static s
         StatusCode::UNAUTHORIZED => "authentication_error",
         StatusCode::FORBIDDEN => "permission_error",
         StatusCode::TOO_MANY_REQUESTS => "rate_limit_error",
-        StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::CONFLICT => "invalid_request_error",
+        StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::CONFLICT => {
+            "invalid_request_error"
+        }
         _ => "api_error",
     });
 
@@ -2059,8 +2232,10 @@ fn stream_proxy_response(
                                 KiroEvent::ContextUsage { percentage } => {
                                     aggregated.context_usage_percentage = Some(percentage);
                                     if matches!(format, ResponseFormat::Anthropic) {
-                                        let data = json!({"type":"context_usage","percentage":percentage});
-                                        send_event(&tx, Some("context_usage"), &data.to_string()).await;
+                                        let data =
+                                            json!({"type":"context_usage","percentage":percentage});
+                                        send_event(&tx, Some("context_usage"), &data.to_string())
+                                            .await;
                                     }
                                 }
                                 KiroEvent::Thinking(text) => {
@@ -2120,7 +2295,8 @@ fn stream_proxy_response(
                                             )
                                             .await;
                                             close_content_block(&tx, &mut text_block_index).await;
-                                            close_content_block(&tx, &mut thinking_block_index).await;
+                                            close_content_block(&tx, &mut thinking_block_index)
+                                                .await;
                                             let index = next_block_index;
                                             next_block_index += 1;
                                             tool_block_indexes.insert(id.clone(), index);
@@ -2134,7 +2310,12 @@ fn stream_proxy_response(
                                                     "input": {}
                                                 }
                                             });
-                                            send_event(&tx, Some("content_block_start"), &data.to_string()).await;
+                                            send_event(
+                                                &tx,
+                                                Some("content_block_start"),
+                                                &data.to_string(),
+                                            )
+                                            .await;
                                         }
                                         ResponseFormat::Responses => {
                                             let data = json!({
@@ -2152,7 +2333,8 @@ fn stream_proxy_response(
                                     }
                                 }
                                 KiroEvent::ToolUseInputDelta { id, input_delta } => {
-                                    if let Some((_, current_input)) = tool_accumulators.get_mut(&id) {
+                                    if let Some((_, current_input)) = tool_accumulators.get_mut(&id)
+                                    {
                                         current_input.push_str(&input_delta);
                                     } else {
                                         tool_accumulators.insert(
@@ -2162,7 +2344,9 @@ fn stream_proxy_response(
                                     }
                                     match format {
                                         ResponseFormat::Anthropic => {
-                                            if let Some(index) = tool_block_indexes.get(&id).copied() {
+                                            if let Some(index) =
+                                                tool_block_indexes.get(&id).copied()
+                                            {
                                                 let data = json!({
                                                     "type": "content_block_delta",
                                                     "index": index,
@@ -2171,7 +2355,12 @@ fn stream_proxy_response(
                                                         "partial_json": input_delta
                                                     }
                                                 });
-                                                send_event(&tx, Some("content_block_delta"), &data.to_string()).await;
+                                                send_event(
+                                                    &tx,
+                                                    Some("content_block_delta"),
+                                                    &data.to_string(),
+                                                )
+                                                .await;
                                             }
                                         }
                                         ResponseFormat::Responses => {
@@ -2195,7 +2384,12 @@ fn stream_proxy_response(
                                                 "type": "content_block_stop",
                                                 "index": index
                                             });
-                                            send_event(&tx, Some("content_block_stop"), &data.to_string()).await;
+                                            send_event(
+                                                &tx,
+                                                Some("content_block_stop"),
+                                                &data.to_string(),
+                                            )
+                                            .await;
                                         }
                                     }
                                     ResponseFormat::Responses => {
@@ -2210,16 +2404,9 @@ fn stream_proxy_response(
                                         send_data(&tx, &data.to_string()).await;
                                     }
                                 },
-                                KiroEvent::Citation {
-                                    text,
-                                    link,
-                                    target,
-                                } => {
-                                    let citation = stream::AggregatedCitation {
-                                        text,
-                                        link,
-                                        target,
-                                    };
+                                KiroEvent::Citation { text, link, target } => {
+                                    let citation =
+                                        stream::AggregatedCitation { text, link, target };
                                     aggregated.citations.push(citation.clone());
 
                                     match format {
@@ -2233,7 +2420,8 @@ fn stream_proxy_response(
                                                 output_tokens,
                                             )
                                             .await;
-                                            close_content_block(&tx, &mut thinking_block_index).await;
+                                            close_content_block(&tx, &mut thinking_block_index)
+                                                .await;
                                             if text_block_index.is_none() {
                                                 let index = next_block_index;
                                                 next_block_index += 1;
@@ -2246,14 +2434,21 @@ fn stream_proxy_response(
                                                         "text": ""
                                                     }
                                                 });
-                                                send_event(&tx, Some("content_block_start"), &data.to_string()).await;
+                                                send_event(
+                                                    &tx,
+                                                    Some("content_block_start"),
+                                                    &data.to_string(),
+                                                )
+                                                .await;
                                             }
                                             if let Some(index) = text_block_index {
-                                                if let Some(data) = build_anthropic_citation_delta_event(
-                                                    index,
-                                                    &citation,
-                                                    &aggregated.text,
-                                                ) {
+                                                if let Some(data) =
+                                                    build_anthropic_citation_delta_event(
+                                                        index,
+                                                        &citation,
+                                                        &aggregated.text,
+                                                    )
+                                                {
                                                     send_event(
                                                         &tx,
                                                         Some("content_block_delta"),
@@ -2350,7 +2545,10 @@ fn stream_proxy_response(
 
     Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, HeaderValue::from_static("text/event-stream"))
+        .header(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/event-stream"),
+        )
         .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
         .header(header::CONNECTION, HeaderValue::from_static("keep-alive"))
         .body(Body::from_stream(ReceiverStream::new(rx)))
@@ -2615,7 +2813,10 @@ mod tests {
 
         assert_eq!(responses_request.model, "claude-3-7-sonnet-20250219");
         assert!(responses_request.stream);
-        assert_eq!(responses_request.tool_choice, Some(json!({ "type": "function", "name": "search_docs" })));
+        assert_eq!(
+            responses_request.tool_choice,
+            Some(json!({ "type": "function", "name": "search_docs" }))
+        );
         assert_eq!(responses_request.tools.as_ref().map(Vec::len), Some(1));
         assert_eq!(responses_request.tools.as_ref().map(Vec::len), Some(1));
         assert_eq!(
@@ -2635,7 +2836,10 @@ mod tests {
                 .map(|call| &call.function.arguments),
             Some(&"{\"q\":\"gateway\"}".to_string())
         );
-        assert_eq!(responses_request.messages[2].content, Some(json!("命中结果")));
+        assert_eq!(
+            responses_request.messages[2].content,
+            Some(json!("命中结果"))
+        );
         assert!(
             chat_error.contains("/v1/responses"),
             "unexpected error: {chat_error}"
@@ -2758,7 +2962,10 @@ mod tests {
         assert_eq!(response["output"][0]["action"]["query"], "Rust release");
         assert_eq!(response["output"][1]["type"], "message");
         assert_eq!(response["output"][1]["content"][0]["type"], "output_text");
-        assert_eq!(response["output"][1]["content"][0]["annotations"][0]["type"], "url_citation");
+        assert_eq!(
+            response["output"][1]["content"][0]["annotations"][0]["type"],
+            "url_citation"
+        );
         assert_eq!(
             response["output"][1]["content"][0]["annotations"][0]["url"],
             "https://blog.rust-lang.org"
@@ -2798,9 +3005,18 @@ mod tests {
             123,
         );
 
-        assert_eq!(response["output"][0]["content"][0]["annotations"][0]["type"], "url_citation");
-        assert_eq!(response["output"][0]["content"][0]["annotations"][0]["start_index"], 6);
-        assert_eq!(response["output"][0]["content"][0]["annotations"][0]["end_index"], 10);
+        assert_eq!(
+            response["output"][0]["content"][0]["annotations"][0]["type"],
+            "url_citation"
+        );
+        assert_eq!(
+            response["output"][0]["content"][0]["annotations"][0]["start_index"],
+            6
+        );
+        assert_eq!(
+            response["output"][0]["content"][0]["annotations"][0]["end_index"],
+            10
+        );
         assert_eq!(
             response["output"][0]["content"][0]["annotations"][0]["url"],
             "https://example.com/rust"
@@ -2849,7 +3065,10 @@ mod tests {
             123,
         );
 
-        assert_eq!(response["output"][0]["content"][0]["annotations"][0]["type"], "url_citation");
+        assert_eq!(
+            response["output"][0]["content"][0]["annotations"][0]["type"],
+            "url_citation"
+        );
         assert_eq!(
             response["output"][0]["content"][0]["annotations"][0]["citationText"],
             "Rust"
@@ -2882,8 +3101,14 @@ mod tests {
         let response = build_anthropic_response("claude-sonnet-4-5", &aggregated, &[]);
 
         assert_eq!(response["content"][0]["type"], "text");
-        assert_eq!(response["content"][0]["citations"][0]["type"], "char_location");
-        assert_eq!(response["content"][0]["citations"][0]["start_char_index"], 6);
+        assert_eq!(
+            response["content"][0]["citations"][0]["type"],
+            "char_location"
+        );
+        assert_eq!(
+            response["content"][0]["citations"][0]["start_char_index"],
+            6
+        );
         assert_eq!(response["content"][0]["citations"][0]["end_char_index"], 10);
         assert_eq!(response["content"][0]["citations"][0]["cited_text"], "Rust");
         assert_eq!(
@@ -2960,5 +3185,148 @@ mod tests {
         assert_eq!(event["annotation_index"], 2);
         assert_eq!(event["sequence_number"], 7);
         assert_eq!(event["annotation"]["type"], "url_citation");
+    }
+
+    #[test]
+    fn with_kiro_upstream_headers_adds_generate_request_headers() {
+        let upstream = UpstreamCredentials {
+            access_token: "token-1".to_string(),
+            profile_arn: None,
+            region: "us-east-1".to_string(),
+            source_label: "single:test".to_string(),
+            user_agent: "KiroIDE 0.11.34 machine-123".to_string(),
+            auth_method: Some("external_idp".to_string()),
+            send_opt_out: true,
+        };
+
+        let request = with_kiro_upstream_headers(
+            reqwest::Client::new()
+                .post("https://q.us-east-1.amazonaws.com/generateAssistantResponse"),
+            &upstream,
+            "application/vnd.amazon.eventstream",
+            true,
+            true,
+            false,
+        )
+        .build()
+        .expect("request should build");
+
+        assert_eq!(
+            request
+                .headers()
+                .get(header::AUTHORIZATION)
+                .and_then(|value| value.to_str().ok()),
+            Some("Bearer token-1")
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get(header::USER_AGENT)
+                .and_then(|value| value.to_str().ok()),
+            Some("KiroIDE 0.11.34 machine-123")
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get("x-amz-user-agent")
+                .and_then(|value| value.to_str().ok()),
+            Some("KiroIDE 0.11.34 machine-123")
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get("x-amzn-codewhisperer-optout")
+                .and_then(|value| value.to_str().ok()),
+            Some("true")
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get("x-amzn-kiro-agent-mode")
+                .and_then(|value| value.to_str().ok()),
+            Some(DEFAULT_AGENT_MODE)
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get("TokenType")
+                .and_then(|value| value.to_str().ok()),
+            Some("EXTERNAL_IDP")
+        );
+        assert!(request.headers().get("x-amzn-kiro-profile-arn").is_none());
+    }
+
+    #[test]
+    fn with_kiro_upstream_headers_keeps_runtime_requests_minimal() {
+        let upstream = UpstreamCredentials {
+            access_token: "token-2".to_string(),
+            profile_arn: None,
+            region: "us-east-1".to_string(),
+            source_label: "single:test".to_string(),
+            user_agent: "KiroIDE 0.11.34 machine-456".to_string(),
+            auth_method: Some("social".to_string()),
+            send_opt_out: true,
+        };
+
+        let request = with_kiro_upstream_headers(
+            reqwest::Client::new()
+                .get("https://q.us-east-1.amazonaws.com/ListAvailableModels?origin=AI_EDITOR"),
+            &upstream,
+            "application/json",
+            false,
+            false,
+            false,
+        )
+        .build()
+        .expect("request should build");
+
+        assert_eq!(
+            request
+                .headers()
+                .get("x-amz-user-agent")
+                .and_then(|value| value.to_str().ok()),
+            Some("KiroIDE 0.11.34 machine-456")
+        );
+        assert!(request
+            .headers()
+            .get("x-amzn-codewhisperer-optout")
+            .is_none());
+        assert!(request.headers().get("x-amzn-kiro-agent-mode").is_none());
+        assert!(request.headers().get("TokenType").is_none());
+        assert!(request.headers().get("x-amzn-kiro-profile-arn").is_none());
+    }
+
+    #[test]
+    fn with_kiro_upstream_headers_adds_mcp_profile_arn_header() {
+        let upstream = UpstreamCredentials {
+            access_token: "token-3".to_string(),
+            profile_arn: Some(
+                "arn:aws:codewhisperer:us-east-1:123456789012:profile/test".to_string(),
+            ),
+            region: "us-east-1".to_string(),
+            source_label: "single:test".to_string(),
+            user_agent: "KiroIDE 0.11.34 machine-789".to_string(),
+            auth_method: Some("social".to_string()),
+            send_opt_out: true,
+        };
+
+        let request = with_kiro_upstream_headers(
+            reqwest::Client::new().post("https://q.us-east-1.amazonaws.com/mcp"),
+            &upstream,
+            "application/json",
+            false,
+            false,
+            true,
+        )
+        .build()
+        .expect("request should build");
+
+        assert_eq!(
+            request
+                .headers()
+                .get("x-amzn-kiro-profile-arn")
+                .and_then(|value| value.to_str().ok()),
+            Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/test")
+        );
     }
 }

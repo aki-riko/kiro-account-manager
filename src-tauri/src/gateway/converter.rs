@@ -1,10 +1,9 @@
 use crate::gateway::models::{
-    AnthropicMessagesRequest, ConversationState,
-    CurrentMessage, HistoryAssistantMessage, HistoryItem, HistoryUserMessage, InferenceConfig,
-    ImageBlock, ImageSource, KiroInputSchema, KiroPayload, KiroTool, KiroToolResult,
-    KiroToolResultContent, KiroToolSpec, KiroToolUse, ModelInfo, NormalizedMessage,
-    NormalizedRequest, Tool, ToolCall, ToolCallFunction, ToolFunction, UserInputMessage,
-    UserInputMessageContext, WebSearchToolOptions,
+    AnthropicMessagesRequest, ConversationState, CurrentMessage, HistoryAssistantMessage,
+    HistoryItem, HistoryUserMessage, ImageBlock, ImageSource, InferenceConfig, KiroInputSchema,
+    KiroPayload, KiroTool, KiroToolResult, KiroToolResultContent, KiroToolSpec, KiroToolUse,
+    ModelInfo, NormalizedMessage, NormalizedRequest, Tool, ToolCall, ToolCallFunction,
+    ToolFunction, UserInputMessage, UserInputMessageContext, WebSearchToolOptions,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use reqwest::Client;
@@ -18,7 +17,8 @@ use uuid::Uuid;
 
 pub const TOOL_DESCRIPTION_MAX_LENGTH: usize = 1024;
 const WEB_SEARCH_TOOL_NAME: &str = "web_search";
-const WEB_SEARCH_TOOL_DESCRIPTION: &str = "Search the web for current information and return relevant results.";
+const WEB_SEARCH_TOOL_DESCRIPTION: &str =
+    "Search the web for current information and return relevant results.";
 const MAX_IMAGE_SOURCE_BYTES: usize = 5 * 1024 * 1024;
 const MAX_IMAGE_REDIRECTS: usize = 3;
 const IMAGE_FETCH_TIMEOUT_SECONDS: u64 = 15;
@@ -76,7 +76,10 @@ pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest,
         .unwrap_or("claude-sonnet-4-5-20250929")
         .to_string();
 
-    let stream = payload.get("stream").and_then(Value::as_bool).unwrap_or(false);
+    let stream = payload
+        .get("stream")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let mut messages = Vec::new();
 
     if let Some(instructions) = payload.get("instructions") {
@@ -108,12 +111,21 @@ pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest,
             .or_else(|| payload.get("max_tokens"))
             .and_then(Value::as_i64)
             .map(|value| value as i32),
-        temperature: payload.get("temperature").and_then(Value::as_f64).map(|value| value as f32),
-        top_p: payload.get("top_p").and_then(Value::as_f64).map(|value| value as f32),
-        stop: payload
-            .get("stop")
-            .and_then(Value::as_array)
-            .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect()),
+        temperature: payload
+            .get("temperature")
+            .and_then(Value::as_f64)
+            .map(|value| value as f32),
+        top_p: payload
+            .get("top_p")
+            .and_then(Value::as_f64)
+            .map(|value| value as f32),
+        stop: payload.get("stop").and_then(Value::as_array).map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        }),
         tools: convert_responses_tools(payload.get("tools")),
         tool_choice: payload.get("tool_choice").cloned(),
     })
@@ -161,7 +173,9 @@ fn convert_web_search_tool(
             } else {
                 name.to_string()
             },
-            description: Some(description.unwrap_or_else(|| WEB_SEARCH_TOOL_DESCRIPTION.to_string())),
+            description: Some(
+                description.unwrap_or_else(|| WEB_SEARCH_TOOL_DESCRIPTION.to_string()),
+            ),
             parameters: Some(web_search_input_schema()),
         },
         web_search: Some(WebSearchToolOptions {
@@ -215,14 +229,12 @@ pub fn get_internal_model_id(external_model: &str) -> Result<String, String> {
         | "claude-sonnet-4-5-20250929"
         | "claude-sonnet-4.5"
         | "claude-sonnet-latest"
-        | "sonnet" => {
-            "claude-sonnet-4.5"
-        }
+        | "sonnet" => "claude-sonnet-4.5",
         "claude-sonnet-4" | "claude-sonnet-4-20250514" => "claude-sonnet-4",
         "claude-3-7-sonnet-20250219" | "claude-3.7-sonnet" => "claude-3-7-sonnet-20250219",
-        "claude-3-5-sonnet-20241022"
-        | "claude-3-5-sonnet-latest"
-        | "claude-3.5-sonnet" => "claude-3-5-sonnet-20241022",
+        "claude-3-5-sonnet-20241022" | "claude-3-5-sonnet-latest" | "claude-3.5-sonnet" => {
+            "claude-3-5-sonnet-20241022"
+        }
         "auto" | "default" => "auto",
         other if other.starts_with("claude-opus-4-6-") => "claude-opus-4.6",
         other if other.starts_with("claude-sonnet-4-6-") => "claude-sonnet-4.6",
@@ -283,7 +295,10 @@ pub async fn build_kiro_payload(
     let history = if merged_messages.len() > 1 {
         let mut history_items = Vec::new();
 
-        for (index, message) in merged_messages[..merged_messages.len() - 1].iter().enumerate() {
+        for (index, message) in merged_messages[..merged_messages.len() - 1]
+            .iter()
+            .enumerate()
+        {
             match message.role.as_str() {
                 "assistant" => history_items.push(HistoryItem::Assistant {
                     assistant_response_message: HistoryAssistantMessage {
@@ -314,7 +329,8 @@ pub async fn build_kiro_payload(
                 "tool" => {
                     history_items.push(HistoryItem::User {
                         user_input_message: HistoryUserMessage {
-                            content: if Some(index) == first_user_index && !system_prompt.is_empty() {
+                            content: if Some(index) == first_user_index && !system_prompt.is_empty()
+                            {
                                 system_prompt.clone()
                             } else {
                                 String::new()
@@ -371,6 +387,8 @@ pub async fn build_kiro_payload(
         conversation_state: ConversationState {
             chat_trigger_type: "MANUAL".to_string(),
             conversation_id,
+            agent_continuation_id: None,
+            agent_task_type: None,
             current_message: CurrentMessage {
                 user_input_message: UserInputMessage {
                     content: current_content,
@@ -385,6 +403,8 @@ pub async fn build_kiro_payload(
                 },
             },
             history,
+            customization_arn: None,
+            workspace_id: None,
         },
         profile_arn,
     })
@@ -420,9 +440,9 @@ fn convert_anthropic_content(content: &Value) -> Value {
     match content {
         Value::String(text) => Value::String(text.clone()),
         Value::Array(items) => {
-            let has_tool_result = items.iter().any(|item| {
-                item.get("type").and_then(Value::as_str) == Some("tool_result")
-            });
+            let has_tool_result = items
+                .iter()
+                .any(|item| item.get("type").and_then(Value::as_str) == Some("tool_result"));
             if has_tool_result {
                 return content.clone();
             }
@@ -507,7 +527,10 @@ fn convert_responses_input_items(items: &[Value]) -> Vec<NormalizedMessage> {
                                 .map(str::to_string)
                                 .unwrap_or_else(|| {
                                     serde_json::to_string(
-                                        &item.get("arguments").cloned().unwrap_or_else(|| json!({})),
+                                        &item
+                                            .get("arguments")
+                                            .cloned()
+                                            .unwrap_or_else(|| json!({})),
                                     )
                                     .unwrap_or_else(|_| "{}".to_string())
                                 }),
@@ -571,10 +594,7 @@ fn responses_tool_output_content(output: Option<&Value>) -> Option<Value> {
 
 fn convert_responses_tools(tools: Option<&Value>) -> Option<Vec<Tool>> {
     let items = tools?.as_array()?;
-    let converted: Vec<Tool> = items
-        .iter()
-        .filter_map(convert_responses_tool)
-        .collect();
+    let converted: Vec<Tool> = items.iter().filter_map(convert_responses_tool).collect();
 
     if converted.is_empty() {
         None
@@ -589,9 +609,15 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
     if is_web_search_tool_type(item_type) {
         return Some(convert_web_search_tool(
             item_type,
-            item.get("name").and_then(Value::as_str).unwrap_or(WEB_SEARCH_TOOL_NAME),
-            item.get("description").and_then(Value::as_str).map(str::to_string),
-            item.get("max_uses").and_then(Value::as_i64).map(|value| value as i32),
+            item.get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(WEB_SEARCH_TOOL_NAME),
+            item.get("description")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            item.get("max_uses")
+                .and_then(Value::as_i64)
+                .map(|value| value as i32),
             item.get("allowed_domains")
                 .and_then(Value::as_array)
                 .map(|values| string_array_from_values(values)),
@@ -616,7 +642,10 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
         tool_type: "function".to_string(),
         function: ToolFunction {
             name: item.get("name").and_then(Value::as_str)?.to_string(),
-            description: item.get("description").and_then(Value::as_str).map(str::to_string),
+            description: item
+                .get("description")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             parameters: item.get("parameters").cloned(),
         },
         web_search: None,
@@ -637,10 +666,18 @@ fn extract_anthropic_tool_calls(content: &Value) -> Option<Vec<ToolCall>> {
             }
 
             Some(ToolCall {
-                id: item.get("id").and_then(Value::as_str).unwrap_or_default().to_string(),
+                id: item
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string(),
                 call_type: "function".to_string(),
                 function: ToolCallFunction {
-                    name: item.get("name").and_then(Value::as_str).unwrap_or_default().to_string(),
+                    name: item
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
                     arguments: serde_json::to_string(
                         &item.get("input").cloned().unwrap_or_else(|| json!({})),
                     )
@@ -665,7 +702,9 @@ fn extract_anthropic_tool_result_id(content: &Value) -> Option<String> {
     items.iter().find_map(|item| {
         let item_type = item.get("type").and_then(Value::as_str).unwrap_or_default();
         if item_type == "tool_result" || item_type == "web_search_tool_result" {
-            item.get("tool_use_id").and_then(Value::as_str).map(str::to_string)
+            item.get("tool_use_id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
         } else {
             None
         }
@@ -700,7 +739,9 @@ fn merge_adjacent_messages(messages: &[&NormalizedMessage]) -> Vec<NormalizedMes
                 last.content = Some(Value::String(join_with_newline(&existing, &incoming)));
 
                 match (&mut last.tool_calls, &message.tool_calls) {
-                    (Some(existing_calls), Some(next_calls)) => existing_calls.extend(next_calls.clone()),
+                    (Some(existing_calls), Some(next_calls)) => {
+                        existing_calls.extend(next_calls.clone())
+                    }
                     (None, Some(next_calls)) => last.tool_calls = Some(next_calls.clone()),
                     _ => {}
                 }
@@ -746,7 +787,9 @@ fn extract_text_content(content: Option<&Value>) -> String {
     match content {
         None => String::new(),
         Some(Value::String(text)) => text.clone(),
-        Some(Value::Array(_)) => extract_text_blocks(content.unwrap(), &["text", "input_text", "output_text"]),
+        Some(Value::Array(_)) => {
+            extract_text_blocks(content.unwrap(), &["text", "input_text", "output_text"])
+        }
         Some(other) => other.to_string(),
     }
 }
@@ -782,7 +825,8 @@ fn extract_tool_results(content: Option<&Value>) -> Vec<KiroToolResult> {
         return Vec::new();
     };
 
-    items.iter()
+    items
+        .iter()
         .filter_map(|item| {
             let item_type = item.get("type").and_then(Value::as_str).unwrap_or_default();
             if item_type != "tool_result" && item_type != "web_search_tool_result" {
@@ -799,11 +843,17 @@ fn extract_tool_results(content: Option<&Value>) -> Vec<KiroToolResult> {
                 Some(Value::Array(array)) if item_type == "web_search_tool_result" => {
                     Value::Array(array.clone()).to_string()
                 }
-                Some(Value::Array(array)) => extract_text_blocks(&Value::Array(array.clone()), &["text", "output_text"]),
+                Some(Value::Array(array)) => {
+                    extract_text_blocks(&Value::Array(array.clone()), &["text", "output_text"])
+                }
                 Some(other) => other.to_string(),
                 None => String::new(),
             };
-            let status = if item.get("is_error").and_then(Value::as_bool).unwrap_or(false) {
+            let status = if item
+                .get("is_error")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+            {
                 "error"
             } else {
                 "success"
@@ -854,7 +904,10 @@ async fn extract_image_block(client: &Client, item: &Value) -> Option<ImageBlock
             if encoded_image_exceeds_limit(&bytes) {
                 return None;
             }
-            let media_type = source.get("media_type").and_then(Value::as_str).unwrap_or("image/png");
+            let media_type = source
+                .get("media_type")
+                .and_then(Value::as_str)
+                .unwrap_or("image/png");
             Some(ImageBlock {
                 format: media_type_to_format(media_type)?,
                 source: ImageSource { bytes },
@@ -922,7 +975,11 @@ async fn resolve_image_source(client: &Client, url: &str) -> Option<(String, Str
     for _ in 0..=MAX_IMAGE_REDIRECTS {
         let response = image_client.get(current_url.clone()).send().await.ok()?;
         if response.status().is_redirection() {
-            let location = response.headers().get(reqwest::header::LOCATION)?.to_str().ok()?;
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)?
+                .to_str()
+                .ok()?;
             let next_url = current_url.join(location).ok()?;
             current_url = validate_remote_image_url(next_url.as_str()).await?;
             continue;
@@ -1057,7 +1114,8 @@ fn extract_tool_uses(message: &NormalizedMessage) -> Option<Vec<KiroToolUse>> {
         .iter()
         .map(|tool_call| KiroToolUse {
             name: tool_call.function.name.clone(),
-            input: serde_json::from_str(&tool_call.function.arguments).unwrap_or_else(|_| json!({})),
+            input: serde_json::from_str(&tool_call.function.arguments)
+                .unwrap_or_else(|_| json!({})),
             tool_use_id: tool_call.id.clone(),
         })
         .collect();
@@ -1071,7 +1129,8 @@ fn extract_tool_uses(message: &NormalizedMessage) -> Option<Vec<KiroToolUse>> {
 
 fn convert_tools(tools: &Option<Vec<Tool>>) -> Option<Vec<KiroTool>> {
     tools.as_ref().map(|items| {
-        items.iter()
+        items
+            .iter()
             .map(|tool| KiroTool {
                 tool_specification: KiroToolSpec {
                     name: tool.function.name.clone(),
@@ -1093,10 +1152,18 @@ fn tool_description(tool: &Tool) -> String {
             .clone()
             .unwrap_or_else(|| WEB_SEARCH_TOOL_DESCRIPTION.to_string())];
         if let Some(options) = &tool.web_search {
-            if let Some(domains) = options.allowed_domains.as_ref().filter(|items| !items.is_empty()) {
+            if let Some(domains) = options
+                .allowed_domains
+                .as_ref()
+                .filter(|items| !items.is_empty())
+            {
                 parts.push(format!("Only return results from: {}", domains.join(", ")));
             }
-            if let Some(domains) = options.blocked_domains.as_ref().filter(|items| !items.is_empty()) {
+            if let Some(domains) = options
+                .blocked_domains
+                .as_ref()
+                .filter(|items| !items.is_empty())
+            {
                 parts.push(format!("Exclude results from: {}", domains.join(", ")));
             }
         }
@@ -1151,7 +1218,10 @@ fn process_tools_with_long_descriptions(
     for tool in tools {
         let description = tool.function.description.clone().unwrap_or_default();
         if description.len() > TOOL_DESCRIPTION_MAX_LENGTH {
-            long_docs.push(format!("## Tool: {}\n\n{}", tool.function.name, description));
+            long_docs.push(format!(
+                "## Tool: {}\n\n{}",
+                tool.function.name, description
+            ));
             processed.push(Tool {
                 tool_type: tool.tool_type.clone(),
                 function: ToolFunction {
@@ -1172,7 +1242,10 @@ fn process_tools_with_long_descriptions(
     let docs = if long_docs.is_empty() {
         None
     } else {
-        Some(format!("# Tool Documentation\n\n{}", long_docs.join("\n\n")))
+        Some(format!(
+            "# Tool Documentation\n\n{}",
+            long_docs.join("\n\n")
+        ))
     };
 
     (Some(processed), docs)
@@ -1199,8 +1272,8 @@ fn join_with_double_newline(left: &str, right: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::engine::general_purpose::STANDARD;
     use crate::gateway::models::AnthropicTool;
+    use base64::engine::general_purpose::STANDARD;
     use serde_json::json;
     use std::{
         io::{Read, Write},
@@ -1257,9 +1330,7 @@ mod tests {
         assert_eq!(converted.messages[0].role, "system");
         assert_eq!(converted.tools.as_ref().map(Vec::len), Some(1));
         assert_eq!(
-            converted.messages[1]
-                .tool_call_id
-                .as_deref(),
+            converted.messages[1].tool_call_id.as_deref(),
             Some("tool_1")
         );
     }
@@ -1305,7 +1376,9 @@ mod tests {
         assert_eq!(tool.function.name, "web_search");
         assert_eq!(tool.function.parameters, Some(web_search_input_schema()));
         assert_eq!(
-            tool.web_search.as_ref().and_then(|options| options.max_uses),
+            tool.web_search
+                .as_ref()
+                .and_then(|options| options.max_uses),
             Some(3)
         );
         assert_eq!(
@@ -1438,26 +1511,36 @@ mod tests {
             tool_choice: None,
         };
 
-        let payload = build_kiro_payload(&Client::new(), &request, Some("arn:aws:codewhisperer:::profile/test".to_string()))
-            .await
-            .expect("payload should build");
-        let current = &payload.conversation_state.current_message.user_input_message;
+        let payload = build_kiro_payload(
+            &Client::new(),
+            &request,
+            Some("arn:aws:codewhisperer:::profile/test".to_string()),
+        )
+        .await
+        .expect("payload should build");
+        let current = &payload
+            .conversation_state
+            .current_message
+            .user_input_message;
 
         assert!(current.content.contains("Tool Documentation"));
         assert_eq!(current.model_id, "claude-sonnet-4.5");
-        assert_eq!(payload.profile_arn.as_deref(), Some("arn:aws:codewhisperer:::profile/test"));
+        assert_eq!(
+            payload.profile_arn.as_deref(),
+            Some("arn:aws:codewhisperer:::profile/test")
+        );
 
-        let history = payload.conversation_state.history.expect("history should exist");
+        let history = payload
+            .conversation_state
+            .history
+            .expect("history should exist");
         assert_eq!(history.len(), 2);
         match &history[0] {
             HistoryItem::Assistant {
                 assistant_response_message,
             } => {
                 assert_eq!(
-                    assistant_response_message
-                        .tool_uses
-                        .as_ref()
-                        .map(Vec::len),
+                    assistant_response_message.tool_uses.as_ref().map(Vec::len),
                     Some(1)
                 );
             }
@@ -1499,7 +1582,11 @@ mod tests {
             .expect("payload should build");
 
         assert_eq!(
-            payload.conversation_state.current_message.user_input_message.model_id,
+            payload
+                .conversation_state
+                .current_message
+                .user_input_message
+                .model_id,
             "claude-sonnet-4.5"
         );
     }
@@ -1528,7 +1615,11 @@ mod tests {
             .expect("payload should build");
 
         assert_eq!(
-            payload.conversation_state.current_message.user_input_message.model_id,
+            payload
+                .conversation_state
+                .current_message
+                .user_input_message
+                .model_id,
             "claude-sonnet-4.6"
         );
     }
@@ -1550,7 +1641,8 @@ mod tests {
             ]
         });
 
-        let converted = normalize_responses_request(&payload).expect("responses payload should convert");
+        let converted =
+            normalize_responses_request(&payload).expect("responses payload should convert");
         assert!(converted.stream);
         assert_eq!(converted.messages.len(), 1);
         assert_eq!(converted.messages[0].role, "user");
@@ -1575,7 +1667,8 @@ mod tests {
             ]
         });
 
-        let converted = normalize_responses_request(&payload).expect("responses payload should convert");
+        let converted =
+            normalize_responses_request(&payload).expect("responses payload should convert");
         assert_eq!(converted.model, "claude-sonnet-4-5-20250929");
     }
 
@@ -1620,7 +1713,8 @@ mod tests {
             ]
         });
 
-        let converted = normalize_responses_request(&payload).expect("responses payload should convert");
+        let converted =
+            normalize_responses_request(&payload).expect("responses payload should convert");
 
         assert_eq!(
             converted.tool_choice,
@@ -1652,7 +1746,10 @@ mod tests {
             Some("search_docs")
         );
         assert_eq!(converted.messages[2].role, "tool");
-        assert_eq!(converted.messages[2].tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(
+            converted.messages[2].tool_call_id.as_deref(),
+            Some("call_1")
+        );
         assert_eq!(converted.messages[2].content, Some(json!("命中结果")));
     }
 
@@ -1691,11 +1788,18 @@ mod tests {
         let payload = build_kiro_payload(&Client::new(), &request, None)
             .await
             .expect("payload should build");
-        let current = &payload.conversation_state.current_message.user_input_message;
+        let current = &payload
+            .conversation_state
+            .current_message
+            .user_input_message;
 
         assert_eq!(current.images.as_ref().map(Vec::len), Some(1));
         assert_eq!(
-            current.images.as_ref().and_then(|images| images.first()).map(|image| image.format.as_str()),
+            current
+                .images
+                .as_ref()
+                .and_then(|images| images.first())
+                .map(|image| image.format.as_str()),
             Some("png")
         );
     }
@@ -1771,8 +1875,14 @@ mod tests {
         let payload = build_kiro_payload(&Client::new(), &request, None)
             .await
             .expect("payload should build");
-        assert!(!handle.join().expect("server thread should finish"), "client should not fetch private image");
-        let current = &payload.conversation_state.current_message.user_input_message;
+        assert!(
+            !handle.join().expect("server thread should finish"),
+            "client should not fetch private image"
+        );
+        let current = &payload
+            .conversation_state
+            .current_message
+            .user_input_message;
 
         assert!(current.images.as_ref().map(Vec::is_empty).unwrap_or(true));
     }
@@ -1809,7 +1919,10 @@ mod tests {
         let payload = build_kiro_payload(&Client::new(), &request, None)
             .await
             .expect("payload should build");
-        let current = &payload.conversation_state.current_message.user_input_message;
+        let current = &payload
+            .conversation_state
+            .current_message
+            .user_input_message;
 
         assert!(current.images.as_ref().map(Vec::is_empty).unwrap_or(true));
     }
@@ -1817,7 +1930,8 @@ mod tests {
     #[test]
     fn get_internal_model_id_normalizes_versioned_public_model_names() {
         assert_eq!(
-            get_internal_model_id("claude-sonnet-4-5-20250929").expect("versioned sonnet 4.5 should map"),
+            get_internal_model_id("claude-sonnet-4-5-20250929")
+                .expect("versioned sonnet 4.5 should map"),
             "claude-sonnet-4.5"
         );
         assert_eq!(
@@ -1825,7 +1939,8 @@ mod tests {
             "claude-sonnet-4.6"
         );
         assert_eq!(
-            get_internal_model_id("claude-sonnet-4-6-20260217").expect("versioned sonnet 4.6 should map"),
+            get_internal_model_id("claude-sonnet-4-6-20260217")
+                .expect("versioned sonnet 4.6 should map"),
             "claude-sonnet-4.6"
         );
         assert_eq!(
@@ -1833,15 +1948,18 @@ mod tests {
             "claude-opus-4.6"
         );
         assert_eq!(
-            get_internal_model_id("claude-opus-4-6-20260205").expect("versioned opus 4.6 should map"),
+            get_internal_model_id("claude-opus-4-6-20260205")
+                .expect("versioned opus 4.6 should map"),
             "claude-opus-4.6"
         );
         assert_eq!(
-            get_internal_model_id("claude-haiku-4-5-20251001").expect("versioned haiku 4.5 should map"),
+            get_internal_model_id("claude-haiku-4-5-20251001")
+                .expect("versioned haiku 4.5 should map"),
             "claude-haiku-4.5"
         );
         assert_eq!(
-            get_internal_model_id("claude-sonnet-latest").expect("latest sonnet alias should default to 4.5"),
+            get_internal_model_id("claude-sonnet-latest")
+                .expect("latest sonnet alias should default to 4.5"),
             "claude-sonnet-4.5"
         );
         assert_eq!(
@@ -1860,6 +1978,8 @@ mod tests {
         assert!(model_ids.iter().any(|id| id == "claude-opus-4-6"));
         assert!(model_ids.iter().any(|id| id == "claude-opus-4-6-20260205"));
         assert!(model_ids.iter().any(|id| id == "claude-sonnet-4-6"));
-        assert!(model_ids.iter().any(|id| id == "claude-sonnet-4-6-20260217"));
+        assert!(model_ids
+            .iter()
+            .any(|id| id == "claude-sonnet-4-6-20260217"));
     }
 }

@@ -88,9 +88,17 @@ pub struct KiroPayload {
 pub struct ConversationState {
     pub chat_trigger_type: String,
     pub conversation_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_continuation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_task_type: Option<String>,
     pub current_message: CurrentMessage,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<Vec<HistoryItem>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub customization_arn: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
