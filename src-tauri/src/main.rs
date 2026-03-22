@@ -31,6 +31,7 @@ mod tray_behavior;
 use account::{AccountStore, GroupTagStore};
 use auth::AuthState;
 use state::AppState;
+use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 use tauri::{Listener, Manager};
 
@@ -179,12 +180,25 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let tray_icon = tray_behavior::create_tray_icon(app.handle())?;
-    app.state::<AppState>()
-        .tray_icon
-        .lock()
-        .expect("tray icon mutex poisoned")
-        .replace(tray_icon);
+    match tray_behavior::create_tray_icon(app.handle()) {
+        Ok(tray_icon) => {
+            let state = app.state::<AppState>();
+            state
+                .tray_icon
+                .lock()
+                .expect("tray icon mutex poisoned")
+                .replace(tray_icon);
+            state
+                .tray_ready
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        Err(err) => {
+            app.state::<AppState>()
+                .tray_ready
+                .store(false, std::sync::atomic::Ordering::Relaxed);
+            log::warn!("系统托盘初始化失败，将继续启动但不启用关闭到托盘: {err}");
+        }
+    }
 
     Ok(())
 }
@@ -210,6 +224,7 @@ fn main() {
             auth: AuthState::new(),
             pending_login: Mutex::new(None),
             gateway: Mutex::new(None),
+            tray_ready: AtomicBool::new(false),
             tray_icon: Mutex::new(None),
         })
         .setup(setup_app)

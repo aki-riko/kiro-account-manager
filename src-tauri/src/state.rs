@@ -1,9 +1,10 @@
 // 应用全局状态
 
-use std::sync::Mutex;
-use crate::auth::AuthState;
 use crate::account::{AccountStore, GroupTagStore};
+use crate::auth::AuthState;
 use crate::gateway::GatewayRuntime;
+use std::sync::atomic::AtomicBool;
+use std::sync::Mutex;
 use tauri::tray::TrayIcon;
 use tauri::Wry;
 
@@ -21,5 +22,6 @@ pub struct AppState {
     pub auth: AuthState,
     pub pending_login: Mutex<Option<PendingLogin>>,
     pub gateway: Mutex<Option<GatewayRuntime>>,
+    pub tray_ready: AtomicBool,
     pub tray_icon: Mutex<Option<TrayIcon<Wry>>>,
 }
