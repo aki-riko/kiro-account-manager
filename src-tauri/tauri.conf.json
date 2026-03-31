@@ -77,8 +77,14 @@
     ],
     "targets": ["msi", "app", "dmg", "deb", "rpm", "appimage"],
     "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      },
       "wix": {
-        "language": "zh-CN"
+        "language": "zh-CN",
+        "template": "wix/main.wxs"
       }
     },
     "macOS": {
