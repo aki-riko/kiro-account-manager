@@ -67,7 +67,7 @@ impl AccountSwitcher {
 
     /// 检查账号是否需要切换
     pub fn should_switch(&self, account: &Account) -> bool {
-        if is_unavailable_status(&account.status) {
+        if !account.is_available() {
             return true;
         }
 
@@ -126,7 +126,7 @@ impl AccountSwitcher {
 fn is_unavailable_status(status: &str) -> bool {
     matches!(
         status,
-        "banned" | "封禁" | "已封禁" | "invalid" | "失效" | "已失效" | "Token已失效" | "expired" | "过期" | "已过期"
+        "capped" | "封顶" | "banned" | "封禁" | "已封禁" | "invalid" | "失效" | "已失效" | "Token已失效" | "expired" | "过期" | "已过期"
     )
 }
 
@@ -146,6 +146,47 @@ fn extract_usage_totals(usage_data: Option<&Value>) -> Option<(i64, i64)> {
         .unwrap_or(0);
 
     Some((current, limit))
+}
+
+fn is_usage_capped(usage_data: Option<&Value>) -> bool {
+    let Some(usage_data) = usage_data else {
+        return false;
+    };
+    let Some(breakdown) = usage_data
+        .get("usageBreakdownList")
+        .and_then(Value::as_array)
+        .and_then(|items| items.first())
+    else {
+        return false;
+    };
+
+    let Some(overage_status) = usage_data
+        .get("overageConfiguration")
+        .and_then(|config| config.get("overageStatus"))
+        .and_then(Value::as_str)
+    else {
+        return false;
+    };
+    if overage_status != "DISABLED" {
+        return false;
+    }
+
+    let Some(current) = breakdown
+        .get("currentUsageWithPrecision")
+        .and_then(Value::as_f64)
+        .or_else(|| breakdown.get("currentUsage").and_then(Value::as_f64))
+    else {
+        return false;
+    };
+    let Some(limit) = breakdown
+        .get("usageLimitWithPrecision")
+        .and_then(Value::as_f64)
+        .or_else(|| breakdown.get("usageLimit").and_then(Value::as_f64))
+    else {
+        return false;
+    };
+
+    limit > 0.0 && current >= limit
 }
 
 /// 换号结果
@@ -183,5 +224,38 @@ impl SwitchResult {
             new_account_email: None,
             message: "当前账号配额充足，无需切换".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_unavailable_status, is_usage_capped, AccountSwitcher, SwitchStrategy};
+    use crate::account::Account;
+
+    #[test]
+    fn capped_status_is_treated_as_unavailable() {
+        assert!(is_unavailable_status("capped"));
+        assert!(is_unavailable_status("封顶"));
+    }
+
+    #[test]
+    fn capped_usage_requires_switch() {
+        let mut account = Account::new("capped@example.com".to_string(), "capped".to_string());
+        account.usage_data = Some(serde_json::json!({
+            "overageConfiguration": {
+                "overageStatus": "DISABLED"
+            },
+            "usageBreakdownList": [
+                {
+                    "currentUsage": 50,
+                    "usageLimit": 50
+                }
+            ]
+        }));
+
+        let switcher = AccountSwitcher::new(SwitchStrategy::RoundRobin, 90, None);
+
+        assert!(is_usage_capped(account.usage_data.as_ref()));
+        assert!(switcher.should_switch(&account));
     }
 }

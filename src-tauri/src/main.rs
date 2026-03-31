@@ -104,6 +104,43 @@ fn setup_log_plugin() -> tauri_plugin_log::Builder {
         })
 }
 
+fn navigate_main_window_to_route(app_handle: &tauri::AppHandle, route: &str) {
+    let Some(window) = app_handle.get_webview_window("main") else {
+        log::warn!("收到 deep link，但未找到主窗口");
+        return;
+    };
+
+    let (path, query) = route
+        .split_once('?')
+        .map_or((route, None), |(path, query)| (path, Some(query)));
+
+    let navigation = || -> Result<(), String> {
+        let mut url = window
+            .url()
+            .map_err(|e| format!("获取主窗口 URL 失败: {e}"))?;
+        url.set_path(path);
+        url.set_query(query);
+        window
+            .navigate(url)
+            .map_err(|e| format!("跳转主窗口到 {route} 失败: {e}"))?;
+        Ok(())
+    };
+
+    if let Err(err) = navigation() {
+        log::error!("{err}");
+    }
+}
+
+fn handle_incoming_deep_link(app_handle: &tauri::AppHandle, url: &str) {
+    if let Some(route) = deep_link_handler::get_app_callback_route(url) {
+        navigate_main_window_to_route(app_handle, &route);
+    } else {
+        deep_link_handler::handle_deep_link(url);
+    }
+
+    tray_behavior::show_main_window(app_handle);
+}
+
 /// 配置单实例插件回调
 #[allow(clippy::needless_pass_by_value)] // Tauri 框架要求回调签名为 Vec<String>
 fn setup_single_instance_callback(app: &tauri::AppHandle, argv: Vec<String>, _cwd: String) {
@@ -111,12 +148,9 @@ fn setup_single_instance_callback(app: &tauri::AppHandle, argv: Vec<String>, _cw
     let protocol_prefix = format!("{}://", deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme());
     for arg in &argv {
         if arg.starts_with(&protocol_prefix) {
-            deep_link_handler::handle_deep_link(arg);
+            handle_incoming_deep_link(app, arg);
         }
     }
-    
-    // 聚焦主窗口
-    tray_behavior::show_main_window(app);
 }
 
 /// 处理 deep link 事件
@@ -142,10 +176,7 @@ fn handle_deep_link_event(app_handle: &tauri::AppHandle, payload: &str) {
         return;
     }
     
-    // 处理 OAuth 回调
-    deep_link_handler::handle_deep_link(&url);
-    // 聚焦窗口
-    tray_behavior::show_main_window(app_handle);
+    handle_incoming_deep_link(app_handle, &url);
 }
 
 /// 应用 setup 回调
@@ -154,7 +185,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let protocol_prefix = format!("{}://", deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme());
     for arg in std::env::args() {
         if arg.starts_with(&protocol_prefix) {
-            deep_link_handler::handle_deep_link(&arg);
+            handle_incoming_deep_link(app.handle(), &arg);
         }
     }
     
@@ -208,7 +239,6 @@ fn main() {
     tauri::Builder::default()
         .on_window_event(tray_behavior::handle_window_event)
         .plugin(setup_log_plugin().build())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())

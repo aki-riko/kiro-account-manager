@@ -1,7 +1,7 @@
 // Provider Factory - 根据 provider 创建对应的认证提供者
 // 参考 kiro-batch-login/src/providers/provider-factory.js
 
-use super::{SocialProvider, IdcProvider};
+use super::IdcProvider;
 
 /// 认证方式
 #[derive(Debug, Clone, PartialEq)]
@@ -53,11 +53,6 @@ pub fn get_provider_config(provider: &str) -> Option<ProviderConfig> {
 /// 获取支持的 providers
 pub fn get_supported_providers() -> Vec<&'static str> {
     vec!["Google", "Github", "BuilderId", "Enterprise"]
-}
-
-/// 创建 Social Provider
-pub fn create_social_provider(config: &ProviderConfig) -> SocialProvider {
-    SocialProvider::new(&config.provider_id)
 }
 
 /// 创建 `IdC` Provider

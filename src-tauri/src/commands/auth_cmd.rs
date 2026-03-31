@@ -7,7 +7,9 @@ use crate::state::AppState;
 use crate::account::Account;
 use crate::auth::User;
 use crate::auth_social;
-use crate::providers::{AuthMethod, AuthProvider, cancel_pending_idc_login, get_provider_config, create_social_provider, create_idc_provider};
+use crate::commands::machine_guid::get_machine_id;
+use crate::kiro_auth_client::KiroAuthServiceClient;
+use crate::providers::{AuthMethod, AuthProvider, cancel_pending_idc_login, get_provider_config, create_idc_provider};
 use crate::commands::common::{get_usage_by_provider, extract_user_info, find_existing_account_idx, calc_status};
 use std::sync::{Mutex, MutexGuard};
 
@@ -43,6 +45,23 @@ fn resolve_idc_login_email(
     }
 }
 
+fn social_callback_redirect_uri() -> String {
+    crate::deep_link_handler::DeepLinkCallbackWaiter::get_redirect_uri()
+        .replace("/authenticate-success", "/app/callback")
+}
+
+fn prepare_pending_social_login(
+    provider: &str,
+    machineid: String,
+) -> crate::state::PendingLogin {
+    crate::state::PendingLogin {
+        provider: provider.to_string(),
+        code_verifier: auth_social::generate_code_verifier_social(),
+        state: uuid::Uuid::new_v4().to_string(),
+        machineid,
+    }
+}
+
 #[tauri::command]
 pub fn get_current_user(state: State<AppState>) -> Option<User> {
     match lock_state(&state.auth.user, "auth user") {
@@ -56,11 +75,18 @@ pub fn get_current_user(state: State<AppState>) -> Option<User> {
 
 #[tauri::command]
 pub fn logout(state: State<AppState>) {
-    if let Ok(mut user) = lock_state(&state.auth.user, "auth user") {
+    clear_auth_state(&state.auth);
+}
+
+fn clear_auth_state(auth: &crate::auth::AuthState) {
+    if let Ok(mut user) = lock_state(&auth.user, "auth user") {
         *user = None;
     }
-    if let Ok(mut access_token) = lock_state(&state.auth.access_token, "auth access_token") {
+    if let Ok(mut access_token) = lock_state(&auth.access_token, "auth access_token") {
         *access_token = None;
+    }
+    if let Ok(mut refresh_token) = lock_state(&auth.refresh_token, "auth refresh_token") {
+        *refresh_token = None;
     }
 }
 
@@ -101,74 +127,33 @@ pub async fn kiro_login(
     }
 
     match config.auth_method {
-        AuthMethod::Social => login_social(app_handle, state, &config).await,
+        AuthMethod::Social => login_social(state, &config).await,
         AuthMethod::Idc => login_idc(app_handle, state, &config).await,
     }
 }
 
 async fn login_social(
-    app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
     config: &crate::providers::ProviderConfig,
 ) -> Result<String, String> {
-    let social_provider = create_social_provider(config);
-    let provider_id = social_provider.get_provider_id().to_string();
-    let auth_method = social_provider.get_auth_method();
-    
-    let auth_result = social_provider.login().await?;
-    
-    let usage_result = get_usage_by_provider(&provider_id, &auth_result.access_token).await?;
-    
-    // 封禁账号直接报错
-    if usage_result.is_banned {
-        return Err("BANNED: 账号已被封禁".to_string());
+    let provider_id = config.provider_id.clone();
+    let pending = prepare_pending_social_login(&provider_id, get_machine_id());
+    let redirect_uri = social_callback_redirect_uri();
+    let code_challenge = auth_social::generate_code_challenge_social(&pending.code_verifier);
+    let client = KiroAuthServiceClient::new(&pending.machineid)?;
+
+    *lock_state(&state.pending_login, "pending_login")? = Some(pending.clone());
+
+    if let Err(err) = client
+        .login(&provider_id, &redirect_uri, &code_challenge, &pending.state)
+        .await
+    {
+        *lock_state(&state.pending_login, "pending_login")? = None;
+        return Err(err);
     }
-    
-    let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
-    
-    // 获取不到邮箱直接报错
-    let _final_email = require_login_email(new_email.clone())?;
 
-    let mut store = lock_state(&state.store, "store")?;
-    let existing_idx = find_existing_account_idx(&store.accounts, new_email.as_ref(), &provider_id, &auth_result.refresh_token, user_id.as_ref());
-    
-    let account = if let Some(idx) = existing_idx {
-        let existing = &mut store.accounts[idx];
-        existing.access_token = Some(auth_result.access_token.clone());
-        existing.refresh_token = Some(auth_result.refresh_token.clone());
-        existing.email.clone_from(&new_email);
-        existing.user_id.clone_from(&user_id);
-        existing.expires_at = Some(auth_result.expires_at.clone());
-        existing.profile_arn.clone_from(&auth_result.profile_arn);
-        existing.label = format!("Kiro {provider_id} 账号");
-        existing.usage_data = Some(usage_result.usage_data);
-        existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
-        existing.clone()
-    } else {
-        let final_email = require_login_email(new_email)?;
-        let mut account = Account::new(final_email.clone(), format!("Kiro {provider_id} 账号"));
-        account.access_token = Some(auth_result.access_token.clone());
-        account.refresh_token = Some(auth_result.refresh_token.clone());
-        account.provider = Some(provider_id.clone());
-        account.auth_method = Some("social".to_string());
-        account.user_id.clone_from(&user_id);
-        account.expires_at = Some(auth_result.expires_at.clone());
-        account.profile_arn = auth_result.profile_arn;
-        account.usage_data = Some(usage_result.usage_data);
-        account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
-        store.accounts.insert(0, account.clone());
-        account
-    };
-    
-    save_store(&store)?;
-    drop(store);
-
-    let display_id = account.get_display_id();
-    update_auth_state(&state, account.email.as_ref(), &provider_id, &auth_result.access_token, &auth_result.refresh_token)?;
-    println!("\n[{auth_method}] LOGIN SUCCESS: {display_id}");
-
-    let _ = app_handle.emit("login-success", account.id.clone());
-    Ok(format!("{auth_method} login completed for {provider_id}"))
+    println!("\n[social] LOGIN STARTED: {provider_id}");
+    Ok(format!("social login started for {provider_id}"))
 }
 
 async fn login_idc(
@@ -287,22 +272,18 @@ pub async fn handle_kiro_social_callback(
         return Err("State mismatch".to_string());
     }
     
-    let redirect_uri = crate::deep_link_handler::DeepLinkCallbackWaiter::get_redirect_uri()
-        .replace("/authenticate-success", "/app/callback");
+    let redirect_uri = social_callback_redirect_uri();
     let token_response = auth_social::exchange_social_code_for_token(
         &code, &pending.code_verifier, &redirect_uri, &pending.machineid,
     ).await?;
     
     let usage_result = get_usage_by_provider(&pending.provider, &token_response.access_token).await?;
     
-    // 封禁账号直接报错
     if usage_result.is_banned {
         return Err("BANNED: 账号已被封禁".to_string());
     }
     
     let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
-    
-    // 获取不到邮箱直接报错
     let final_email = require_login_email(new_email.clone())?;
 
     let mut store = lock_state(&state.store, "store")?;
@@ -347,7 +328,12 @@ pub fn get_supported_providers() -> Vec<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{require_login_email, resolve_idc_login_email};
+    use super::{
+        clear_auth_state, prepare_pending_social_login, require_login_email,
+        resolve_idc_login_email, social_callback_redirect_uri,
+    };
+    use crate::auth::AuthState;
+    use crate::auth::User;
 
     #[test]
     fn require_login_email_rejects_missing_email() {
@@ -385,5 +371,53 @@ mod tests {
             resolve_idc_login_email("Enterprise", None, None).unwrap_err(),
             "Enterprise 账号缺少 email 和 userId".to_string()
         );
+    }
+
+    #[test]
+    fn clear_auth_state_removes_refresh_token_too() {
+        let auth = AuthState::new();
+        *auth.user.lock().expect("user lock should work") = Some(User {
+            id: "user-1".to_string(),
+            email: Some("user@example.com".to_string()),
+            name: "user".to_string(),
+            avatar: None,
+            provider: "Google".to_string(),
+        });
+        *auth.access_token.lock().expect("access_token lock should work") =
+            Some("access-token".to_string());
+        *auth.refresh_token.lock().expect("refresh_token lock should work") =
+            Some("refresh-token".to_string());
+
+        clear_auth_state(&auth);
+
+        assert!(auth.user.lock().expect("user lock should work").is_none());
+        assert!(auth
+            .access_token
+            .lock()
+            .expect("access_token lock should work")
+            .is_none());
+        assert!(auth
+            .refresh_token
+            .lock()
+            .expect("refresh_token lock should work")
+            .is_none());
+    }
+
+    #[test]
+    fn prepare_pending_social_login_creates_callback_context() {
+        let pending = prepare_pending_social_login("Google", "machine-123".to_string());
+
+        assert_eq!(pending.provider, "Google");
+        assert_eq!(pending.machineid, "machine-123");
+        assert!(!pending.state.is_empty());
+        assert!(!pending.code_verifier.is_empty());
+    }
+
+    #[test]
+    fn social_callback_redirect_uri_uses_app_callback_path() {
+        let redirect_uri = social_callback_redirect_uri();
+
+        assert!(redirect_uri.starts_with("kiro-account-manager://"));
+        assert!(redirect_uri.ends_with("/app/callback"));
     }
 }

@@ -227,11 +227,66 @@ impl Account {
 
     /// 判断账号是否可用（可正常参与切换/同步）
     pub fn is_available(&self) -> bool {
-        !matches!(
-            self.status.as_str(),
-            "banned" | "封禁" | "已封禁" | "invalid" | "失效" | "已失效" | "Token已失效" | "expired" | "过期" | "已过期"
-        )
+        !is_unavailable_status(self.status.as_str()) && !is_usage_capped(self.usage_data.as_ref())
     }
+}
+
+fn is_unavailable_status(status: &str) -> bool {
+    matches!(
+        status,
+        "capped"
+            | "封顶"
+            | "banned"
+            | "封禁"
+            | "已封禁"
+            | "invalid"
+            | "失效"
+            | "已失效"
+            | "Token已失效"
+            | "expired"
+            | "过期"
+            | "已过期"
+    )
+}
+
+fn usage_number(source: &serde_json::Value, integer_key: &str, precise_key: &str) -> Option<f64> {
+    source
+        .get(precise_key)
+        .and_then(serde_json::Value::as_f64)
+        .or_else(|| source.get(integer_key).and_then(serde_json::Value::as_f64))
+}
+
+fn is_usage_capped(usage_data: Option<&serde_json::Value>) -> bool {
+    let Some(usage_data) = usage_data else {
+        return false;
+    };
+
+    let Some(breakdown) = usage_data
+        .get("usageBreakdownList")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|items| items.first())
+    else {
+        return false;
+    };
+
+    if usage_data
+        .get("overageConfiguration")
+        .and_then(|config| config.get("overageStatus"))
+        .and_then(serde_json::Value::as_str)
+        != Some("DISABLED")
+    {
+        return false;
+    }
+
+    let Some(current_usage) = usage_number(breakdown, "currentUsage", "currentUsageWithPrecision")
+    else {
+        return false;
+    };
+    let Some(usage_limit) = usage_number(breakdown, "usageLimit", "usageLimitWithPrecision") else {
+        return false;
+    };
+
+    usage_limit > 0.0 && current_usage >= usage_limit
 }
 
 pub struct AccountStore {
@@ -546,5 +601,29 @@ impl GroupTagStore {
             self.try_save_to_file().map_err(|_| "保存标签失败".to_string())?;
         }
         Ok(deleted)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_usage_capped, Account};
+
+    #[test]
+    fn account_is_not_available_when_monthly_usage_is_capped() {
+        let mut account = Account::new("capped@example.com".to_string(), "capped".to_string());
+        account.usage_data = Some(serde_json::json!({
+            "overageConfiguration": {
+                "overageStatus": "DISABLED"
+            },
+            "usageBreakdownList": [
+                {
+                    "currentUsage": 50,
+                    "usageLimit": 50
+                }
+            ]
+        }));
+
+        assert!(is_usage_capped(account.usage_data.as_ref()));
+        assert!(!account.is_available());
     }
 }
