@@ -25,7 +25,7 @@ export function useGatewayPolling({
   }, [fallbackConfig, onStatus])
 
   useEffect(() => {
-    if (activeTab !== 'requestLogs') {
+    if (activeTab !== 'observability') {
       return undefined
     }
 

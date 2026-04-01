@@ -31,7 +31,7 @@ function GatewayPage() {
   const [saving, setSaving] = useState(false)
   const [copySuccess, setCopySuccess] = useState('')
   const [logDir, setLogDir] = useState('')
-  const [activeTab, setActiveTab] = useState('config')
+  const [activeTab, setActiveTab] = useState('overview')
   const [requestLogs, setRequestLogs] = useState([])
   const [requestLogsLoading, setRequestLogsLoading] = useState(false)
   const [requestLogOutcome, setRequestLogOutcome] = useState('all')
@@ -79,15 +79,16 @@ function GatewayPage() {
     [baseUrl, config.apiKey, logDir, errorHistory]
   )
   const deferredRequestLogQuery = useDeferredValue(requestLogQuery)
+  const isObservabilityTab = activeTab === 'observability'
   const requestLogSummary = useMemo(
-    () => activeTab === 'requestLogs' ? buildGatewayRequestLogSummary(requestLogs) : buildGatewayRequestLogSummary([]),
-    [activeTab, requestLogs]
+    () => isObservabilityTab ? buildGatewayRequestLogSummary(requestLogs) : buildGatewayRequestLogSummary([]),
+    [isObservabilityTab, requestLogs]
   )
   const filteredRequestLogs = useMemo(
-    () => activeTab === 'requestLogs'
+    () => isObservabilityTab
       ? filterGatewayRequestLogs(requestLogs, { outcome: requestLogOutcome, query: deferredRequestLogQuery })
       : [],
-    [activeTab, requestLogs, requestLogOutcome, deferredRequestLogQuery]
+    [isObservabilityTab, requestLogs, requestLogOutcome, deferredRequestLogQuery]
   )
   const filteredRequestLogSummary = useMemo(
     () => buildGatewayRequestLogSummary(filteredRequestLogs),
@@ -437,28 +438,181 @@ function GatewayPage() {
           keepMounted={false}
           onChange={(value) => {
             startTransition(() => {
-              setActiveTab(value || 'config')
+              setActiveTab(value || 'overview')
             })
           }}
         >
           <Tabs.List>
-            <Tabs.Tab value="config">配置</Tabs.Tab>
+            <Tabs.Tab value="overview">总览</Tabs.Tab>
             <Tabs.Tab value="integration">接入</Tabs.Tab>
-            <Tabs.Tab value="operations">运行监控</Tabs.Tab>
-            <Tabs.Tab value="requestLogs">请求日志</Tabs.Tab>
+            <Tabs.Tab value="observability">观测</Tabs.Tab>
+            <Tabs.Tab value="advanced">高级</Tabs.Tab>
           </Tabs.List>
 
-          <Tabs.Panel value="config" pt="md">
+          <Tabs.Panel value="overview" pt="md">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] gap-4">
+              <Card withBorder radius="md" className={`${colors.card} ${colors.cardBorder}`}>
+                <Stack gap="sm">
+                  <Group justify="space-between" align="flex-start">
+                    <Stack gap={4}>
+                      <Group gap="xs">
+                        <Radio size={16} />
+                        <Text fw={600} className={colors.text}>控制台总览</Text>
+                      </Group>
+                      <Text size="sm" className={colors.textMuted}>
+                        日常只看这里：入口、状态、当前账号来源和下一步动作都收口，不再把大表单放在第一页。
+                      </Text>
+                    </Stack>
+                    <Button variant="light" size="xs" leftSection={<RefreshCw size={14} />} onClick={handleRefresh} loading={loading}>
+                      刷新
+                    </Button>
+                  </Group>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                    <Card withBorder radius="md">
+                      <Text size="xs" className={colors.textMuted}>客户端入口</Text>
+                      <Text fw={700} className={colors.text}>{baseUrl}</Text>
+                    </Card>
+                    <Card withBorder radius="md">
+                      <Text size="xs" className={colors.textMuted}>{routingSummary.selectionLabel}</Text>
+                      <Text fw={700} className={colors.text}>{routingSummary.selectionValue}</Text>
+                    </Card>
+                    <Card withBorder radius="md">
+                      <Text size="xs" className={colors.textMuted}>客户端 Key</Text>
+                      <Text fw={700} className={colors.text}>{securitySummary.apiKeyState}</Text>
+                    </Card>
+                    <Card withBorder radius="md">
+                      <Text size="xs" className={colors.textMuted}>请求计数 / 错误</Text>
+                      <Text fw={700} className={colors.text}>{statusSummary.requests} / {statusSummary.errorCount}</Text>
+                    </Card>
+                  </div>
+
+                  <Card withBorder radius="md">
+                    <Stack gap={8}>
+                      <Group justify="space-between">
+                        <Text size="sm" fw={600}>当前建议动作</Text>
+                        <Badge color={actionSummary.tone}>{actionSummary.title}</Badge>
+                      </Group>
+                      <Text size="sm" className={colors.textMuted}>{actionSummary.description}</Text>
+                    </Stack>
+                  </Card>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Card withBorder radius="md">
+                      <Stack gap={8}>
+                        <Text size="xs" className={colors.textMuted}>快速复制</Text>
+                        <Text fw={700} className={colors.text}>基础入口</Text>
+                        <Button variant="light" size="xs" leftSection={<Copy size={14} />} onClick={() => copyText(baseUrl, '网关入口已复制')}>
+                          复制入口地址
+                        </Button>
+                      </Stack>
+                    </Card>
+                    <Card withBorder radius="md">
+                      <Stack gap={8}>
+                        <Text size="xs" className={colors.textMuted}>OpenAI 兼容接入</Text>
+                        <Text fw={700} className={colors.text}>OpenAI Responses 兼容</Text>
+                        <Button
+                          variant="light"
+                          size="xs"
+                          leftSection={<Copy size={14} />}
+                          onClick={() => copyText(clientSamples.openai.env, 'OpenAI 兼容配置已复制')}
+                        >
+                          复制 OpenAI 兼容环境变量
+                        </Button>
+                      </Stack>
+                    </Card>
+                    <Card withBorder radius="md">
+                      <Stack gap={8}>
+                        <Text size="xs" className={colors.textMuted}>排障入口</Text>
+                        <Text fw={700} className={colors.text}>日志目录</Text>
+                        <Button variant="light" size="xs" leftSection={<FolderOpen size={14} />} onClick={handleOpenLogDir}>
+                          打开日志目录
+                        </Button>
+                      </Stack>
+                    </Card>
+                  </div>
+
+                  {copySuccess ? <Badge color="green" leftSection={<Check size={12} />}>{copySuccess}</Badge> : null}
+                </Stack>
+              </Card>
+
+              <Card withBorder radius="md" className={`${colors.card} ${colors.cardBorder}`}>
+                <Stack gap="sm">
+                  <Group justify="space-between">
+                    <Group gap="xs">
+                      <Shield size={16} />
+                      <Text fw={600} className={colors.text}>状态与边界</Text>
+                    </Group>
+                    <Badge color={config.localOnly ? 'teal' : 'yellow'}>{securitySummary.exposureLabel}</Badge>
+                  </Group>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Card withBorder radius="md">
+                      <Text size="xs" className={colors.textMuted}>路由模式</Text>
+                      <Text fw={700} className={colors.text}>{routingSummary.modeLabel}</Text>
+                    </Card>
+                    <Card withBorder radius="md">
+                      <Text size="xs" className={colors.textMuted}>池策略</Text>
+                      <Text fw={700} className={colors.text}>{routingSummary.strategySummary}</Text>
+                    </Card>
+                    <Card withBorder radius="md">
+                      <Text size="xs" className={colors.textMuted}>Region / 日志级别</Text>
+                      <Text fw={700} className={colors.text}>{statusSummary.region} / {statusSummary.logLevel}</Text>
+                    </Card>
+                    <Card withBorder radius="md">
+                      <Text size="xs" className={colors.textMuted}>最后同步</Text>
+                      <Text fw={700} className={colors.text}>{statusSummary.sync}</Text>
+                    </Card>
+                  </div>
+
+                  <Card withBorder radius="md">
+                    <Text size="xs" fw={600}>日志目录</Text>
+                    <Text size="xs" mt={6} style={{ fontFamily: 'JetBrains Mono, monospace', wordBreak: 'break-all' }}>
+                      {logDir || '尚未获取'}
+                    </Text>
+                  </Card>
+
+                  <Card withBorder radius="md">
+                    <Stack gap={8}>
+                      <Group justify="space-between">
+                        <Text size="sm" fw={600}>最近风险</Text>
+                        <Badge color={latestErrorEntry ? 'orange' : 'teal'}>
+                          {latestErrorEntry ? '需要排查' : '状态平稳'}
+                        </Badge>
+                      </Group>
+                      {latestErrorEntry ? (
+                        <Code block style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {`首次: ${latestErrorEntry.firstSeenAt}\n最近: ${latestErrorEntry.lastSeenAt}\n次数: ${latestErrorEntry.count}\n${latestErrorEntry.message}`}
+                        </Code>
+                      ) : (
+                        <Text size="sm" className={colors.textMuted}>最近没有流式或上游错误命中。</Text>
+                      )}
+                    </Stack>
+                  </Card>
+
+                  <Alert color="blue" variant="light" title="页面边界">
+                    网关页只负责入口控制、接入和观测。账号增删改、分组治理继续放在账号管理页面，避免在这里再造一套后台。
+                  </Alert>
+                </Stack>
+              </Card>
+            </div>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="advanced" pt="md">
             <div className="grid grid-cols-1 gap-4">
           <Card withBorder radius="md" className={`${colors.card} ${colors.cardBorder}`}>
             <Stack gap="sm">
-              <Group justify="space-between">
-                <Group gap="xs"><Server size={16} /><Text fw={600} className={colors.text}>网关配置</Text></Group>
-                <Group gap="xs">
-                  {hasFieldErrors ? <Badge color="red">配置待修正</Badge> : null}
-                  {hasUnsavedChanges ? <Badge color="yellow">未保存变更</Badge> : <Badge color="teal">已同步</Badge>}
+                <Group justify="space-between">
+                  <Group gap="xs"><Server size={16} /><Text fw={600} className={colors.text}>高级配置</Text></Group>
+                  <Group gap="xs">
+                    {hasFieldErrors ? <Badge color="red">配置待修正</Badge> : null}
+                    {hasUnsavedChanges ? <Badge color="yellow">未保存变更</Badge> : <Badge color="teal">已同步</Badge>}
+                  </Group>
                 </Group>
-              </Group>
+
+                <Text size="sm" className={colors.textMuted}>
+                  监听地址、安全暴露、账号来源和池调度都收口到这里，属于低频但决定网关行为边界的配置。
+                </Text>
 
               <Card withBorder radius="md">
                 <Stack gap="sm">
@@ -728,18 +882,18 @@ function GatewayPage() {
                         variant="light"
                         size="xs"
                         leftSection={<Copy size={14} />}
-                        onClick={() => copyText(clientSamples.anthropic.env, 'Anthropic 配置已复制')}
+                        onClick={() => copyText(clientSamples.anthropic.env, 'Claude / Anthropic 配置已复制')}
                       >
-                        复制 Anthropic 配置
+                        复制 Claude / Anthropic 配置
                       </Button>
                     </Group>
                   </Card>
 
                   <Card withBorder radius="md">
-                    <Text size="xs" fw={600}>OpenAI Responses</Text>
+                     <Text size="xs" fw={600}>OpenAI Responses 兼容</Text>
                     <Code block mt="xs">{clientSamples.openai.env}</Code>
                     <Text size="xs" mt={8} className={colors.textMuted}>
-                      OpenAI 客户端仅支持 <Code>/v1/responses</Code>。
+                      OpenAI 兼容客户端仅支持 <Code>/v1/responses</Code>，示例 model 可替换为任意网关支持的模型。
                     </Text>
                     <Code block mt="xs">{clientSamples.openai.curl}</Code>
                     <Group mt="sm" gap="xs">
@@ -747,17 +901,17 @@ function GatewayPage() {
                         variant="light"
                         size="xs"
                         leftSection={<Copy size={14} />}
-                        onClick={() => copyText(clientSamples.openai.env, 'OpenAI 配置已复制')}
+                        onClick={() => copyText(clientSamples.openai.env, 'OpenAI 兼容配置已复制')}
                       >
-                        复制 OpenAI 配置
+                        复制 OpenAI 兼容配置
                       </Button>
                       <Button
                         variant="light"
                         size="xs"
                         leftSection={<Copy size={14} />}
-                        onClick={() => copyText(clientSamples.openai.curl, 'Responses curl 已复制')}
+                        onClick={() => copyText(clientSamples.openai.curl, '兼容 Responses curl 已复制')}
                       >
-                        复制 Responses curl
+                        复制兼容 Responses curl
                       </Button>
                       {copySuccess ? <Badge color="green" leftSection={<Check size={12} />}>{copySuccess}</Badge> : null}
                     </Group>
@@ -776,26 +930,26 @@ function GatewayPage() {
               </Card>
 
               <Alert color="blue" variant="light" title="接入提醒">
-                客户端连本地网关只需要两件事：接入地址和客户端 API Key。运行状态、日志目录、错误排查已经放到“运行监控”和“请求日志”里，不再在这里重复展示。
+                客户端连本地网关只需要两件事：接入地址和客户端 API Key。运行状态、日志目录、错误排查统一放到“观测”页，不再在这里重复堆叠。
               </Alert>
             </div>
           </Tabs.Panel>
 
-          <Tabs.Panel value="operations" pt="md">
+          <Tabs.Panel value="observability" pt="md">
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)] gap-4">
               <Card withBorder radius="md" className={`${colors.card} ${colors.cardBorder}`}>
                 <Stack gap="sm">
                   <Group justify="space-between">
                     <Group gap="xs">
                       <Shield size={16} />
-                      <Text fw={600} className={colors.text}>运行状态</Text>
+                      <Text fw={600} className={colors.text}>观测总览</Text>
                     </Group>
                     <Group gap="xs">
                       <Badge color="blue" leftSection={<Radio size={12} />}>{`账号池 ${config.strategy}`}</Badge>
                       <Badge color={config.localOnly ? 'teal' : 'yellow'}>{config.localOnly ? '仅本机' : '允许远程'}</Badge>
                       <Badge color={status.running ? 'green' : 'red'}>{status.running ? '运行中' : '已停止'}</Badge>
                       <Button variant="light" size="xs" leftSection={<RefreshCw size={14} />} onClick={handleRefresh} loading={loading}>
-                        刷新
+                        刷新状态
                       </Button>
                       <Button variant="light" size="xs" color="gray" onClick={handleClearErrors} disabled={!errorHistory.length}>
                         清空错误
@@ -888,16 +1042,14 @@ function GatewayPage() {
                 </Stack>
               </Card>
             </div>
-          </Tabs.Panel>
 
-          <Tabs.Panel value="requestLogs" pt="md">
             <Stack gap="md">
               <Card withBorder radius="md" className={`${colors.card} ${colors.cardBorder}`}>
                 <Stack gap="sm">
                   <Group justify="space-between">
                     <Group gap="xs">
                       <Activity size={16} />
-                      <Text fw={600} className={colors.text}>网关请求日志</Text>
+                      <Text fw={600} className={colors.text}>请求日志</Text>
                     </Group>
                     <Group gap="xs">
                       <Badge color="indigo">gateway-request-log.jsonl</Badge>
