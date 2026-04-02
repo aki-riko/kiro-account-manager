@@ -22,8 +22,7 @@
     "release:minor": "standard-version --release-as minor",
     "release:major": "standard-version --release-as major",
     "release:patch": "standard-version --release-as patch",
-    "release:check": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-release-pipeline.ps1",
-    "publish": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/release.ps1"
+    "release:check": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-release-pipeline.ps1"
   },
   "dependencies": {
     "@headlessui/react": "2.2.9",

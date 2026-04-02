@@ -27,14 +27,14 @@ if ($unpinned) {
   $errors += ('release workflow has unpinned actions: ' + ($unpinned -join ', '))
 }
 
-if (-not $package.scripts.publish) {
-  $errors += 'package.json missing publish script'
+if (-not $package.scripts.'build:release') {
+  $errors += 'package.json missing build:release script'
 } else {
-  $publishScript = $package.scripts.publish
-  if ($publishScript -match 'scripts/release\.ps1') {
-    $releaseScript = Join-Path $repoRoot 'scripts/release.ps1'
-    if (-not (Test-Path -LiteralPath $releaseScript)) {
-      $errors += 'package.json publish script points to missing scripts/release.ps1'
+  $buildReleaseScript = $package.scripts.'build:release'
+  if ($buildReleaseScript -match 'scripts/build-release\.ps1') {
+    $localBuildScript = Join-Path $repoRoot 'scripts/build-release.ps1'
+    if (-not (Test-Path -LiteralPath $localBuildScript)) {
+      $errors += 'package.json build:release script points to missing scripts/build-release.ps1'
     }
   }
 }
