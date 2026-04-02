@@ -1106,6 +1106,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn runtime_rejects_unauthenticated_messages_requests_over_real_http() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener
+            .local_addr()
+            .expect("local addr should resolve")
+            .port();
+        drop(listener);
+
+        let config = runtime_test_gateway_config(port);
+        let mut runtime = spawn_runtime(config).await.expect("runtime should start");
+
+        let response = reqwest::Client::new()
+            .post(format!("http://127.0.0.1:{port}/messages"))
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "model": "claude-sonnet-4-5-20250929",
+                    "messages": [{ "role": "user", "content": "hello" }]
+                })
+                .to_string(),
+            )
+            .send()
+            .await
+            .expect("messages request should succeed");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        stop_runtime(&mut runtime).await;
+    }
+
+    #[tokio::test]
+    async fn runtime_rejects_unauthenticated_mcp_requests_over_real_http() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener should bind");
+        let port = listener
+            .local_addr()
+            .expect("local addr should resolve")
+            .port();
+        drop(listener);
+
+        let config = runtime_test_gateway_config(port);
+        let mut runtime = spawn_runtime(config).await.expect("runtime should start");
+
+        let response = reqwest::Client::new()
+            .post(format!("http://127.0.0.1:{port}/mcp"))
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/list",
+                    "params": {}
+                })
+                .to_string(),
+            )
+            .send()
+            .await
+            .expect("mcp request should succeed");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        stop_runtime(&mut runtime).await;
+    }
+
+    #[tokio::test]
     async fn runtime_requires_client_api_key_even_when_local_only() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener should bind");
         let port = listener
