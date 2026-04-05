@@ -181,7 +181,7 @@ export const buildClientSamples = (baseUrl, apiKey) => {
 
 export const formatGatewayAccountOptionLabel = (account) => {
   const email = String(account?.email || '').trim()
-  const userId = String(account?.userId || account?.user_id || '').trim()
+  const userId = String(account?.userId || '').trim()
   return email || userId || '未知账号'
 }
 
