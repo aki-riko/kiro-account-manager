@@ -38,7 +38,7 @@
         "form-action": ["'self'"],
         "frame-ancestors": ["'none'"],
         "object-src": ["'none'"],
-        "script-src": ["'self'"],
+        "script-src": ["'self'", "'unsafe-inline'"],
         "style-src": ["'self'", "'unsafe-inline'"],
         "img-src": ["'self'", "asset:", "http://asset.localhost", "https:", "data:"],
         "font-src": ["'self'", "data:"],

@@ -111,6 +111,45 @@
   - Windows：需通过 WSL 使用 `kiro-cli`，数据库路径可填 `\\wsl$\<distro>\home\<user>\.local\share\kiro-cli\data.sqlite3`
 - 导出为 JSON 文件（支持批量选择）
 
+**JSON 导入格式要求**
+
+所有账号必填字段：
+- `refreshToken` - 必须以 `aor` 开头
+
+账号类型自动识别：
+- **Social 账号**（Google/GitHub）：必须指定 `provider`，不能有 `clientId` 和 `clientSecret`
+- **IdC 账号**（BuilderId/Enterprise）：必须有 `clientId` 和 `clientSecret`，`provider` 可选（根据 `startUrl` 自动判断）
+
+示例：
+```json
+[
+  {
+    "refreshToken": "aor...",
+    "provider": "Google"
+  },
+  {
+    "refreshToken": "aor...",
+    "clientId": "...",
+    "clientSecret": "...",
+    "provider": "BuilderId"
+  },
+  {
+    "refreshToken": "aor...",
+    "clientId": "...",
+    "clientSecret": "...",
+    "provider": "Enterprise",
+    "startUrl": "https://example.awsapps.com/start"
+  }
+]
+```
+
+说明：
+- 第 1 个：Google 账号（必须指定 `provider`）
+- 第 2 个：BuilderId 账号（可显式指定 `provider: "BuilderId"`，或省略让系统自动识别）
+- 第 3 个：Enterprise 账号（可显式指定 `provider: "Enterprise"`，或通过 `startUrl` 自动识别）
+
+可选字段：`accessToken`、`machineId`、`region`、`clientIdHash`、`password`
+
 **批量管理**
 - 批量刷新（智能并发控制，自动优化速度）
 - 批量删除 / 批量打标签

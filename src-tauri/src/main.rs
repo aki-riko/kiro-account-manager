@@ -237,14 +237,14 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+use crate::tray_behavior::TRAY_ICON_ID;
+
+    // 先移除旧的托盘图标（如果存在）
+    let _ = app.remove_tray_by_id(TRAY_ICON_ID);
+    
     match tray_behavior::create_tray_icon(app.handle()) {
         Ok(tray_icon) => {
             let state = app.state::<AppState>();
-            
-            // 先移除旧的托盘图标（如果存在）
-            // TrayIcon 会在 drop 时自动清理，所以只需要 take() 即可
-            let _ = state.tray_icon.lock().expect("tray icon mutex poisoned").take();
-            
             state
                 .tray_icon
                 .lock()
@@ -260,6 +260,17 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 .store(false, std::sync::atomic::Ordering::Relaxed);
             log::warn!("系统托盘初始化失败，将继续启动但不启用关闭到托盘: {err}");
         }
+    }
+
+    // 显示主窗口
+    if let Some(window) = app.get_webview_window("main") {
+        if let Err(err) = window.show() {
+            log::error!("显示主窗口失败: {err}");
+        } else {
+            log::info!("主窗口已显示");
+        }
+    } else {
+        log::warn!("未找到主窗口");
     }
 
     Ok(())

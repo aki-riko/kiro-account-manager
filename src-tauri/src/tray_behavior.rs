@@ -7,7 +7,7 @@ use tauri::{
 };
 
 const MAIN_WINDOW_LABEL: &str = "main";
-const TRAY_ICON_ID: &str = "main-tray";
+pub const TRAY_ICON_ID: &str = "main-tray";
 const TRAY_SHOW_ID: &str = "tray-show";
 const TRAY_EXIT_ID: &str = "tray-exit";
 
