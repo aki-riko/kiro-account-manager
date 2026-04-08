@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import Sidebar from './components/layout/Sidebar'
 import UpdateChecker from './components/shared/UpdateChecker'
 import WelcomeModal from './components/modals/WelcomeModal'
+import { dismissBootSplash } from './utils/bootSplash'
 
 import { useApp } from './hooks/useApp'
 import { useAutoRefresh } from './hooks/useAutoRefresh'
@@ -32,6 +33,7 @@ function PageLoading() {
 }
 
 function App() {
+  console.log('[App] 组件开始渲染')
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeMenu, setActiveMenu] = useState(() => {
@@ -39,9 +41,17 @@ function App() {
     return localStorage.getItem('activeMenu') || 'home'
   })
   const [mountedRouteIds, setMountedRouteIds] = useState(() => getMountedRouteIds([], localStorage.getItem('activeMenu') || 'home'))
+  
+  console.log('[App] useState 初始化完成')
+  
   const { colors } = useApp()
+  console.log('[App] useApp 完成')
+  
   const { settings: appSettings, loading: settingsLoading } = useAppSettings()
+  console.log('[App] useAppSettings 完成')
+  
   const { showError, showInfo } = useDialog()
+  console.log('[App] useDialog 完成')
 
   // 保存当前页面到 localStorage
   useEffect(() => {
@@ -134,19 +144,19 @@ function App() {
   }, [])
 
   const checkAuth = async () => {
+    console.log('[checkAuth] 开始执行')
     try {
       const currentUser = await invoke('get_current_user')
+      console.log('[checkAuth] 获取用户成功:', currentUser)
       setUser(currentUser)
     } catch (e) {
-      console.error('Auth check failed:', e)
+      console.error('[checkAuth] 获取用户失败:', e)
     } finally {
+      console.log('[checkAuth] 设置 loading = false')
       setLoading(false)
       // App 加载完成后移除启动画面
-      setTimeout(() => {
-        import('./utils/bootSplash.js').then(({ dismissBootSplash }) => {
-          dismissBootSplash()
-        })
-      }, 100)
+      console.log('[checkAuth] 调用 dismissBootSplash')
+      dismissBootSplash()
     }
   }
 
@@ -189,12 +199,15 @@ function App() {
   }
 
   if (loading) {
+    console.log('[App] 渲染 loading 状态')
     return (
       <div className={`h-screen flex items-center justify-center ${colors.main}`}>
         <div className={colors.text}>加载中...</div>
       </div>
     )
   }
+
+  console.log('[App] 渲染主界面')
 
   return (
     <PrivacyProvider>

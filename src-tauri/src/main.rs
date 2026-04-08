@@ -240,6 +240,11 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     match tray_behavior::create_tray_icon(app.handle()) {
         Ok(tray_icon) => {
             let state = app.state::<AppState>();
+            
+            // 先移除旧的托盘图标（如果存在）
+            // TrayIcon 会在 drop 时自动清理，所以只需要 take() 即可
+            let _ = state.tray_icon.lock().expect("tray icon mutex poisoned").take();
+            
             state
                 .tray_icon
                 .lock()
