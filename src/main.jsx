@@ -69,7 +69,21 @@ const showWindow = () => {
     return
   }
 
-  getCurrentWindow().show().catch(() => {})
+  // 确保 Vite 已连接后再显示窗口
+  if (import.meta.hot) {
+    // 开发模式：等待 Vite 连接
+    const checkViteConnection = () => {
+      if (import.meta.hot.data?.connected !== false) {
+        getCurrentWindow().show().catch(() => {})
+      } else {
+        setTimeout(checkViteConnection, 100)
+      }
+    }
+    checkViteConnection()
+  } else {
+    // 生产模式：直接显示
+    getCurrentWindow().show().catch(() => {})
+  }
 }
 
 // 立即尝试显示窗口
