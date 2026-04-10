@@ -6,6 +6,28 @@ $passwordPath = Join-Path $repoRoot '.tauri-updater-password'
 $bundleDir = Join-Path $repoRoot 'src-tauri\target\release\bundle\msi'
 $packageJsonPath = Join-Path $repoRoot 'package.json'
 
+function Ensure-CargoAvailable {
+  if (Get-Command cargo -ErrorAction SilentlyContinue) {
+    return
+  }
+
+  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+  $processPath = $env:Path
+  $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
+
+  $pathParts = @($processPath, $userPath, $machinePath)
+  if (Test-Path -LiteralPath $cargoBin) {
+    $pathParts += $cargoBin
+  }
+
+  $env:Path = ($pathParts | Where-Object { $_ -and $_.Trim() -ne '' } | Select-Object -Unique) -join ';'
+
+  if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+    throw 'cargo not found in PATH. Please install Rust via rustup and reopen terminal.'
+  }
+}
+
 function Get-MsiRows {
   param(
     [Parameter(Mandatory = $true)]
@@ -131,6 +153,7 @@ try {
   $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -LiteralPath $keyPath -Raw
   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = (Get-Content -LiteralPath $passwordPath -Raw).Trim()
 
+  Ensure-CargoAvailable
   npm run tauri build
 
   if ($LASTEXITCODE -ne 0) {
