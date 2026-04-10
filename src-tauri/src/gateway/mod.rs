@@ -88,6 +88,8 @@ pub struct GatewayStatus {
     pub port: u16,
     pub request_count: u64,
     pub last_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_config: Option<GatewayConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,6 +174,27 @@ fn default_log_level() -> String {
     "debug".to_string()
 }
 
+fn build_bind_addr(host: &str, port: u16) -> Result<SocketAddr, String> {
+    let normalized = host.trim();
+    if normalized.is_empty() {
+        return Err("监听地址不能为空".to_string());
+    }
+
+    if normalized.eq_ignore_ascii_case("localhost") {
+        return Ok(SocketAddr::from(([127, 0, 0, 1], port)));
+    }
+
+    let bind_target = if normalized.contains(':') {
+        format!("[{normalized}]:{port}")
+    } else {
+        format!("{normalized}:{port}")
+    };
+
+    bind_target
+        .parse::<SocketAddr>()
+        .map_err(|e| format!("监听地址无效: {e}"))
+}
+
 impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
@@ -200,14 +223,13 @@ impl GatewayStatus {
             port: config.port,
             request_count: 0,
             last_error: None,
+            runtime_config: None,
         }
     }
 }
 
 fn ensure_config_valid(config: &GatewayConfig) -> Result<(), String> {
-    if config.host.trim().is_empty() {
-        return Err("监听地址不能为空".to_string());
-    }
+    build_bind_addr(&config.host, config.port)?;
     if config.port == 0 {
         return Err("端口必须大于 0".to_string());
     }
@@ -456,6 +478,7 @@ pub async fn start_gateway(
         port: config.port,
         request_count: 0,
         last_error: None,
+        runtime_config: Some(config.clone()),
     };
 
     let mut guard = state
@@ -510,6 +533,7 @@ pub async fn get_gateway_status(
             port: config.port,
             request_count,
             last_error: last_error_text,
+            runtime_config: Some(config),
         })
     } else {
         let cfg = load_gateway_config().unwrap_or_default();
@@ -546,9 +570,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
     };
 
     let app = router(state);
-    let addr: SocketAddr = format!("{}:{}", config.host, config.port)
-        .parse()
-        .map_err(|e| format!("监听地址无效: {e}"))?;
+    let addr = build_bind_addr(&config.host, config.port)?;
 
     let listener = TcpListener::bind(addr)
         .await

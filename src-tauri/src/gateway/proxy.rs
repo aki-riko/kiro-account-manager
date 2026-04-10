@@ -281,8 +281,22 @@ fn serialize_logged_value(value: &Value) -> String {
 }
 
 fn prepare_logged_body(body: &str) -> Option<String> {
-    let _ = body;
-    None
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let max_chars = 12_000usize;
+    let mut truncated = String::with_capacity(trimmed.len().min(max_chars));
+    for (index, ch) in trimmed.chars().enumerate() {
+        if index >= max_chars {
+            truncated.push_str("\n...[truncated]");
+            break;
+        }
+        truncated.push(ch);
+    }
+
+    Some(truncated)
 }
 
 fn write_request_log(

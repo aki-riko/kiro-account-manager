@@ -2,7 +2,7 @@ import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, use
 import { Copy, Play, Square, Activity, Shield, Server, RefreshCw, Radio, Check, RotateCcw, FolderOpen, Search, AlertTriangle } from 'lucide-react'
 import { Alert, Button, Card, Group, Stack, Text, TextInput, Textarea, NumberInput, Select, Badge, Code, Tooltip, Switch, Tabs } from '@mantine/core'
 import { useApp } from '../../hooks/useApp'
-import { applyGatewayLocalOnlyChange, buildClientSamples, buildGatewayActionSummary, buildGatewayIntegrationSummary, buildGatewayMetricsSummary, buildGatewayRequestLogSummary, buildGatewayRoutingSummary, buildGatewaySecuritySummary, buildGatewayStatusSummary, createGatewayFieldErrors, filterGatewayRequestLogs, formatGatewayAccountOptionLabel, formatGatewayRequestDuration, formatGatewayTimestamp, getGatewayRequestOutcomeColor, mergeErrorHistory } from './gatewayPageUtils'
+import { applyGatewayLocalOnlyChange, buildClientSamples, buildGatewayActionSummary, buildGatewayBaseUrl, buildGatewayConnectHost, buildGatewayIntegrationSummary, buildGatewayMetricsSummary, buildGatewayRequestLogSummary, buildGatewayRoutingSummary, buildGatewaySecuritySummary, buildGatewayStatusSummary, createGatewayFieldErrors, filterGatewayRequestLogs, formatGatewayAccountOptionLabel, formatGatewayRequestDuration, formatGatewayTimestamp, getGatewayRequestOutcomeColor, mergeErrorHistory } from './gatewayPageUtils'
 import {
   buildGatewayConfigSnapshot,
   buildGatewayRuntimeSnapshot,
@@ -69,17 +69,28 @@ function GatewayPage() {
     [groups]
   )
 
-  const baseUrl = useMemo(() => `http://${config.host}:${config.port}`, [config.host, config.port])
   const fieldErrors = useMemo(() => createGatewayFieldErrors(config), [config])
   const hasFieldErrors = Object.keys(fieldErrors).length > 0
   const configSnapshot = useMemo(() => buildGatewayConfigSnapshot(config), [config])
   const runtimeSnapshot = useMemo(() => buildGatewayRuntimeSnapshot(config), [config])
   const hasUnsavedChanges = configSnapshot !== savedConfigSnapshot
   const hasRuntimeChanges = !!status.running && !!appliedRuntimeSnapshot && runtimeSnapshot !== appliedRuntimeSnapshot
-  const clientSamples = useMemo(() => buildClientSamples(baseUrl, config.apiKey), [baseUrl, config.apiKey])
+  const effectiveConfig = useMemo(
+    () => (status.running && status.runtimeConfig ? status.runtimeConfig : config),
+    [status.running, status.runtimeConfig, config]
+  )
+  const effectiveBaseUrl = useMemo(
+    () => buildGatewayBaseUrl(effectiveConfig.host, effectiveConfig.port, effectiveConfig.localOnly),
+    [effectiveConfig.host, effectiveConfig.port, effectiveConfig.localOnly]
+  )
+  const effectiveConnectHost = useMemo(
+    () => buildGatewayConnectHost(effectiveConfig.host, effectiveConfig.localOnly),
+    [effectiveConfig.host, effectiveConfig.localOnly]
+  )
+  const clientSamples = useMemo(() => buildClientSamples(effectiveBaseUrl, effectiveConfig.apiKey), [effectiveBaseUrl, effectiveConfig.apiKey])
   const statusSummary = useMemo(
-    () => buildGatewayStatusSummary({ config, status, errorHistory, lastStatusSyncAt }),
-    [config, status, errorHistory, lastStatusSyncAt]
+    () => buildGatewayStatusSummary({ config: effectiveConfig, status, errorHistory, lastStatusSyncAt }),
+    [effectiveConfig, status, errorHistory, lastStatusSyncAt]
   )
   const actionSummary = useMemo(
     () => buildGatewayActionSummary({ running: status.running, hasUnsavedChanges, hasRuntimeChanges, hasFieldErrors }),
@@ -89,9 +100,13 @@ function GatewayPage() {
     () => buildGatewaySecuritySummary({ config }),
     [config]
   )
+  const effectiveSecuritySummary = useMemo(
+    () => buildGatewaySecuritySummary({ config: effectiveConfig }),
+    [effectiveConfig]
+  )
   const integrationSummary = useMemo(
-    () => buildGatewayIntegrationSummary({ baseUrl, apiKey: config.apiKey, logDir, errorHistory }),
-    [baseUrl, config.apiKey, logDir, errorHistory]
+    () => buildGatewayIntegrationSummary({ baseUrl: effectiveBaseUrl, apiKey: effectiveConfig.apiKey, logDir, errorHistory }),
+    [effectiveBaseUrl, effectiveConfig.apiKey, logDir, errorHistory]
   )
   const deferredRequestLogQuery = useDeferredValue(requestLogQuery)
   const isObservabilityTab = activeTab === 'observability'
@@ -127,16 +142,28 @@ function GatewayPage() {
     }),
     [config, accounts.length, groups.length, accountOptions, groupOptions]
   )
+  const effectiveRoutingSummary = useMemo(() => buildGatewayRoutingSummary({
+    config: effectiveConfig,
+    counts: {
+      accounts: accounts.length,
+      groups: groups.length,
+    },
+    selectedLabels: {
+      single: accountOptions.find(item => item.value === effectiveConfig.accountId)?.label,
+      group: groupOptions.find(item => item.value === effectiveConfig.groupId)?.label,
+    },
+  }), [effectiveConfig, accounts.length, groups.length, accountOptions, groupOptions])
+
   const latestErrorEntry = useMemo(
     () => errorHistory[0] || null,
     [errorHistory]
   )
   const runtimeBadgeColor = status.running ? 'green' : 'gray'
-  const endpointBadgeColor = config.localOnly ? 'teal' : 'yellow'
+  const endpointBadgeColor = effectiveConfig.localOnly ? 'teal' : 'yellow'
   const capabilityCards = useMemo(() => {
-    const exposureDetail = config.localOnly
+    const exposureDetail = effectiveConfig.localOnly
       ? '仅 127.0.0.1 / ::1 可访问，远程请求会被拒绝。'
-      : `允许远程访问${securitySummary.allowedIpsCount ? `，当前白名单 ${securitySummary.allowedIpsCount} 条` : '，建议配合白名单限制来源 IP'}。`
+      : `允许远程访问${effectiveSecuritySummary.allowedIpsCount ? `，当前白名单 ${effectiveSecuritySummary.allowedIpsCount} 条` : '，建议配合白名单限制来源 IP'}。`
 
     return [
       {
@@ -151,7 +178,7 @@ function GatewayPage() {
       },
       {
         label: '安全边界',
-        title: config.localOnly ? '仅本机暴露' : '远程可访问',
+        title: effectiveConfig.localOnly ? '仅本机暴露' : '远程可访问',
         description: exposureDetail,
       },
       {
@@ -160,7 +187,7 @@ function GatewayPage() {
         description: `最近请求 ${requestLogSummary.total} 条，错误历史 ${errorHistory.length} 条，日志最后同步 ${lastRequestLogsSyncAt}。`,
       },
     ]
-  }, [config.localOnly, securitySummary.allowedIpsCount, requestLogSummary.total, errorHistory.length, lastRequestLogsSyncAt])
+  }, [effectiveConfig.localOnly, effectiveSecuritySummary.allowedIpsCount, requestLogSummary.total, errorHistory.length, lastRequestLogsSyncAt])
   const operationsChecklist = useMemo(() => {
     const checks = [
       {
@@ -314,10 +341,12 @@ function GatewayPage() {
       const { gatewayConfig, gatewayStatus, accounts: accountList, groups: groupList, logDir: gatewayLogDir } = await loadGatewayPageData()
 
       const nextConfig = hydrateGatewayConfig(gatewayConfig)
+      const nextStatus = buildGatewayStatusState(gatewayStatus, gatewayConfig, nextConfig)
+      const runtimeConfig = gatewayStatus?.running && nextStatus.runtimeConfig ? nextStatus.runtimeConfig : null
       setConfig(nextConfig)
       setSavedConfigSnapshot(buildGatewayConfigSnapshot(nextConfig))
-      setAppliedRuntimeSnapshot(gatewayStatus?.running ? buildGatewayRuntimeSnapshot(nextConfig) : null)
-      setStatus(buildGatewayStatusState(gatewayStatus, gatewayConfig, nextConfig))
+      setAppliedRuntimeSnapshot(runtimeConfig ? buildGatewayRuntimeSnapshot(runtimeConfig) : null)
+      setStatus(nextStatus)
       setLastStatusSyncAt(formatGatewayTimestamp())
       setAccounts(accountList)
       setGroups(groupList)
@@ -340,7 +369,11 @@ function GatewayPage() {
   }, [loadAll])
 
   const handleStatusPoll = useCallback(({ status: nextStatus, fallbackConfig, syncedAt }) => {
-    setStatus(buildGatewayStatusState(nextStatus, nextStatus, fallbackConfig))
+    const nextState = buildGatewayStatusState(nextStatus, nextStatus, fallbackConfig)
+    setStatus(nextState)
+    setAppliedRuntimeSnapshot(nextState.running && nextState.runtimeConfig
+      ? buildGatewayRuntimeSnapshot(nextState.runtimeConfig)
+      : null)
     setLastStatusSyncAt(syncedAt)
     if (nextStatus?.lastError) {
       pushError(nextStatus.lastError)
@@ -426,8 +459,9 @@ function GatewayPage() {
     setSaving(true)
     try {
       const st = await startGateway(config)
-      setStatus(st)
-      setAppliedRuntimeSnapshot(buildGatewayRuntimeSnapshot(config))
+      const nextStatus = buildGatewayStatusState(st, st, config)
+      setStatus(nextStatus)
+      setAppliedRuntimeSnapshot(nextStatus.runtimeConfig ? buildGatewayRuntimeSnapshot(nextStatus.runtimeConfig) : buildGatewayRuntimeSnapshot(config))
       setLastStatusSyncAt(formatGatewayTimestamp())
     } catch (e) {
       pushError(e)
@@ -444,8 +478,9 @@ function GatewayPage() {
         await stopGateway()
       }
       const st = await startGateway(config)
-      setStatus(st)
-      setAppliedRuntimeSnapshot(buildGatewayRuntimeSnapshot(config))
+      const nextStatus = buildGatewayStatusState(st, st, config)
+      setStatus(nextStatus)
+      setAppliedRuntimeSnapshot(nextStatus.runtimeConfig ? buildGatewayRuntimeSnapshot(nextStatus.runtimeConfig) : buildGatewayRuntimeSnapshot(config))
       setLastStatusSyncAt(formatGatewayTimestamp())
     } catch (e) {
       pushError(e)
@@ -486,9 +521,6 @@ function GatewayPage() {
             <Group justify="space-between" align="flex-start">
               <Stack gap={6}>
                 <Text fw={700} className={colors.text}>Kiro API 网关</Text>
-                <Text size="sm" className={colors.textMuted}>
-                  本地代理仅转发至 Kiro API，不经过任何第三方服务器。Kiro access token 从本地账号自动读取，页面里填写的是客户端 API Key。
-                </Text>
               </Stack>
               <Group gap="xs">
                 <Badge color="indigo">Gateway Console</Badge>
@@ -514,14 +546,14 @@ function GatewayPage() {
               <Stack gap={4}>
                 <Group gap="xs">
                   <Badge color={runtimeBadgeColor}>{status.running ? '网关运行中' : '网关未启动'}</Badge>
-                  <Badge color={endpointBadgeColor}>{config.localOnly ? '仅本机访问' : '允许远程访问'}</Badge>
+                  <Badge color={endpointBadgeColor}>{effectiveConfig.localOnly ? '仅本机访问' : '允许远程访问'}</Badge>
                   <Badge variant="light" color={hasUnsavedChanges ? 'yellow' : 'teal'}>
                     {hasUnsavedChanges ? '存在未保存配置' : '配置已保存'}
                   </Badge>
                 </Group>
-                <Text fw={700} className={colors.text}>当前入口 {baseUrl}</Text>
+                <Text fw={700} className={colors.text}>当前入口 {effectiveBaseUrl}</Text>
                 <Text size="sm" className={colors.textMuted}>
-                  {routingSummary.modeLabel} · {routingSummary.selectionValue} · {securitySummary.apiKeyState}
+                  {effectiveRoutingSummary.modeLabel} · {effectiveRoutingSummary.selectionValue} · {effectiveSecuritySummary.apiKeyState}
                 </Text>
               </Stack>
 
@@ -591,7 +623,7 @@ function GatewayPage() {
                   {latestErrorEntry ? '最近有错误请求' : '最近未发现错误'}
                 </Text>
                 <Text size="sm" className={colors.textMuted} mt={4}>
-                  {latestErrorEntry?.occurredAt || lastStatusSyncAt}
+                  {latestErrorEntry?.lastSeenAt || lastStatusSyncAt}
                 </Text>
               </Card>
             </div>
@@ -635,9 +667,6 @@ function GatewayPage() {
                         <Radio size={16} />
                         <Text fw={600} className={colors.text}>控制台总览</Text>
                       </Group>
-                      <Text size="sm" className={colors.textMuted}>
-                        日常只看这里：入口、状态、当前账号来源和下一步动作都收口，不再把大表单放在第一页。
-                      </Text>
                     </Stack>
                     <Button variant="light" size="xs" leftSection={<RefreshCw size={14} />} onClick={handleRefresh} loading={loading}>
                       刷新
@@ -647,15 +676,15 @@ function GatewayPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                     <Card withBorder radius="md">
                       <Text size="xs" className={colors.textMuted}>客户端入口</Text>
-                      <Text fw={700} className={colors.text}>{baseUrl}</Text>
+                      <Text fw={700} className={colors.text}>{effectiveBaseUrl}</Text>
                     </Card>
                     <Card withBorder radius="md">
-                      <Text size="xs" className={colors.textMuted}>{routingSummary.selectionLabel}</Text>
-                      <Text fw={700} className={colors.text}>{routingSummary.selectionValue}</Text>
+                      <Text size="xs" className={colors.textMuted}>{effectiveRoutingSummary.selectionLabel}</Text>
+                      <Text fw={700} className={colors.text}>{effectiveRoutingSummary.selectionValue}</Text>
                     </Card>
                     <Card withBorder radius="md">
                       <Text size="xs" className={colors.textMuted}>客户端 Key</Text>
-                      <Text fw={700} className={colors.text}>{securitySummary.apiKeyState}</Text>
+                      <Text fw={700} className={colors.text}>{effectiveSecuritySummary.apiKeyState}</Text>
                     </Card>
                     <Card withBorder radius="md">
                       <Text size="xs" className={colors.textMuted}>请求计数 / 错误</Text>
@@ -703,7 +732,7 @@ function GatewayPage() {
                       <Stack gap={8}>
                         <Text size="xs" className={colors.textMuted}>快速复制</Text>
                         <Text fw={700} className={colors.text}>基础入口</Text>
-                        <Button variant="light" size="xs" leftSection={<Copy size={14} />} onClick={() => copyText(baseUrl, '网关入口已复制')}>
+                        <Button variant="light" size="xs" leftSection={<Copy size={14} />} onClick={() => copyText(effectiveBaseUrl, '网关入口已复制')}>
                           复制入口地址
                         </Button>
                       </Stack>
@@ -744,17 +773,17 @@ function GatewayPage() {
                       <Shield size={16} />
                       <Text fw={600} className={colors.text}>状态与边界</Text>
                     </Group>
-                    <Badge color={config.localOnly ? 'teal' : 'yellow'}>{securitySummary.exposureLabel}</Badge>
+                    <Badge color={effectiveConfig.localOnly ? 'teal' : 'yellow'}>{effectiveSecuritySummary.exposureLabel}</Badge>
                   </Group>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Card withBorder radius="md">
                       <Text size="xs" className={colors.textMuted}>路由模式</Text>
-                      <Text fw={700} className={colors.text}>{routingSummary.modeLabel}</Text>
+                      <Text fw={700} className={colors.text}>{effectiveRoutingSummary.modeLabel}</Text>
                     </Card>
                     <Card withBorder radius="md">
                       <Text size="xs" className={colors.textMuted}>池策略</Text>
-                      <Text fw={700} className={colors.text}>{routingSummary.strategySummary}</Text>
+                      <Text fw={700} className={colors.text}>{effectiveRoutingSummary.strategySummary}</Text>
                     </Card>
                     <Card withBorder radius="md">
                       <Text size="xs" className={colors.textMuted}>Region / 日志级别</Text>
@@ -791,9 +820,6 @@ function GatewayPage() {
                     </Stack>
                   </Card>
 
-                  <ThemedAlert color="blue" variant="light" title="页面边界" colors={colors}>
-                    网关页只负责入口控制、接入和观测。账号增删改、分组治理继续放在账号管理页面，避免在这里再造一套后台。
-                  </ThemedAlert>
                 </Stack>
               </Card>
             </div>
@@ -947,9 +973,6 @@ function GatewayPage() {
                     classNames={selectClassNames}
                   />
 
-                  <ThemedAlert color="orange" variant="light" title="风险提示" colors={colors}>
-                    该网关会直接使用本地或托管账号的 Kiro 凭证访问上游。不要把客户端 API Key、错误日志或网关端口暴露给不受信任环境。
-                  </ThemedAlert>
                 </Stack>
               </Card>
 
@@ -1055,32 +1078,20 @@ function GatewayPage() {
                     {Object.values(fieldErrors).join('；')}
                   </Text>
                 </ThemedAlert>
-              ) : null}
+              ) : (
+                <ThemedAlert
+                  color={actionSummary.tone}
+                  variant="light"
+                  colors={colors}
+                  title={actionSummary.title}
+                >
+                  <Text size="sm" className={colors.textMuted}>
+                    {actionSummary.description}
+                  </Text>
+                </ThemedAlert>
+              )}
             </Stack>
           </Card>
-          {hasFieldErrors ? (
-            <ThemedAlert
-              color="red"
-              variant="light"
-              colors={colors}
-              title="保存前需修正"
-            >
-              <Text size="sm" className={colors.textMuted}>
-                {Object.values(fieldErrors).join('；')}
-              </Text>
-            </ThemedAlert>
-          ) : (
-            <ThemedAlert
-              color={actionSummary.tone}
-              variant="light"
-              colors={colors}
-              title={actionSummary.title}
-            >
-              <Text size="sm" className={colors.textMuted}>
-                {actionSummary.description}
-              </Text>
-            </ThemedAlert>
-          )}
             </div>
           </Tabs.Panel>
 
@@ -1107,6 +1118,7 @@ function GatewayPage() {
                     <Card withBorder radius="md">
                       <Text size="xs" className={colors.textMuted}>接入地址</Text>
                       <Text fw={700} className={colors.text}>{integrationSummary.endpointLabel}</Text>
+                      <Text size="xs" className={colors.textMuted} mt={4}>客户端应连接 {effectiveConnectHost}</Text>
                     </Card>
                     <Card withBorder radius="md">
                       <Text size="xs" className={colors.textMuted}>认证头</Text>
@@ -1200,9 +1212,6 @@ function GatewayPage() {
                 </Stack>
               </Card>
 
-              <ThemedAlert color="blue" variant="light" title="接入提醒" colors={colors}>
-                客户端连本地网关只需要两件事：接入地址和客户端 API Key。运行状态、日志目录、错误排查统一放到“观测”页，不再在这里重复堆叠。
-              </ThemedAlert>
             </div>
           </Tabs.Panel>
 
@@ -1225,8 +1234,8 @@ function GatewayPage() {
                       <Text fw={600} className={colors.text}>观测总览</Text>
                     </Group>
                     <Group gap="xs">
-                      <Badge color="blue" leftSection={<Radio size={12} />}>{`账号池 ${config.strategy}`}</Badge>
-                      <Badge color={config.localOnly ? 'teal' : 'yellow'}>{config.localOnly ? '仅本机' : '允许远程'}</Badge>
+                      <Badge color="blue" leftSection={<Radio size={12} />}>{`账号池 ${effectiveConfig.strategy}`}</Badge>
+                      <Badge color={effectiveConfig.localOnly ? 'teal' : 'yellow'}>{effectiveConfig.localOnly ? '仅本机' : '允许远程'}</Badge>
                       <Badge color={status.running ? 'green' : 'red'}>{status.running ? '运行中' : '已停止'}</Badge>
                       <Button variant="light" size="xs" leftSection={<RefreshCw size={14} />} onClick={handleRefresh} loading={loading}>
                         刷新状态
