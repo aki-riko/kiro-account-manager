@@ -16,6 +16,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    collections::HashMap,
     fs,
     io::{BufRead, BufReader, Write},
     net::{IpAddr, SocketAddr},
@@ -24,6 +25,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
+    time::{Duration, Instant},
 };
 use tauri::{AppHandle, Manager};
 use tokio::{
@@ -122,12 +124,25 @@ pub struct GatewayRuntime {
     server_task: Option<JoinHandle<()>>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ResponsesSessionEntry {
+    pub response_id: String,
+    pub previous_response_id: Option<String>,
+    pub request_messages: Vec<crate::gateway::models::NormalizedMessage>,
+    pub response_text: String,
+    pub tool_calls: Vec<(String, String, String)>,
+    pub updated_at: Instant,
+}
+
+pub(crate) type ResponsesSessionStore = Arc<AsyncMutex<HashMap<String, ResponsesSessionEntry>>>;
+
 #[derive(Clone)]
 struct RouterState {
     config: GatewayConfig,
     request_count: Arc<AtomicU64>,
     last_error: Arc<AsyncMutex<Option<String>>>,
     http: Client,
+    responses_sessions: ResponsesSessionStore,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -558,6 +573,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
 
     let request_count = Arc::new(AtomicU64::new(0));
     let last_error = Arc::new(AsyncMutex::new(None));
+    let responses_sessions = Arc::new(AsyncMutex::new(HashMap::new()));
 
     let http = build_streaming_http_client()
         .map_err(|e| format!("初始化 HTTP 客户端失败: {e}"))?;
@@ -567,6 +583,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
         request_count: request_count.clone(),
         last_error: last_error.clone(),
         http,
+        responses_sessions,
     };
 
     let app = router(state);
@@ -750,6 +767,7 @@ mod tests {
             request_count: Arc::new(AtomicU64::new(0)),
             last_error: Arc::new(AsyncMutex::new(None)),
             http: Client::new(),
+            responses_sessions: Arc::new(AsyncMutex::new(HashMap::new())),
         }
     }
 
@@ -878,6 +896,7 @@ mod tests {
             request_count: Arc::new(AtomicU64::new(0)),
             last_error: Arc::new(AsyncMutex::new(None)),
             http: Client::new(),
+            responses_sessions: Arc::new(AsyncMutex::new(HashMap::new())),
         }
     }
 

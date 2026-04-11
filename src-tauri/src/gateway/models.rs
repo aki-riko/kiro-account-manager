@@ -12,6 +12,8 @@ pub struct NormalizedRequest {
     pub stop: Option<Vec<String>>,
     pub tools: Option<Vec<Tool>>,
     pub tool_choice: Option<serde_json::Value>,
+    #[serde(default)]
+    pub previous_response_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -64,6 +64,7 @@ pub fn normalize_anthropic_request(request: &AnthropicMessagesRequest) -> Normal
         stop: request.stop_sequences.clone(),
         tools,
         tool_choice: request.tool_choice.clone(),
+        previous_response_id: None,
     }
 }
 
@@ -131,6 +132,12 @@ pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest,
         }),
         tools: convert_responses_tools(payload.get("tools")),
         tool_choice: payload.get("tool_choice").cloned(),
+        previous_response_id: payload
+            .get("previous_response_id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
     })
 }
 
@@ -257,7 +264,10 @@ pub async fn build_kiro_payload(
     profile_arn: Option<String>,
 ) -> Result<KiroPayload, String> {
     let model_id = get_internal_model_id(&request.model)?;
-    let conversation_id = Uuid::new_v4().to_string();
+    let conversation_id = request
+        .previous_response_id
+        .clone()
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
     let inference_config = build_inference_config(request);
     let (processed_tools, tool_docs) = process_tools_with_long_descriptions(&request.tools);
     let tool_docs_for_current = tool_docs.clone();
@@ -865,6 +875,61 @@ fn extract_text_content(content: Option<&Value>) -> String {
             extract_text_blocks(value, &["text", "input_text", "output_text"])
         }
         Some(other) => other.to_string(),
+    }
+}
+
+pub fn normalized_user_message_from_text(text: &str) -> NormalizedMessage {
+    NormalizedMessage {
+        role: "user".to_string(),
+        content: Some(Value::String(text.to_string())),
+        tool_calls: None,
+        tool_call_id: None,
+        metadata: None,
+    }
+}
+
+pub fn normalized_tool_message_from_output(tool_call_id: &str, output: &str) -> NormalizedMessage {
+    NormalizedMessage {
+        role: "tool".to_string(),
+        content: Some(Value::String(output.to_string())),
+        tool_calls: None,
+        tool_call_id: Some(tool_call_id.to_string()),
+        metadata: None,
+    }
+}
+
+pub fn history_assistant_message_from_response_content(
+    content: &str,
+    tool_calls: &[(String, String, String)],
+) -> HistoryAssistantMessage {
+    let tool_uses = if tool_calls.is_empty() {
+        None
+    } else {
+        Some(
+            tool_calls
+                .iter()
+                .map(|(id, name, arguments)| KiroToolUse {
+                    name: name.clone(),
+                    input: serde_json::from_str(arguments).unwrap_or_else(|_| json!({})),
+                    tool_use_id: id.clone(),
+                })
+                .collect(),
+        )
+    };
+
+    HistoryAssistantMessage {
+        content: if content.trim().is_empty() {
+            "I understand.".to_string()
+        } else {
+            content.to_string()
+        },
+        tool_uses,
+        reasoning_content: None,
+        references: None,
+        supplementary_web_links: None,
+        followup_prompt: None,
+        message_id: None,
+        cache_point: None,
     }
 }
 
@@ -1756,6 +1821,7 @@ mod tests {
                 web_search: None,
             }]),
             tool_choice: None,
+            previous_response_id: None,
         };
 
         let payload = build_kiro_payload(
@@ -1823,6 +1889,7 @@ mod tests {
             stop: None,
             tools: None,
             tool_choice: None,
+            previous_response_id: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None)
@@ -1857,6 +1924,7 @@ mod tests {
             stop: None,
             tools: None,
             tool_choice: None,
+            previous_response_id: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None)
@@ -2085,6 +2153,7 @@ mod tests {
                 web_search: None,
             }]),
             tool_choice: Some(json!({ "type": "function", "name": "search_docs" })),
+            previous_response_id: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None)
@@ -2102,6 +2171,34 @@ mod tests {
                 .cloned(),
             Some(json!({ "type": "function", "name": "search_docs" }))
         );
+    }
+
+    #[tokio::test]
+    async fn build_kiro_payload_reuses_previous_response_id_as_conversation_id() {
+        let request = NormalizedRequest {
+            model: "claude-sonnet-4-5-20250929".to_string(),
+            messages: vec![NormalizedMessage {
+                role: "user".to_string(),
+                content: Some(json!("继续")),
+                tool_calls: None,
+                tool_call_id: None,
+                metadata: None,
+            }],
+            stream: false,
+            max_tokens: None,
+            temperature: None,
+            top_p: None,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+            previous_response_id: Some("resp_prev_123".to_string()),
+        };
+
+        let payload = build_kiro_payload(&Client::new(), &request, None)
+            .await
+            .expect("payload should build");
+
+        assert_eq!(payload.conversation_state.conversation_id, "resp_prev_123");
     }
 
     #[tokio::test]
@@ -2133,6 +2230,7 @@ mod tests {
                 web_search: None,
             }]),
             tool_choice: Some(json!({ "type": "function", "name": "missing_tool" })),
+            previous_response_id: None,
         };
 
         let error = build_kiro_payload(&Client::new(), &request, None)
@@ -2173,6 +2271,7 @@ mod tests {
             stop: None,
             tools: None,
             tool_choice: None,
+            previous_response_id: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None)
@@ -2261,6 +2360,7 @@ mod tests {
             stop: None,
             tools: None,
             tool_choice: None,
+            previous_response_id: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None)
@@ -2306,6 +2406,7 @@ mod tests {
             stop: None,
             tools: None,
             tool_choice: None,
+            previous_response_id: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None)
@@ -2385,6 +2486,7 @@ mod tests {
             stop: None,
             tools: None,
             tool_choice: None,
+            previous_response_id: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None)
