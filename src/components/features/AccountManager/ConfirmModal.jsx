@@ -22,6 +22,7 @@ import { Button } from '../../shared/button'
  * @param {function} onCancel - 取消回调
  * @param {string} confirmText - 确认按钮文字
  * @param {string} cancelText - 取消按钮文字
+ * @param {ReactNode} customContent - 自定义内容（可选）
  */
 function ConfirmModal({
   type = 'confirm',
@@ -33,6 +34,7 @@ function ConfirmModal({
   confirmText,
   cancelText,
   loading = false,
+  customContent,
 }) {
   const { t, colors, theme } = useApp()
   const accent = getThemeAccent(theme)
@@ -83,6 +85,9 @@ function ConfirmModal({
           <p className="text-sm leading-relaxed whitespace-pre-line">
             {message}
           </p>
+          
+          {/* 自定义内容 */}
+          {customContent}
           
           {/* 原始响应展开区域 */}
           {rawData && (

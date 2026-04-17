@@ -70,6 +70,8 @@ function AccountManager({ onNavigate }) {
     handleSwitchAccount,
     confirmSwitch,
     closeSwitchDialog,
+    switchTarget,
+    setSwitchTarget,
   } = useSwitchAccount(setLocalToken)
   
   useEffect(() => {
@@ -657,6 +659,35 @@ function AccountManager({ onNavigate }) {
           onConfirm={switchDialog.type === 'confirm' ? confirmSwitch : closeSwitchDialog}
           onCancel={closeSwitchDialog}
           confirmText={switchDialog.type === 'confirm' ? t('switch.confirmBtn') : t('common.ok')}
+          customContent={switchDialog.type === 'confirm' ? (
+            <div className="mt-4">
+              <div className="text-sm font-medium mb-2" style={{ color: colors.text }}>切换目标</div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="switchTarget"
+                    value="ide"
+                    checked={switchTarget === 'ide'}
+                    onChange={(e) => setSwitchTarget(e.target.value)}
+                    className="w-4 h-4"
+                  />
+                  <span style={{ color: colors.text }}>IDE (默认)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="switchTarget"
+                    value="cli"
+                    checked={switchTarget === 'cli'}
+                    onChange={(e) => setSwitchTarget(e.target.value)}
+                    className="w-4 h-4"
+                  />
+                  <span style={{ color: colors.text }}>CLI 2.0 (需要已安装 Kiro CLI)</span>
+                </label>
+              </div>
+            </div>
+          ) : null}
         />
       )}
       </div>

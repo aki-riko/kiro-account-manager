@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../../hooks/useApp'
 import { useAppSettings } from '../../../../contexts/AppSettingsContext'
@@ -15,6 +15,15 @@ export function useSwitchAccount(onLocalTokenChange) {
   const { settings: appSettings } = useAppSettings()
   const [switchingId, setSwitchingId] = useState(null)
   const [switchDialog, setSwitchDialog] = useState(null)
+  const [switchTarget, setSwitchTarget] = useState('ide') // 'ide' | 'cli'
+
+  // 从 localStorage 读取上次选择的切换目标
+  useEffect(() => {
+    const saved = localStorage.getItem('switchTarget')
+    if (saved && (saved === 'ide' || saved === 'cli')) {
+      setSwitchTarget(saved)
+    }
+  }, [])
 
   // 显示切换确认弹窗
   const handleSwitchAccount = useCallback((account) => {
@@ -40,19 +49,44 @@ export function useSwitchAccount(onLocalTokenChange) {
     const account = switchDialog?.account
     if (!account) return
     
+    // 保存用户选择的切换目标
+    localStorage.setItem('switchTarget', switchTarget)
+    
     setSwitchDialog(null)
     setSwitchingId(account.id)
     
     try {
+      // 如果选择 CLI，先检测 CLI 2.0 安装状态
+      if (switchTarget === 'cli') {
+        const cliInfo = await invoke('check_cli_installation')
+        if (!cliInfo.installed) {
+          setSwitchDialog({
+            type: 'error',
+            title: t('switch.cliNotInstalled'),
+            message: t('switch.cliNotInstalledMessage'),
+            account: null,
+          })
+          setSwitchingId(null)
+          return
+        }
+      }
+      
       // 先同步账号（刷新 token + 获取最新配额）
       const syncResult = await invoke('sync_account', { id: account.id })
-      let refreshedAccount = syncResult.account  // ✅ 修复：从 syncResult 中提取 account
+      let refreshedAccount = syncResult.account
       
       const settings = appSettings || {}
       refreshedAccount = await applyMachineGuid(refreshedAccount, settings)
       
-      const params = buildSwitchParams(refreshedAccount)
-      await invoke('switch_kiro_account', { params })
+      if (switchTarget === 'cli') {
+        // CLI 切号
+        const payload = await invoke('build_cli_switch_payload', { account: refreshedAccount })
+        await invoke('switch_to_cli_account', { payload })
+      } else {
+        // IDE 切号
+        const params = buildSwitchParams(refreshedAccount)
+        await invoke('switch_kiro_account', { params })
+      }
       
       // 更新当前账号标识
       invoke('get_kiro_local_token').then(onLocalTokenChange).catch(() => onLocalTokenChange(null))
@@ -90,10 +124,12 @@ export function useSwitchAccount(onLocalTokenChange) {
       const remaining = totalLimit - totalUsed
       const provider = refreshedAccount.provider || 'Unknown'
       
+      const targetLabel = switchTarget === 'cli' ? 'CLI 2.0' : 'IDE'
+      
       setSwitchDialog({
         type: 'success',
         title: t('switch.success'),
-        message: `${refreshedAccount.email}\n\n📊 ${t('switch.quota')}: ${totalUsed}/${totalLimit} (${t('switch.remaining')} ${remaining})\n🏷️ ${t('switch.type')}: ${provider}`,
+        message: `${refreshedAccount.email}\n\n📊 ${t('switch.quota')}: ${totalUsed}/${totalLimit} (${t('switch.remaining')} ${remaining})\n🏷️ ${t('switch.type')}: ${provider}\n🎯 切换目标: ${targetLabel}`,
         account: null,
       })
     } catch (e) {
@@ -106,7 +142,7 @@ export function useSwitchAccount(onLocalTokenChange) {
     } finally {
       setSwitchingId(null)
     }
-  }, [switchDialog, appSettings, onLocalTokenChange, t])
+  }, [switchDialog, appSettings, onLocalTokenChange, t, switchTarget])
 
   // 关闭弹窗
   const closeSwitchDialog = useCallback(() => setSwitchDialog(null), [])
@@ -118,5 +154,7 @@ export function useSwitchAccount(onLocalTokenChange) {
     handleSwitchAccount,
     confirmSwitch,
     closeSwitchDialog,
+    switchTarget,
+    setSwitchTarget,
   }
 }
