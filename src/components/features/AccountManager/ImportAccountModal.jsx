@@ -16,8 +16,8 @@ import {
   DialogDescription,
   DialogBody,
   DialogFooter,
-} from '../../ui/dialog'
-import { Button } from '../../ui/button'
+} from '../../shared/dialog'
+import { Button } from '../../shared/button'
 
 function validateAccount(item, index) {
   const errors = []

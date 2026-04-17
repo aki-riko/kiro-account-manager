@@ -13,8 +13,8 @@ import {
   DialogDescription,
   DialogBody,
   DialogFooter,
-} from '../../ui/dialog'
-import { Button } from '../../ui/button'
+} from '../../shared/dialog'
+import { Button } from '../../shared/button'
 
 const PRESET_COLORS = [
   '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', 
