@@ -16,6 +16,14 @@ export function useSwitchAccount(onLocalTokenChange) {
   const [switchingId, setSwitchingId] = useState(null)
   const [switchDialog, setSwitchDialog] = useState(null)
   const [switchTarget, setSwitchTarget] = useState('ide') // 'ide' | 'cli'
+  const [cliInstalled, setCliInstalled] = useState(false)
+
+  // 检测 CLI 安装状态
+  useEffect(() => {
+    invoke('check_cli_installation').then(info => {
+      setCliInstalled(info.installed)
+    }).catch(() => setCliInstalled(false))
+  }, [])
 
   // 从 localStorage 读取上次选择的切换目标
   useEffect(() => {
@@ -156,5 +164,6 @@ export function useSwitchAccount(onLocalTokenChange) {
     closeSwitchDialog,
     switchTarget,
     setSwitchTarget,
+    cliInstalled,
   }
 }

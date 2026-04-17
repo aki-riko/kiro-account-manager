@@ -72,6 +72,7 @@ function AccountManager({ onNavigate }) {
     closeSwitchDialog,
     switchTarget,
     setSwitchTarget,
+    cliInstalled,
   } = useSwitchAccount(setLocalToken)
   
   useEffect(() => {
@@ -661,7 +662,7 @@ function AccountManager({ onNavigate }) {
           confirmText={switchDialog.type === 'confirm' ? t('switch.confirmBtn') : t('common.ok')}
           customContent={switchDialog.type === 'confirm' ? (
             <div className="mt-4">
-              <div className="text-sm font-medium mb-2" style={{ color: colors.text }}>切换目标</div>
+              <div className="text-sm font-medium mb-2" style={{ color: colors.text }}>{t('switch.switchTarget')}</div>
               <div className="space-y-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -674,16 +675,20 @@ function AccountManager({ onNavigate }) {
                   />
                   <span style={{ color: colors.text }}>IDE (默认)</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className={`flex items-center gap-2 ${cliInstalled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
                   <input
                     type="radio"
                     name="switchTarget"
                     value="cli"
                     checked={switchTarget === 'cli'}
                     onChange={(e) => setSwitchTarget(e.target.value)}
+                    disabled={!cliInstalled}
                     className="w-4 h-4"
                   />
-                  <span style={{ color: colors.text }}>CLI 2.0 (需要已安装 Kiro CLI)</span>
+                  <span style={{ color: colors.text }}>
+                    CLI 2.0
+                    {!cliInstalled && ' (未安装，请先安装 Kiro CLI)'}
+                  </span>
                 </label>
               </div>
             </div>
