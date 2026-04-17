@@ -468,12 +468,13 @@ src/                  React 前端
 
 src-tauri/src/        Rust + Tauri 后端
   commands/           所有 Tauri commands
-  providers/          Social / IdC 认证提供者
+  auth/               认证模块（包含 providers/ 子目录）
+  clients/            HTTP 客户端（AWS SSO、Kiro Auth、Kiro Portal）
+  core/               核心功能（账号、自动切换、Deep Link）
+  kiro/               Kiro 集成（IDE、CLI、Settings）
+  utils/              工具函数（浏览器、命令输出）
   gateway/            Kiro API Gateway
   state.rs            全局应用状态
-  kiro.rs             Kiro 本地配置与账号切换
-  deep_link_handler.rs OAuth 回调与 deep link 处理
-  tray_behavior.rs    系统托盘行为
 ```
 
 ---
