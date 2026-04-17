@@ -1,7 +1,7 @@
 // Hooks 管理命令
 
 use crate::commands::common::run_blocking_task;
-use crate::hooks::{HookFile, HooksManager};
+use crate::kiro::settings::hooks::{HookFile, HooksManager};
 use tauri::command;
 
 #[command]

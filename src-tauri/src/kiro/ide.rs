@@ -334,3 +334,51 @@ pub async fn switch_kiro_account(
     .await
     .map_err(|e| format!("Task failed: {e}"))?
 }
+
+/// 检测 Kiro IDE 是否安装
+#[allow(dead_code)]
+fn detect_kiro_ide() -> bool {
+    let candidates = get_kiro_ide_paths();
+
+    for path in candidates {
+        if path.exists() {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// 获取 Kiro IDE 候选路径
+#[allow(dead_code)]
+fn get_kiro_ide_paths() -> Vec<std::path::PathBuf> {
+    let mut paths = Vec::new();
+
+    if cfg!(target_os = "windows") {
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            paths.push(
+                std::path::PathBuf::from(local_app_data)
+                    .join("Programs")
+                    .join("Kiro")
+                    .join("Kiro.exe"),
+            );
+        }
+    } else if cfg!(target_os = "macos") {
+        // macOS: Kiro.app 安装在 /Applications
+        paths.push(std::path::PathBuf::from("/Applications/Kiro.app"));
+    } else {
+        // Linux: 可能在多个位置
+        paths.push(std::path::PathBuf::from("/usr/bin/kiro"));
+        
+        if let Ok(home) = std::env::var("HOME") {
+            paths.push(
+                std::path::PathBuf::from(&home)
+                    .join(".local")
+                    .join("bin")
+                    .join("kiro"),
+            );
+        }
+    }
+
+    paths
+}

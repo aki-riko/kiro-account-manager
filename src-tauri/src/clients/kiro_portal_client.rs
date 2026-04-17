@@ -1,7 +1,7 @@
 // Kiro Web Portal 客户端 - CBOR API
 // 直接返回 JSON Value，不依赖复杂的结构体
 
-use crate::http_client::build_http_client;
+use crate::clients::http_client::build_http_client;
 use serde::Serialize;
 
 const KIRO_WEB_PORTAL: &str = "https://app.kiro.dev";

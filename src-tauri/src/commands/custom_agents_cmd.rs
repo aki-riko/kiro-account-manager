@@ -1,7 +1,7 @@
 // Custom Agents 管理命令
 
 use crate::commands::common::run_blocking_task;
-use crate::custom_agents::{CustomAgentFile, CustomAgentsManager};
+use crate::kiro::settings::custom_agents::{CustomAgentFile, CustomAgentsManager};
 use tauri::command;
 
 #[command]

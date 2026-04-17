@@ -703,10 +703,10 @@ return (
                 </Alert>
 
                 {isWindowsOs && (
-                  <Alert icon={<AlertCircle size={16} />} color="orange" variant="light">
-                    <div className={`text-sm font-medium ${colors.text}`}>{t('import.kiroCliWindowsWslTitle')}</div>
+                  <Alert icon={<AlertCircle size={16} />} color="blue" variant="light">
+                    <div className={`text-sm font-medium ${colors.text}`}>{t('import.kiroCliWindowsTitle')}</div>
                     <div className={`text-xs mt-1 ${colors.textMuted}`}>
-                      {t('import.kiroCliWindowsWslHint')}
+                      {t('import.kiroCliWindowsHint')}
                     </div>
                   </Alert>
                 )}

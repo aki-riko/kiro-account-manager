@@ -25,7 +25,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 use tauri::{AppHandle, Manager};
 use tokio::{
@@ -34,7 +34,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::http_client::{build_streaming_http_client, is_supported_kiro_region};
+use crate::clients::http_client::{build_streaming_http_client, is_supported_kiro_region};
 
 #[cfg(test)]
 thread_local! {
@@ -126,6 +126,7 @@ pub struct GatewayRuntime {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResponsesSessionEntry {
+    #[allow(dead_code)]
     pub response_id: String,
     pub previous_response_id: Option<String>,
     pub request_messages: Vec<crate::gateway::models::NormalizedMessage>,
@@ -544,7 +545,7 @@ pub async fn get_gateway_status(
         let last_error_text = last_error.lock().await.clone();
         Ok(GatewayStatus {
             running,
-            host: config.host,
+            host: config.host.clone(),
             port: config.port,
             request_count,
             last_error: last_error_text,

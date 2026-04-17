@@ -1,34 +1,19 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod auth;
-mod auth_social;
-mod auto_switch;
-mod aws_sso_client;
-mod browser;
-mod commands;
-mod deep_link_handler;
-mod http_client;
-
-mod gateway;
-mod kiro;
-mod kiro_auth_client;
-mod kiro_cli_db;
-mod kiro_portal_client;
-mod mcp;
-
-mod account;
-mod cmd_output;
-mod custom_agents;
-mod hooks;
-mod powers;
-mod process;
-mod providers;
-mod skills;
+// 核心模块
+mod core;
 mod state;
-mod steering;
 mod tray_behavior;
 
-use account::{AccountStore, GroupTagStore};
+// 功能模块
+mod auth;
+mod clients;
+mod commands;
+mod gateway;
+mod kiro;
+mod utils;
+
+use core::account::{AccountStore, GroupTagStore};
 use auth::AuthState;
 use state::AppState;
 use std::sync::atomic::AtomicBool;
@@ -36,7 +21,7 @@ use std::sync::Mutex;
 use tauri::{Listener, Manager};
 
 // 导入命令
-use browser::detect_installed_browsers;
+use utils::browser::detect_installed_browsers;
 use commands::account_cmd::{
     add_account_by_idc, add_account_by_social, add_local_kiro_account, delete_account,
     delete_account_remote, delete_accounts, export_accounts, get_account_usage, get_accounts,
@@ -60,7 +45,10 @@ use commands::group_tag_cmd::{
     remove_account_tags, remove_tag_from_account, reorder_groups, set_account_group,
     set_account_tags, update_group, update_tag,
 };
-use commands::kiro_cli_cmd::{get_kiro_cli_default_path, import_from_kiro_cli};
+use commands::kiro_cli_cmd::{
+    check_cli_installation, get_kiro_cli_default_path, import_from_kiro_cli,
+    read_cli_db_snapshot, rollback_cli_switch, switch_to_cli_account,
+};
 use commands::kiro_settings_cmd::{
     get_kiro_settings, set_kiro_agent_autonomy, set_kiro_code_references,
     set_kiro_codebase_indexing, set_kiro_configure_mcp, set_kiro_debug_logs, set_kiro_model,
@@ -97,8 +85,8 @@ use commands::steering_cmd::{
 };
 use commands::update_cmd::check_update;
 
-use kiro::{get_kiro_local_token, read_kiro_accounts, switch_kiro_account};
-use process::{close_kiro_ide, is_kiro_ide_running, start_kiro_ide};
+use kiro::ide::{get_kiro_local_token, read_kiro_accounts, switch_kiro_account};
+use kiro::process::{close_kiro_ide, is_kiro_ide_running, start_kiro_ide};
 
 /// 配置日志插件
 fn setup_log_plugin() -> tauri_plugin_log::Builder {
@@ -149,10 +137,10 @@ fn navigate_main_window_to_route(app_handle: &tauri::AppHandle, route: &str) {
 }
 
 fn handle_incoming_deep_link(app_handle: &tauri::AppHandle, url: &str) {
-    if let Some(route) = deep_link_handler::get_app_callback_route(url) {
+    if let Some(route) = core::deep_link_handler::get_app_callback_route(url) {
         navigate_main_window_to_route(app_handle, &route);
     } else {
-        deep_link_handler::handle_deep_link(url);
+        core::deep_link_handler::handle_deep_link(url);
     }
 
     tray_behavior::show_main_window(app_handle);
@@ -164,7 +152,7 @@ fn setup_single_instance_callback(app: &tauri::AppHandle, argv: Vec<String>, _cw
     // 当第二个实例尝试启动时，处理传入的参数（deep-link 回调）
     let protocol_prefix = format!(
         "{}://",
-        deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme()
+        core::deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme()
     );
     for arg in &argv {
         if arg.starts_with(&protocol_prefix) {
@@ -192,7 +180,7 @@ fn handle_deep_link_event(app_handle: &tauri::AppHandle, payload: &str) {
     // 只处理当前环境的协议
     let protocol_prefix = format!(
         "{}://",
-        deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme()
+        core::deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme()
     );
     if !url.starts_with(&protocol_prefix) {
         return;
@@ -206,7 +194,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // 首次启动时检查命令行参数中的 deep link（Windows/Linux）
     let protocol_prefix = format!(
         "{}://",
-        deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme()
+        core::deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme()
     );
     for arg in std::env::args() {
         if arg.starts_with(&protocol_prefix) {
@@ -218,7 +206,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
     {
         use tauri_plugin_deep_link::DeepLinkExt;
-        let scheme = deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme();
+        let scheme = core::deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme();
         app.deep_link()
             .register(scheme)
             .map_err(|e| format!("Failed to register deep link: {e}"))?;
@@ -321,6 +309,10 @@ fn main() {
             // Kiro CLI 导入命令
             get_kiro_cli_default_path,
             import_from_kiro_cli,
+            check_cli_installation,
+            read_cli_db_snapshot,
+            switch_to_cli_account,
+            rollback_cli_switch,
             // 分组与标签命令
             get_groups,
             add_group,

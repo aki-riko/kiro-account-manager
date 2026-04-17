@@ -1,9 +1,9 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
 
-use crate::account::Account;
+use crate::core::account::Account;
 use crate::commands::common::extract_user_info;
-use crate::kiro_cli_db::read_kiro_cli_accounts;
-use crate::kiro_portal_client::KiroPortalClient;
+use crate::kiro::cli::read_kiro_cli_accounts;
+use crate::clients::kiro_portal_client::KiroPortalClient;
 use crate::state::AppState;
 use serde::Serialize;
 use std::sync::{Mutex, MutexGuard};
@@ -22,7 +22,7 @@ fn expand_home_dir(path: &str) -> Result<String, String> {
 }
 
 /// 从 CLI 账号判断 provider
-fn determine_provider(cli_account: &crate::kiro_cli_db::KiroCliAccount) -> String {
+fn determine_provider(cli_account: &crate::kiro::cli::KiroCliAccount) -> String {
     if cli_account.auth_method == "social" {
         // Social Login，通过 profile_arn 判断
         if let Some(ref arn) = cli_account.profile_arn {
@@ -102,13 +102,14 @@ pub fn get_kiro_cli_default_path() -> Result<String, String> {
                 .join("data.sqlite3"),
         );
     } else if cfg!(target_os = "windows") {
-        candidates.push(
-            std::path::PathBuf::from(&home)
-                .join(".local")
-                .join("share")
-                .join("kiro-cli")
-                .join("data.sqlite3"),
-        );
+        // Kiro CLI 2.0 原生支持 Windows
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            candidates.push(
+                std::path::PathBuf::from(local_app_data)
+                    .join("Kiro-Cli")
+                    .join("data.sqlite3"),
+            );
+        }
     } else {
         if let Ok(xdg_data_home) = std::env::var("XDG_DATA_HOME") {
             candidates.push(
@@ -263,6 +264,130 @@ pub async fn import_from_kiro_cli(
         is_new,
         account: Some(account),
         error: None,
+    })
+}
+
+// ============================================================
+// CLI 2.0 切号功能
+// ============================================================
+
+/// 检测 CLI 2.0 安装状态
+#[tauri::command]
+pub fn check_cli_installation() -> crate::kiro::cli::CliInstallationInfo {
+    crate::kiro::cli::check_cli_installation()
+}
+
+/// 读取 CLI 数据库快照（前端展示用）
+#[tauri::command]
+pub fn read_cli_db_snapshot(
+    db_path: String,
+) -> Result<crate::kiro::cli::KiroCliDbSnapshot, String> {
+    let expanded_path = expand_home_dir(&db_path)?;
+    crate::kiro::cli::read_cli_db_snapshot(&expanded_path)
+}
+
+/// 切号到 CLI 账号
+#[tauri::command]
+pub async fn switch_to_cli_account(
+    account_id: String,
+    db_path: String,
+    state: State<'_, AppState>,
+) -> Result<crate::kiro::cli::KiroCliWriteBackup, String> {
+    let expanded_path = expand_home_dir(&db_path)?;
+
+    // 1. 从 store 读取账号数据
+    let store = lock_account_store(&state.store)?;
+    let account = store
+        .accounts
+        .iter()
+        .find(|a| a.id == account_id)
+        .ok_or_else(|| format!("账号不存在: {account_id}"))?;
+
+    // 2. 构造切号载荷
+    let payload = build_switch_payload(account)?;
+
+    // 3. 执行切号写入
+    crate::kiro::cli::switch_cli_account(&expanded_path, &payload)
+}
+
+/// 回滚切号操作
+#[tauri::command]
+pub fn rollback_cli_switch(
+    db_path: String,
+    backup: crate::kiro::cli::KiroCliWriteBackup,
+) -> Result<(), String> {
+    let expanded_path = expand_home_dir(&db_path)?;
+    crate::kiro::cli::rollback_cli_switch(&expanded_path, &backup)
+}
+
+/// 构造切号载荷（从 Account 转换为 CLI 2.0 格式）
+fn build_switch_payload(
+    account: &Account,
+) -> Result<crate::kiro::cli::KiroCliSwitchPayload, String> {
+    // 判断账号类型
+    let provider = account.provider.as_ref().ok_or("账号缺少 provider 字段")?;
+    let (token_key, device_reg_key, auth_method) = match provider.as_str() {
+        "BuilderId" => (
+            "kirocli:odic:token",
+            "kirocli:odic:device-registration",
+            "IdC",
+        ),
+        "Google" | "Github" => (
+            "kirocli:social:token",
+            "kirocli:social:device-registration",
+            "social",
+        ),
+        _ => return Err(format!("不支持的 provider: {}", provider)),
+    };
+
+    // 构造 token JSON
+    let mut token_data = serde_json::json!({
+        "access_token": account.access_token,
+        "refresh_token": account.refresh_token,
+        "region": account.region,
+    });
+
+    // IdC 账号：补齐固定字段
+    if auth_method == "IdC" {
+        token_data["scopes"] = serde_json::json!([
+            "codewhisperer:completions",
+            "codewhisperer:analysis",
+            "codewhisperer:conversations",
+        ]);
+        token_data["oauth_flow"] = serde_json::json!("Pkce");
+    }
+
+    // Social 账号：补齐 start_url
+    if auth_method == "social" {
+        token_data["start_url"] = serde_json::json!("https://view.awsapps.com/start");
+        if let Some(ref profile_arn) = account.profile_arn {
+            token_data["profile_arn"] = serde_json::json!(profile_arn);
+        }
+    }
+
+    // 补齐过期时间
+    if let Some(ref expires_at) = account.expires_at {
+        token_data["expires_at"] = serde_json::json!(expires_at);
+    }
+
+    let token_value = serde_json::to_string(&token_data)
+        .map_err(|e| format!("序列化 token 失败: {e}"))?;
+
+    // 构造 device registration JSON
+    let device_reg_data = serde_json::json!({
+        "client_id": account.client_id.as_ref().unwrap_or(&String::new()),
+        "client_secret": account.client_secret.as_ref().unwrap_or(&String::new()),
+        "region": account.region,
+    });
+
+    let device_reg_value = serde_json::to_string(&device_reg_data)
+        .map_err(|e| format!("序列化 device registration 失败: {e}"))?;
+
+    Ok(crate::kiro::cli::KiroCliSwitchPayload {
+        token_key: token_key.to_string(),
+        token_value,
+        device_reg_key: device_reg_key.to_string(),
+        device_reg_value,
     })
 }
 

@@ -1,7 +1,7 @@
 // 公共工具函数 - 提取重复逻辑
 
-use crate::account::Account;
-use crate::providers::{
+use crate::core::account::Account;
+use crate::auth::providers::{
     AuthProvider, IdcProvider, KiroPortalClient, RefreshMetadata, SocialProvider,
 };
 
@@ -199,7 +199,7 @@ pub fn find_existing_account_idx(
 #[cfg(test)]
 mod tests {
     use super::{extract_user_info, find_existing_account_idx, parse_usage_result};
-    use crate::account::Account;
+    use crate::core::account::Account;
 
     #[test]
     fn parse_usage_result_maps_banned_and_auth_errors_without_failing() {

@@ -1,5 +1,5 @@
-use crate::browser::open_browser;
-use crate::http_client::build_http_client_with_user_agent;
+use crate::utils::browser::open_browser;
+use crate::clients::http_client::build_http_client_with_user_agent;
 use reqwest::Client;
 use serde::Deserialize;
 

@@ -1,6 +1,6 @@
 // 应用全局状态
 
-use crate::account::{AccountStore, GroupTagStore};
+use crate::core::account::{AccountStore, GroupTagStore};
 use crate::auth::AuthState;
 use crate::gateway::GatewayRuntime;
 use std::sync::atomic::AtomicBool;

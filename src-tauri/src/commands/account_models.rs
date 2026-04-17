@@ -1,6 +1,6 @@
-use crate::account::{Account, AvailableModelsCacheEntry};
+use crate::core::account::{Account, AvailableModelsCacheEntry};
 use crate::commands::machine_guid::get_machine_id;
-use crate::http_client::{
+use crate::clients::http_client::{
     apply_kiro_runtime_headers, build_http_client_with_user_agent, build_kiro_custom_user_agent,
     resolve_kiro_upstream_region, resolve_q_service_endpoint,
 };
@@ -281,7 +281,7 @@ mod tests {
         ListAvailableModelsResponse,
         AVAILABLE_MODELS_CACHE_TTL_SECONDS,
     };
-    use crate::account::Account;
+    use crate::core::account::Account;
 
     #[test]
     fn build_list_available_models_url_keeps_expected_query_shape() {

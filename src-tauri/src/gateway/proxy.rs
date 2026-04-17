@@ -13,20 +13,20 @@ use std::{
     collections::{HashMap, HashSet},
     convert::Infallible,
     net::{IpAddr, SocketAddr},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use url::Url;
 
 use crate::{
-    account::{Account, AccountStore},
+    core::account::{Account, AccountStore},
     commands::common::{
         calc_expires_at, calc_status, get_usage_by_provider, refresh_token_by_provider,
         RefreshResult,
     },
     commands::machine_guid::get_machine_id,
-    http_client::{
+    clients::http_client::{
         build_kiro_custom_user_agent, is_external_idp_auth_method,
         resolve_kiro_upstream_region, should_add_redirect_for_internal,
         should_send_codewhisperer_optout,
@@ -2128,6 +2128,7 @@ fn build_responses_message_content(
     content
 }
 
+#[allow(dead_code)]
 fn build_responses_response(
     model: &str,
     aggregated: &stream::AggregatedKiroResponse,

@@ -2,7 +2,7 @@
 //! 实现 AWS SSO OIDC API 调用，用于 BuilderId/Enterprise 认证
 //! 使用 Authorization Code Flow（跟 Kiro Desktop 一致）
 
-use crate::http_client::build_http_client;
+use crate::clients::http_client::build_http_client;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 

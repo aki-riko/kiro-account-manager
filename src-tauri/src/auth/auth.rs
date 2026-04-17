@@ -1,6 +1,6 @@
 // Auth 模块 - 当前使用的认证相关代码
 
-use crate::http_client::build_http_client;
+use crate::clients::http_client::build_http_client;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 
@@ -110,7 +110,7 @@ pub async fn refresh_token_desktop(refresh_token: &str) -> Result<DesktopRefresh
 pub async fn delete_account_desktop(access_token: &str, machine_id: &str) -> Result<(), String> {
     let user_agent = format!("KiroIDE-0.6.18-{machine_id}");
 
-    let client = crate::http_client::build_http_client_with_user_agent(&user_agent)
+    let client = crate::clients::http_client::build_http_client_with_user_agent(&user_agent)
         .map_err(|e| format!("Failed to create client: {e}"))?;
 
     // Kiro Desktop 使用 DELETE /account 端点

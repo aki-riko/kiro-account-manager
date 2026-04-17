@@ -1,7 +1,7 @@
 // Steering 管理命令
 
 use crate::commands::common::run_blocking_task;
-use crate::steering::{SteeringFile, SteeringManager};
+use crate::kiro::settings::steering::{SteeringFile, SteeringManager};
 use tauri::command;
 
 #[command]

@@ -2,15 +2,15 @@
 
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递 State
 
-use crate::account::Account;
+use crate::core::account::Account;
 use crate::auth::User;
-use crate::auth_social;
+use crate::auth::auth_social;
 use crate::commands::common::{
     calc_status, extract_user_info, find_existing_account_idx, get_usage_by_provider,
 };
 use crate::commands::machine_guid::get_machine_id;
-use crate::kiro_auth_client::KiroAuthServiceClient;
-use crate::providers::{
+use crate::clients::kiro_auth_client::KiroAuthServiceClient;
+use crate::auth::providers::{
     cancel_pending_idc_login, create_idc_provider, get_provider_config, AuthMethod, AuthProvider,
 };
 use crate::state::AppState;
@@ -23,7 +23,7 @@ fn lock_state<'a, T>(mutex: &'a Mutex<T>, label: &str) -> Result<MutexGuard<'a, 
         .map_err(|_| format!("Failed to acquire {label} lock"))
 }
 
-fn save_store(store: &crate::account::AccountStore) -> Result<(), String> {
+fn save_store(store: &crate::core::account::AccountStore) -> Result<(), String> {
     if store.save_to_file() {
         Ok(())
     } else {
@@ -50,7 +50,7 @@ fn resolve_idc_login_email(
 }
 
 fn social_callback_redirect_uri() -> String {
-    crate::deep_link_handler::DeepLinkCallbackWaiter::get_redirect_uri()
+    crate::core::deep_link_handler::DeepLinkCallbackWaiter::get_redirect_uri()
         .replace("/authenticate-success", "/app/callback")
 }
 
@@ -93,7 +93,7 @@ fn clear_auth_state(auth: &crate::auth::AuthState) {
 
 #[tauri::command]
 pub fn cancel_kiro_login(state: State<'_, AppState>) -> bool {
-    let cancelled_social = crate::deep_link_handler::cancel_waiter();
+    let cancelled_social = crate::core::deep_link_handler::cancel_waiter();
     let cancelled_idc = cancel_pending_idc_login();
     match lock_state(&state.pending_login, "pending_login") {
         Ok(mut pending_login) => {
@@ -135,7 +135,7 @@ pub async fn kiro_login(
 
 async fn login_social(
     state: State<'_, AppState>,
-    config: &crate::providers::ProviderConfig,
+    config: &crate::auth::providers::ProviderConfig,
 ) -> Result<String, String> {
     let provider_id = config.provider_id.clone();
     let pending = prepare_pending_social_login(&provider_id, get_machine_id());
@@ -160,7 +160,7 @@ async fn login_social(
 async fn login_idc(
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
-    config: &crate::providers::ProviderConfig,
+    config: &crate::auth::providers::ProviderConfig,
 ) -> Result<String, String> {
     let idc_provider = create_idc_provider(config);
     let provider_id = idc_provider.get_provider_id().to_string();
@@ -358,7 +358,7 @@ pub async fn handle_kiro_social_callback(
 
 #[tauri::command]
 pub fn get_supported_providers() -> Vec<&'static str> {
-    crate::providers::get_supported_providers()
+    crate::auth::providers::get_supported_providers()
 }
 
 #[cfg(test)]

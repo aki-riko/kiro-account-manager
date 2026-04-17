@@ -2,10 +2,10 @@
 // 参考 kiro-batch-login/src/providers/social-provider.js
 
 use super::{AuthProvider, AuthResult, RefreshMetadata};
-use crate::auth_social;
+use crate::auth::auth_social;
 use crate::commands::machine_guid::get_machine_id;
-use crate::deep_link_handler::{register_waiter, DeepLinkCallbackWaiter};
-use crate::kiro_auth_client::KiroAuthServiceClient;
+use crate::core::deep_link_handler::{register_waiter, DeepLinkCallbackWaiter};
+use crate::clients::kiro_auth_client::KiroAuthServiceClient;
 use async_trait::async_trait;
 use serde::Deserialize;
 

@@ -3,7 +3,7 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递 State
 #![allow(clippy::too_many_lines)] // 命令文件包含多个函数
 
-use crate::account::Account;
+use crate::core::account::Account;
 use crate::auth::{refresh_token_desktop, User};
 use crate::commands::account_models::{
     clear_available_models_cache, fetch_all_available_models, read_available_models_cache,
@@ -13,7 +13,7 @@ use crate::commands::common::{
     calc_expires_at, calc_status, extract_user_info, find_existing_account_idx,
     get_usage_by_provider, is_auth_error_message, refresh_token_by_provider, RefreshResult,
 };
-use crate::providers::{AuthProvider, IdcProvider, KiroPortalClient, RefreshMetadata};
+use crate::auth::providers::{AuthProvider, IdcProvider, KiroPortalClient, RefreshMetadata};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
@@ -91,7 +91,7 @@ fn lock_store<'a, T>(mutex: &'a Mutex<T>, label: &str) -> Result<MutexGuard<'a, 
         .map_err(|_| format!("Failed to acquire {label} lock"))
 }
 
-fn save_store(store: &crate::account::AccountStore) -> Result<(), String> {
+fn save_store(store: &crate::core::account::AccountStore) -> Result<(), String> {
     store.try_save_to_file()
 }
 
@@ -657,7 +657,7 @@ pub fn export_accounts(state: State<AppState>, ids: Option<Vec<String>>) -> Stri
 pub async fn add_local_kiro_account(
     state: State<'_, AppState>,
 ) -> Result<AddAccountResult, String> {
-    use crate::kiro::{get_client_registration, get_kiro_local_token};
+    use crate::kiro::ide::{get_client_registration, get_kiro_local_token};
 
     let local_token = get_kiro_local_token()
         .await

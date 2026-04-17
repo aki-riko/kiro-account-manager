@@ -1,7 +1,7 @@
 // Skills 管理命令
 
 use crate::commands::common::run_blocking_task;
-use crate::skills::{SkillInfo, SkillsManager};
+use crate::kiro::settings::skills::{SkillInfo, SkillsManager};
 use tauri::command;
 
 #[command]

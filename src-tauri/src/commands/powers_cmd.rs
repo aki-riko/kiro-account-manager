@@ -1,7 +1,7 @@
 // Powers 管理命令
 
 use crate::commands::common::run_blocking_task;
-use crate::powers::{PowerInfo, PowersManager, RecommendedPower, RegistryInfo};
+use crate::kiro::settings::powers::{PowerInfo, PowersManager, RecommendedPower, RegistryInfo};
 use tauri::command;
 
 #[command]

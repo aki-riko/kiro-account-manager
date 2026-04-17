@@ -2,9 +2,9 @@
 // 使用 Authorization Code Flow（跟 Kiro Desktop 一致）
 
 use super::{AuthProvider, AuthResult, RefreshMetadata};
-use crate::auth_social::{generate_code_challenge_social, generate_code_verifier_social};
-use crate::aws_sso_client::{AWSSSOClient, GRANT_SCOPES};
-use crate::browser::open_browser;
+use crate::auth::auth_social::{generate_code_challenge_social, generate_code_verifier_social};
+use crate::clients::aws_sso_client::{AWSSSOClient, GRANT_SCOPES};
+use crate::utils::browser::open_browser;
 use async_trait::async_trait;
 use sha1::{Digest, Sha1};
 use std::sync::atomic::{AtomicBool, Ordering};

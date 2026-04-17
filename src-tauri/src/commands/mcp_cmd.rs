@@ -3,7 +3,7 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
 
 use crate::commands::common::run_blocking_task;
-use crate::mcp::{McpConfig, McpServer};
+use crate::kiro::settings::mcp::{McpConfig, McpServer};
 
 /// 获取 MCP 配置（支持项目级合并）
 #[tauri::command]

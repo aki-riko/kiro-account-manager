@@ -1,7 +1,7 @@
 // 自动换号策略模块
 #![allow(dead_code)]
 
-use crate::account::Account;
+use crate::core::account::Account;
 use rand::seq::SliceRandom;
 use serde_json::Value;
 
@@ -257,7 +257,7 @@ impl SwitchResult {
 #[cfg(test)]
 mod tests {
     use super::{is_unavailable_status, is_usage_capped, AccountSwitcher, SwitchStrategy};
-    use crate::account::Account;
+    use crate::core::account::Account;
 
     #[test]
     fn capped_status_is_treated_as_unavailable() {

@@ -878,6 +878,7 @@ fn extract_text_content(content: Option<&Value>) -> String {
     }
 }
 
+#[allow(dead_code)]
 pub fn normalized_user_message_from_text(text: &str) -> NormalizedMessage {
     NormalizedMessage {
         role: "user".to_string(),
@@ -888,6 +889,7 @@ pub fn normalized_user_message_from_text(text: &str) -> NormalizedMessage {
     }
 }
 
+#[allow(dead_code)]
 pub fn normalized_tool_message_from_output(tool_call_id: &str, output: &str) -> NormalizedMessage {
     NormalizedMessage {
         role: "tool".to_string(),
@@ -898,6 +900,7 @@ pub fn normalized_tool_message_from_output(tool_call_id: &str, output: &str) -> 
     }
 }
 
+#[allow(dead_code)]
 pub fn history_assistant_message_from_response_content(
     content: &str,
     tool_calls: &[(String, String, String)],
