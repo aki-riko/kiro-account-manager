@@ -652,6 +652,8 @@
   "switch.type": "类型",
   "switch.cliNotInstalled": "CLI 未安装",
   "switch.cliNotInstalledMessage": "未检测到 Kiro CLI 2.0，请先安装后再尝试切换到 CLI",
+  "switch.ideNotInstalled": "IDE 未安装",
+  "switch.ideNotInstalledMessage": "未检测到 Kiro IDE 配置环境（.aws/sso/cache），请先安装或登录 Kiro IDE",
   "switch.switchTarget": "切换目标",
   "detail.aoaPrefix": "aoa 开头",
   "detail.aorPrefix": "aor 开头",

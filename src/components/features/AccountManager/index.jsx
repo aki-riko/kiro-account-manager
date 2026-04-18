@@ -73,6 +73,7 @@ function AccountManager({ onNavigate }) {
     switchTarget,
     setSwitchTarget,
     cliInstalled,
+    ideInstalled,
   } = useSwitchAccount(setLocalToken)
   
   useEffect(() => {
@@ -664,16 +665,20 @@ function AccountManager({ onNavigate }) {
             <div className="mt-4">
               <div className="text-sm font-medium mb-2" style={{ color: colors.text }}>{t('switch.switchTarget')}</div>
               <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className={`flex items-center gap-2 ${ideInstalled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
                   <input
                     type="radio"
                     name="switchTarget"
                     value="ide"
                     checked={switchTarget === 'ide'}
                     onChange={(e) => setSwitchTarget(e.target.value)}
+                    disabled={!ideInstalled}
                     className="w-4 h-4"
                   />
-                  <span style={{ color: colors.text }}>IDE (默认)</span>
+                  <span style={{ color: colors.text }}>
+                    IDE
+                    {!ideInstalled && ' (未安装，请先安装 Kiro IDE)'}
+                  </span>
                 </label>
                 <label className={`flex items-center gap-2 ${cliInstalled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
                   <input

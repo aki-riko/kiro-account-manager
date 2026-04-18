@@ -17,13 +17,19 @@ export function useSwitchAccount(onLocalTokenChange) {
   const [switchDialog, setSwitchDialog] = useState(null)
   const [switchTarget, setSwitchTarget] = useState('ide') // 'ide' | 'cli'
   const [cliInstalled, setCliInstalled] = useState(false)
+  const [ideInstalled, setIdeInstalled] = useState(false)
 
-  // 检测 CLI 安装状态
+  // 检测 CLI 和 IDE 安装状态
   useEffect(() => {
     invoke('check_cli_installation').then(info => {
       const installed = info?.cli_installed ?? info?.cliInstalled ?? info?.installed
       setCliInstalled(Boolean(installed))
     }).catch(() => setCliInstalled(false))
+
+    invoke('check_ide_installation').then(info => {
+      const installed = info?.ide_installed ?? info?.ideInstalled ?? info?.installed
+      setIdeInstalled(Boolean(installed))
+    }).catch(() => setIdeInstalled(false))
   }, [])
 
   // 从 localStorage 读取上次选择的切换目标
@@ -74,6 +80,22 @@ export function useSwitchAccount(onLocalTokenChange) {
             type: 'error',
             title: t('switch.cliNotInstalled'),
             message: t('switch.cliNotInstalledMessage'),
+            account: null,
+          })
+          setSwitchingId(null)
+          return
+        }
+      }
+
+      // 如果选择 IDE，先检测 IDE 安装状态
+      if (switchTarget === 'ide') {
+        const ideInfo = await invoke('check_ide_installation')
+        const installed = ideInfo?.ide_installed ?? ideInfo?.ideInstalled ?? ideInfo?.installed
+        if (!installed) {
+          setSwitchDialog({
+            type: 'error',
+            title: t('switch.ideNotInstalled'),
+            message: t('switch.ideNotInstalledMessage'),
             account: null,
           })
           setSwitchingId(null)
@@ -167,5 +189,6 @@ export function useSwitchAccount(onLocalTokenChange) {
     switchTarget,
     setSwitchTarget,
     cliInstalled,
+    ideInstalled,
   }
 }
