@@ -423,8 +423,11 @@ pub struct CliInstallationInfo {
 
 /// 检测 CLI 2.0 是否安装
 pub fn check_cli_installation() -> CliInstallationInfo {
-    let (cli_path, cli_installed) = detect_cli_executable();
-    let (db_path, db_exists) = detect_cli_database();
+    let cli_path = detect_cli_executable();
+    let db_path = detect_cli_database();
+
+    let cli_installed = cli_path.is_some();
+    let db_exists = db_path.as_ref().map_or(false, |p| std::path::Path::new(p).exists());
 
     CliInstallationInfo {
         cli_installed,
@@ -435,16 +438,16 @@ pub fn check_cli_installation() -> CliInstallationInfo {
 }
 
 /// 检测 CLI 可执行文件
-fn detect_cli_executable() -> (Option<String>, bool) {
+pub fn detect_cli_executable() -> Option<String> {
     let candidates = get_cli_executable_paths();
 
     for path in candidates {
         if path.exists() {
-            return (Some(path.to_string_lossy().to_string()), true);
+            return Some(path.to_string_lossy().to_string());
         }
     }
 
-    (None, false)
+    None
 }
 
 /// 获取 CLI 可执行文件候选路径
@@ -484,21 +487,17 @@ fn get_cli_executable_paths() -> Vec<std::path::PathBuf> {
 }
 
 /// 检测 CLI 数据库
-fn detect_cli_database() -> (Option<String>, bool) {
+pub fn detect_cli_database() -> Option<String> {
     let candidates = get_cli_database_paths();
 
     for path in &candidates {
         if path.exists() {
-            return (Some(path.to_string_lossy().to_string()), true);
+            return Some(path.to_string_lossy().to_string());
         }
     }
 
     // 返回默认路径（即使不存在）
-    if let Some(default_path) = candidates.first() {
-        return (Some(default_path.to_string_lossy().to_string()), false);
-    }
-
-    (None, false)
+    candidates.first().map(|p| p.to_string_lossy().to_string())
 }
 
 /// 获取 CLI 数据库候选路径

@@ -75,13 +75,99 @@ fn lock_account_store<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, String> 
         .lock()
         .map_err(|_| "Failed to acquire store lock".to_string())
 }
-
 #[derive(Serialize)]
 pub struct KiroCliImportResult {
     pub success: bool,
     pub is_new: bool,
     pub account: Option<Account>,
     pub error: Option<String>,
+}
+
+/// CLI 安装检测结果
+#[derive(Serialize)]
+pub struct CliInstallationInfo {
+    pub cli_installed: bool,
+    pub cli_executable_path: Option<String>,
+    pub cli_db_path: Option<String>,
+    pub cli_version: Option<String>,
+}
+
+/// 检查 Kiro CLI 2.0 安装状态
+#[tauri::command]
+pub fn check_cli_installation() -> Result<CliInstallationInfo, String> {
+    let exe_path = crate::kiro::cli::detect_cli_executable();
+    let db_path = crate::kiro::cli::detect_cli_database();
+
+    let cli_installed = exe_path.is_some() && db_path.is_some();
+
+    // 如果找到可执行文件，尝试获取版本
+    let cli_version = if let Some(ref exe) = exe_path {
+        std::process::Command::new(exe)
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|output| {
+                if output.status.success() {
+                    String::from_utf8(output.stdout).ok()
+                } else {
+                    None
+                }
+            })
+            .map(|v| v.trim().to_string())
+    } else {
+        None
+    };
+
+    Ok(CliInstallationInfo {
+        cli_installed,
+        cli_executable_path: exe_path,
+        cli_db_path: db_path,
+        cli_version,
+    })
+}
+
+/// 获取 kiro-cli 默认数据库路径
+/// CLI 安装检测结果
+#[derive(Serialize)]
+pub struct CliInstallationInfo {
+    pub cli_installed: bool,
+    pub cli_executable_path: Option<String>,
+    pub cli_db_path: Option<String>,
+    pub cli_version: Option<String>,
+}
+
+/// 检查 Kiro CLI 2.0 安装状态
+#[tauri::command]
+pub fn check_cli_installation() -> Result<CliInstallationInfo, String> {
+    let exe_path = crate::kiro::cli::detect_cli_executable();
+    let db_path = crate::kiro::cli::detect_cli_database();
+
+    let cli_installed = exe_path.is_some() && db_path.is_some();
+
+    // 如果找到可执行文件，尝试获取版本
+    let cli_version = if let Some(ref exe) = exe_path {
+        std::process::Command::new(exe)
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|output| {
+                if output.status.success() {
+                    String::from_utf8(output.stdout).ok()
+                } else {
+                    None
+                }
+            })
+            .map(|v| v.trim().to_string())
+    } else {
+        None
+    };
+
+    Ok(CliInstallationInfo {
+        cli_installed,
+        cli_executable_path: exe_path,
+        cli_db_path: db_path,
+        cli_version,
+    })
 }
 
 /// 获取 kiro-cli 默认数据库路径
