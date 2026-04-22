@@ -4,6 +4,8 @@ import { emit } from '@tauri-apps/api/event'
 import { getQuota, getUsed } from '../utils/accountStats'
 import { isUnavailableStatus } from '../utils/accountStatus'
 import { applyMachineGuid, buildSwitchParams } from '../utils/kiroSwitch'
+import { Account } from '../types/account'
+import { AppSettings } from '../contexts/AppSettingsContext'
 
 // 默认值
 const DEFAULT_THRESHOLD = 1 // 余额阈值
@@ -12,12 +14,10 @@ const DEFAULT_INTERVAL = 5  // 检查间隔（分钟）
 /**
  * 自动换号 Hook
  * 当当前账号余额低于阈值时，自动切换到其他可用账号
- * @param {Object} appSettings - 应用设置
- * @param {boolean} settingsLoading - 设置是否加载中
  */
-export function useAutoSwitch(appSettings, settingsLoading) {
-  const timerRef = useRef(null)
-  const appSettingsRef = useRef(appSettings)
+export function useAutoSwitch(appSettings: AppSettings | null, settingsLoading: boolean) {
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const appSettingsRef = useRef<AppSettings | null>(appSettings)
 
   // 同步 appSettings 到 ref
   useEffect(() => {
@@ -26,22 +26,22 @@ export function useAutoSwitch(appSettings, settingsLoading) {
 
   // 检查并自动切换账号
   const checkAndAutoSwitch = async () => {
-    const settings = appSettingsRef.current || {}
+    const settings = appSettingsRef.current
     
     // 未启用自动换号
-    if (!settings.autoSwitchEnabled) return
+    if (!settings || !settings.autoSwitchEnabled) return
 
     const threshold = settings.autoSwitchThreshold ?? DEFAULT_THRESHOLD
 
     try {
       // 获取所有账号
-      const accounts = await invoke('get_accounts')
+      const accounts = await invoke<Account[]>('get_accounts')
       if (!accounts?.length) return
 
       // 获取当前使用的账号（从本地 Kiro 凭证）
-      let currentAccount = null
+      let currentAccount: Account | undefined
       try {
-        const localToken = await invoke('get_kiro_local_token')
+        const localToken = await invoke<{ refreshToken?: string }>('get_kiro_local_token')
         if (localToken?.refreshToken) {
           currentAccount = accounts.find(acc => acc.refreshToken === localToken.refreshToken)
         }
@@ -55,12 +55,11 @@ export function useAutoSwitch(appSettings, settingsLoading) {
 
       // 先刷新当前账号状态获取最新余额
       try {
-        const syncResult = await invoke('sync_account', { id: currentAccount.id })
+        const syncResult = await invoke<{ account: Account }>('sync_account', { id: currentAccount.id })
         currentAccount = syncResult.account
       } catch (e) {
         const errorMsg = String(e)
         if (errorMsg.includes('BANNED')) {
-          // 更新账号状态为封禁
           try {
             await invoke('update_account', {
               params: {
@@ -87,7 +86,6 @@ export function useAutoSwitch(appSettings, settingsLoading) {
           }
           return
         }
-        // 其他错误静默处理
       }
 
       // 计算剩余额度
@@ -103,9 +101,9 @@ export function useAutoSwitch(appSettings, settingsLoading) {
       // 查找可用账号
       const availableAccount = accounts.find(acc => {
         // 排除当前账号
-        if (acc.id === currentAccount.id) return false
+        if (acc.id === (currentAccount as Account).id) return false
         // 排除不可用账号
-        if (isUnavailableStatus(acc.status)) return false
+        if (isUnavailableStatus(acc)) return false
         // 排除余额不足的账号
         const accQuota = getQuota(acc)
         const accUsed = getUsed(acc)
@@ -139,12 +137,8 @@ export function useAutoSwitch(appSettings, settingsLoading) {
       timerRef.current = null
     }
 
-    const settings = appSettingsRef.current || {}
-    
-    // 未启用则不启动
-    if (!settings.autoSwitchEnabled) {
-      return
-    }
+    const settings = appSettingsRef.current
+    if (!settings || !settings.autoSwitchEnabled) return
 
     const interval = settings.autoSwitchInterval ?? DEFAULT_INTERVAL
     const intervalMs = interval * 60 * 1000
@@ -168,8 +162,8 @@ export function useAutoSwitch(appSettings, settingsLoading) {
   useEffect(() => {
     if (settingsLoading) return
 
-    const settings = appSettingsRef.current || {}
-    if (settings.autoSwitchEnabled) {
+    const settings = appSettingsRef.current
+    if (settings?.autoSwitchEnabled) {
       startAutoSwitchTimer()
     }
 
@@ -182,8 +176,8 @@ export function useAutoSwitch(appSettings, settingsLoading) {
   useEffect(() => {
     if (settingsLoading) return
     
-    const settings = appSettingsRef.current || {}
-    if (settings.autoSwitchEnabled) {
+    const settings = appSettingsRef.current
+    if (settings?.autoSwitchEnabled) {
       startAutoSwitchTimer()
     } else {
       stopAutoSwitchTimer()

@@ -1,14 +1,15 @@
 import { useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { AppSettings } from '../contexts/AppSettingsContext'
 
 /**
  * 模型锁定检查 Hook
- * @param {Object} appSettings - 应用设置
- * @param {boolean} settingsLoading - 设置是否加载中
+ * @param appSettings - 应用设置
+ * @param settingsLoading - 设置是否加载中
  */
-export function useModelLock(appSettings, settingsLoading) {
-  const modelLockTimerRef = useRef(null)
-  const appSettingsRef = useRef(appSettings)
+export function useModelLock(appSettings: AppSettings | null, settingsLoading: boolean) {
+  const modelLockTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const appSettingsRef = useRef<AppSettings | null>(appSettings)
 
   // 同步 appSettings 到 ref
   useEffect(() => {
@@ -18,10 +19,10 @@ export function useModelLock(appSettings, settingsLoading) {
   // 检查并恢复锁定的模型
   const checkAndRestoreLockedModel = async () => {
     try {
-      const settings = appSettingsRef.current || {}
-      if (!settings.lockModel || !settings.lockedModel) return
+      const settings = appSettingsRef.current
+      if (!settings || !settings.lockModel || !settings.lockedModel) return
 
-      const kiroSettings = await invoke('get_kiro_settings').catch(() => ({}))
+      const kiroSettings = await invoke<{ modelSelection?: string }>('get_kiro_settings').catch(() => ({}))
       const currentModel = kiroSettings.modelSelection
 
       if (currentModel && currentModel !== settings.lockedModel) {

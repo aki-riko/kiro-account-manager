@@ -3,6 +3,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 import { getConcurrency, runWithConcurrency } from '../utils/concurrency'
 import { isUnavailableStatus } from '../utils/accountStatus'
+import { Account } from '../types/account'
+import { AppSettings } from '../contexts/AppSettingsContext'
 
 // 常量
 const DEFAULT_REFRESH_INTERVAL = 10 // 分钟
@@ -10,12 +12,10 @@ const DEFAULT_REFRESH_INTERVAL = 10 // 分钟
 /**
  * 自动同步账号数据的 Hook
  * 定时调用 sync_account 同步配额数据，后端会自动刷新过期 Token
- * @param {Object} appSettings - 应用设置
- * @param {boolean} settingsLoading - 设置是否加载中
  */
-export function useAutoRefresh(appSettings, settingsLoading) {
-  const refreshTimerRef = useRef(null)
-  const appSettingsRef = useRef(appSettings)
+export function useAutoRefresh(appSettings: AppSettings | null, settingsLoading: boolean) {
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const appSettingsRef = useRef<AppSettings | null>(appSettings)
 
   // 同步 appSettings 到 ref
   useEffect(() => {
@@ -25,11 +25,11 @@ export function useAutoRefresh(appSettings, settingsLoading) {
   // 同步所有账号数据（包含配额和 Token 刷新）
   const syncAllAccounts = async () => {
     try {
-      const accounts = await invoke('get_accounts')
+      const accounts = await invoke<Account[]>('get_accounts')
       if (!accounts?.length) return
 
       // 只同步可用账号，失效/过期/封禁都应跳过
-      const validAccounts = accounts.filter(acc => !isUnavailableStatus(acc.status))
+      const validAccounts = accounts.filter(acc => !isUnavailableStatus(acc))
       if (!validAccounts.length) {
         return
       }
@@ -54,7 +54,6 @@ export function useAutoRefresh(appSettings, settingsLoading) {
           } else if (errorMsg.includes('request failed') || errorMsg.includes('network') || errorMsg.includes('timeout') || errorMsg.includes('connection')) {
             networkErrorCount++
           }
-          // 其他错误静默处理
         }
       })
 
@@ -74,8 +73,8 @@ export function useAutoRefresh(appSettings, settingsLoading) {
 
   // 定时同步检查
   const checkAndSyncAccounts = async () => {
-    const settings = appSettingsRef.current || {}
-    if (settings.autoRefresh === false) return
+    const settings = appSettingsRef.current
+    if (!settings || settings.autoRefresh === false) return
     await syncAllAccounts()
   }
 
@@ -90,8 +89,8 @@ export function useAutoRefresh(appSettings, settingsLoading) {
     // 启动时同步所有账号数据
     syncAllAccounts()
 
-    const settings = appSettingsRef.current || {}
-    const interval = settings.autoRefreshInterval ?? DEFAULT_REFRESH_INTERVAL
+    const settings = appSettingsRef.current
+    const interval = settings?.autoRefreshInterval ?? DEFAULT_REFRESH_INTERVAL
     const intervalMs = interval * 60 * 1000
 
     refreshTimerRef.current = setInterval(checkAndSyncAccounts, intervalMs)
