@@ -4,10 +4,10 @@
 
 /**
  * 根据任务数量计算并发数
- * @param {number} count - 任务数量
- * @returns {number} 并发数
+ * @param count - 任务数量
+ * @returns 并发数
  */
-export const getConcurrency = (count) => {
+export const getConcurrency = (count: number): number => {
   if (count <= 10) return 10
   if (count <= 50) return 30
   if (count <= 100) return 50
@@ -18,13 +18,17 @@ export const getConcurrency = (count) => {
 
 /**
  * 分批执行异步任务
- * @param {Array<Function>} tasks - 任务函数数组，每个函数返回 Promise
- * @param {number} concurrency - 并发数
- * @param {Function} onProgress - 进度回调 (completed, total)
- * @returns {Promise<Array>} 所有任务的结果
+ * @param tasks - 任务函数数组，每个函数返回 Promise
+ * @param concurrency - 并发数
+ * @param onProgress - 进度回调 (completed, total)
+ * @returns 所有任务的结果
  */
-export const runWithConcurrency = async (tasks, concurrency, onProgress) => {
-  const results = []
+export const runWithConcurrency = async <T>(
+  tasks: Array<() => Promise<T>>, 
+  concurrency: number, 
+  onProgress?: (completed: number, total: number) => void
+): Promise<Array<PromiseSettledResult<T>>> => {
+  const results: Array<PromiseSettledResult<T>> = []
   for (let i = 0; i < tasks.length; i += concurrency) {
     const batch = tasks.slice(i, i + concurrency)
     const batchResults = await Promise.allSettled(batch.map(fn => fn()))

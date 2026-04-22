@@ -9,7 +9,24 @@ import GatewayAdvanced from './GatewayAdvanced'
 import GatewayIntegration from './GatewayIntegration'
 import GatewayObservability from './GatewayObservability'
 import GatewayOverview from './GatewayOverview'
-import { applyGatewayLocalOnlyChange, buildClientSamples, buildGatewayActionSummary, buildGatewayBaseUrl, buildGatewayConnectHost, buildGatewayIntegrationSummary, buildGatewayMetricsSummary, buildGatewayRequestLogSummary, buildGatewayRoutingSummary, buildGatewaySecuritySummary, buildGatewayStatusSummary, createGatewayFieldErrors, filterGatewayRequestLogs, formatGatewayAccountOptionLabel, formatGatewayTimestamp, mergeErrorHistory } from './gatewayPageUtils'
+import { 
+  applyGatewayLocalOnlyChange, 
+  buildClientSamples, 
+  buildGatewayActionSummary, 
+  buildGatewayBaseUrl, 
+  buildGatewayConnectHost, 
+  buildGatewayIntegrationSummary, 
+  buildGatewayMetricsSummary, 
+  buildGatewayRequestLogSummary, 
+  buildGatewayRoutingSummary, 
+  buildGatewaySecuritySummary, 
+  buildGatewayStatusSummary, 
+  createGatewayFieldErrors, 
+  filterGatewayRequestLogs, 
+  formatGatewayAccountOptionLabel, 
+  formatGatewayTimestamp, 
+  mergeErrorHistory 
+} from './gatewayPageUtils'
 import {
   buildGatewayConfigSnapshot,
   buildGatewayRuntimeSnapshot,
@@ -17,20 +34,26 @@ import {
   clearGatewayRequestLogs,
   DEFAULT_GATEWAY_CONFIG,
   DEFAULT_GATEWAY_STATUS,
-  fetchGatewayStatus,
   fetchGatewayRequestLogs,
   loadGatewayPageData,
   openGatewayLogDir,
   saveGatewayConfig,
   startGateway,
-  stopGateway} from './gatewayPageState'
+  stopGateway,
+  hydrateGatewayConfig
+} from './gatewayPageState'
 import { useGatewayPolling } from './useGatewayPolling'
 
-function Alert(props) {
+// 定义网关页面使用的色彩系统
+const colors = {
+  inputFocus: 'focus:ring-primary/20 focus:border-primary',
+}
+
+function Alert(props: any) {
   return <AlertPrimitive {...props} />
 }
 
-function ThemedAlert({ colors, title, children, ...props }) {
+function ThemedAlert({ title, children, ...props }: any) {
   return (
     <Alert {...props}>
       {title && <AlertTitle className={"text-foreground"}>{title}</AlertTitle>}
@@ -42,24 +65,24 @@ function ThemedAlert({ colors, title, children, ...props }) {
 }
 
 function GatewayPage() {
-  
+  const { t } = useApp()
   const [config, setConfig] = useState(DEFAULT_GATEWAY_CONFIG)
   const [status, setStatus] = useState(DEFAULT_GATEWAY_STATUS)
-  const [errorHistory, setErrorHistory] = useState([])
-  const [accounts, setAccounts] = useState([])
-  const [groups, setGroups] = useState([])
+  const [errorHistory, setErrorHistory] = useState<any[]>([])
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [groups, setGroups] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [copySuccess, setCopySuccess] = useState('')
   const [logDir, setLogDir] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
-  const [requestLogs, setRequestLogs] = useState([])
+  const [requestLogs, setRequestLogs] = useState<any[]>([])
   const [requestLogsLoading, setRequestLogsLoading] = useState(false)
   const [requestLogOutcome, setRequestLogOutcome] = useState('all')
   const [requestLogQuery, setRequestLogQuery] = useState('')
   const [lastRequestLogsSyncAt, setLastRequestLogsSyncAt] = useState('-')
   const [savedConfigSnapshot, setSavedConfigSnapshot] = useState(() => buildGatewayConfigSnapshot(DEFAULT_GATEWAY_CONFIG))
-  const [appliedRuntimeSnapshot, setAppliedRuntimeSnapshot] = useState(null)
+  const [appliedRuntimeSnapshot, setAppliedRuntimeSnapshot] = useState<any>(null)
   const [lastStatusSyncAt, setLastStatusSyncAt] = useState('-')
 
   const accountOptions = useMemo(
@@ -80,6 +103,7 @@ function GatewayPage() {
   const runtimeSnapshot = useMemo(() => buildGatewayRuntimeSnapshot(config), [config])
   const hasUnsavedChanges = configSnapshot !== savedConfigSnapshot
   const hasRuntimeChanges = !!status.running && !!appliedRuntimeSnapshot && runtimeSnapshot !== appliedRuntimeSnapshot
+  
   const effectiveConfig = useMemo(
     () => (status.running && status.runtimeConfig ? status.runtimeConfig : config),
     [status.running, status.runtimeConfig, config]
@@ -164,8 +188,7 @@ function GatewayPage() {
     () => errorHistory[0] || null,
     [errorHistory]
   )
-  const runtimeBadgeColor = status.running ? 'green' : 'gray'
-  const endpointBadgeColor = effectiveConfig.localOnly ? 'teal' : 'yellow'
+
   const consoleHighlights = useMemo(() => ([
     {
       label: '当前入口',
@@ -208,6 +231,7 @@ function GatewayPage() {
     hasRuntimeChanges,
     hasUnsavedChanges,
   ])
+
   const operationsChecklist = useMemo(() => {
     const checks = [
       {
@@ -248,6 +272,7 @@ function GatewayPage() {
 
     return checks
   }, [hasFieldErrors, status.running, statusSummary.listen, statusSummary.requests, hasUnsavedChanges, hasRuntimeChanges, latestErrorEntry])
+
   const observabilityHighlights = useMemo(() => ([
     {
       label: '流式请求',
@@ -266,6 +291,7 @@ function GatewayPage() {
       value: `${requestMetrics.uniqueModels} / ${requestMetrics.uniqueUpstreams}`,
       detail: '分别表示模型数 / 上游来源数，用于判断路由与账号池是否均衡。'},
   ]), [requestLogSummary.streaming, requestMetrics.successRateLabel, requestMetrics.total, requestMetrics.avgDurationLabel, requestMetrics.errorRateLabel, requestMetrics.uniqueModels, requestMetrics.uniqueUpstreams])
+
   const integrationGuidance = useMemo(() => ([
     {
       label: 'Anthropic / Claude',
@@ -280,13 +306,15 @@ function GatewayPage() {
       label: '排障入口',
       detail: '日志目录、错误历史、请求明细都统一收口在观测页，不需要再翻系统日志。'},
   ]), [])
+
   const pollingFallbackConfig = useMemo(
     () => ({
       host: config.host,
       port: config.port}),
     [config.host, config.port]
   )
-  const renderMetricList = (items, emptyLabel) => {
+
+  const renderMetricList = (items: any[], emptyLabel: string) => {
     if (!items.length) {
       return <Text size="sm" className={"text-muted-foreground"}>{emptyLabel}</Text>
     }
@@ -308,18 +336,18 @@ function GatewayPage() {
     label: "text-foreground",
     description: "text-muted-foreground",
     error: 'text-red-400',
-    section: "text-muted-foreground"}), [colors])
+    section: "text-muted-foreground"}), [])
 
   const selectClassNames = useMemo(() => ({
     ...inputClassNames,
     dropdown: `glass-card border border-border`,
-    option: "text-foreground"}), [colors, inputClassNames])
+    option: "text-foreground"}), [inputClassNames])
 
   const switchClassNames = useMemo(() => ({
     label: "text-foreground",
-    description: "text-muted-foreground"}), [colors])
+    description: "text-muted-foreground"}), [])
 
-  const pushError = (msg) => {
+  const pushError = (msg: any) => {
     const normalized = String(msg?.message || msg || '').trim()
     if (!normalized) return
     setErrorHistory(prev => mergeErrorHistory(prev, normalized, formatGatewayTimestamp(), 8))
@@ -371,7 +399,7 @@ function GatewayPage() {
     })
   }, [loadAll])
 
-  const handleStatusPoll = useCallback(({ status: nextStatus, fallbackConfig, syncedAt }) => {
+  const handleStatusPoll = useCallback(({ status: nextStatus, fallbackConfig, syncedAt }: any) => {
     const nextState = buildGatewayStatusState(nextStatus, nextStatus, fallbackConfig)
     setStatus(nextState)
     setAppliedRuntimeSnapshot(nextState.running && nextState.runtimeConfig
@@ -383,7 +411,7 @@ function GatewayPage() {
     }
   }, [])
 
-  const handleRequestLogsPoll = useCallback(({ logs, syncedAt }) => {
+  const handleRequestLogsPoll = useCallback(({ logs, syncedAt }: any) => {
     setRequestLogs(logs)
     setLastRequestLogsSyncAt(syncedAt)
   }, [])
@@ -394,7 +422,7 @@ function GatewayPage() {
     onStatus: handleStatusPoll,
     onRequestLogs: handleRequestLogsPoll})
 
-  const setField = (key, value) => setConfig(prev => ({ ...prev, [key]: value }))
+  const setField = (key: string, value: any) => setConfig(prev => ({ ...prev, [key]: value }))
 
   const createGeneratedApiKey = () => {
     const random = crypto?.randomUUID?.().replace(/-/g, '') || `${Date.now()}${Math.random().toString(36).slice(2)}`
@@ -513,7 +541,7 @@ function GatewayPage() {
     }
   }
 
-  const copyText = async (text, successMessage) => {
+  const copyText = async (text: string, successMessage: string) => {
     try {
       await navigator.clipboard.writeText(text)
       setCopySuccess(successMessage)
@@ -558,8 +586,8 @@ function GatewayPage() {
             <Group justify="space-between" align="flex-start">
               <Stack gap={4}>
                 <Group gap="xs">
-                  <Badge color={runtimeBadgeColor}>{status.running ? '网关运行中' : '网关未启动'}</Badge>
-                  <Badge color={endpointBadgeColor}>{effectiveConfig.localOnly ? '仅本机访问' : '允许远程访问'}</Badge>
+                  <Badge color={status.running ? 'green' : 'gray'}>{status.running ? '网关运行中' : '网关未启动'}</Badge>
+                  <Badge color={effectiveConfig.localOnly ? 'teal' : 'yellow'}>{effectiveConfig.localOnly ? '仅本机访问' : '允许远程访问'}</Badge>
                   <Badge variant="light" color={hasUnsavedChanges ? 'yellow' : 'teal'}>
                     {hasUnsavedChanges ? '存在未保存配置' : '配置已保存'}
                   </Badge>
@@ -581,7 +609,7 @@ function GatewayPage() {
                 </Button>
                 {status.running ? (
                   <Button
-                    variant="light"
+                    variant="ghost"
                     onClick={handleRestart}
                     disabled={hasFieldErrors || saving || loading}
                   >
@@ -591,18 +619,18 @@ function GatewayPage() {
                 ) : null}
                 {!status.running ? (
                   <Button
-                    color="green"
                     onClick={handleStart}
                     disabled={hasFieldErrors || saving || loading}
+                    className="bg-green-500 hover:bg-green-600 text-white"
                   >
                     <Play size={16} className="mr-1" />
                     启动网关
                   </Button>
                 ) : (
                   <Button
-                    color="red"
                     onClick={handleStop}
                     disabled={saving || loading}
+                    className="bg-red-500 hover:bg-red-600 text-white"
                   >
                     <Square size={16} className="mr-1" />
                     停止网关
@@ -640,7 +668,6 @@ function GatewayPage() {
             <ThemedAlert
               color={actionSummary.tone}
               variant="light"
-              colors={colors}
               title={actionSummary.title}
             >
               <Text size="sm" className={"text-muted-foreground"}>
@@ -679,7 +706,6 @@ function GatewayPage() {
 
           <TabsContent value="overview">
             <GatewayOverview
-              colors={colors}
               loading={loading}
               handleRefresh={handleRefresh}
               effectiveBaseUrl={effectiveBaseUrl}
@@ -700,7 +726,6 @@ function GatewayPage() {
 
           <TabsContent value="integration">
             <GatewayIntegration
-              colors={colors}
               integrationGuidance={integrationGuidance}
               integrationSummary={integrationSummary}
               effectiveConnectHost={effectiveConnectHost}
@@ -712,7 +737,6 @@ function GatewayPage() {
 
           <TabsContent value="observability">
             <GatewayObservability
-              colors={colors}
               observabilityHighlights={observabilityHighlights}
               effectiveConfig={effectiveConfig}
               status={status}
@@ -746,7 +770,6 @@ function GatewayPage() {
 
           <TabsContent value="advanced">
             <GatewayAdvanced
-              colors={colors}
               config={config}
               hasFieldErrors={hasFieldErrors}
               hasUnsavedChanges={hasUnsavedChanges}

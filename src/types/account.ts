@@ -40,6 +40,9 @@ export interface Account {
         models: any[];
     };
     expiresAt?: string;
+    status?: string;
+    lastError?: string;
+    refreshing?: boolean;
     // 扩展字段
     _index?: number;
 }
