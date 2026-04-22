@@ -3,16 +3,60 @@ import { Card, CardContent } from '../../ui/card'
 import { Input } from '../../ui/input'
 import { Switch } from '../../ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
-import { Button } from '../../ui/button'
-import { resolveOsLabel } from './settingsValidators'
 import React from 'react'
+
+interface BrowserInfo {
+  name: string;
+  path: string;
+  incognitoArg?: string;
+}
+
+interface SystemMachineInfo {
+  machineGuid: string;
+  osType: string;
+  requiresAdmin: boolean;
+  canModify: boolean;
+}
+
+interface SettingsGeneralProps {
+  autoRefresh: boolean;
+  autoRefreshInterval: number;
+  autoChangeMachineId: boolean;
+  machineIdMode: string;
+  privacyMode: boolean;
+  setPrivacyMode: (checked: boolean) => void;
+  autoSwitchEnabled: boolean;
+  autoSwitchThreshold: number;
+  autoSwitchInterval: number;
+  browserPath: string;
+  setBrowserPath: (path: string) => void;
+  originalBrowserPath: string;
+  savingBrowser: boolean;
+  detectedBrowsers: BrowserInfo[];
+  showBrowserList: boolean;
+  setShowBrowserList: (show: boolean) => void;
+  systemMachineInfo: SystemMachineInfo | null;
+  machineGuidAction: string | null;
+  handleResetSystemMachineGuid: () => void;
+  handleDetectBrowsers: () => void;
+  handleApplyBrowser: () => void;
+  handleAutoRefreshChange: (checked: boolean) => void;
+  handleAutoRefreshIntervalChange: (value: string) => void;
+  handleAutoChangeMachineIdChange: (checked: boolean) => void;
+  handleMachineIdModeChange: (mode: string) => void;
+  handleAutoSwitchEnabledChange: (checked: boolean) => void;
+  handleAutoSwitchThresholdChange: (value: number) => void;
+  handleAutoSwitchIntervalChange: (value: string) => void;
+  t: (key: string, options?: any) => string;
+}
 
 function SettingsGeneral({ 
   autoRefresh, 
   autoRefreshInterval, 
   autoChangeMachineId, 
   machineIdMode, 
-  privacyMode, 
+  privacyMode,
+  setPrivacyMode,
   autoSwitchEnabled, 
   autoSwitchThreshold, 
   autoSwitchInterval, 
@@ -36,12 +80,12 @@ function SettingsGeneral({
   handleAutoSwitchThresholdChange, 
   handleAutoSwitchIntervalChange, 
   t
-}) {
+}: SettingsGeneralProps) {
   const accountToggleContainerClass = "bg-card hover:bg-muted/50 border border-border text-foreground"
   const browserChanged = browserPath !== originalBrowserPath
 
-  const [copiedField, setCopiedField] = React.useState(null)
-  const copiedTimerRef = React.useRef(null)
+  const [copiedField, setCopiedField] = React.useState<string | null>(null)
+  const copiedTimerRef = React.useRef<NodeJS.Timeout | null>(null)
 
   React.useEffect(() => {
     return () => {
@@ -51,7 +95,7 @@ function SettingsGeneral({
     }
   }, [])
 
-  const copyToClipboard = (text, field) => {
+  const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text).catch(e => console.error('Copy failed:', e))
     setCopiedField(field)
     if (copiedTimerRef.current) {
@@ -60,12 +104,21 @@ function SettingsGeneral({
     copiedTimerRef.current = setTimeout(() => setCopiedField(null), 1500)
   }
 
-  const handleSelectBrowser = (browser, useIncognito = true) => {
+  const handleSelectBrowser = (browser: BrowserInfo, useIncognito = true) => {
     const path = useIncognito && browser.incognitoArg
       ? `"${browser.path}" ${browser.incognitoArg}`
       : `"${browser.path}"`
     setBrowserPath(path)
     setShowBrowserList(false)
+  }
+
+  const resolveOsLabel = (osType: string, defaultLabel: string) => {
+    switch (osType) {
+      case 'windows': return 'Windows'
+      case 'macos': return 'macOS'
+      case 'linux': return 'Linux'
+      default: return defaultLabel
+    }
   }
 
   return (
@@ -183,7 +236,7 @@ function SettingsGeneral({
               />
               <button
                 onClick={handleDetectBrowsers}
-                className="btn-icon px-4 py-3 border rounded-xl bg-card hover:bg-muted/50 border-border text-foreground flex items-center gap-2"
+                className="px-4 py-3 border rounded-xl bg-card hover:bg-muted/50 border-border text-foreground flex items-center gap-2"
                 title={t('settings.detectBrowsersTitle')}
               >
                 <Search size={16} />
@@ -192,7 +245,7 @@ function SettingsGeneral({
               <button
                 onClick={handleApplyBrowser}
                 disabled={savingBrowser || !browserChanged}
-                className={`btn-icon px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed border ${browserChanged
+                className={`px-5 py-3 rounded-xl flex items-center gap-2 font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed border ${browserChanged
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-muted text-muted-foreground border-border"
                   }`}
@@ -220,7 +273,7 @@ function SettingsGeneral({
                       <div className="text-xs text-muted-foreground truncate">{browser.path}</div>
                     </div>
                     <div className="flex gap-2 ml-3">
-                      <button onClick={() => handleSelectBrowser(browser, true)} className="btn-icon px-3 py-1.5 text-xs rounded-lg transition-colors border bg-primary text-primary-foreground border-primary">
+                      <button onClick={() => handleSelectBrowser(browser, true)} className="px-3 py-1.5 text-xs rounded-lg transition-colors border bg-primary text-primary-foreground border-primary">
                         {t('settings.selectBrowser')}
                       </button>
                     </div>
@@ -258,7 +311,7 @@ function SettingsGeneral({
           <div className="rounded-xl p-4 mb-4 border border-border bg-muted/30">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-medium text-foreground">{t('settings.currentMachineGuid')}</span>
-              <button onClick={() => {}} className="btn-icon p-1.5 rounded-lg hover:bg-muted/50 transition-colors">
+              <button onClick={() => {}} className="p-1.5 rounded-lg hover:bg-muted/50 transition-colors">
                 <RefreshCw size={14} className="text-muted-foreground" />
               </button>
             </div>
@@ -267,7 +320,7 @@ function SettingsGeneral({
                 {systemMachineInfo?.machineGuid || t('common.loading')}
               </code>
               {systemMachineInfo?.machineGuid && (
-                <button onClick={() => copyToClipboard(systemMachineInfo.machineGuid, 'sysMachineGuid')} className="btn-icon p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                <button onClick={() => copyToClipboard(systemMachineInfo.machineGuid, 'sysMachineGuid')} className="p-2 rounded-lg hover:bg-muted/50 transition-colors">
                   {copiedField === 'sysMachineGuid' ? <Check size={16} className="text-green-500" /> : <Copy size={16} className="text-muted-foreground" />}
                 </button>
               )}
@@ -294,7 +347,7 @@ function SettingsGeneral({
             <button
               onClick={handleResetSystemMachineGuid}
               disabled={machineGuidAction !== null}
-              className="w-full btn-icon px-4 py-3 rounded-xl flex items-center justify-center gap-2 font-medium bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
+              className="w-full px-4 py-3 rounded-xl flex items-center justify-center gap-2 font-medium bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
             >
               {machineGuidAction === 'reset' ? <RefreshCw size={16} className="animate-spin" /> : <Shuffle size={16} />}
               {t('common.reset')}
