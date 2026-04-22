@@ -1,14 +1,37 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
+import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { Loader, ArrowRight } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { Button } from '../../shared/button'
+import React from 'react'
+
+// 样式定义
+const colors = {
+  error: 'bg-destructive/10 text-destructive border-destructive/20',
+  errorBorder: 'border-destructive/20',
+  inputFocus: 'focus:ring-primary/20 focus:border-primary',
+  dialogFooter: 'bg-muted/30 border-t border-border'
+}
+
+const accent = {
+  gradientFrom: 'from-primary',
+  gradientTo: 'to-primary/80',
+  shadow: 'shadow-primary/20',
+  text: 'text-primary',
+  hoverBorder: 'hover:border-primary/50',
+  iconBadgeBg: 'bg-primary/10'
+}
 
 const DEFAULT_PROVIDER_ORDER = ['Google', 'Github', 'BuilderId', 'Enterprise']
 
-function getProviderMeta(provider, colors, t) {
-  const providers = {
+interface ProviderMeta {
+  name: string;
+  icon: React.ReactNode;
+}
+
+function getProviderMeta(provider: string, t: any): ProviderMeta {
+  const providers: Record<string, ProviderMeta> = {
     Google: {
       name: t('login.google'),
       icon: (
@@ -38,10 +61,14 @@ function getProviderMeta(provider, colors, t) {
     icon: <span className={`text-xl font-bold text-foreground`}>{provider[0] || '?'}</span>}
 }
 
-function Login({ onLogin }) {
-  const { t, theme } = useApp()
-    const [supportedProviders, setSupportedProviders] = useState(DEFAULT_PROVIDER_ORDER)
-  const [loadingProvider, setLoadingProvider] = useState(null)
+interface LoginProps {
+  onLogin?: () => void;
+}
+
+function Login({ onLogin }: LoginProps) {
+  const { t } = useApp()
+  const [supportedProviders, setSupportedProviders] = useState<string[]>(DEFAULT_PROVIDER_ORDER)
+  const [loadingProvider, setLoadingProvider] = useState<string | null>(null)
   const [loginPending, setLoginPending] = useState(false)
   const [canceling, setCanceling] = useState(false)
   const [error, setError] = useState('')
@@ -49,10 +76,10 @@ function Login({ onLogin }) {
   const [enterpriseStartUrl, setEnterpriseStartUrl] = useState('')
   const [enterpriseRegion, setEnterpriseRegion] = useState('us-east-1')
   const [showWaitingModal, setShowWaitingModal] = useState(false)
-  const [waitingProviderName, setWaitingProviderName] = useState(t('login.idc'))
+  const [waitingProviderName, setWaitingProviderName] = useState('')
 
   useEffect(() => {
-    let unlistenSuccess
+    let unlistenSuccess: UnlistenFn | undefined
 
     const setupListener = async () => {
       unlistenSuccess = await listen('login-success', () => {
@@ -75,7 +102,7 @@ function Login({ onLogin }) {
 
     const loadSupportedProviders = async () => {
       try {
-        const providers = await invoke('get_supported_providers')
+        const providers = await invoke<string[]>('get_supported_providers')
         if (!mounted || !Array.isArray(providers) || providers.length === 0) {
           return
         }
@@ -97,7 +124,7 @@ function Login({ onLogin }) {
     }
   }, [])
 
-  const getLoginErrorMessage = (e) => {
+  const getLoginErrorMessage = (e: any) => {
     const rawMessage = typeof e === 'string' ? e : e?.message || t('login.failed')
     if (rawMessage.includes('登录已取消') || rawMessage.toLowerCase().includes('cancel')) {
       return t('login.cancelled')
@@ -105,7 +132,7 @@ function Login({ onLogin }) {
     return rawMessage
   }
 
-  const handleLogin = async (provider) => {
+  const handleLogin = async (provider: string) => {
     if (loginPending) return
 
     // Enterprise 需要用户输入 start_url
@@ -115,7 +142,7 @@ function Login({ onLogin }) {
       return
     }
 
-    const providerMeta = getProviderMeta(provider, colors, t)
+    const providerMeta = getProviderMeta(provider, t)
 
     // 显示等待授权弹窗
     setWaitingProviderName(providerMeta.name)
@@ -193,7 +220,7 @@ function Login({ onLogin }) {
 
   const providers = supportedProviders.map((provider) => ({
     id: provider,
-    ...getProviderMeta(provider, colors, t)}))
+    ...getProviderMeta(provider, t)}))
 
   return (
     <div className={`h-full flex flex-col items-center justify-center glass-main relative overflow-hidden`}>
@@ -247,7 +274,7 @@ function Login({ onLogin }) {
             >
               <div className="flex items-center gap-4">
                 {loadingProvider === provider.id ? (
-                  <Loader size={28} className={accent.text} />
+                  <Loader size={28} className={`${accent.text} animate-spin`} />
                 ) : (
                   provider.icon
                 )}
@@ -294,7 +321,6 @@ function Login({ onLogin }) {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
           <div 
             className={`glass-card rounded-2xl w-full max-w-[480px] shadow-2xl border border-border`}
-            style={{ animation: 'dialogSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)' }}
           >
             {/* Header */}
             <div className="px-6 pt-6 pb-2">
@@ -347,7 +373,6 @@ function Login({ onLogin }) {
                 {t('login.cancel')}
               </Button>
               <Button
-                variant="primary"
                 onClick={handleEnterpriseLogin}
               >
                 继续
@@ -362,7 +387,6 @@ function Login({ onLogin }) {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
           <div 
             className={`glass-card rounded-2xl w-full max-w-[400px] shadow-2xl border border-border`}
-            style={{ animation: 'dialogSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)' }}
           >
             {/* Header */}
             <div className="px-6 pt-6 pb-2">
