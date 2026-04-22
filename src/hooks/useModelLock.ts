@@ -22,7 +22,7 @@ export function useModelLock(appSettings: AppSettings | null, settingsLoading: b
       const settings = appSettingsRef.current
       if (!settings || !settings.lockModel || !settings.lockedModel) return
 
-      const kiroSettings = await invoke<{ modelSelection?: string }>('get_kiro_settings').catch(() => ({}))
+      const kiroSettings = await invoke<{ modelSelection?: string }>('get_kiro_settings').catch(() => ({ modelSelection: undefined }))
       const currentModel = kiroSettings.modelSelection
 
       if (currentModel && currentModel !== settings.lockedModel) {
