@@ -4,6 +4,7 @@ import { Input } from '../../ui/input'
 import { Switch } from '../../ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import React from 'react'
+import { TFunction } from 'i18next'
 
 interface BrowserInfo {
   name: string;
@@ -47,7 +48,7 @@ interface SettingsGeneralProps {
   handleAutoSwitchEnabledChange: (checked: boolean) => void;
   handleAutoSwitchThresholdChange: (value: number) => void;
   handleAutoSwitchIntervalChange: (value: string) => void;
-  t: (key: string, options?: any) => string;
+  t: TFunction;
 }
 
 function SettingsGeneral({ 
