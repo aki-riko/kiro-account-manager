@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
@@ -7,20 +7,23 @@ import MCPServerCard from './MCPServerCard'
 import AddMCPModal from './AddMCPModal'
 import EditMCPModal from './EditMCPModal'
 import { handleUiError } from '../../../utils/errorLogger'
+import { getThemeAccent, getGradientAccentButton } from './themeAccent'
+import React from 'react'
 
 function MCPManager() {
   const { t, theme } = useApp()
-    const accentGradientButtonClass = getGradientAccentButton(accent)
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
+  const accentGradientButtonClass = getGradientAccentButton(accent)
   const { showConfirm } = useDialog()
-  const [servers, setServers] = useState({})
+  const [servers, setServers] = useState<any>({})
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [editingServer, setEditingServer] = useState(null) // { name, config }
+  const [editingServer, setEditingServer] = useState<any>(null) // { name, config }
 
   // 加载配置
   const loadConfig = useCallback(async () => {
     try {
-      const config = await invoke('get_mcp_config', { projectDir: null })
+      const config = await invoke<any>('get_mcp_config', { projectDir: null })
       setServers(config.mcpServers || {})
     } catch (e) {
       handleUiError('加载 MCP 配置失败', e, { userMessage: '加载 MCP 配置失败' })
@@ -34,10 +37,10 @@ function MCPManager() {
   }, [loadConfig])
 
   // 切换启用/禁用
-  const handleToggle = async (name, disabled) => {
+  const handleToggle = async (name: string, disabled: boolean) => {
     try {
       await invoke('toggle_mcp_server', { name, disabled, projectDir: null })
-      setServers(prev => ({
+      setServers((prev: any) => ({
         ...prev,
         [name]: { ...prev[name], disabled }
       }))
@@ -47,12 +50,12 @@ function MCPManager() {
   }
 
   // 删除服务器
-  const handleDelete = async (name) => {
+  const handleDelete = async (name: string) => {
     const confirmed = await showConfirm(t('mcpManager.deleteServer'), `${t('mcpManager.confirmDelete')} ${name}？`)
     if (confirmed) {
       try {
         await invoke('delete_mcp_server', { name, projectDir: null })
-        setServers(prev => {
+        setServers((prev: any) => {
           const next = { ...prev }
           delete next[name]
           return next
@@ -101,12 +104,12 @@ function MCPManager() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {serverList.map(([name, config]) => (
+            {serverList.map(([name, config]: [string, any]) => (
               <MCPServerCard
                 key={name}
                 name={name}
                 config={config}
-                onToggle={(disabled) => handleToggle(name, disabled)}
+                onToggle={(disabled: boolean) => handleToggle(name, disabled)}
                 onEdit={() => setEditingServer({ name, config })}
                 onDelete={() => handleDelete(name)}
               />

@@ -1,14 +1,20 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X, Terminal, AlertCircle, Wand2 } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { Textarea } from '@/components/ui/textarea'
 import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent, getGradientAccentButton } from './themeAccent'
+import React from 'react'
 
-
-function EditMCPModal({ name, config, onClose, onSuccess, projectDir }) {
+function EditMCPModal({ name, config, onClose, onSuccess, projectDir }: any) {
   const { t, theme } = useApp()
-  
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
   const accentGradientButtonClass = getGradientAccentButton(accent)
+
+  // 定义本地色彩系统
+  const colors = {
+    inputFocus: 'focus:ring-primary/20 focus:border-primary'
+  }
 
   const [jsonConfig, setJsonConfig] = useState('')
   const [saving, setSaving] = useState(false)
@@ -55,10 +61,10 @@ function EditMCPModal({ name, config, onClose, onSuccess, projectDir }) {
 
   // 保存
   const handleSave = async () => {
-    let parsed
+    let parsed: any
     try {
       parsed = JSON.parse(jsonConfig)
-    } catch (e) {
+    } catch (e: any) {
       setError('JSON 格式错误: ' + e.message)
       return
     }
@@ -94,7 +100,6 @@ function EditMCPModal({ name, config, onClose, onSuccess, projectDir }) {
       <div 
         className={`relative overflow-hidden glass-card border border-border rounded-lg shadow-2xl w-[520px] max-h-[85vh] flex flex-col`}
         onClick={e => e.stopPropagation()}
-        
       >
         {/* 顶部渐变装饰 */}
         <div className={`absolute top-0 left-0 right-0 h-24 ${accent.bgSoft} pointer-events-none`} />
@@ -107,13 +112,13 @@ function EditMCPModal({ name, config, onClose, onSuccess, projectDir }) {
             </div>
             <h2 className={`text-base font-semibold text-foreground`}>{t('common.edit')}: {name}</h2>
           </div>
-          <button onClick={onClose} className={`p-2 rounded-lg hover:bg-muted/50`}>
+          <button onClick={onClose} className={`cursor-pointer p-2 rounded-lg hover:bg-muted/50`}>
             <X size={18} className={"text-muted-foreground"} />
           </button>
         </div>
 
         {/* 内容 */}
-        <div className="relative flex-1 overflow-auto p-6 space-y-4" style={{ padding: 'var(--app-space-md)' }}>
+        <div className="relative flex-1 overflow-auto p-6 space-y-4">
           {/* JSON 配置 */}
           <div className="flex-1">
             <div className="flex items-center justify-between mb-1.5">
@@ -128,7 +133,7 @@ function EditMCPModal({ name, config, onClose, onSuccess, projectDir }) {
               </div>
               <button
                 onClick={formatJson}
-                className={`text-xs text-muted-foreground ${accent.textHover} flex items-center gap-1 transition-colors`}
+                className={`cursor-pointer text-xs text-muted-foreground ${accent.textHover} flex items-center gap-1 transition-colors`}
               >
                 <Wand2 size={12} />
                 格式化
@@ -157,14 +162,14 @@ function EditMCPModal({ name, config, onClose, onSuccess, projectDir }) {
         <div className={`relative flex justify-end gap-3 px-6 py-4 border-t border-border`}>
           <button
             onClick={onClose}
-            className={`px-5 py-2.5 rounded-lg text-sm text-foreground hover:bg-muted/50`}
+            className={`cursor-pointer px-5 py-2.5 rounded-lg text-sm text-foreground hover:bg-muted/50`}
           >
             {t('common.cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={saving || !!parseError}
-            className={`px-6 py-2.5 ${accentGradientButtonClass} rounded-lg text-sm font-medium disabled:opacity-50`}
+            className={`cursor-pointer px-6 py-2.5 ${accentGradientButtonClass} rounded-lg text-sm font-medium disabled:opacity-50`}
           >
             {saving ? t('common.saving') : t('common.save')}
           </button>

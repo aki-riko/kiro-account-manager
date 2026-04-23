@@ -1,27 +1,34 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X, Terminal, AlertCircle, Wand2, ClipboardPaste, Check, AlertTriangle } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
 import { MCP_TEMPLATES } from './MCPTemplates'
-
 import { showSuccess } from '../../../utils/toast.jsx'
+import { getThemeAccent, getGradientAccentButton } from './themeAccent'
+import React from 'react'
 
 const DUPLICATE_STRATEGY_KEY = 'mcpDuplicateStrategy'
 
-function AddMCPModal({ onClose, onSuccess, projectDir }) {
+function AddMCPModal({ onClose, onSuccess, projectDir }: any) {
   const { t, theme } = useApp()
-  
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
   const accentGradientButtonClass = getGradientAccentButton(accent)
+
+  // 定义本地色彩系统
+  const colors = {
+    inputFocus: 'focus:ring-primary/20 focus:border-primary',
+    info: 'bg-primary/10'
+  }
 
   const [jsonConfig, setJsonConfig] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [parseResult, setParseResult] = useState(null)
-  const [existingServers, setExistingServers] = useState([])
-  const [duplicates, setDuplicates] = useState([])
+  const [parseResult, setParseResult] = useState<any>(null)
+  const [existingServers, setExistingServers] = useState<string[]>([])
+  const [duplicates, setDuplicates] = useState<string[]>([])
   const [duplicateStrategy, setDuplicateStrategy] = useState(() => localStorage.getItem(DUPLICATE_STRATEGY_KEY) || 'skip')
 
-  const getUniqueServerName = (baseName, occupiedNames) => {
+  const getUniqueServerName = (baseName: string, occupiedNames: Set<string>) => {
     let i = 1
     let candidate = `${baseName}-${i}`
     while (occupiedNames.has(candidate)) {
@@ -33,7 +40,7 @@ function AddMCPModal({ onClose, onSuccess, projectDir }) {
 
   // 加载现有服务列表
   useEffect(() => {
-    invoke('get_mcp_config', { projectDir: projectDir || null }).then(config => {
+    invoke<any>('get_mcp_config', { projectDir: projectDir || null }).then(config => {
       setExistingServers(Object.keys(config.mcpServers || {}))
     }).catch(() => {})
   }, [projectDir])
@@ -58,18 +65,18 @@ function AddMCPModal({ onClose, onSuccess, projectDir }) {
     }
     try {
       const parsed = JSON.parse(jsonConfig)
-      const servers = []
+      const servers: any[] = []
 
       // 格式1: { mcpServers: { name: config, ... } }
       if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
         for (const [name, config] of Object.entries(parsed.mcpServers)) {
-          if (config.command) servers.push({ name, config })
+          if ((config as any).command) servers.push({ name, config })
         }
       }
       // 格式2: { name: config, ... }
       else if (typeof parsed === 'object' && !parsed.command) {
         for (const [name, config] of Object.entries(parsed)) {
-          if (config && typeof config === 'object' && config.command) {
+          if (config && typeof config === 'object' && (config as any).command) {
             servers.push({ name, config })
           }
         }
@@ -97,8 +104,8 @@ function AddMCPModal({ onClose, onSuccess, projectDir }) {
   }, [jsonConfig, existingServers])
 
   // 应用模板
-  const applyTemplate = (templateName) => {
-    const config = { [templateName]: MCP_TEMPLATES[templateName] }
+  const applyTemplate = (templateName: string) => {
+    const config = { [templateName]: (MCP_TEMPLATES as any)[templateName] }
     setJsonConfig(JSON.stringify(config, null, 2))
     setError('')
   }
@@ -135,7 +142,7 @@ function AddMCPModal({ onClose, onSuccess, projectDir }) {
 
     let latestServers = existingServers
     try {
-      const latestConfig = await invoke('get_mcp_config', { projectDir: projectDir || null })
+      const latestConfig = await invoke<any>('get_mcp_config', { projectDir: projectDir || null })
       latestServers = Object.keys(latestConfig.mcpServers || {})
       setExistingServers(latestServers)
     } catch {
@@ -143,7 +150,7 @@ function AddMCPModal({ onClose, onSuccess, projectDir }) {
     }
 
     const occupiedNames = new Set(latestServers)
-    const results = { success: [], failed: [], skipped: [], renamed: [] }
+    const results: any = { success: [], failed: [], skipped: [], renamed: [] }
 
     for (const { name, config } of parseResult.servers) {
       let targetName = name
@@ -178,11 +185,11 @@ function AddMCPModal({ onClose, onSuccess, projectDir }) {
     setSaving(false)
 
     if (results.failed.length > 0) {
-      const failedNames = results.failed.map(f => f.name).join(', ')
+      const failedNames = results.failed.map((f: any) => f.name).join(', ')
       const summary = [`部分失败: ${failedNames}`]
       if (results.success.length > 0) summary.push(`已成功: ${results.success.join(', ')}`)
       if (results.skipped.length > 0) summary.push(`已跳过: ${results.skipped.join(', ')}`)
-      if (results.renamed.length > 0) summary.push(`已重命名: ${results.renamed.map(r => `${r.from}→${r.to}`).join(', ')}`)
+      if (results.renamed.length > 0) summary.push(`已重命名: ${results.renamed.map((r: any) => `${r.from}→${r.to}`).join(', ')}`)
       setError(summary.join('；'))
       return
     }
@@ -204,7 +211,7 @@ function AddMCPModal({ onClose, onSuccess, projectDir }) {
   }
 
   const serverCount = parseResult?.servers?.length || 0
-  const serverNames = parseResult?.servers?.map(s => s.name) || []
+  const serverNames = parseResult?.servers?.map((s: any) => s.name) || []
   // 限制显示的名称数量
   const displayNames = serverNames.length > 3 
     ? serverNames.slice(0, 3).join(', ') + ` 等 ${serverNames.length} 个`
@@ -215,7 +222,6 @@ function AddMCPModal({ onClose, onSuccess, projectDir }) {
       <div 
         className={`relative overflow-hidden glass-card border border-border rounded-lg shadow-2xl w-[560px] max-w-full max-h-[85vh] flex flex-col`}
         onClick={e => e.stopPropagation()}
-        
       >
         {/* 顶部渐变装饰 */}
         <div className={`absolute top-0 left-0 right-0 h-24 ${accent.bgSoft} pointer-events-none`} />
@@ -237,7 +243,7 @@ function AddMCPModal({ onClose, onSuccess, projectDir }) {
         </div>
 
         {/* 内容 */}
-        <div className="relative flex-1 overflow-auto p-6 space-y-4" style={{ padding: 'var(--app-space-md)' }}>
+        <div className="relative flex-1 overflow-auto p-6 space-y-4">
           {/* 快速模板 */}
           <div>
             <label className={`block text-xs text-muted-foreground mb-1.5`}>快速填充</label>
