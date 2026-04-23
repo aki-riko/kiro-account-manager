@@ -1,10 +1,30 @@
 import { Card } from '@/components/ui/card'
-import { useApp } from '../../../hooks/useApp'
+import { LucideIcon } from 'lucide-react'
+import React from 'react'
+
+interface StatCardProps {
+  icon: LucideIcon;
+  iconBg: string;
+  iconColor: string;
+  value: string | number;
+  label: string;
+  delay: string;
+  onClick?: () => void;
+  warning?: boolean;
+}
 
 // 统计卡片组件 - 紧凑版
-function StatCard({ icon: Icon, iconBg, iconColor, value, label, delay, onClick, warning }) {
+function StatCard({ 
+  icon: Icon, 
+  iconBg, 
+  iconColor, 
+  value, 
+  label, 
+  delay, 
+  onClick, 
+  warning 
+}: StatCardProps) {
   
-
   return (
     <Card
       onClick={onClick}

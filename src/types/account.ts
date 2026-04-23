@@ -1,20 +1,65 @@
+export interface FreeTrialInfo {
+    currentUsage?: number;
+    currentUsageWithPrecision?: number;
+    freeTrialExpiry: number;
+    freeTrialStatus: 'ACTIVE' | 'EXPIRED' | string;
+    usageLimit?: number;
+    usageLimitWithPrecision?: number;
+}
+
+export interface Bonus {
+    status: 'ACTIVE' | string;
+    expiresAt: number;
+    displayName?: string;
+    bonusCode?: string;
+    description?: string;
+    redeemedAt?: number;
+    usageLimit?: number;
+    currentUsage?: number;
+}
+
 export interface UsageBreakdown {
-    freeTrialInfo?: {
-        freeTrialExpiry: number;
-        freeTrialStatus: 'ACTIVE' | 'EXPIRED' | string;
-    };
-    bonuses?: Array<{
-        status: 'ACTIVE' | string;
-        expiresAt: number;
-    }>;
+    bonuses?: Bonus[];
+    currency?: string;
+    currentOverages?: number;
+    currentOveragesWithPrecision?: number;
+    currentUsage?: number;
+    currentUsageWithPrecision?: number;
+    displayName?: string;
+    displayNamePlural?: string;
+    freeTrialInfo?: FreeTrialInfo;
     nextDateReset?: number;
+    overageCap?: number;
+    overageCapWithPrecision?: number;
+    overageCharges?: number;
+    overageRate?: number;
+    resourceType?: string;
+    unit?: string;
+    usageLimit?: number;
+    usageLimitWithPrecision?: number;
 }
 
 export interface AccountUsageData {
-    usageBreakdownList?: UsageBreakdown[];
+    daysUntilReset?: number;
+    limits?: any[];
     nextDateReset?: number;
+    overageConfiguration?: {
+        overageLimit?: number | null;
+        overageStatus?: string;
+    };
     subscriptionInfo?: {
+        overageCapability?: string;
+        subscriptionManagementTarget?: string;
         subscriptionTitle: string;
+        type?: string;
+        upgradeCapability?: string;
+    };
+    totalUsage?: number | null;
+    usageBreakdown?: any;
+    usageBreakdownList?: UsageBreakdown[];
+    userInfo?: {
+        userId?: string;
+        email?: string | null;
     };
 }
 
@@ -43,6 +88,9 @@ export interface Account {
     status?: string;
     lastError?: string;
     refreshing?: boolean;
+    addedAt?: string;
+    quota?: number;
+    used?: number;
     // 扩展字段
     _index?: number;
 }
