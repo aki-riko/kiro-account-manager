@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 import { invoke } from '@tauri-apps/api/core'
 import { X, Tag, Plus, Trash2, Edit2, Check, Folder } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
@@ -8,15 +9,19 @@ import { getTags, getGroups } from '../../../api/groupTag'
 
 // 预设颜色
 const PRESET_COLORS = [
-  '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', 
+  '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b',
   '#ef4444', '#ec4899', '#06b6d4', '#84cc16'
 ]
 
 // 标签选择器（用于账号编辑）
 export function TagSelector({ selectedTagIds, onChange, allTags }) {
   const { t, theme } = useApp()
-  const { colors, accent } = theme
-  
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
+  const colors = useMemo(() => ({
+    inputFocus: 'focus:ring-primary/20 focus:border-primary'
+  }), [])
+
+
   const [newTagName, setNewTagName] = useState('')
   const [tags, setTags] = useState(allTags || [])
   const [showDropdown, setShowDropdown] = useState(false)
@@ -24,7 +29,7 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
 
   useEffect(() => {
     if (!allTags) {
-      getTags().then(setTags).catch(() => {})
+      getTags().then(setTags).catch(() => { })
     }
   }, [allTags])
 
@@ -41,7 +46,7 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
 
   const actualTags = allTags || tags
   const unselectedTags = actualTags.filter(t => !selectedTagIds.includes(t.id))
-  
+
   // 过滤：有输入时过滤，没输入时显示全部未选中的
   const filteredTags = newTagName.trim()
     ? unselectedTags.filter(t => t.name.toLowerCase().includes(newTagName.toLowerCase()))
@@ -51,7 +56,7 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
   const handleAddTag = async () => {
     const trimmed = newTagName.trim().slice(0, 20)
     if (!trimmed) return
-    
+
     const existing = actualTags.find(t => t.name === trimmed)
     if (existing) {
       if (!selectedTagIds.includes(existing.id)) {
@@ -88,8 +93,8 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
           const tag = getTagById(tagId)
           if (!tag) return null
           return (
-            <span 
-              key={tagId} 
+            <span
+              key={tagId}
               className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full text-white"
               style={{ backgroundColor: tag.color || '#8b5cf6' }}
             >
@@ -120,8 +125,8 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
           {showDropdown && unselectedTags.length > 0 && (
             <div className={`absolute top-full left-0 right-0 mt-1 glass-card border border-border rounded-lg shadow-lg z-10 max-h-32 overflow-y-auto`}>
               {filteredTags.map(tag => (
-                <button 
-                  key={tag.id} 
+                <button
+                  key={tag.id}
                   type="button"
                   onClick={() => { onChange([...selectedTagIds, tag.id]); setNewTagName(''); setShowDropdown(false) }}
                   className={`w-full px-3 py-2 text-left text-sm text-foreground hover:opacity-80 flex items-center gap-2 transition-colors hover:bg-muted/50`}
@@ -156,10 +161,16 @@ export function TagSelector({ selectedTagIds, onChange, allTags }) {
 // 标签管理弹窗（全局标签和分组管理）
 function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
   const { t, theme } = useApp()
-  const { colors, accent } = theme
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
+  const colors = useMemo(() => ({
+    inputFocus: 'focus:ring-primary/20 focus:border-primary',
+    iconSuccess: 'text-green-600 hover:text-green-700',
+    hoverBg: 'hover:bg-green-500/10',
+    dangerHover: 'hover:bg-red-500/10'
+  }), [])
 
   const { showError, showConfirm } = useDialog()
-  
+
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [tags, setTags] = useState([])
   const [groups, setGroups] = useState([])
@@ -213,7 +224,7 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
   const handleDelete = async (id) => {
     const item = items.find(i => i.id === id)
     const title = isTagMode ? (t('tags.deleteTag') || '删除标签') : (t('groups.deleteGroup') || '删除分组')
-    const msg = isTagMode 
+    const msg = isTagMode
       ? `${t('tags.confirmDelete') || '确定删除标签'} "${item?.name}"?`
       : `${t('groups.confirmDelete') || '确定删除分组'} "${item?.name}"?`
     const confirmed = await showConfirm(title, msg)
@@ -260,7 +271,7 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
-      <div 
+      <div
         className={`glass-card border border-border rounded-2xl w-full max-w-md shadow-2xl max-h-[80vh] overflow-hidden flex flex-col`}
         onClick={e => e.stopPropagation()}
         style={{ animation: 'modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}
@@ -277,22 +288,20 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
           <div className="flex gap-2">
             <button
               onClick={() => handleTabChange('tags')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'tags'
-                  ? `${accent.solidBg} text-white`
-                  : `text-foreground bg-muted/30 hover:bg-muted/50`
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'tags'
+                ? `${accent.solidBg} text-white`
+                : `text-foreground bg-muted/30 hover:bg-muted/50`
+                }`}
             >
               <Tag size={16} />
               {t('tags.title') || '标签'}
             </button>
             <button
               onClick={() => handleTabChange('groups')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'groups'
-                  ? `${accent.solidBg} text-white`
-                  : `text-foreground bg-muted/30 hover:bg-muted/50`
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'groups'
+                ? `${accent.solidBg} text-white`
+                : `text-foreground bg-muted/30 hover:bg-muted/50`
+                }`}
             >
               <Folder size={16} />
               {t('groups.title') || '分组'}
@@ -350,8 +359,8 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
           ) : (
             <div className="space-y-2">
               {items.map(item => (
-                <div 
-                  key={item.id} 
+                <div
+                  key={item.id}
                   className={`flex items-center gap-3 p-3 rounded-lg bg-muted/30`}
                 >
                   {editingId === item.id ? (
@@ -380,7 +389,7 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
                     </>
                   ) : (
                     <>
-                      <span 
+                      <span
                         className={`w-4 h-4 flex-shrink-0 ${isTagMode ? 'rounded-full' : 'rounded'}`}
                         style={{ backgroundColor: item.color }}
                       />
@@ -388,14 +397,14 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
                       {item.createdAt && (
                         <span className={`text-xs text-muted-foreground`}>{item.createdAt}</span>
                       )}
-                      <button 
-                        onClick={() => startEdit(item)} 
+                      <button
+                        onClick={() => startEdit(item)}
                         className={`p-1.5 text-muted-foreground rounded transition-colors hover:bg-muted/50`}
                       >
                         <Edit2 size={14} />
                       </button>
-                      <button 
-                        onClick={() => handleDelete(item.id)} 
+                      <button
+                        onClick={() => handleDelete(item.id)}
                         className={`p-1.5 text-muted-foreground rounded transition-colors ${colors.dangerHover || 'hover:bg-red-500/10'}`}
                       >
                         <Trash2 size={14} />
@@ -410,8 +419,8 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
 
         {/* 底部 */}
         <div className={`flex justify-end px-5 py-4 border-t border-border`}>
-          <button 
-            onClick={() => { onSuccess?.(); onClose() }} 
+          <button
+            onClick={() => { onSuccess?.(); onClose() }}
             className={`px-4 py-2 text-white rounded-lg text-sm font-medium ${accent.solidBg} ${accent.solidHoverBg}`}
           >
             {t('common.close')}
