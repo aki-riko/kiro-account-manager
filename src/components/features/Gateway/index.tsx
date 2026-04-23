@@ -694,19 +694,19 @@ function GatewayPage() {
           <TabsList>
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <LayoutDashboard size={16} />
-              总览
+              {t('gateway.overview')}
             </TabsTrigger>
             <TabsTrigger value="integration" className="flex items-center gap-2">
               <Plug size={16} />
-              接入
+              {t('gateway.integration')}
             </TabsTrigger>
             <TabsTrigger value="observability" className="flex items-center gap-2">
               <ActivityIcon size={16} />
-              观测
+              {t('gateway.observability')}
             </TabsTrigger>
             <TabsTrigger value="advanced" className="flex items-center gap-2">
               <Settings size={16} />
-              高级
+              {t('gateway.advanced')}
             </TabsTrigger>
           </TabsList>
 
