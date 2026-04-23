@@ -88,6 +88,7 @@ pub async fn get_usage_by_account(
     access_token: &str,
 ) -> Result<UsageResult, String> {
     use crate::clients::http_client::resolve_kiro_upstream_region;
+    use crate::clients::kiro_q_client::KiroQClient;
     use crate::commands::machine_guid::get_machine_id;
 
     let machine_id = account
@@ -102,7 +103,7 @@ pub async fn get_usage_by_account(
         "us-east-1",
     );
 
-    let client = KiroPortalClient::new()?;
+    let client = KiroQClient::new()?;
     let usage_call = client
         .get_usage_limits(
             access_token,
@@ -145,9 +146,11 @@ pub async fn get_enterprise_usage_with_region_probe(
     access_token: &str,
     machine_id: &str,
 ) -> Result<(UsageResult, String), String> {
-    let client = KiroPortalClient::new()?;
+    use crate::clients::kiro_q_client::KiroQClient;
+
+    let client = KiroQClient::new()?;
     let result = client
-        .get_enterprise_usage_with_region_probe(access_token, machine_id)
+        .get_usage_limits_with_region_probe(access_token, machine_id)
         .await;
 
     match result {
