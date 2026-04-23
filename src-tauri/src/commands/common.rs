@@ -96,6 +96,46 @@ pub async fn get_usage_by_provider(
     parse_usage_result(usage_call)
 }
 
+/// 为企业账号获取 usage 数据（多区域探测）
+/// 返回 (UsageResult, detected_region)
+pub async fn get_enterprise_usage_with_region_probe(
+    access_token: &str,
+    machine_id: &str,
+) -> Result<(UsageResult, String), String> {
+    let client = KiroPortalClient::new()?;
+    let result = client
+        .get_enterprise_usage_with_region_probe(access_token, machine_id)
+        .await;
+
+    match result {
+        Ok((usage_data, region)) => Ok((
+            UsageResult {
+                usage_data,
+                is_banned: false,
+                is_auth_error: false,
+            },
+            region,
+        )),
+        Err(e) if e.starts_with("BANNED:") => Ok((
+            UsageResult {
+                usage_data: serde_json::Value::Null,
+                is_banned: true,
+                is_auth_error: false,
+            },
+            String::new(),
+        )),
+        Err(e) if is_auth_error_message(&e) => Ok((
+            UsageResult {
+                usage_data: serde_json::Value::Null,
+                is_banned: false,
+                is_auth_error: true,
+            },
+            String::new(),
+        )),
+        Err(e) => Err(e),
+    }
+}
+
 /// 解析 usage 结果，提取封禁状态和认证错误
 fn parse_usage_result(result: Result<serde_json::Value, String>) -> Result<UsageResult, String> {
     match result {

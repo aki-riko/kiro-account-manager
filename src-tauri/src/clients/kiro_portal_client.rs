@@ -1,7 +1,9 @@
 // Kiro Web Portal 客户端 - CBOR API
 // 直接返回 JSON Value，不依赖复杂的结构体
 
-use crate::clients::http_client::build_http_client;
+use crate::clients::http_client::{
+    build_http_client, build_q_service_url, get_usage_probe_regions,
+};
 use serde::Serialize;
 
 const KIRO_WEB_PORTAL: &str = "https://app.kiro.dev";
@@ -152,5 +154,83 @@ impl KiroPortalClient {
         }
         
         Ok(decoded)
+    }
+
+    /// 多区域探测获取企业账号的 usage 数据（直接调用 AWS getUsageLimits API）
+    /// 返回 (usage_data, detected_region)
+    pub async fn get_enterprise_usage_with_region_probe(
+        &self,
+        access_token: &str,
+        machine_id: &str,
+    ) -> Result<(serde_json::Value, String), String> {
+        let regions = get_usage_probe_regions();
+        let user_agent = crate::clients::http_client::build_kiro_custom_user_agent(machine_id);
+
+        for region in regions {
+            let url = format!(
+                "{}/getUsageLimits?origin=AI_EDITOR&resourceType=AGENTIC_REQUEST&isEmailRequired=true",
+                build_q_service_url(region)
+            );
+
+            let response = self
+                .client
+                .get(&url)
+                .header("Authorization", format!("Bearer {}", access_token))
+                .header("x-amz-user-agent", &user_agent)
+                .header("amz-sdk-invocation-id", uuid::Uuid::new_v4().to_string())
+                .header("amz-sdk-request", "attempt=1; max=1")
+                .header("User-Agent", &user_agent)
+                .header("Accept", "application/json")
+                .send()
+                .await;
+
+            let response = match response {
+                Ok(r) => r,
+                Err(_) => continue, // 网络错误，尝试下一个区域
+            };
+
+            let status = response.status();
+            let status_code = status.as_u16();
+
+            // 403 表示账号不在这个区域，继续尝试下一个
+            if status_code == 403 {
+                continue;
+            }
+
+            // 401 表示 token 过期
+            if status_code == 401 {
+                return Err("AUTH_ERROR: Token expired or invalid".to_string());
+            }
+
+            // 423 表示账号被封禁
+            if status_code == 423 {
+                return Err("BANNED: Account suspended".to_string());
+            }
+
+            // 200 成功
+            if status.is_success() {
+                let bytes = response
+                    .bytes()
+                    .await
+                    .map_err(|e| format!("Failed to read response: {}", e))?;
+
+                let usage_data: serde_json::Value = serde_json::from_slice(&bytes)
+                    .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+
+                return Ok((usage_data, region.to_string()));
+            }
+
+            // 其他错误
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!(
+                "GetUsageLimits failed in region {} - HTTP {}: {}",
+                region, status_code, error_text
+            ));
+        }
+
+        Err("Failed to find account in any region (all returned 403)".to_string())
     }
 }
