@@ -10,6 +10,7 @@ import GatewayAdvanced from './GatewayAdvanced'
 import GatewayIntegration from './GatewayIntegration'
 import GatewayObservability from './GatewayObservability'
 import GatewayOverview from './GatewayOverview'
+import { GatewayConfig, GatewayStatus } from './gatewayPageState'
 import { 
   applyGatewayLocalOnlyChange, 
   buildClientSamples, 
@@ -67,8 +68,8 @@ function ThemedAlert({ title, children, ...props }: any) {
 
 function GatewayPage() {
   const { t } = useApp()
-  const [config, setConfig] = useState(DEFAULT_GATEWAY_CONFIG)
-  const [status, setStatus] = useState(DEFAULT_GATEWAY_STATUS)
+  const [config, setConfig] = useState<GatewayConfig>(DEFAULT_GATEWAY_CONFIG)
+  const [status, setStatus] = useState<GatewayStatus>(DEFAULT_GATEWAY_STATUS)
   const [errorHistory, setErrorHistory] = useState<any[]>([])
   const [accounts, setAccounts] = useState<any[]>([])
   const [groups, setGroups] = useState<any[]>([])
@@ -126,7 +127,7 @@ function GatewayPage() {
     [effectiveConfig, status, errorHistory, lastStatusSyncAt]
   )
   const actionSummary = useMemo(
-    () => buildGatewayActionSummary({ running: status.running, hasUnsavedChanges, hasRuntimeChanges, hasFieldErrors }),
+    () => buildGatewayActionSummary({ running: status.running, isDirty: hasUnsavedChanges, hasUnsavedChanges, hasRuntimeChanges, hasFieldErrors }),
     [status.running, hasUnsavedChanges, hasRuntimeChanges, hasFieldErrors]
   )
   const securitySummary = useMemo(
@@ -140,6 +141,7 @@ function GatewayPage() {
   const integrationSummary = useMemo(
     () => buildGatewayIntegrationSummary({
       baseUrl: effectiveBaseUrl,
+      apiKey: effectiveConfig.clientApiKeysText || effectiveConfig.apiKey,
       clientApiKeysText: effectiveConfig.clientApiKeysText || effectiveConfig.apiKey,
       logDir,
       errorHistory}),
@@ -707,6 +709,7 @@ function GatewayPage() {
 
           <TabsContent value="overview">
             <GatewayOverview
+              colors={colors}
               loading={loading}
               handleRefresh={handleRefresh}
               effectiveBaseUrl={effectiveBaseUrl}
@@ -727,6 +730,7 @@ function GatewayPage() {
 
           <TabsContent value="integration">
             <GatewayIntegration
+              colors={colors}
               integrationGuidance={integrationGuidance}
               integrationSummary={integrationSummary}
               effectiveConnectHost={effectiveConnectHost}
@@ -738,6 +742,7 @@ function GatewayPage() {
 
           <TabsContent value="observability">
             <GatewayObservability
+              colors={colors}
               observabilityHighlights={observabilityHighlights}
               effectiveConfig={effectiveConfig}
               status={status}
@@ -771,6 +776,7 @@ function GatewayPage() {
 
           <TabsContent value="advanced">
             <GatewayAdvanced
+              colors={colors}
               config={config}
               hasFieldErrors={hasFieldErrors}
               hasUnsavedChanges={hasUnsavedChanges}

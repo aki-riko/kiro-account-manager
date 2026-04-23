@@ -1,6 +1,11 @@
 import { Card, CardContent } from '@/components/ui/card'
+import React from 'react'
 
-export function GatewaySurfaceCard({ colors, className = '', children, ...props }) {
+interface GatewaySurfaceCardProps extends React.HTMLAttributes<HTMLDivElement> {
+  colors?: any;
+}
+
+export function GatewaySurfaceCard({ colors, className = '', children, ...props }: GatewaySurfaceCardProps) {
   return (
     <Card
       className={`glass-card border-border border rounded-md ${className}`.trim()}
@@ -13,7 +18,11 @@ export function GatewaySurfaceCard({ colors, className = '', children, ...props 
   )
 }
 
-export function GatewaySubCard({ className = '', children, ...props }) {
+interface GatewaySubCardProps extends React.HTMLAttributes<HTMLDivElement> {
+  children?: React.ReactNode;
+}
+
+export function GatewaySubCard({ className = '', children, ...props }: GatewaySubCardProps) {
   return (
     <Card className={`border rounded-md ${className}`} {...props}>
       <CardContent className="p-4">
@@ -23,7 +32,16 @@ export function GatewaySubCard({ className = '', children, ...props }) {
   )
 }
 
-export function GatewaySectionHeader({ colors, icon: Icon, title, badge, actions, groupProps = {} }) {
+interface GatewaySectionHeaderProps {
+  colors?: any;
+  icon?: any;
+  title: string;
+  badge?: React.ReactNode;
+  actions?: React.ReactNode;
+  groupProps?: any;
+}
+
+export function GatewaySectionHeader({ colors, icon: Icon, title, badge, actions, groupProps = {} }: GatewaySectionHeaderProps) {
   return (
     <div className="flex items-center justify-between" {...groupProps}>
       <div className="flex items-center gap-2">
@@ -35,7 +53,16 @@ export function GatewaySectionHeader({ colors, icon: Icon, title, badge, actions
   )
 }
 
-export function GatewayStatCard({ colors, label, value, detail, valueProps = {}, className = '' }) {
+interface GatewayStatCardProps {
+  colors?: any;
+  label: string;
+  value: string | number;
+  detail?: string;
+  valueProps?: any;
+  className?: string;
+}
+
+export function GatewayStatCard({ colors, label, value, detail, valueProps = {}, className = '' }: GatewayStatCardProps) {
   return (
     <GatewaySubCard className={className}>
       <p className={`text-xs text-muted-foreground`}>{label}</p>
@@ -51,7 +78,13 @@ export function GatewayStatCard({ colors, label, value, detail, valueProps = {},
   )
 }
 
-export function GatewayPathCard({ title = '日志目录', value, actions }) {
+interface GatewayPathCardProps {
+  title?: string;
+  value: string;
+  actions?: React.ReactNode;
+}
+
+export function GatewayPathCard({ title = '日志目录', value, actions }: GatewayPathCardProps) {
   return (
     <GatewaySubCard>
       <p className="text-xs font-semibold">{title}</p>
@@ -67,7 +100,15 @@ export function GatewayPathCard({ title = '日志目录', value, actions }) {
   )
 }
 
-export function GatewayCodeCard({ title, code, description, actions, children }) {
+interface GatewayCodeCardProps {
+  title?: string;
+  code?: string;
+  description?: string;
+  actions?: React.ReactNode;
+  children?: React.ReactNode;
+}
+
+export function GatewayCodeCard({ title, code, description, actions, children }: GatewayCodeCardProps) {
   return (
     <GatewaySubCard>
       {title ? <p className="text-xs font-semibold">{title}</p> : null}

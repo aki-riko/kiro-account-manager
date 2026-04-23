@@ -8,7 +8,30 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import { GatewaySectionHeader, GatewayStatCard, GatewaySubCard, GatewaySurfaceCard } from './GatewayShared'
+import { GatewayStatCard, GatewaySurfaceCard } from './GatewayShared'
+import React from 'react'
+
+interface GatewayAdvancedProps {
+  colors: any;
+  config: any;
+  hasFieldErrors: boolean;
+  hasUnsavedChanges: boolean;
+  fieldErrors: Record<string, string>;
+  inputClassNames: any;
+  selectClassNames: any;
+  switchClassNames: any;
+  setField: (key: string, value: any) => void;
+  handleGenerateApiKey: () => void;
+  securitySummary: any;
+  routingSummary: any;
+  accountOptions: any[];
+  groupOptions: any[];
+  actionSummary: any;
+  ThemedAlert: React.ComponentType<any>;
+  setConfig: React.Dispatch<React.SetStateAction<any>>;
+  applyGatewayLocalOnlyChange: (config: any, checked: boolean, generator: () => string) => any;
+  createGeneratedApiKey: () => string;
+}
 
 function GatewayAdvanced({
   colors,
@@ -29,7 +52,7 @@ function GatewayAdvanced({
   ThemedAlert,
   setConfig,
   applyGatewayLocalOnlyChange,
-  createGeneratedApiKey}) {
+  createGeneratedApiKey}: GatewayAdvancedProps) {
   return (
     <div className="grid grid-cols-1 gap-4">
       <GatewaySurfaceCard colors={colors}>
@@ -107,7 +130,7 @@ function GatewayAdvanced({
                           .split(/[\n,]+/)
                           .map(item => item.trim())
                           .find(Boolean) || ''
-                        setConfig(prev => ({ ...prev, clientApiKeysText, apiKey: primaryApiKey }))
+                        setConfig((prev: any) => ({ ...prev, clientApiKeysText, apiKey: primaryApiKey }))
                       }}
                       className={fieldErrors.clientApiKeysText ? 'border-red-500' : ''}
                       autoComplete="off"
@@ -212,7 +235,7 @@ function GatewayAdvanced({
                     <Switch
                       checked={!!config.localOnly}
                       onCheckedChange={(checked) => {
-                        setConfig(prev => applyGatewayLocalOnlyChange(prev, checked, createGeneratedApiKey))
+                        setConfig((prev: any) => applyGatewayLocalOnlyChange(prev, checked, createGeneratedApiKey))
                       }}
                     />
                   </div>

@@ -1,20 +1,21 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
-import { Lock, Copy, Palette, Check, RefreshCw, Settings as SettingsIcon, Clock, Globe, Search, Shield, Download, Upload, Shuffle, AlertTriangle, Eye, EyeOff, Repeat, LayoutDashboard, Cpu, Bot, Bell } from 'lucide-react'
+import { Palette, Settings as SettingsIcon, Network, LayoutDashboard, Cpu, Bot, Bell } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { useAppSettings } from '../../../contexts/AppSettingsContext'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
-import { buildSettingsErrorMessage, persistAppSettings, runKiroCommandWithAppSettings } from './settingsActions'
-import { buildThemeOptions, NOTIFICATION_SETTINGS_FIELD_MAP } from './settingsConstants'
+import { persistAppSettings, runKiroCommandWithAppSettings } from './settingsActions'
+import { NOTIFICATION_SETTINGS_FIELD_MAP } from './settingsConstants'
 import { isValidBrowserPath, isValidProxy } from './settingsValidators'
 import SettingsAppearance from './SettingsAppearance'
 import SettingsGeneral from './SettingsGeneral'
 import SettingsKiro from './SettingsKiro'
 import SettingsAgent from './SettingsAgent'
 import SettingsNotifications from './SettingsNotifications'
+import React from 'react'
 
 function Settings() {
     const { t, theme, setTheme } = useApp()
@@ -28,7 +29,7 @@ function Settings() {
     const [autoRefresh, setAutoRefresh] = useState(true)
     const [autoRefreshInterval, setAutoRefreshInterval] = useState(50) // 分钟
     const [autoChangeMachineId, setAutoChangeMachineId] = useState(true) // 默认开启
-    const [machineIdMode, setMachineIdMode] = useState('bind') // 'random' | 'bind'
+    const [machineIdMode, setMachineIdMode] = useState<'random' | 'bind'>('bind') // 'random' | 'bind'
     const [httpProxy, setHttpProxy] = useState('')
     const [originalProxy, setOriginalProxy] = useState('') // 原始代理值，用于判断是否修改
     const [savingProxy, setSavingProxy] = useState(false)
@@ -36,7 +37,7 @@ function Settings() {
     const [browserPath, setBrowserPath] = useState('')
     const [originalBrowserPath, setOriginalBrowserPath] = useState('')
     const [savingBrowser, setSavingBrowser] = useState(false)
-    const [detectedBrowsers, setDetectedBrowsers] = useState([])
+    const [detectedBrowsers, setDetectedBrowsers] = useState<any[]>([])
     const [showBrowserList, setShowBrowserList] = useState(false)
     const [detectingProxy, setDetectingProxy] = useState(false)
     const [enableCodebaseIndexing, setEnableCodebaseIndexing] = useState(true)
@@ -74,8 +75,8 @@ function Settings() {
     const [loading, setLoading] = useState(false)
 
     // 系统机器码
-    const [systemMachineInfo, setSystemMachineInfo] = useState(null)
-    const [machineGuidAction, setMachineGuidAction] = useState(null) // 'reset'
+    const [systemMachineInfo, setSystemMachineInfo] = useState<any>(null)
+    const [machineGuidAction, setMachineGuidAction] = useState<string | null>(null) // 'reset'
 
     // 加载设置（指纹延迟加载，不阻塞页面）
     const loadSettings = async () => {
@@ -83,9 +84,9 @@ function Settings() {
         try {
             // 先加载核心设置（快速）
             const [kiroSettings, appSettings, sysMachine] = await Promise.all([
-                invoke('get_kiro_settings').catch(() => null),
-                invoke('get_app_settings').catch(() => null),
-                invoke('get_system_machine_guid').catch(() => null)
+                invoke<any>('get_kiro_settings').catch(() => null),
+                invoke<any>('get_app_settings').catch(() => null),
+                invoke<any>('get_system_machine_guid').catch(() => null)
             ])
             setSystemMachineInfo(sysMachine)
 
@@ -144,7 +145,7 @@ function Settings() {
         loadSettings()
     }, [])
 
-    const saveAppSettings = (updates, notifyChange = false) => persistAppSettings({
+    const saveAppSettings = (updates: any, notifyChange = false) => persistAppSettings({
         updates,
         notifyChange,
         updateAppSettings,
@@ -152,13 +153,13 @@ function Settings() {
         showError,
         t})
 
-    const runKiroCommand = (command, commandArgs, appSettingsUpdates = null, notifyChange = false) => runKiroCommandWithAppSettings({
+    const runKiroCommand = (command: string, commandArgs: any, appSettingsUpdates: any = null, notifyChange = false) => runKiroCommandWithAppSettings({
         command,
         commandArgs,
         appSettingsUpdates,
         notifyChange,
         invokeFn: invoke,
-        persistSettings: ({ updates, notifyChange: shouldNotify }) => saveAppSettings(updates, shouldNotify),
+        persistSettings: ({ updates, notifyChange: shouldNotify }: any) => saveAppSettings(updates, shouldNotify),
         showError,
         t})
 
@@ -173,14 +174,14 @@ function Settings() {
             await invoke('set_kiro_proxy', { proxy: httpProxy })
             setOriginalProxy(httpProxy)
             await showSuccess(t('settings.saveSuccess'), httpProxy ? t('settings.proxyApplied') : t('settings.proxyCleared'))
-        } catch (err) {
+        } catch (err: any) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         } finally {
             setSavingProxy(false)
         }
     }
 
-    const handleApplyModel = async (model) => {
+    const handleApplyModel = async (model: string) => {
         setAiModel(model)
         setSavingModel(true)
         try {
@@ -188,63 +189,67 @@ function Settings() {
             if (lockModel) {
                 await saveAppSettings({ lockedModel: model })
             }
-        } catch (err) {
+        } catch (err: any) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         } finally {
             setSavingModel(false)
         }
     }
 
-    const handleLockModelChange = async (checked) => {
+    const handleLockModelChange = async (checked: boolean) => {
         setLockModel(checked)
         await saveAppSettings({ lockModel: checked, lockedModel: checked ? aiModel : null })
     }
 
-    const handleAutoRefreshChange = async (checked) => {
+    const handleLockModelCheckboxChange = (checked: boolean) => {
+        handleLockModelChange(checked);
+    };
+
+    const handleAutoRefreshChange = async (checked: boolean) => {
         setAutoRefresh(checked)
         await saveAppSettings({ autoRefresh: checked }, true)
     }
 
-    const handleAutoRefreshIntervalChange = async (value) => {
+    const handleAutoRefreshIntervalChange = async (value: string) => {
         const interval = parseInt(value) || 50
         setAutoRefreshInterval(interval)
         await saveAppSettings({ autoRefreshInterval: interval }, true)
     }
 
-    const handleAutoChangeMachineIdChange = async (checked) => {
+    const handleAutoChangeMachineIdChange = async (checked: boolean) => {
         setAutoChangeMachineId(checked)
         await saveAppSettings({ autoChangeMachineId: checked })
     }
 
-    const handleMachineIdModeChange = async (mode) => {
+    const handleMachineIdModeChange = async (mode: 'bind' | 'random') => {
         setMachineIdMode(mode)
         await saveAppSettings({ bindMachineIdToAccount: mode === 'bind' })
     }
 
-    const handleAutoSwitchEnabledChange = async (checked) => {
+    const handleAutoSwitchEnabledChange = async (checked: boolean) => {
         setAutoSwitchEnabled(checked)
         await saveAppSettings({ autoSwitchEnabled: checked }, true)
     }
 
-    const handleAutoSwitchThresholdChange = async (value) => {
+    const handleAutoSwitchThresholdChange = async (value: any) => {
         const parsedValue = typeof value === 'number' ? value : parseFloat(value)
         const threshold = Number.isFinite(parsedValue) ? parsedValue : 1
         setAutoSwitchThreshold(threshold)
         await saveAppSettings({ autoSwitchThreshold: threshold }, true)
     }
 
-    const handleAutoSwitchIntervalChange = async (value) => {
+    const handleAutoSwitchIntervalChange = async (value: string) => {
         const interval = parseInt(value) || 5
         setAutoSwitchInterval(interval)
         await saveAppSettings({ autoSwitchInterval: interval }, true)
     }
 
-    const handleCodebaseIndexingChange = async (checked) => {
+    const handleCodebaseIndexingChange = async (checked: boolean) => {
         setEnableCodebaseIndexing(checked)
         await runKiroCommand('set_kiro_codebase_indexing', { enabled: checked }, { enableCodebaseIndexing: checked })
     }
 
-    const handleTrustedCommandsModeChange = async (mode) => {
+    const handleTrustedCommandsModeChange = async (mode: string) => {
         if (!mode) return
         if (mode === 'all') {
             const confirmed = await showConfirm(
@@ -257,70 +262,78 @@ function Settings() {
         setTrustedCommandsMode(mode)
         try {
             await invoke('set_kiro_trusted_commands', { mode, customCommands: customTrustedCommands })
-        } catch (err) {
+        } catch (err: any) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         }
     }
 
-    const handleCustomTrustedCommandsChange = async (commands) => {
+    const handleCustomTrustedCommandsChange = async (commands: string) => {
         setCustomTrustedCommands(commands)
         if (trustedCommandsMode === 'common') {
             try {
                 await invoke('set_kiro_trusted_commands', { mode: 'common', customCommands: commands })
-            } catch (err) {
+            } catch (err: any) {
                 await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
             }
         }
     }
 
-    const handleAgentAutonomyChange = async (mode) => {
+    const handleAgentAutonomyChange = async (mode: string) => {
         setAgentAutonomy(mode)
         await runKiroCommand('set_kiro_agent_autonomy', { autonomy: mode })
     }
 
-    const handleTabAutocompleteChange = async (checked) => {
+    const handleTabAutocompleteChange = async (checked: boolean) => {
         setEnableTabAutocomplete(checked)
         await runKiroCommand('set_kiro_tab_autocomplete', { enabled: checked }, { enableTabAutocomplete: checked })
     }
 
-    const handleUsageSummaryChange = async (checked) => {
+    const handleUsageSummaryChange = async (checked: boolean) => {
         setUsageSummary(checked)
         await runKiroCommand('set_kiro_usage_summary', { enabled: checked }, { usageSummary: checked })
     }
 
-    const handleCodeReferencesChange = async (checked) => {
+    const handleUsageSummaryCheckboxChange = (checked: boolean) => {
+        handleUsageSummaryChange(checked);
+    };
+
+    const handleCodeReferencesChange = async (checked: boolean) => {
         setCodeReferences(checked)
         await runKiroCommand('set_kiro_code_references', { enabled: checked }, { codeReferences: checked })
     }
 
-    const handleDebugLogsChange = async (checked) => {
+    const handleCodeReferencesCheckboxChange = (checked: boolean) => {
+        handleCodeReferencesChange(checked);
+    };
+
+    const handleDebugLogsChange = async (checked: boolean) => {
         setEnableDebugLogs(checked)
         await runKiroCommand('set_kiro_debug_logs', { enabled: checked }, { enableDebugLogs: checked })
     }
 
-    const handleNotificationChange = async (key, checked, setter) => {
+    const handleNotificationChange = async (key: string, checked: boolean, setter: (v: boolean) => void) => {
         setter(checked)
-        const field = NOTIFICATION_SETTINGS_FIELD_MAP[key]
+        const field = (NOTIFICATION_SETTINGS_FIELD_MAP as any)[key]
         await runKiroCommand('set_kiro_notification', { key, enabled: checked }, field ? { [field]: checked } : null)
     }
 
-    const handleTrustedToolsSave = async (value) => {
+    const handleTrustedToolsSave = async (value: string) => {
         setTrustedTools(value)
         const tools = value.split(',').map(s => s.trim()).filter(Boolean)
         await runKiroCommand('set_kiro_trusted_tools', { tools }, { trustedTools: tools })
     }
 
-    const handleReferenceTrackerChange = async (checked) => {
+    const handleReferenceTrackerChange = async (checked: boolean) => {
         setReferenceTracker(checked)
         await runKiroCommand('set_kiro_reference_tracker', { enabled: checked }, { referenceTracker: checked })
     }
 
-    const handleConfigureMcpChange = async (mode) => {
+    const handleConfigureMcpChange = async (mode: string) => {
         setConfigureMcp(mode)
         await runKiroCommand('set_kiro_configure_mcp', { mode }, { configureMcp: mode })
     }
 
-    const handleTelemetryChange = async (ideKey, checked, setter, appField) => {
+    const handleTelemetryChange = async (ideKey: string, checked: boolean, setter: (v: boolean) => void, appField: string) => {
         setter(checked)
         await runKiroCommand('set_kiro_telemetry', { key: ideKey, enabled: checked }, { [appField]: checked })
     }
@@ -336,7 +349,7 @@ function Settings() {
             await saveAppSettings({ browserPath: browserPath })
             setOriginalBrowserPath(browserPath)
             await showSuccess(t('settings.saveSuccess'), browserPath ? t('settings.browserSaved') : t('settings.defaultBrowser'))
-        } catch (err) {
+        } catch (err: any) {
             await showError(t('settings.saveFailed'), err.toString())
         } finally {
             setSavingBrowser(false)
@@ -345,10 +358,10 @@ function Settings() {
 
     const handleDetectBrowsers = async () => {
         try {
-            const browsers = await invoke('detect_installed_browsers')
+            const browsers = await invoke<any[]>('detect_installed_browsers')
             setDetectedBrowsers(browsers)
             setShowBrowserList(true)
-        } catch (err) {
+        } catch (err: any) {
             await showError(t('settings.detectFailed'), err.toString())
         }
     }
@@ -356,14 +369,14 @@ function Settings() {
     const handleDetectProxy = async () => {
         setDetectingProxy(true)
         try {
-            const proxyInfo = await invoke('detect_system_proxy')
+            const proxyInfo = await invoke<any>('detect_system_proxy')
             if (proxyInfo.enabled && proxyInfo.httpProxy) {
                 setHttpProxy(proxyInfo.httpProxy)
                 await showSuccess(t('settings.detectSuccess'), `${t('settings.systemProxyDetected')}: ${proxyInfo.httpProxy}`)
             } else {
                 await showError(t('settings.noProxyDetected'), t('settings.noProxyConfigured'))
             }
-        } catch (err) {
+        } catch (err: any) {
             await showError(t('settings.detectFailed'), err.toString())
         } finally {
             setDetectingProxy(false)
@@ -380,10 +393,10 @@ function Settings() {
 
         setMachineGuidAction('reset')
         try {
-            const newGuid = await invoke('reset_system_machine_guid')
-            setSystemMachineInfo(prev => ({ ...prev, machineGuid: newGuid }))
+            const newGuid = await invoke<string>('reset_system_machine_guid')
+            setSystemMachineInfo((prev: any) => ({ ...prev, machineGuid: newGuid }))
             await showSuccess(t('settings.resetSuccess'), `${t('settings.newMachineGuid')}: ${newGuid}`)
-        } catch (err) {
+        } catch (err: any) {
             await showError(t('settings.resetFailed'), err.toString())
             setMachineGuidAction(null)
         }
@@ -435,7 +448,46 @@ function Settings() {
 
                     <TabsContent value="general">
                         <SettingsGeneral
-                            {...{ autoRefresh, setAutoRefresh, autoRefreshInterval, setAutoRefreshInterval, autoChangeMachineId, setAutoChangeMachineId, machineIdMode, setMachineIdMode, privacyMode, setPrivacyMode, autoSwitchEnabled, setAutoSwitchEnabled, autoSwitchThreshold, setAutoSwitchThreshold, autoSwitchInterval, setAutoSwitchInterval, browserPath, setBrowserPath, originalBrowserPath, setOriginalBrowserPath, savingBrowser, setSavingBrowser, detectedBrowsers, setDetectedBrowsers, showBrowserList, setShowBrowserList, systemMachineInfo, setSystemMachineInfo, machineGuidAction, handleResetSystemMachineGuid, handleDetectBrowsers, handleApplyBrowser, handleAutoRefreshChange, handleAutoRefreshIntervalChange, handleAutoChangeMachineIdChange, handleMachineIdModeChange, handleAutoSwitchEnabledChange, handleAutoSwitchThresholdChange, handleAutoSwitchIntervalChange, t }}
+                            autoRefresh={autoRefresh}
+                            setAutoRefresh={setAutoRefresh}
+                            autoRefreshInterval={autoRefreshInterval}
+                            setAutoRefreshInterval={setAutoRefreshInterval}
+                            autoChangeMachineId={autoChangeMachineId}
+                            setAutoChangeMachineId={setAutoChangeMachineId}
+                            machineIdMode={machineIdMode}
+                            setMachineIdMode={setMachineIdMode}
+                            privacyMode={privacyMode}
+                            setPrivacyMode={setPrivacyMode}
+                            autoSwitchEnabled={autoSwitchEnabled}
+                            setAutoSwitchEnabled={setAutoSwitchEnabled}
+                            autoSwitchThreshold={autoSwitchThreshold}
+                            setAutoSwitchThreshold={setAutoSwitchThreshold}
+                            autoSwitchInterval={autoSwitchInterval}
+                            setAutoSwitchInterval={setAutoSwitchInterval}
+                            browserPath={browserPath}
+                            setBrowserPath={setBrowserPath}
+                            originalBrowserPath={originalBrowserPath}
+                            setOriginalBrowserPath={setOriginalBrowserPath}
+                            savingBrowser={savingBrowser}
+                            setSavingBrowser={setSavingBrowser}
+                            detectedBrowsers={detectedBrowsers}
+                            setDetectedBrowsers={setDetectedBrowsers}
+                            showBrowserList={showBrowserList}
+                            setShowBrowserList={setShowBrowserList}
+                            systemMachineInfo={systemMachineInfo}
+                            setSystemMachineInfo={setSystemMachineInfo}
+                            machineGuidAction={machineGuidAction}
+                            handleResetSystemMachineGuid={handleResetSystemMachineGuid}
+                            handleDetectBrowsers={handleDetectBrowsers}
+                            handleApplyBrowser={handleApplyBrowser}
+                            handleAutoRefreshChange={handleAutoRefreshChange}
+                            handleAutoRefreshIntervalChange={handleAutoRefreshIntervalChange}
+                            handleAutoChangeMachineIdChange={handleAutoChangeMachineIdChange}
+                            handleMachineIdModeChange={handleMachineIdModeChange}
+                            handleAutoSwitchEnabledChange={handleAutoSwitchEnabledChange}
+                            handleAutoSwitchThresholdChange={handleAutoSwitchThresholdChange}
+                            handleAutoSwitchIntervalChange={handleAutoSwitchIntervalChange}
+                            t={t}
                         />
                     </TabsContent>
 
@@ -449,19 +501,84 @@ function Settings() {
 
                     <TabsContent value="kiro">
                         <SettingsKiro
-                            {...{ aiModel, setAiModel, lockModel, setLockModel, agentAutonomy, setAgentAutonomy, trustedCommandsMode, setTrustedCommandsMode, customTrustedCommands, setCustomTrustedCommands, trustedTools, setTrustedTools, configureMcp, setConfigureMcp, httpProxy, setHttpProxy, originalProxy, savingProxy, detectingProxy, savingModel, handleApplyModel, handleLockModelChange, handleAgentAutonomyChange, handleTrustedCommandsModeChange, handleCustomTrustedCommandsChange, handleTrustedToolsSave, handleConfigureMcpChange, handleApplyProxy, handleDetectProxy, t }}
+                            aiModel={aiModel}
+                            setAiModel={setAiModel}
+                            lockModel={lockModel}
+                            setLockModel={setLockModel}
+                            agentAutonomy={agentAutonomy}
+                            setAgentAutonomy={setAgentAutonomy}
+                            trustedCommandsMode={trustedCommandsMode}
+                            setTrustedCommandsMode={setTrustedCommandsMode}
+                            customTrustedCommands={customTrustedCommands}
+                            setCustomTrustedCommands={setCustomTrustedCommands}
+                            trustedTools={trustedTools}
+                            setTrustedTools={setTrustedTools}
+                            configureMcp={configureMcp}
+                            setConfigureMcp={setConfigureMcp}
+                            httpProxy={httpProxy}
+                            setHttpProxy={setHttpProxy}
+                            originalProxy={originalProxy}
+                            savingProxy={savingProxy}
+                            detectingProxy={detectingProxy}
+                            savingModel={savingModel}
+                            handleApplyModel={handleApplyModel}
+                            handleLockModelChange={handleLockModelChange}
+                            handleAgentAutonomyChange={handleAgentAutonomyChange}
+                            handleTrustedCommandsModeChange={handleTrustedCommandsModeChange}
+                            handleCustomTrustedCommandsChange={handleCustomTrustedCommandsChange}
+                            handleTrustedToolsSave={handleTrustedToolsSave}
+                            handleConfigureMcpChange={handleConfigureMcpChange}
+                            handleApplyProxy={handleApplyProxy}
+                            handleDetectProxy={handleDetectProxy}
+                            t={t}
                         />
                     </TabsContent>
 
                     <TabsContent value="agent">
                         <SettingsAgent
-                            {...{ enableCodebaseIndexing, setEnableCodebaseIndexing, enableTabAutocomplete, setEnableTabAutocomplete, usageSummary, setUsageSummary, codeReferences, setCodeReferences, enableDebugLogs, setEnableDebugLogs, referenceTracker, setReferenceTracker, handleCodebaseIndexingChange, handleTabAutocompleteChange, handleUsageSummaryChange, handleCodeReferencesChange, handleDebugLogsChange, handleReferenceTrackerChange, t }}
+                            enableCodebaseIndexing={enableCodebaseIndexing}
+                            setEnableCodebaseIndexing={setEnableCodebaseIndexing}
+                            enableTabAutocomplete={enableTabAutocomplete}
+                            setEnableTabAutocomplete={setEnableTabAutocomplete}
+                            usageSummary={usageSummary}
+                            setUsageSummary={setUsageSummary}
+                            codeReferences={codeReferences}
+                            setCodeReferences={setCodeReferences}
+                            enableDebugLogs={enableDebugLogs}
+                            setEnableDebugLogs={setEnableDebugLogs}
+                            referenceTracker={referenceTracker}
+                            setReferenceTracker={setReferenceTracker}
+                            handleCodebaseIndexingChange={handleCodebaseIndexingChange}
+                            handleTabAutocompleteChange={handleTabAutocompleteChange}
+                            handleUsageSummaryChange={handleUsageSummaryChange}
+                            handleCodeReferencesChange={handleCodeReferencesChange}
+                            handleDebugLogsChange={handleDebugLogsChange}
+                            handleReferenceTrackerChange={handleReferenceTrackerChange}
+                            t={t}
                         />
                     </TabsContent>
 
                     <TabsContent value="notifications">
                         <SettingsNotifications
-                            {...{ notifyActionRequired, setNotifyActionRequired, notifyFailure, setNotifyFailure, notifySuccess, setNotifySuccess, notifyBilling, setNotifyBilling, telemetryContentCollection, setTelemetryContentCollection, telemetryUsageAnalytics, setTelemetryUsageAnalytics, telemetryEditStats, setTelemetryEditStats, telemetryFeedback, setTelemetryFeedback, handleNotificationChange, handleTelemetryChange, t }}
+                            notifyActionRequired={notifyActionRequired}
+                            setNotifyActionRequired={setNotifyActionRequired}
+                            notifyFailure={notifyFailure}
+                            setNotifyFailure={setNotifyFailure}
+                            notifySuccess={notifySuccess}
+                            setNotifySuccess={setNotifySuccess}
+                            notifyBilling={notifyBilling}
+                            setNotifyBilling={setNotifyBilling}
+                            telemetryContentCollection={telemetryContentCollection}
+                            setTelemetryContentCollection={setTelemetryContentCollection}
+                            telemetryUsageAnalytics={telemetryUsageAnalytics}
+                            setTelemetryUsageAnalytics={setTelemetryUsageAnalytics}
+                            telemetryEditStats={telemetryEditStats}
+                            setTelemetryEditStats={setTelemetryEditStats}
+                            telemetryFeedback={telemetryFeedback}
+                            setTelemetryFeedback={setTelemetryFeedback}
+                            handleNotificationChange={handleNotificationChange}
+                            handleTelemetryChange={handleTelemetryChange}
+                            t={t}
                         />
                     </TabsContent>
                 </Tabs>

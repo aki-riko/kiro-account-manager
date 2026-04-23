@@ -1,9 +1,7 @@
-import { useTheme } from '../../contexts/ThemeContext'
+import React from 'react'
 
 // 基础骨架元素
-export function SkeletonBox({ className = '' }) {
-  const { colors } = useTheme()
-  
+export function SkeletonBox({ className = '' }: { className?: string }) {
   return (
     <div 
       className={`animate-pulse rounded bg-muted/30 ${className}`}
@@ -13,8 +11,6 @@ export function SkeletonBox({ className = '' }) {
 
 // 账号卡片骨架屏
 export function AccountCardSkeleton() {
-  const { colors } = useTheme()
-
   return (
     <div className={`relative rounded-2xl border border-border glass-card p-4 pt-10`}>
       {/* 选择框占位 */}
@@ -59,7 +55,7 @@ export function AccountCardSkeleton() {
 }
 
 // 账号列表骨架屏
-export function AccountListSkeleton({ count = 8 }) {
+export function AccountListSkeleton({ count = 8 }: { count?: number }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-6">
       {[...Array(count)].map((_, i) => (
@@ -71,8 +67,6 @@ export function AccountListSkeleton({ count = 8 }) {
 
 // 表格行骨架屏
 export function AccountTableRowSkeleton() {
-  const { colors } = useTheme()
-
   return (
     <div className={`flex items-center gap-3 px-4 py-2.5 border-b border-border`}>
       {/* 选择框 */}
@@ -117,9 +111,7 @@ export function AccountTableRowSkeleton() {
 }
 
 // 表格视图骨架屏
-export function AccountTableSkeleton({ count = 8 }) {
-  const { colors } = useTheme()
-
+export function AccountTableSkeleton({ count = 8 }: { count?: number }) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden p-6">
       {/* 顶部信息栏 */}
@@ -158,8 +150,6 @@ export function AccountTableSkeleton({ count = 8 }) {
 
 // 首页统计卡片骨架屏
 export function StatCardSkeleton() {
-  const { colors } = useTheme()
-
   return (
     <div className={`rounded-2xl p-5 border border-border glass-card`}>
       <div className="flex items-center gap-2 mb-2">
@@ -171,4 +161,5 @@ export function StatCardSkeleton() {
   )
 }
 
-export default { SkeletonBox, AccountCardSkeleton, AccountListSkeleton, AccountTableRowSkeleton, AccountTableSkeleton, StatCardSkeleton }
+const Skeletons = { SkeletonBox, AccountCardSkeleton, AccountListSkeleton, AccountTableRowSkeleton, AccountTableSkeleton, StatCardSkeleton };
+export default Skeletons;

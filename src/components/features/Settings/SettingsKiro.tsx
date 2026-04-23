@@ -8,6 +8,33 @@ import { Label } from '../../ui/label'
 import { AI_MODELS } from './settingsConstants'
 import React from 'react'
 
+interface SettingsKiroProps {
+  aiModel: string;
+  lockModel: boolean;
+  agentAutonomy: string;
+  trustedCommandsMode: string;
+  customTrustedCommands: string;
+  trustedTools: string;
+  setTrustedTools: (value: string) => void;
+  configureMcp: string;
+  httpProxy: string;
+  setHttpProxy: (value: string) => void;
+  originalProxy: string;
+  savingProxy: boolean;
+  detectingProxy: boolean;
+  savingModel: boolean;
+  handleApplyModel: (model: string) => Promise<void>;
+  handleLockModelChange: (checked: boolean) => Promise<void>;
+  handleAgentAutonomyChange: (mode: string) => Promise<void>;
+  handleTrustedCommandsModeChange: (mode: string) => Promise<void>;
+  handleCustomTrustedCommandsChange: (commands: string) => Promise<void>;
+  handleTrustedToolsSave: (value: string) => Promise<void>;
+  handleConfigureMcpChange: (mode: string) => Promise<void>;
+  handleApplyProxy: () => Promise<void>;
+  handleDetectProxy: () => Promise<void>;
+  t: (key: string) => string;
+}
+
 function SettingsKiro({
   aiModel,
   lockModel,
@@ -33,7 +60,7 @@ function SettingsKiro({
   handleApplyProxy,
   handleDetectProxy,
   t
-}) {
+}: SettingsKiroProps) {
   const proxyChanged = httpProxy !== originalProxy
 
   return (
@@ -65,14 +92,14 @@ function SettingsKiro({
             </div>
 
             {/* 锁定模型 */}
-            <label className="flex items-center gap-3 cursor-pointer rounded-lg p-3 border border-border bg-muted/30 hover:bg-muted/50">
+            <div className="flex items-center gap-3 cursor-pointer rounded-lg p-3 border border-border bg-muted/30 hover:bg-muted/50">
               <Switch checked={lockModel} onCheckedChange={handleLockModelChange} />
               <Lock size={14} className="text-muted-foreground" />
               <div>
                 <span className="text-sm text-foreground">{t('settings.lockModel')}</span>
                 <p className="text-xs text-muted-foreground">{t('settings.lockModelDesc')}</p>
               </div>
-            </label>
+            </div>
 
             {/* Agent 自主模式 */}
             <div>
@@ -153,7 +180,7 @@ function SettingsKiro({
                 <button
                   onClick={handleDetectProxy}
                   disabled={detectingProxy}
-                  className="btn-icon px-3 py-2 border rounded-lg bg-card hover:bg-muted/50 border-border text-foreground flex items-center gap-1 text-xs"
+                  className="px-3 py-2 border rounded-lg bg-card hover:bg-muted/50 border-border text-foreground flex items-center gap-1 text-xs"
                   title={t('settings.detectProxyTitle')}
                 >
                   {detectingProxy ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
@@ -162,7 +189,7 @@ function SettingsKiro({
                 <button
                   onClick={handleApplyProxy}
                   disabled={savingProxy || !proxyChanged}
-                  className={`btn-icon px-3 py-2 rounded-lg flex items-center gap-1 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed border ${proxyChanged
+                  className={`px-3 py-2 rounded-lg flex items-center gap-1 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed border ${proxyChanged
                     ? "bg-primary text-primary-foreground border-primary"
                     : "bg-muted text-muted-foreground border-border"
                     }`}

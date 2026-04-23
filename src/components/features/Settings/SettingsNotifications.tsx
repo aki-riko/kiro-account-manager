@@ -2,6 +2,28 @@ import { Switch } from '../../ui/switch'
 import { Card, CardContent } from '../../ui/card'
 import React from 'react'
 
+interface SettingsNotificationsProps {
+  notifyActionRequired: boolean;
+  setNotifyActionRequired: (v: boolean) => void;
+  notifyFailure: boolean;
+  setNotifyFailure: (v: boolean) => void;
+  notifySuccess: boolean;
+  setNotifySuccess: (v: boolean) => void;
+  notifyBilling: boolean;
+  setNotifyBilling: (v: boolean) => void;
+  telemetryContentCollection: boolean;
+  setTelemetryContentCollection: (v: boolean) => void;
+  telemetryUsageAnalytics: boolean;
+  setTelemetryUsageAnalytics: (v: boolean) => void;
+  telemetryEditStats: boolean;
+  setTelemetryEditStats: (v: boolean) => void;
+  telemetryFeedback: boolean;
+  setTelemetryFeedback: (v: boolean) => void;
+  handleNotificationChange: (key: string, checked: boolean, setter: (v: boolean) => void) => Promise<void>;
+  handleTelemetryChange: (ideKey: string, checked: boolean, setter: (v: boolean) => void, appField: string) => Promise<void>;
+  t: (key: string) => string;
+}
+
 function SettingsNotifications({
   notifyActionRequired,
   setNotifyActionRequired,
@@ -22,7 +44,7 @@ function SettingsNotifications({
   handleNotificationChange,
   handleTelemetryChange,
   t
-}) {
+}: SettingsNotificationsProps) {
   return (
     <>
       {/* 通知设置 */}
@@ -32,22 +54,22 @@ function SettingsNotifications({
           <p className="text-sm text-muted-foreground mb-4">{t('settings.notificationsDesc')}</p>
 
           <div className="grid grid-cols-2 gap-2">
-            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
+            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
               <Switch checked={notifyActionRequired} onCheckedChange={(checked) => handleNotificationChange('kiroAgent.notifications.agent.actionRequired', checked, setNotifyActionRequired)} />
               <span className="text-xs text-foreground">{t('settings.notifyActionRequired')}</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
+            </div>
+            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
               <Switch checked={notifyFailure} onCheckedChange={(checked) => handleNotificationChange('kiroAgent.notifications.agent.failure', checked, setNotifyFailure)} />
               <span className="text-xs text-foreground">{t('settings.notifyFailure')}</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
+            </div>
+            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
               <Switch checked={notifySuccess} onCheckedChange={(checked) => handleNotificationChange('kiroAgent.notifications.agent.success', checked, setNotifySuccess)} />
               <span className="text-xs text-foreground">{t('settings.notifySuccess')}</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
+            </div>
+            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
               <Switch checked={notifyBilling} onCheckedChange={(checked) => handleNotificationChange('kiroAgent.notifications.billing', checked, setNotifyBilling)} />
               <span className="text-xs text-foreground">{t('settings.notifyBilling')}</span>
-            </label>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -59,22 +81,22 @@ function SettingsNotifications({
           <p className="text-sm text-muted-foreground mb-4">{t('settings.telemetryDesc')}</p>
 
           <div className="grid grid-cols-2 gap-2">
-            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
+            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
               <Switch checked={telemetryContentCollection} onCheckedChange={(checked) => handleTelemetryChange('telemetry.dataSharingAndPromptLogging.contentCollectionForServiceImprovement', checked, setTelemetryContentCollection, 'telemetryContentCollection')} />
               <span className="text-xs text-foreground">{t('settings.telemetryContentCollection')}</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
+            </div>
+            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
               <Switch checked={telemetryUsageAnalytics} onCheckedChange={(checked) => handleTelemetryChange('telemetry.dataSharingAndPromptLogging.usageAnalyticsAndPerformanceMetrics', checked, setTelemetryUsageAnalytics, 'telemetryUsageAnalytics')} />
               <span className="text-xs text-foreground">{t('settings.telemetryUsageAnalytics')}</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
+            </div>
+            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
               <Switch checked={telemetryEditStats} onCheckedChange={(checked) => handleTelemetryChange('telemetry.editStats.enabled', checked, setTelemetryEditStats, 'telemetryEditStats')} />
               <span className="text-xs text-foreground">{t('settings.telemetryEditStats')}</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
+            </div>
+            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
               <Switch checked={telemetryFeedback} onCheckedChange={(checked) => handleTelemetryChange('telemetry.feedback.enabled', checked, setTelemetryFeedback, 'telemetryFeedback')} />
               <span className="text-xs text-foreground">{t('settings.telemetryFeedback')}</span>
-            </label>
+            </div>
           </div>
         </CardContent>
       </Card>

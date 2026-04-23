@@ -3,8 +3,14 @@ import { Card, CardContent } from '../../ui/card'
 import { buildThemeOptions } from './settingsConstants'
 import React from 'react'
 
-function SettingsAppearance({ theme, setTheme, t }) {
-  const themeIconMap = { Sun, Moon, Palette }
+interface SettingsAppearanceProps {
+  theme: string;
+  setTheme: (theme: string) => void;
+  t: (key: string) => string;
+}
+
+function SettingsAppearance({ theme, setTheme, t }: SettingsAppearanceProps) {
+  const themeIconMap: Record<string, any> = { Sun, Moon, Palette }
   const themeOptions = buildThemeOptions(t)
 
   return (
@@ -16,7 +22,7 @@ function SettingsAppearance({ theme, setTheme, t }) {
             <p className="text-xs text-muted-foreground mt-0.5">{t('settings.themeDesc')}</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
-            {themeOptions.map((opt) => {
+            {themeOptions.map((opt: any) => {
               const Icon = themeIconMap[opt.iconName]
               const isActive = theme === opt.key
               return (

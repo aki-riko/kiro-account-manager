@@ -13,6 +13,7 @@ import { useDialog } from '../../../contexts/DialogContext'
 import alipayQR from '../../../assets/donate/alipay.jpg'
 import wechatQR from '../../../assets/donate/wechat.jpg'
 import { isLightTheme as checkIsLightTheme } from '../../../utils/themeMode'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 // 常量定义
 const QQ_NUMBER = '1292548381'

@@ -5,10 +5,43 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { formatGatewayRequestDuration, getGatewayRequestOutcomeColor } from './gatewayPageUtils'
+import { formatGatewayRequestDuration } from './gatewayPageUtils'
 import { GatewayCodeCard, GatewayPathCard, GatewaySectionHeader, GatewayStatCard, GatewaySubCard, GatewaySurfaceCard } from './GatewayShared'
+import React from 'react'
 
-function GatewayMetricListCard({ title, children }) {
+interface GatewayObservabilityProps {
+  colors: any;
+  observabilityHighlights: any[];
+  effectiveConfig: any;
+  status: any;
+  loading: boolean;
+  handleRefresh: () => Promise<void>;
+  handleClearErrors: () => void;
+  errorHistory: any[];
+  statusSummary: any;
+  hasUnsavedChanges: boolean;
+  filteredRequestLogSummary: any;
+  integrationSummary: any;
+  logDir: string;
+  handleOpenLogDir: () => Promise<void>;
+  loadRequestLogs: (limit?: number) => Promise<void>;
+  requestLogsLoading: boolean;
+  handleClearRequestLogs: () => Promise<void>;
+  requestLogs: any[];
+  lastRequestLogsSyncAt: string;
+  requestLogOutcome: string;
+  setRequestLogOutcome: (value: string) => void;
+  selectClassNames: any;
+  requestLogQuery: string;
+  setRequestLogQuery: (value: string) => void;
+  inputClassNames: any;
+  requestLogSummary: any;
+  requestMetrics: any;
+  renderMetricList: (items: any[], emptyLabel: string) => React.ReactNode;
+  filteredRequestLogs: any[];
+}
+
+function GatewayMetricListCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <GatewaySubCard>
       <div className="text-xs font-semibold">{title}</div>
@@ -19,7 +52,7 @@ function GatewayMetricListCard({ title, children }) {
   )
 }
 
-function GatewayErrorHistoryCard({ errorHistory }) {
+function GatewayErrorHistoryCard({ errorHistory }: { errorHistory: any[] }) {
   const entries = errorHistory.length
     ? errorHistory
     : [{ message: '暂无流式错误', firstSeenAt: '-', lastSeenAt: '-', count: 1 }]
@@ -46,7 +79,7 @@ function GatewayErrorHistoryCard({ errorHistory }) {
   )
 }
 
-function GatewayRequestLogEntry({ colors, item, itemKey }) {
+function GatewayRequestLogEntry({ colors, item, itemKey }: { colors: any; item: any; itemKey: string }) {
   return (
     <GatewaySubCard key={itemKey}>
       <div className="flex flex-col gap-2">
@@ -135,7 +168,7 @@ function GatewayObservability({
   requestLogSummary,
   requestMetrics,
   renderMetricList,
-  filteredRequestLogs}) {
+  filteredRequestLogs}: GatewayObservabilityProps) {
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
@@ -166,7 +199,7 @@ function GatewayObservability({
                   <Badge variant={effectiveConfig.localOnly ? 'default' : 'secondary'}>{effectiveConfig.localOnly ? '仅本机' : '允许远程'}</Badge>
                   <Badge variant={status.running ? 'default' : 'destructive'}>{status.running ? '运行中' : '已停止'}</Badge>
                   <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-                    <RefreshCw size={14} className="mr-1" />
+                    <RefreshCw size={14} className={`mr-1 ${loading ? 'animate-spin' : ''}`} />
                     刷新状态
                   </Button>
                   <Button variant="outline" size="sm" onClick={handleClearErrors} disabled={!errorHistory.length}>
@@ -185,7 +218,7 @@ function GatewayObservability({
               <GatewayStatCard colors={colors} label="最后同步" value={statusSummary.sync} />
             </div>
 
-            <Alert variant={errorHistory.length ? 'default' : 'default'}>
+            <Alert>
               <AlertTitle>运行摘要</AlertTitle>
               <AlertDescription>
                 {`错误历史 ${statusSummary.errorCount}，当前${status.running ? '已启动' : '未启动'}，${hasUnsavedChanges ? '页面存在未保存变更。' : '页面配置已与已保存状态同步。'}`}
@@ -236,7 +269,7 @@ function GatewayObservability({
         </GatewaySurfaceCard>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 mt-4">
         <GatewaySurfaceCard colors={colors}>
           <div className="flex flex-col gap-3">
             <GatewaySectionHeader
@@ -252,7 +285,7 @@ function GatewayObservability({
                     onClick={() => loadRequestLogs()}
                     disabled={requestLogsLoading}
                   >
-                    <RefreshCw size={14} className="mr-1" />
+                    <RefreshCw size={14} className={`mr-1 ${requestLogsLoading ? 'animate-spin' : ''}`} />
                     刷新日志
                   </Button>
                   <Button

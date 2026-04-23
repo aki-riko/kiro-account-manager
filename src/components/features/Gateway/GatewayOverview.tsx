@@ -2,6 +2,26 @@ import { Check, Copy, FolderOpen, Radio, RefreshCw, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Stack, Group, Badge, Card, Code, Text } from '@/components/shared/layout'
 import { GatewayPathCard, GatewaySectionHeader, GatewayStatCard, GatewaySubCard, GatewaySurfaceCard } from './GatewayShared'
+import React from 'react'
+
+interface GatewayOverviewProps {
+  colors: any;
+  loading: boolean;
+  handleRefresh: () => Promise<void>;
+  effectiveBaseUrl: string;
+  effectiveRoutingSummary: any;
+  effectiveSecuritySummary: any;
+  statusSummary: any;
+  actionSummary: any;
+  operationsChecklist: any[];
+  clientSamples: any;
+  copyText: (text: string, msg: string) => Promise<void>;
+  handleOpenLogDir: () => Promise<void>;
+  copySuccess: string;
+  effectiveConfig: any;
+  logDir: string;
+  latestErrorEntry: any;
+}
 
 function GatewayOverview({
   colors,
@@ -19,7 +39,7 @@ function GatewayOverview({
   copySuccess,
   effectiveConfig,
   logDir,
-  latestErrorEntry}) {
+  latestErrorEntry}: GatewayOverviewProps) {
   const overviewTone = latestErrorEntry ? 'orange' : actionSummary.tone
 
   return (
@@ -31,8 +51,8 @@ function GatewayOverview({
             icon={Radio}
             title="控制台总览"
             actions={(
-              <Button variant="light" size="xs" onClick={handleRefresh}>
-                <RefreshCw size={14} className="mr-1" />
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+                <RefreshCw size={14} className={`mr-1 ${loading ? 'animate-spin' : ''}`} />
                 刷新
               </Button>
             )}
@@ -128,7 +148,7 @@ function GatewayOverview({
               <Stack gap={8}>
                 <Text size="xs" className={"text-muted-foreground"}>快速复制</Text>
                 <Text fw={700} className={"text-foreground"}>基础入口</Text>
-                <Button variant="light" size="xs" onClick={() => copyText(effectiveBaseUrl, '网关入口已复制')}>
+                <Button variant="outline" size="sm" onClick={() => copyText(effectiveBaseUrl, '网关入口已复制')}>
                   <Copy size={14} className="mr-1" />
                   复制入口地址
                 </Button>
@@ -139,8 +159,8 @@ function GatewayOverview({
                 <Text size="xs" className={"text-muted-foreground"}>OpenAI 兼容接入</Text>
                 <Text fw={700} className={"text-foreground"}>OpenAI Responses 兼容</Text>
                 <Button
-                  variant="light"
-                  size="xs"
+                  variant="outline"
+                  size="sm"
                   onClick={() => copyText(clientSamples.openai.env, 'OpenAI 兼容配置已复制')}
                 >
                   <Copy size={14} className="mr-1" />
@@ -152,7 +172,7 @@ function GatewayOverview({
               <Stack gap={8}>
                 <Text size="xs" className={"text-muted-foreground"}>排障入口</Text>
                 <Text fw={700} className={"text-foreground"}>日志目录</Text>
-                <Button variant="light" size="xs" onClick={handleOpenLogDir}>
+                <Button variant="outline" size="sm" onClick={handleOpenLogDir}>
                   <FolderOpen size={14} className="mr-1" />
                   打开日志目录
                 </Button>

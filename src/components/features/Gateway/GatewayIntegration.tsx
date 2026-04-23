@@ -2,6 +2,17 @@ import { Check, Copy } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { GatewayCodeCard, GatewaySectionHeader, GatewayStatCard, GatewaySubCard, GatewaySurfaceCard } from './GatewayShared'
+import React from 'react'
+
+interface GatewayIntegrationProps {
+  colors: any;
+  integrationGuidance: any[];
+  integrationSummary: any;
+  effectiveConnectHost: string;
+  clientSamples: any;
+  copyText: (text: string, msg: string) => Promise<void>;
+  copySuccess: string;
+}
 
 function GatewayIntegration({
   colors,
@@ -10,7 +21,7 @@ function GatewayIntegration({
   effectiveConnectHost,
   clientSamples,
   copyText,
-  copySuccess}) {
+  copySuccess}: GatewayIntegrationProps) {
   return (
     <div className="grid grid-cols-1 gap-4">
       <GatewaySurfaceCard colors={colors}>

@@ -1,7 +1,28 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { X, ChevronDown, Tag } from 'lucide-react'
-import { useTheme } from '../../../contexts/ThemeContext'
+import { useApp } from '../../../hooks/useApp'
 import { isPointerInsideContainer } from './utils/pointerInside'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
+import React from 'react'
+
+interface TagItem {
+  id: string;
+  name: string;
+  color?: string;
+}
+
+interface SearchableTagSelectProps {
+  tags?: TagItem[];
+  value?: string | null;
+  onChange: (value: string | null) => void;
+  placeholder?: string;
+  showAllOption?: boolean;
+  showNoneOption?: boolean;
+  allLabel?: string;
+  noneLabel?: string;
+  hasLabel?: string;
+  className?: string;
+}
 
 /**
  * 可搜索的标签选择下拉框
@@ -16,18 +37,19 @@ function SearchableTagSelect({
   allLabel = '全部',
   noneLabel = '无标签',
   hasLabel = '有标签',
-  className = ''}) {
-  const { colors, theme } = useTheme()
-    const activeOptionClass = `${accent.bgSoft} ${accent.text} font-medium`
+  className = ''}: SearchableTagSelectProps) {
+  const { theme } = useApp()
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
+  const activeOptionClass = `${accent.bgSoft} ${accent.text} font-medium`
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const containerRef = useRef(null)
-  const panelRef = useRef(null)
-  const inputRef = useRef(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   // 点击外部关闭
   useEffect(() => {
-    const handleClickOutside = (e) => {
+    const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !isPointerInsideContainer(e, [containerRef.current, panelRef.current])) {
         setOpen(false)
         setSearch('')
@@ -53,7 +75,7 @@ function SearchableTagSelect({
   const selectedTag = tags.find(t => t.id === value)
 
   // 选择标签
-  const handleSelect = (tagId) => {
+  const handleSelect = (tagId: string | null) => {
     onChange(tagId)
     setOpen(false)
     setSearch('')
@@ -65,7 +87,7 @@ function SearchableTagSelect({
   return (
     <div className={`relative ${className}`} ref={containerRef}>
       {/* 输入框（可搜索） */}
-      <div className={`w-full flex items-center border rounded-xl text-sm bg-background border-input ${colors.inputFocus} ${open ? `ring-2 ${accent.ring} ${accent.border}` : ''} transition-all cursor-pointer`}>
+      <div className={`w-full flex items-center border rounded-xl text-sm bg-background border-input ${open ? `ring-2 ${accent.ring} ${accent.border}` : ''} transition-all cursor-pointer shadow-sm`}>
         {selectedTag && (
           <span className="ml-4 w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: selectedTag.color }} />
         )}

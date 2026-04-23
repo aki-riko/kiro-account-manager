@@ -2,15 +2,14 @@ import { useRef, useMemo, useState, useEffect, useCallback, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Users, Plus, Eye, Edit2, Copy, Key, BarChart3, Repeat, Trash2, UserX } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
-import { useTranslation } from 'react-i18next'
 import { useApp } from '../../../hooks/useApp'
-import { useTheme } from '../../../contexts/ThemeContext'
 import { getAccountStatusMeta, isBannedStatus, isUnavailableStatus } from '../../../utils/accountStatus'
 import AccountCard from './AccountCard'
 import ContextMenu from './ContextMenu'
+import React from 'react'
 
 // 根据容器宽度计算列数
-function getColumnCount(width) {
+function getColumnCount(width: number) {
   if (width >= 1280) return 4
   if (width >= 1024) return 3
   if (width >= 768) return 2
@@ -38,21 +37,20 @@ const VirtualRow = memo(function VirtualRow({
   groupDefinitions,
   accountRowStateById,
   onLoadAvailableModels,
-  colors,
   t,
-  onContextMenuOpen}) {
+  onContextMenuOpen}: any) {
   return (
     <div className="gap-6 pb-6" style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-      {row.map(item => {
+      {row.map((item: any) => {
         if (item._isAddButton) {
-          return <AddButton key="add" onClick={onAdd} colors={colors} t={t} />
+          return <AddButton key="add" onClick={onAdd} t={t} />
         }
         return (
           <AccountCard
             key={item.id}
             account={item}
             selectedIdsSet={selectedIdsSet}
-            onSelect={(checked) => onSelectOne(item.id, checked)}
+            onSelect={(checked: boolean) => onSelectOne(item.id, checked)}
             copiedId={copiedId}
             onCopy={onCopy}
             onSwitch={onSwitch}
@@ -69,13 +67,13 @@ const VirtualRow = memo(function VirtualRow({
             availableModelsLoading={Boolean(accountRowStateById?.[item.id]?.availableModelsLoading)}
             availableModelsError={accountRowStateById?.[item.id]?.availableModelsError ?? ''}
             onLoadAvailableModels={onLoadAvailableModels}
-            onContextMenuOpen={(x, y) => onContextMenuOpen(item.id, x, y, item)}
+            onContextMenuOpen={(x: number, y: number) => onContextMenuOpen(item.id, x, y, item)}
           />
         )
       })}
     </div>
   )
-}, (prev, next) => {
+}, (prev: any, next: any) => {
   if (prev.row !== next.row || prev.columns !== next.columns) return false
   if (prev.copiedId !== next.copiedId) return false
   if (prev.localToken !== next.localToken) return false
@@ -112,15 +110,15 @@ function AccountTable({
   tagDefinitions = [],
   groupDefinitions = [],
   accountRowStateById = {},
-  onLoadAvailableModels}) {
-  const { t} = useApp()
-  const containerRef = useRef(null)
-  const scrollRef = useRef(null)
+  onLoadAvailableModels}: any) {
+  const { t } = useApp()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [columns, setColumns] = useState(4)
-  const [contextMenuState, setContextMenuState] = useState(null) // { accountId, x, y, account }
+  const [contextMenuState, setContextMenuState] = useState<any>(null) // { accountId, x, y, account }
 
   // 打开右键菜单
-  const handleContextMenuOpen = useCallback((accountId, x, y, account) => {
+  const handleContextMenuOpen = useCallback((accountId: string, x: number, y: number, account: any) => {
     setContextMenuState({ accountId, x, y, account })
   }, [])
 
@@ -130,13 +128,13 @@ function AccountTable({
   }, [])
 
   // 生成菜单项
-  const getMenuItems = useCallback((account) => {
+  const getMenuItems = useCallback((account: any) => {
     const isBanned = isBannedStatus(account)
     const isUnavailable = isUnavailableStatus(account)
     const statusMeta = getAccountStatusMeta(account, t)
     const rowState = accountRowStateById?.[account.id] ?? {}
 
-    const items = [
+    const items: any[] = [
       { icon: Eye, label: t('accountCard.viewDetails'), onClick: () => onEdit(account) },
       { icon: Edit2, label: t('accountCard.editRemark'), onClick: () => onEditLabel(account) },
       { icon: Copy, label: t('accountCard.copyJson'), onClick: () => onCopy(JSON.stringify(account, null, 2), account.id) },
@@ -158,7 +156,7 @@ function AccountTable({
   useEffect(() => {
     if (!containerRef.current) return
     const updateColumns = () => {
-      const width = containerRef.current?.offsetWidth - 48 || 0
+      const width = containerRef.current?.offsetWidth ? containerRef.current.offsetWidth - 48 : 0
       setColumns(getColumnCount(width))
     }
     updateColumns()
@@ -211,7 +209,7 @@ function AccountTable({
           </div>
           <p className="font-medium mb-1">{t('common.noAccounts')}</p>
           <p className="text-sm opacity-75">{t('common.addAccountHint')}</p>
-          <button onClick={onAdd} className={`mt-4 px-4 py-2 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors`}>
+          <button onClick={onAdd} className={`mt-4 px-4 py-2 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer`}>
             <Plus size={16} className="inline mr-1" />
             {t('common.addAccount')}
           </button>
@@ -255,7 +253,6 @@ function AccountTable({
                     groupDefinitions={groupDefinitions}
                     accountRowStateById={accountRowStateById}
                     onLoadAvailableModels={onLoadAvailableModels}
-                    colors={colors}
                     t={t}
                     onContextMenuOpen={handleContextMenuOpen}
                   />
@@ -279,11 +276,11 @@ function AccountTable({
   )
 }
 
-const AddButton = memo(function AddButton({ onClick, colors, t }) {
+const AddButton = memo(function AddButton({ onClick, t }: any) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-2xl border-2 border-dashed min-h-[240px] flex flex-col items-center justify-center gap-2.5 ${colors.dashedBorder} ${colors.dashedBorderHover}`}
+      className={`rounded-2xl border-2 border-dashed border-border hover:border-muted-foreground/50 transition-colors min-h-[240px] flex flex-col items-center justify-center gap-2.5 cursor-pointer`}
     >
       <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-muted/30`}>
         <Plus size={20} className={"text-muted-foreground"} />

@@ -1,11 +1,13 @@
-﻿import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Filter, X } from 'lucide-react'
-import { useTheme } from '../../../contexts/ThemeContext'
+import { useApp } from '../../../hooks/useApp'
 import { useTranslation } from 'react-i18next'
 import SearchableTagSelect from './SearchableTagSelect'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 import { buildFilterSummaryItems, countActiveFilters } from './utils/filterDropdownState'
 import { isPointerInsideContainer } from './utils/pointerInside'
+import React from 'react'
 
 const SUBSCRIPTION_OPTIONS = [
   { value: '', label: '全部' },
@@ -38,7 +40,18 @@ const USAGE_RANGE_OPTIONS = [
   { value: '2000-+', label: '2000+' },
 ]
 
-function SectionCard({ title, subtitle, children, colors }) {
+interface FilterDropdownProps {
+  filters: any;
+  onFiltersChange: (filters: any) => void;
+  allGroups?: any[];
+  selectedGroup?: any;
+  onGroupFilter?: (group: any) => void;
+  allTags?: any[];
+  selectedTag?: any;
+  onTagFilter: (tag: any) => void;
+}
+
+function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <section className={`rounded-xl border border-border bg-muted/30 p-3 space-y-3`}>
       <div>
@@ -50,7 +63,7 @@ function SectionCard({ title, subtitle, children, colors }) {
   )
 }
 
-function FilterField({ label, hint, active, colors, accent, children, fullWidth = false }) {
+function FilterField({ label, hint, active, accent, children, fullWidth = false }: any) {
   return (
     <div
       className={`
@@ -81,7 +94,7 @@ function FilterField({ label, hint, active, colors, accent, children, fullWidth 
   )
 }
 
-function FilterSelect({ label, hint, value, options, onChange, onClear, colors, accent }) {
+function FilterSelect({ label, hint, value, options, onChange, onClear, accent }: any) {
   const displayValue = Array.isArray(value) ? (value[0] || '') : (value || '')
   const hasValue = displayValue !== ''
 
@@ -90,7 +103,6 @@ function FilterSelect({ label, hint, value, options, onChange, onClear, colors, 
       label={label}
       hint={hint}
       active={hasValue}
-      colors={colors}
       accent={accent}
     >
       <div className="relative">
@@ -104,9 +116,9 @@ function FilterSelect({ label, hint, value, options, onChange, onClear, colors, 
               onChange(nextValue)
             }
           }}
-          className={`w-full px-3 py-2.5 ${hasValue ? 'pr-9' : 'pr-3'} text-sm rounded-lg border bg-background border-input ${colors.inputFocus} text-foreground transition-all duration-200 cursor-pointer shadow-sm`}
+          className={`w-full px-3 py-2.5 ${hasValue ? 'pr-9' : 'pr-3'} text-sm rounded-lg border bg-background border-input text-foreground transition-all duration-200 cursor-pointer shadow-sm`}
         >
-          {options.map(opt => (
+          {options.map((opt: any) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
@@ -137,16 +149,17 @@ function FilterDropdown({
   onGroupFilter,
   allTags = [],
   selectedTag,
-  onTagFilter}) {
-  const { colors, theme } = useTheme()
+  onTagFilter}: FilterDropdownProps) {
+  const { theme } = useApp()
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
   
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const dropdownRef = useRef(null)
-  const panelRef = useRef(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handleClickOutside = (e) => {
+    const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !isPointerInsideContainer(e, [dropdownRef.current, panelRef.current])) {
         setOpen(false)
       }
@@ -277,7 +290,6 @@ function FilterDropdown({
               <SectionCard
                 title="基础筛选"
                 subtitle="优先按标签缩小范围，适合高频定位。"
-                colors={colors}
               >
                 <div>
                   <label className={`block text-xs font-medium text-muted-foreground mb-2`}>
@@ -301,7 +313,6 @@ function FilterDropdown({
             <SectionCard
               title="高级筛选"
               subtitle="按订阅、状态、登录方式、使用量和分组进一步精确收敛。"
-              colors={colors}
             >
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <FilterSelect
@@ -309,9 +320,8 @@ function FilterDropdown({
                   hint="适合快速筛出不同套餐层级的账号。"
                   value={filters.subscriptions?.length > 0 ? filters.subscriptions[0] : ''}
                   options={SUBSCRIPTION_OPTIONS}
-                  onChange={(value) => onFiltersChange({ ...filters, subscriptions: [value] })}
+                  onChange={(value: string) => onFiltersChange({ ...filters, subscriptions: [value] })}
                   onClear={() => onFiltersChange({ ...filters, subscriptions: [] })}
-                  colors={colors}
                   accent={accent}
                 />
 
@@ -320,9 +330,8 @@ function FilterDropdown({
                   hint="查看正常、封顶、失效等当前状态。"
                   value={filters.statuses?.length > 0 ? filters.statuses[0] : ''}
                   options={STATUS_OPTIONS}
-                  onChange={(value) => onFiltersChange({ ...filters, statuses: [value] })}
+                  onChange={(value: string) => onFiltersChange({ ...filters, statuses: [value] })}
                   onClear={() => onFiltersChange({ ...filters, statuses: [] })}
-                  colors={colors}
                   accent={accent}
                 />
 
@@ -331,9 +340,8 @@ function FilterDropdown({
                   hint="按登录来源区分 Google、GitHub 等账号。"
                   value={filters.providers?.length > 0 ? filters.providers[0] : ''}
                   options={PROVIDER_OPTIONS}
-                  onChange={(value) => onFiltersChange({ ...filters, providers: [value] })}
+                  onChange={(value: string) => onFiltersChange({ ...filters, providers: [value] })}
                   onClear={() => onFiltersChange({ ...filters, providers: [] })}
-                  colors={colors}
                   accent={accent}
                 />
 
@@ -342,9 +350,8 @@ function FilterDropdown({
                   hint="快速关注不同 usage 区间的账号。"
                   value={filters.usageRange || ''}
                   options={USAGE_RANGE_OPTIONS}
-                  onChange={(value) => onFiltersChange({ ...filters, usageRange: value })}
+                  onChange={(value: string) => onFiltersChange({ ...filters, usageRange: value })}
                   onClear={() => onFiltersChange({ ...filters, usageRange: null })}
-                  colors={colors}
                   accent={accent}
                 />
 
@@ -353,7 +360,6 @@ function FilterDropdown({
                     label={t('groups.title') || '分组'}
                     hint="不常用时放最后，需要时也能直接搜索或切到有/无分组。"
                     active={Boolean(selectedGroup)}
-                    colors={colors}
                     accent={accent}
                     fullWidth
                   >
