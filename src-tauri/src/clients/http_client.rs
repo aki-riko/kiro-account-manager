@@ -9,11 +9,41 @@ use uuid::Uuid;
 const KIRO_APP_VERSION_FALLBACK: &str = "0.0.0";
 const SUPPORTED_KIRO_REGIONS: &[&str] = &[
     "us-east-1",
+    "us-east-2",
+    "us-west-1",
+    "us-west-2",
+    "eu-west-1",
+    "eu-west-2",
+    "eu-west-3",
+    "eu-central-1",
+    "eu-north-1",
+    "eu-south-1",
+    "ap-northeast-1",
+    "ap-northeast-2",
+    "ap-northeast-3",
+    "ap-southeast-1",
+    "ap-southeast-2",
+    "ap-south-1",
+    "ap-east-1",
+    "ca-central-1",
+    "sa-east-1",
+    "me-south-1",
+    "af-south-1",
+    "us-gov-west-1",
+];
+
+// 企业账号多区域探测优先级列表（按使用频率排序）
+const USAGE_PROBE_REGIONS: &[&str] = &[
+    "us-east-1",
     "eu-central-1",
     "us-west-2",
     "ap-northeast-1",
+    "us-east-2",
+    "eu-west-1",
     "ap-southeast-1",
-    "us-gov-west-1",
+    "us-west-1",
+    "eu-west-2",
+    "ap-northeast-2",
 ];
 
 fn normalize_kiro_region(region: Option<&str>) -> Option<String> {
@@ -195,12 +225,12 @@ pub fn resolve_kiro_upstream_region(
         .unwrap_or_else(|| "us-east-1".to_string())
 }
 
-pub fn resolve_q_service_endpoint(region: Option<&str>) -> &'static str {
-    if normalize_kiro_region(region).is_some_and(|value| value.starts_with("eu-")) {
-        "https://q.eu-central-1.amazonaws.com"
-    } else {
-        "https://q.us-east-1.amazonaws.com"
-    }
+pub fn get_usage_probe_regions() -> &'static [&'static str] {
+    USAGE_PROBE_REGIONS
+}
+
+pub fn build_q_service_url(region: &str) -> String {
+    format!("https://q.{}.amazonaws.com", region)
 }
 
 pub fn should_send_codewhisperer_optout() -> bool {
@@ -344,29 +374,9 @@ pub fn build_http_client_with_user_agent(user_agent: &str) -> Result<Client, Str
 mod tests {
     use super::{
         apply_kiro_runtime_headers, is_external_idp_auth_method, is_supported_kiro_region,
-        parse_region_from_profile_arn, resolve_kiro_upstream_region, resolve_q_service_endpoint,
+        parse_region_from_profile_arn, resolve_kiro_upstream_region,
         should_add_redirect_for_internal,
     };
-
-    #[test]
-    fn resolve_q_service_endpoint_matches_upstream_region_rule() {
-        assert_eq!(
-            resolve_q_service_endpoint(Some("eu-west-1")),
-            "https://q.us-east-1.amazonaws.com"
-        );
-        assert_eq!(
-            resolve_q_service_endpoint(Some("eu-central-1")),
-            "https://q.eu-central-1.amazonaws.com"
-        );
-        assert_eq!(
-            resolve_q_service_endpoint(Some("us-east-1")),
-            "https://q.us-east-1.amazonaws.com"
-        );
-        assert_eq!(
-            resolve_q_service_endpoint(None),
-            "https://q.us-east-1.amazonaws.com"
-        );
-    }
 
     #[test]
     fn parse_region_from_profile_arn_accepts_supported_regions_only() {
