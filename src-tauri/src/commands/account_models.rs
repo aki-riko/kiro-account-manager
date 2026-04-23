@@ -2,7 +2,7 @@ use crate::core::account::{Account, AvailableModelsCacheEntry};
 use crate::commands::machine_guid::get_machine_id;
 use crate::clients::http_client::{
     apply_kiro_runtime_headers, build_http_client_with_user_agent, build_kiro_custom_user_agent,
-    resolve_kiro_upstream_region, resolve_q_service_endpoint,
+    build_q_service_url, resolve_kiro_upstream_region,
 };
 use serde::{Deserialize, Serialize};
 
@@ -164,9 +164,9 @@ async fn fetch_available_models_page(
         account.region.as_deref(),
         "us-east-1",
     );
-    let base_url = resolve_q_service_endpoint(Some(&region));
+    let base_url = build_q_service_url(&region);
     let url = build_list_available_models_url(
-        base_url,
+        &base_url,
         account.profile_arn.as_deref(),
         model_provider,
         next_token,
