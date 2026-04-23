@@ -479,19 +479,13 @@ function Settings() {
                     <TabsContent value="kiro">
                         <SettingsKiro
                             aiModel={aiModel}
-                            setAiModel={setAiModel}
                             lockModel={lockModel}
-                            setLockModel={setLockModel}
                             agentAutonomy={agentAutonomy}
-                            setAgentAutonomy={setAgentAutonomy}
                             trustedCommandsMode={trustedCommandsMode}
-                            setTrustedCommandsMode={setTrustedCommandsMode}
                             customTrustedCommands={customTrustedCommands}
-                            setCustomTrustedCommands={setCustomTrustedCommands}
                             trustedTools={trustedTools}
                             setTrustedTools={setTrustedTools}
                             configureMcp={configureMcp}
-                            setConfigureMcp={setConfigureMcp}
                             httpProxy={httpProxy}
                             setHttpProxy={setHttpProxy}
                             originalProxy={originalProxy}
@@ -514,17 +508,11 @@ function Settings() {
                     <TabsContent value="agent">
                         <SettingsAgent
                             enableCodebaseIndexing={enableCodebaseIndexing}
-                            setEnableCodebaseIndexing={setEnableCodebaseIndexing}
                             enableTabAutocomplete={enableTabAutocomplete}
-                            setEnableTabAutocomplete={setEnableTabAutocomplete}
                             usageSummary={usageSummary}
-                            setUsageSummary={setUsageSummary}
                             codeReferences={codeReferences}
-                            setCodeReferences={setCodeReferences}
                             enableDebugLogs={enableDebugLogs}
-                            setEnableDebugLogs={setEnableDebugLogs}
                             referenceTracker={referenceTracker}
-                            setReferenceTracker={setReferenceTracker}
                             handleCodebaseIndexingChange={handleCodebaseIndexingChange}
                             handleTabAutocompleteChange={handleTabAutocompleteChange}
                             handleUsageSummaryChange={handleUsageSummaryChange}

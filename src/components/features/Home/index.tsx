@@ -35,6 +35,7 @@ function Home({ onNavigate }: HomeProps) {
     accounts: tokens, 
     localToken, 
     loading, 
+    refreshing,
     stats, 
     currentAccount,
     currentQuotaInfo,
@@ -124,6 +125,7 @@ function Home({ onNavigate }: HomeProps) {
           {/* 当前账号 */}
           <CurrentAccountCard 
             localToken={localToken}
+            refreshing={refreshing}
             handleRefresh={handleRefresh}
             colors={colors}
             t={t}

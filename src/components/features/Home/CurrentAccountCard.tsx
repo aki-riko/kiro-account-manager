@@ -4,13 +4,29 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { RefreshCw, Users, Clock } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
-
+import { useMemo } from 'react'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 import { getProviderDisplayName, isGitHubProvider } from '../../../utils/accountProvider'
+import React from 'react'
+
+interface CurrentAccountCardProps {
+  localToken: any;
+  refreshing: boolean;
+  handleRefresh: () => void;
+  colors: any;
+  t: any;
+}
 
 // 当前账号卡片
-function CurrentAccountCard({ localToken, refreshing, handleRefresh, colors, t }) {
+function CurrentAccountCard({ 
+  localToken, 
+  refreshing, 
+  handleRefresh, 
+  colors, 
+  t 
+}: CurrentAccountCardProps) {
   const { theme } = useApp()
-  
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
 
   return (
     <Card className="card-glow animate-scale-in delay-300">
@@ -76,8 +92,14 @@ function CurrentAccountCard({ localToken, refreshing, handleRefresh, colors, t }
   )
 }
 
+interface TokenDetailPopoverProps {
+  localToken: any;
+  colors: any;
+  t: any;
+}
+
 // Token 详情悬浮框
-function TokenDetailPopover({ localToken, colors, t }) {
+function TokenDetailPopover({ localToken, colors, t }: TokenDetailPopoverProps) {
   return (
     <Card className="absolute left-16 top-0 w-72 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none shadow-xl">
       <CardContent className="p-3 space-y-2">
