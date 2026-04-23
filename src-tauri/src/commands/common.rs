@@ -121,25 +121,12 @@ fn parse_usage_result(result: Result<serde_json::Value, String>) -> Result<Usage
 }
 
 pub fn is_auth_error_message(error: &str) -> bool {
-    // 临时封号不属于 token 过期/无效，需单独处理
-    if is_suspended_error_message(error) {
-        return false;
-    }
     let lower = error.to_lowercase();
     error.starts_with("AUTH_ERROR:")
         || error.contains("401")
         || error.contains("Unauthorized")
         || lower.contains("expired")
         || lower.contains("invalid")
-}
-
-/// 检测是否是临时封号错误（TemporarilySuspended）。
-/// 此类错误由 AWS 在账号异常时下发 403 + reason=TemporarilySuspended，
-/// 刷新 Token 对其无效，应直接向上层报告并跳过重试。
-pub fn is_suspended_error_message(error: &str) -> bool {
-    error.contains("TemporarilySuspended")
-        || error.contains("temporarily suspended")
-        || error.contains("TemporarilySuspended")
 }
 
 /// 计算过期时间字符串

@@ -4,6 +4,7 @@
 use reqwest::{Client, Proxy};
 use serde_json::Value;
 use std::{path::PathBuf, time::Duration};
+use uuid::Uuid;
 
 const KIRO_APP_VERSION_FALLBACK: &str = "0.0.0";
 const SUPPORTED_KIRO_REGIONS: &[&str] = &[
@@ -238,11 +239,15 @@ pub fn apply_kiro_runtime_headers(
     auth_method: Option<&str>,
     provider: Option<&str>,
 ) -> reqwest::RequestBuilder {
+    let invocation_id = uuid::Uuid::new_v4().to_string();
+
     let mut builder = builder
         .header(reqwest::header::AUTHORIZATION, format!("Bearer {access_token}"))
         .header(reqwest::header::ACCEPT, accept)
         .header(reqwest::header::USER_AGENT, user_agent)
-        .header("x-amz-user-agent", user_agent);
+        .header("x-amz-user-agent", user_agent)
+        .header("amz-sdk-invocation-id", invocation_id)
+        .header("amz-sdk-request", "attempt=1; max=1");
 
     if is_external_idp_auth_method(auth_method) {
         builder = builder.header("TokenType", "EXTERNAL_IDP");

@@ -11,8 +11,7 @@ use crate::commands::account_models::{
 };
 use crate::commands::common::{
     calc_expires_at, calc_status, extract_user_info, find_existing_account_idx,
-    get_usage_by_provider, is_auth_error_message, is_suspended_error_message,
-    refresh_token_by_provider, RefreshResult,
+    get_usage_by_provider, is_auth_error_message, refresh_token_by_provider, RefreshResult,
 };
 use crate::auth::providers::{AuthProvider, IdcProvider, KiroPortalClient, RefreshMetadata};
 use crate::state::AppState;
@@ -1242,10 +1241,6 @@ pub async fn list_available_models(
                 save_store(&store)?;
             }
             Ok(response)
-        }
-        // TemporarilySuspended：AWS 临时封号，刷新 Token 无法解除，直接报错
-        Err(error) if is_suspended_error_message(&error) => {
-            Err(format!("SUSPENDED: 账号已被临时封禁，请联系 AWS 支持解封。详情: {error}"))
         }
         Err(error) if is_auth_error_message(&error) => {
             let refresh = refresh_token_by_provider(&account).await?;

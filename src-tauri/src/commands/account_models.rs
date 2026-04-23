@@ -182,11 +182,32 @@ async fn fetch_available_models_page(
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        if status.as_u16() == 401 || status.as_u16() == 403 {
+
+        // 401 → token 过期，可尝试刷新
+        if status.as_u16() == 401 {
             return Err(format!(
                 "AUTH_ERROR: ListAvailableModels failed ({status}): {body}"
             ));
         }
+
+        // 403 → 解析 reason 字段，区分封禁和 token 无效
+        if status.as_u16() == 403 {
+            let reason = serde_json::from_str::<serde_json::Value>(&body)
+                .ok()
+                .and_then(|v| v.get("reason").and_then(|r| r.as_str()).map(str::to_string))
+                .unwrap_or_default();
+            // ListAvailableModels 封禁响应的 reason 精确值为 "TemporarilySuspended"
+            if reason == "TemporarilySuspended" {
+                return Err(format!(
+                    "BANNED: ListAvailableModels 403 封禁 ({reason}): {body}"
+                ));
+            }
+            // 其他 403（如 token 无效）→ 可尝试刷新
+            return Err(format!(
+                "AUTH_ERROR: ListAvailableModels failed ({status}): {body}"
+            ));
+        }
+
         return Err(format!("ListAvailableModels failed ({status}): {body}"));
     }
 
