@@ -123,27 +123,11 @@ pub struct UserInputMessage {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ImageBlock {
     pub format: String,
     pub source: ImageSource,
 }
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ImageSource {
-    pub bytes: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InferenceConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_tokens: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stop_sequences: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize)]

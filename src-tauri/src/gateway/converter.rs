@@ -1,6 +1,6 @@
 use crate::gateway::models::{
     AnthropicMessagesRequest, ConversationState, CurrentMessage, HistoryAssistantMessage,
-    HistoryItem, HistoryUserMessage, ImageBlock, ImageSource, InferenceConfig, KiroInputSchema,
+    HistoryItem, HistoryUserMessage, ImageBlock, ImageSource, KiroInputSchema,
     KiroPayload, KiroTool, KiroToolResult, KiroToolResultContent, KiroToolSpec, KiroToolUse,
     ModelInfo, NormalizedMessage, NormalizedRequest, Tool, ToolCall, ToolCallFunction,
     ToolFunction, UserInputMessage, UserInputMessageContext, WebSearchToolOptions,
@@ -787,23 +787,7 @@ fn extract_anthropic_tool_result_id(content: &Value) -> Option<String> {
         } else {
             None
         }
-    })
-}
-
-fn build_inference_config(request: &NormalizedRequest) -> Option<InferenceConfig> {
-    if request.max_tokens.is_none()
-        && request.temperature.is_none()
-        && request.top_p.is_none()
-        && request.stop.is_none()
-    {
-        return None;
-    }
-
-    Some(InferenceConfig {
-        max_tokens: request.max_tokens,
-        temperature: request.temperature,
-        top_p: request.top_p,
-        stop_sequences: request.stop.clone(),
+    fn images_option(images: Vec<ImageBlock>) -> Option<Vec<ImageBlock>> {
     })
 }
 
