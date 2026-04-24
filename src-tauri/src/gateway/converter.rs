@@ -268,6 +268,7 @@ pub async fn build_kiro_payload(
         .previous_response_id
         .clone()
         .unwrap_or_else(|| Uuid::new_v4().to_string());
+    let agent_continuation_id = conversation_id.clone();
     let inference_config = build_inference_config(request);
     let (processed_tools, tool_docs) = process_tools_with_long_descriptions(&request.tools);
     let tool_docs_for_current = tool_docs.clone();
@@ -398,9 +399,9 @@ pub async fn build_kiro_payload(
     Ok(KiroPayload {
         conversation_state: ConversationState {
             chat_trigger_type: "MANUAL".to_string(),
-            conversation_id,
-            agent_continuation_id: None,
-            agent_task_type: None,
+            conversation_id: conversation_id.clone(),
+            agent_continuation_id: Some(agent_continuation_id),
+            agent_task_type: Some("vibe".to_string()),
             current_message: CurrentMessage {
                 user_input_message: UserInputMessage {
                     content: current_content,

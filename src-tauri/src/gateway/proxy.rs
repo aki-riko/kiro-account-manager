@@ -1162,12 +1162,16 @@ fn with_kiro_upstream_headers(
     include_agent_mode: bool,
     include_profile_arn_header: bool,
 ) -> reqwest::RequestBuilder {
+    let invocation_id = uuid::Uuid::new_v4().to_string();
+
     let mut builder = builder
         .header("Authorization", format!("Bearer {}", upstream.access_token))
         .header("Content-Type", "application/json")
         .header("Accept", accept)
         .header(header::USER_AGENT, upstream.user_agent.clone())
-        .header("x-amz-user-agent", upstream.user_agent.clone());
+        .header("x-amz-user-agent", upstream.user_agent.clone())
+        .header("amz-sdk-invocation-id", invocation_id)
+        .header("amz-sdk-request", "attempt=1; max=3");
 
     if include_opt_out && upstream.send_opt_out {
         builder = builder.header("x-amzn-codewhisperer-optout", "true");

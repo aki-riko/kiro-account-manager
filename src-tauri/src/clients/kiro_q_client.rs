@@ -5,7 +5,6 @@ use crate::clients::http_client::{
     apply_kiro_runtime_headers, build_http_client, build_kiro_custom_user_agent,
     build_q_service_url, get_usage_probe_regions,
 };
-use serde_json::json;
 use uuid::Uuid;
 
 pub struct KiroQClient {
