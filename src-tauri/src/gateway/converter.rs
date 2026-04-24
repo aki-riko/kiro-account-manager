@@ -333,7 +333,6 @@ pub async fn build_kiro_payload(
                                 None,
                                 extract_tool_results(message.content.as_ref()),
                             ),
-                            inference_config: inference_config.clone(),
                         },
                     });
                 }
@@ -354,7 +353,6 @@ pub async fn build_kiro_payload(
                                 None,
                                 extract_tool_results_from_tool_message(message),
                             ),
-                            inference_config: inference_config.clone(),
                         },
                     });
                 }
