@@ -36,7 +36,7 @@ const isValidIpv4Address = (value) => {
 const isValidIpv6Address = (value) => {
   try {
     const parsed = new URL(`http://[${value}]/`)
-    return parsed.hostname === `[${value}]`
+    return parsed.hostname === value
   } catch {
     return false
   }
