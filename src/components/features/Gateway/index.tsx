@@ -303,6 +303,9 @@ function GatewayPage() {
       label: 'Anthropic / Claude',
       detail: '使用 ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY 直连本地网关，适合 Claude Code / Claude Desktop 兼容链路。'},
     {
+      label: 'OpenAI Chat Completions',
+      detail: '使用 OPENAI_BASE_URL + OPENAI_API_KEY，支持传统 OpenAI Chat Completions 格式（/v1/chat/completions），兼容标准 OpenAI 客户端库。'},
+    {
       label: 'OpenAI Responses',
       detail: '使用 OPENAI_BASE_URL + OPENAI_API_KEY，网关会把 /v1/responses 请求映射到 Kiro 上游并保留流式事件序列。'},
     {

@@ -113,6 +113,10 @@ export function getIntegrationProps() {
         env: 'OPENAI_BASE_URL=http://127.0.0.1:8765',
         curl: 'curl http://127.0.0.1:8765/v1/responses',
       },
+      openaiChat: {
+        env: 'OPENAI_BASE_URL=http://127.0.0.1:8765',
+        curl: 'curl http://127.0.0.1:8765/v1/chat/completions',
+      },
     },
     copyText: noop,
     copySuccess: '兼容 Responses curl 已复制',
