@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 import { CheckIcon } from "lucide-react"
 
 function Checkbox({
-  className,
+  className = "",
   ...props
 }) {
   return (

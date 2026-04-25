@@ -26,7 +26,7 @@ function DropdownMenuTrigger({
 
 function DropdownMenuContent({
   className,
-  align = "start",
+  align = "start" as const,
   sideOffset = 4,
   ...props
 }) {
@@ -109,10 +109,12 @@ function DropdownMenuRadioItem({
   className,
   children,
   inset,
+  value,
   ...props
 }) {
   return (
     <DropdownMenuPrimitive.RadioItem
+      value={value}
       data-slot="dropdown-menu-radio-item"
       data-inset={inset}
       className={cn(

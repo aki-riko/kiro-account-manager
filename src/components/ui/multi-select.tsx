@@ -10,7 +10,7 @@ function MultiSelect({
   onChange,
   options = [],
   placeholder = "Select items...",
-  className,
+  className = "",
   searchable = true,
   clearable = true,
   ...props
@@ -59,7 +59,6 @@ function MultiSelect({
               selectedItems.map(item => (
                 <Badge
                   key={item.value}
-                  variant="secondary"
                   className="gap-1 pr-1 rounded-md"
                 >
                   <span>{item.label}</span>
