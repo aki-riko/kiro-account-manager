@@ -65,7 +65,7 @@ export interface AccountUsageData {
 
 export interface TagLink {
     tagId: string;
-    tagName: string;
+    tagName?: string;
     linkedAt?: string;
 }
 
@@ -82,7 +82,9 @@ export interface Account {
     usageData?: AccountUsageData;
     availableModelsCache?: {
         cachedAt: number;
-        models: any[];
+        models?: any[];
+        response?: any;
+        modelProvider?: any;
     };
     expiresAt?: string;
     status?: string;
@@ -92,6 +94,8 @@ export interface Account {
     quota?: number;
     used?: number;
     // 扩展字段
+    clientId?: string;
+    clientSecret?: string;
     _index?: number;
 }
 

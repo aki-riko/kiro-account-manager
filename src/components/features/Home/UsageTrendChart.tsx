@@ -5,11 +5,13 @@ import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Calendar } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 
 export default function UsageTrendChart({ accounts, stats }) {
   const { t, theme} = useApp()
-  
+  const accent = getThemeAccent(theme)
+
   const [usageHistory, setUsageHistory] = useState([])
 
   // 加载并保存历史记录
@@ -33,9 +35,10 @@ export default function UsageTrendChart({ accounts, stats }) {
           }).catch(console.error)
 
           // 重新加载历史
-          const updatedHistory = await invoke('get_usage_history').catch(() => ({ entries: [] }))
+          const updatedHistory = await invoke('get_usage_history').catch(() => ({ entries: [] })) as { entries: any[] }
           setUsageHistory(updatedHistory.entries || [])
         } else {
+          const history = await invoke('get_usage_history').catch(() => ({ entries: [] })) as { entries: any[] }
           setUsageHistory(history.entries || [])
         }
       } catch (e) {

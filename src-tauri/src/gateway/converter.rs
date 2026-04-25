@@ -2,8 +2,9 @@ use crate::gateway::models::{
     AnthropicMessagesRequest, ConversationState, CurrentMessage, HistoryAssistantMessage,
     HistoryItem, HistoryUserMessage, ImageBlock, ImageSource, KiroInputSchema,
     KiroPayload, KiroTool, KiroToolResult, KiroToolResultContent, KiroToolSpec, KiroToolUse,
-    ModelInfo, NormalizedMessage, NormalizedRequest, Tool, ToolCall, ToolCallFunction,
-    ToolFunction, UserInputMessage, UserInputMessageContext, WebSearchToolOptions,
+    ModelInfo, NormalizedMessage, NormalizedRequest, OpenAIChatRequest,
+    Tool, ToolCall, ToolCallFunction, ToolFunction, UserInputMessage,
+    UserInputMessageContext, WebSearchToolOptions,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use reqwest::Client;
@@ -70,7 +71,7 @@ pub fn normalize_anthropic_request(request: &AnthropicMessagesRequest) -> Normal
 
 pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest, String> {
     if payload.get("messages").is_some() && payload.get("input").is_none() {
-        return Err("已移除 /v1/chat/completions，请改用 /v1/responses 并传 input".to_string());
+        return normalize_openai_chat_payload(payload);
     }
 
     let model = payload
@@ -79,10 +80,6 @@ pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest,
         .unwrap_or("claude-sonnet-4-5-20250929")
         .to_string();
 
-    let stream = payload
-        .get("stream")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
     let mut messages = Vec::new();
 
     if let Some(instructions) = payload.get("instructions") {
@@ -106,10 +103,153 @@ pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest,
         return Err("Responses 请求缺少可转换的 input".to_string());
     }
 
-    Ok(NormalizedRequest {
+    Ok(build_normalized_request_from_payload(
+        payload,
         model,
         messages,
-        stream,
+        convert_responses_tools(payload.get("tools")),
+    ))
+}
+
+fn normalize_openai_chat_payload(payload: &Value) -> Result<NormalizedRequest, String> {
+    let model = payload
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or("claude-sonnet-4-5-20250929")
+        .to_string();
+
+    let messages = convert_openai_chat_messages(payload.get("messages"));
+    if messages.is_empty() {
+        return Err("chat.completions 请求缺少可转换的 messages".to_string());
+    }
+
+    Ok(build_normalized_request_from_payload(
+        payload,
+        model,
+        messages,
+        convert_openai_chat_tools(payload.get("tools")),
+    ))
+}
+
+pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> NormalizedRequest {
+    let mut messages = Vec::new();
+    let mut pending_tool_results = Vec::new();
+
+    for msg in &request.messages {
+        match msg.role.as_str() {
+            "system" => {
+                let text = extract_text_content(Some(&msg.content));
+                if !text.is_empty() {
+                    messages.push(NormalizedMessage {
+                        role: "system".to_string(),
+                        content: Some(Value::String(text)),
+                        tool_calls: None,
+                        tool_call_id: None,
+                        metadata: None,
+                    });
+                }
+            }
+            "tool" => {
+                let content = extract_text_content(Some(&msg.content));
+                let tool_call_id = msg.tool_call_id.clone().unwrap_or_default();
+                pending_tool_results.push((tool_call_id, content));
+            }
+            "user" | "assistant" => {
+                if !pending_tool_results.is_empty() {
+                    messages.push(create_tool_results_message(&pending_tool_results));
+                    pending_tool_results.clear();
+                }
+
+                let tool_calls = if msg.role == "assistant" {
+                    msg.tool_calls.as_ref().map(|tcs| {
+                        tcs.iter()
+                            .map(|tc| ToolCall {
+                                id: tc.id.clone(),
+                                call_type: tc.call_type.clone(),
+                                function: ToolCallFunction {
+                                    name: tc.function.name.clone(),
+                                    arguments: tc.function.arguments.to_string(),
+                                },
+                            })
+                            .collect()
+                    })
+                } else {
+                    None
+                };
+
+                messages.push(NormalizedMessage {
+                    role: msg.role.clone(),
+                    content: Some(msg.content.clone()),
+                    tool_calls,
+                    tool_call_id: None,
+                    metadata: None,
+                });
+            }
+            _ => {}
+        }
+    }
+
+    if !pending_tool_results.is_empty() {
+        messages.push(create_tool_results_message(&pending_tool_results));
+    }
+
+    let tools = request.tools.as_ref().map(|tools| {
+        tools
+            .iter()
+            .map(|t| Tool {
+                tool_type: t.tool_type.clone(),
+                function: t.function.clone(),
+                web_search: None,
+            })
+            .collect()
+    });
+
+    NormalizedRequest {
+        model: request.model.clone(),
+        messages,
+        stream: request.stream,
+        max_tokens: request.max_tokens,
+        temperature: request.temperature,
+        top_p: request.top_p,
+        stop: request.stop.clone(),
+        tools,
+        tool_choice: request.tool_choice.clone(),
+        previous_response_id: None,
+    }
+}
+
+fn create_tool_results_message(tool_results: &[(String, String)]) -> NormalizedMessage {
+    let mut content_array = Vec::new();
+    for (tool_call_id, content) in tool_results {
+        content_array.push(json!({
+            "type": "tool_result",
+            "tool_use_id": tool_call_id,
+            "content": content
+        }));
+    }
+
+    NormalizedMessage {
+        role: "user".to_string(),
+        content: Some(Value::Array(content_array)),
+        tool_calls: None,
+        tool_call_id: None,
+        metadata: None,
+    }
+}
+
+fn build_normalized_request_from_payload(
+    payload: &Value,
+    model: String,
+    messages: Vec<NormalizedMessage>,
+    tools: Option<Vec<Tool>>,
+) -> NormalizedRequest {
+    NormalizedRequest {
+        model,
+        messages,
+        stream: payload
+            .get("stream")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         max_tokens: payload
             .get("max_output_tokens")
             .or_else(|| payload.get("max_tokens"))
@@ -123,14 +263,18 @@ pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest,
             .get("top_p")
             .and_then(Value::as_f64)
             .map(|value| value as f32),
-        stop: payload.get("stop").and_then(Value::as_array).map(|items| {
-            items
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect()
+        stop: payload.get("stop").and_then(|value| match value {
+            Value::String(item) => Some(vec![item.to_string()]),
+            Value::Array(items) => Some(
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect(),
+            ),
+            _ => None,
         }),
-        tools: convert_responses_tools(payload.get("tools")),
+        tools,
         tool_choice: payload.get("tool_choice").cloned(),
         previous_response_id: payload
             .get("previous_response_id")
@@ -138,7 +282,90 @@ pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest,
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string),
-    })
+    }
+}
+
+fn convert_openai_chat_messages(messages: Option<&Value>) -> Vec<NormalizedMessage> {
+    let Some(Value::Array(items)) = messages else {
+        return Vec::new();
+    };
+
+    items
+        .iter()
+        .filter_map(|item| {
+            let role = item.get("role").and_then(Value::as_str)?.to_string();
+            let tool_calls = item
+                .get("tool_calls")
+                .and_then(Value::as_array)
+                .map(|calls| {
+                    calls
+                        .iter()
+                        .filter_map(|call| {
+                            Some(ToolCall {
+                                id: call.get("id").and_then(Value::as_str)?.to_string(),
+                                call_type: call
+                                    .get("type")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("function")
+                                    .to_string(),
+                                function: ToolCallFunction {
+                                    name: call
+                                        .get("function")?
+                                        .get("name")
+                                        .and_then(Value::as_str)?
+                                        .to_string(),
+                                    arguments: call
+                                        .get("function")?
+                                        .get("arguments")
+                                        .and_then(Value::as_str)
+                                        .unwrap_or("{}")
+                                        .to_string(),
+                                },
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .filter(|calls| !calls.is_empty());
+
+            let content = item.get("content").map(convert_openai_chat_content);
+            Some(NormalizedMessage {
+                role,
+                content,
+                tool_calls,
+                tool_call_id: item
+                    .get("tool_call_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                metadata: None,
+            })
+        })
+        .collect()
+}
+
+fn convert_openai_chat_content(content: &Value) -> Value {
+    match content {
+        Value::String(text) => Value::String(text.clone()),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| {
+                    if item.get("type").and_then(Value::as_str) == Some("text") {
+                        json!({
+                            "type": "input_text",
+                            "text": item.get("text").and_then(Value::as_str).unwrap_or_default()
+                        })
+                    } else {
+                        item.clone()
+                    }
+                })
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+fn convert_openai_chat_tools(tools: Option<&Value>) -> Option<Vec<Tool>> {
+    convert_responses_tools(tools)
 }
 
 fn convert_anthropic_tool(tool: &crate::gateway::models::AnthropicTool) -> Tool {

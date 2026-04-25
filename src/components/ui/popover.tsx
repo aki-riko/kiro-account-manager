@@ -18,10 +18,15 @@ function PopoverTrigger({
 }
 
 function PopoverContent({
-  className,
+  className = "",
   align = "center",
   sideOffset = 4,
   ...props
+}: {
+  className?: string
+  align?: "center" | "start" | "end"
+  sideOffset?: number
+  [key: string]: any
 }) {
   return (
     <PopoverPrimitive.Portal>
@@ -45,7 +50,7 @@ function PopoverAnchor({
 }
 
 function PopoverHeader({
-  className,
+  className = "",
   ...props
 }) {
   return (
@@ -57,7 +62,7 @@ function PopoverHeader({
 }
 
 function PopoverTitle({
-  className,
+  className = "",
   ...props
 }) {
   return (
@@ -69,7 +74,7 @@ function PopoverTitle({
 }
 
 function PopoverDescription({
-  className,
+  className = "",
   ...props
 }) {
   return (

@@ -152,6 +152,7 @@ struct RouterState {
 enum ResponseFormat {
     Anthropic,
     Responses,
+    OpenAI,
 }
 
 const CONFIG_DIR: &str = ".kiro-account-manager";
@@ -598,6 +599,7 @@ fn router(state: RouterState) -> Router {
         .route("/v1/messages", post(messages_handler))
         .route("/v1/messages/count_tokens", post(count_tokens_handler))
         .route("/v1/responses", post(responses_handler))
+        .route("/v1/chat/completions", post(openai_chat_handler))
         .route("/mcp", post(mcp_handler))
         .with_state(state)
 }
@@ -727,6 +729,15 @@ async fn responses_handler(
     Json(payload): Json<Value>,
 ) -> Response {
     proxy::proxy_handler(state, addr, headers, payload, ResponseFormat::Responses).await
+}
+
+async fn openai_chat_handler(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(state): State<RouterState>,
+    headers: HeaderMap,
+    Json(payload): Json<Value>,
+) -> Response {
+    proxy::proxy_handler(state, addr, headers, payload, ResponseFormat::OpenAI).await
 }
 
 async fn mcp_handler(
@@ -988,7 +999,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn chat_completions_route_returns_not_found() {
+    async fn openai_chat_completions_endpoint_accepts_requests() {
         let app = router(test_router_state());
         let response = app
             .oneshot(
@@ -1008,7 +1019,7 @@ mod tests {
             .await
             .expect("router should respond");
 
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_ne!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

@@ -1,7 +1,9 @@
 import { PieChart, BarChart2 } from 'lucide-react'
+import { useMemo } from 'react'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { formatUsage, getAccountDisplayName, getQuota, getUsed } from '../../../utils/accountStats'
 import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -9,6 +11,7 @@ import { Progress } from '@/components/ui/progress'
 function UsageDistribution({ tokens, colors, t }) {
   const { maskEmail } = usePrivacy()
   const { theme } = useApp()
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
   
   
   // 计算使用率（使用统一的 getQuota 和 getUsed 函数）

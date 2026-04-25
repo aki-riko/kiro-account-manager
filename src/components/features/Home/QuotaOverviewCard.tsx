@@ -3,11 +3,14 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { TrendingUp } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
+import { useMemo } from 'react'
 
 
 // 配额总览卡片
 function QuotaOverviewCard({ stats, colors, t }) {
   const { theme } = useApp()
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
   
   const getBadgeVariant = (percent) => {
     if (percent > 80) return 'destructive'

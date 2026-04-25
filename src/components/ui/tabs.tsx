@@ -8,7 +8,7 @@ function Tabs({
   className,
   orientation = "horizontal",
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Root>) {
+}: { className?: string; orientation?: string; [key: string]: any }) {
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
@@ -34,13 +34,11 @@ const tabsListVariants = cva(
       variant: "default"}}
 )
 
-interface TabsListProps extends React.ComponentProps<typeof TabsPrimitive.List>, VariantProps<typeof tabsListVariants> {}
-
 function TabsList({
   className,
   variant = "default",
   ...props
-}: TabsListProps) {
+}: { className?: string; variant?: "default" | "line"; [key: string]: any }) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
@@ -51,10 +49,11 @@ function TabsList({
   )
 }
 
-function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Tab>) {
+function TabsTrigger({ className, value, ...props }: { className?: string; value: any; [key: string]: any }) {
   return (
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
+      value={value}
       className={cn(
         "relative inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-transparent px-3 py-1 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm dark:data-active:bg-white/10 dark:data-active:text-white [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
@@ -64,10 +63,11 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
   )
 }
 
-function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Panel>) {
+function TabsContent({ className, value, ...props }: { className?: string; value: any; [key: string]: any }) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
+      value={value}
       className={cn("flex-1 text-sm outline-none w-full mt-2", className)}
       {...props}
     />

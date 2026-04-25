@@ -8,18 +8,21 @@ import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Stack, Group, Text } from '@/components/shared/layout'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
+import { useMemo } from 'react'
 
 // 当前账号配额详情
-function AccountQuotaDetail({ 
-  currentAccount, 
-  currentQuotaInfo, 
-  refreshingAccount, 
-  handleRefreshCurrentAccount, 
+function AccountQuotaDetail({
+  currentAccount,
+  currentQuotaInfo,
+  refreshingAccount,
+  handleRefreshCurrentAccount,
   maskEmail,
   theme,
-  colors, 
-  t 
+  colors,
+  t
 }) {
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
   
   const usageData = currentAccount.usageData
   const breakdown = usageData?.usageBreakdownList?.[0] || usageData?.usageBreakdown
@@ -137,7 +140,7 @@ function AccountHeader({ currentAccount, userInfo, subInfo, daysUntilReset, refr
             </span>
             {subInfo?.type && (
               <Badge
-                variant={subInfo.type.includes('PRO') ? 'default' : 'secondary'}
+                variant="default"
                 className="shrink-0"
                 style={{
                   background: subInfo.type.includes('PRO+') ? 'linear-gradient(to right, rgb(168, 85, 247), rgb(236, 72, 153))' :
@@ -193,7 +196,7 @@ function MonthlyUsageProgress({ currentPercent, currentUsed, currentQuota, accen
       radius="lg"
       className={"bg-muted/30"}
     >
-      <Group justify="space-between" mb="xs">
+      <Group justify="space-between" className="mb-xs">
         <Text size="sm" fw={500} className={"text-foreground"}>
           {t('home.monthlyUsage')}
         </Text>
@@ -226,12 +229,11 @@ function SubscriptionDetails({ subInfo, overageConfig, colors, t }) {
       radius="md"
       className={"bg-muted/30"}
     >
-      <Text 
-        size="10px" 
-        fw={500} 
-        tt="uppercase" 
-        mb="xs"
-        className={"text-primary"}
+      <Text
+        size="10px"
+        fw={500}
+        tt="uppercase"
+        className="mb-xs text-primary"
       >
         {t('home.subscriptionDetails')}
       </Text>
@@ -282,12 +284,11 @@ function AccountInfo({ currentAccount, userInfo, breakdown, nextDateReset, accen
       radius="md"
       className={"bg-muted/30"}
     >
-      <Text 
-        size="10px" 
-        fw={500} 
-        tt="uppercase" 
-        mb="xs"
-        className={accent.text}
+      <Text
+        size="10px"
+        fw={500}
+        tt="uppercase"
+        className={`mb-xs ${accent.text}`}
       >
         {t('home.accountInfo')}
       </Text>
@@ -310,10 +311,13 @@ function AccountInfo({ currentAccount, userInfo, breakdown, nextDateReset, accen
         )}
         <Group justify="space-between">
           <Text size="xs" className={"text-muted-foreground"}>ID</Text>
-          <Tooltip label={userInfo?.userId}>
-            <Text size="xs" className={`text-foreground font-mono`} truncate style={{ maxWidth: 80 }}>
-              {userInfo?.userId?.split('.').pop()?.substring(0, 8) || '-'}
-            </Text>
+          <Tooltip>
+            <TooltipTrigger>
+              <Text size="xs" className={`text-foreground font-mono`} truncate style={{ maxWidth: 80 }}>
+                {userInfo?.userId?.split('.').pop()?.substring(0, 8) || '-'}
+              </Text>
+            </TooltipTrigger>
+            <TooltipContent>{userInfo?.userId}</TooltipContent>
           </Tooltip>
         </Group>
       </Stack>
@@ -329,21 +333,21 @@ function QuotaBreakdown({ mainUsed, mainLimit, mainPercent, freeTrial, bonuses, 
       radius="md"
       className={"bg-muted/30"}
     >
-      <Text size="10px" fw={500} tt="uppercase" mb="xs" className={"text-foreground"}>
+      <Text size="10px" fw={500} tt="uppercase" className="mb-xs text-foreground">
         {t('home.quotaDetails')}
       </Text>
       <Stack gap="xs">
         {/* 基础额度 */}
-        <QuotaRow label={t('home.base')} used={mainUsed} limit={mainLimit} percent={mainPercent} color="blue" accent={accent} colors={colors} />
+        <QuotaRow label={t('home.base')} used={mainUsed} limit={mainLimit} percent={mainPercent} color="blue" expiry={null} accent={accent} colors={colors} t={t} />
 
         {/* 试用额度 */}
         {freeTrial && freeTrial.usageLimit > 0 && (
-          <QuotaRow 
-            label={t('home.trial')} 
-            used={freeTrial.currentUsage ?? 0} 
-            limit={freeTrial.usageLimit} 
+          <QuotaRow
+            label={t('home.trial')}
+            used={freeTrial.currentUsage ?? 0}
+            limit={freeTrial.usageLimit}
             percent={freeTrial.usageLimit > 0 ? ((freeTrial.currentUsage ?? 0) / freeTrial.usageLimit * 100) : 0}
-            color="purple" 
+            color="purple"
             expiry={freeTrial.freeTrialExpiry}
             accent={accent}
             colors={colors}
@@ -353,7 +357,7 @@ function QuotaBreakdown({ mainUsed, mainLimit, mainPercent, freeTrial, bonuses, 
 
         {/* 奖励额度 */}
         {bonuses.map((bonus, idx) => (
-          <QuotaRow 
+          <QuotaRow
             key={idx}
             label={bonus.displayName?.substring(0, 4) || `奖励${idx+1}`} 
             used={Math.round(bonus.currentUsage ?? 0)} 

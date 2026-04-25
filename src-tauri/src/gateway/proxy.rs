@@ -1,3 +1,4 @@
+
 use axum::{
     body::{Body, Bytes},
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -43,8 +44,8 @@ use super::{
     effective_client_api_keys,
     models::{
         AnthropicContentBlock, AnthropicMessagesRequest, AnthropicMessagesResponse, AnthropicUsage,
-        ModelsResponse, NormalizedMessage, NormalizedRequest, ToolCall, ToolCallFunction,
-        WebSearchToolOptions,
+        ModelsResponse, NormalizedMessage, NormalizedRequest, OpenAIChatRequest, ToolCall,
+        ToolCallFunction, WebSearchToolOptions,
     },
     stream::{self, aggregate_kiro_response, parse_kiro_event_full, KiroEvent},
     thinking_parser::{SegmentType, ThinkingParser},
@@ -354,6 +355,7 @@ fn request_endpoint(format: ResponseFormat) -> &'static str {
     match format {
         ResponseFormat::Anthropic => "messages",
         ResponseFormat::Responses => "responses",
+        ResponseFormat::OpenAI => "chat_completions",
     }
 }
 
@@ -407,6 +409,13 @@ fn build_gateway_error_body(
             }
         }),
         ResponseFormat::Responses => json!({
+            "error": {
+                "message": message,
+                "type": error_type,
+                "code": status.as_u16()
+            }
+        }),
+        ResponseFormat::OpenAI => json!({
             "error": {
                 "message": message,
                 "type": error_type,
@@ -637,6 +646,13 @@ pub async fn proxy_handler(
                 created_at,
                 request.previous_response_id.as_deref(),
             ),
+            ResponseFormat::OpenAI => {
+                serde_json::to_value(stream::build_openai_response(
+                    &request.model,
+                    &outcome.aggregated,
+                ))
+                .unwrap_or_else(|_| json!({}))
+            }
         };
         let response_body = serialize_logged_value(&response);
         if matches!(format, ResponseFormat::Responses) {
@@ -769,6 +785,10 @@ pub async fn proxy_handler(
             created_at,
             request.previous_response_id.as_deref(),
         ),
+        ResponseFormat::OpenAI => {
+            serde_json::to_value(stream::build_openai_response(&request.model, &aggregated))
+                .unwrap_or_else(|_| json!({}))
+        }
     };
     if matches!(format, ResponseFormat::Responses) {
         persist_responses_session_entry(
@@ -1447,7 +1467,14 @@ fn normalize_request(format: ResponseFormat, payload: &Value) -> Result<Normaliz
                 .map_err(|error| format!("Anthropic 请求解析失败: {error}"))?;
             Ok(normalize_anthropic_request(&request))
         }
-        ResponseFormat::Responses => normalize_responses_request(payload),
+        ResponseFormat::Responses => {
+            normalize_responses_request(payload)
+        }
+        ResponseFormat::OpenAI => {
+            let request: OpenAIChatRequest = serde_json::from_value(payload.clone())
+                .map_err(|error| format!("OpenAI 请求解析失败: {error}"))?;
+            Ok(crate::gateway::converter::normalize_openai_chat_request(&request))
+        }
     }
 }
 
@@ -2439,6 +2466,27 @@ fn stream_proxy_response(
             if !send_data(&tx, &output_item_added.to_string()).await {
                 return;
             }
+        } else if matches!(format, ResponseFormat::OpenAI) {
+            let completion_id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
+            let created = chrono::Utc::now().timestamp();
+            let delta = crate::gateway::models::OpenAIChatDelta {
+                role: Some("assistant".to_string()),
+                content: Some("".to_string()),
+                tool_calls: None,
+            };
+            let chunk = stream::build_openai_chunk(
+                &completion_id,
+                created,
+                &model,
+                delta,
+                None,
+                None,
+            );
+            if let Ok(chunk_json) = serde_json::to_string(&chunk) {
+                if !send_data(&tx, &chunk_json).await {
+                    return;
+                }
+            }
         }
 
         const STALLED_STREAM_TIMEOUT: tokio::time::Duration =
@@ -2630,6 +2678,26 @@ fn stream_proxy_response(
                                                     });
                                                     send_data(&tx, &data.to_string()).await;
                                                 }
+                                                ResponseFormat::OpenAI => {
+                                                    let output_index = responses_next_output_index;
+                                                    responses_next_output_index += 1;
+                                                    responses_tool_output_indexes
+                                                        .insert(id.clone(), output_index);
+                                                    let data = json!({
+                                                        "type": "response.output_item.added",
+                                                        "response_id": response_id,
+                                                        "output_index": output_index,
+                                                        "item": {
+                                                            "id": id,
+                                                            "type": "function_call",
+                                                            "status": "in_progress",
+                                                            "call_id": id,
+                                                            "name": name,
+                                                            "arguments": ""
+                                                        }
+                                                    });
+                                                    send_data(&tx, &data.to_string()).await;
+                                                }
                                             }
                                         }
                                         KiroEvent::ToolUseInputDelta { id, input_delta } => {
@@ -2673,6 +2741,15 @@ fn stream_proxy_response(
                                                     });
                                                     send_data(&tx, &data.to_string()).await;
                                                 }
+                                                ResponseFormat::OpenAI => {
+                                                    let data = json!({
+                                                        "type": "response.function_call_arguments.delta",
+                                                        "response_id": response_id,
+                                                        "call_id": id,
+                                                        "delta": input_delta
+                                                    });
+                                                    send_data(&tx, &data.to_string()).await;
+                                                }
                                             }
                                         }
                                         KiroEvent::ToolUseStop { id } => match format {
@@ -2696,6 +2773,44 @@ fn stream_proxy_response(
                                                 }
                                             }
                                             ResponseFormat::Responses => {
+                                                if let Some((name, input)) =
+                                                    tool_accumulators.remove(&id)
+                                                {
+                                                    aggregated.tool_calls.push((
+                                                        id.clone(),
+                                                        name.clone(),
+                                                        input.clone(),
+                                                    ));
+                                                    let done = build_stream_responses_function_call_arguments_done_event(
+                                                        &response_id,
+                                                        &id,
+                                                        &input,
+                                                    );
+                                                    send_data(&tx, &done.to_string()).await;
+                                                    let output_index = responses_tool_output_indexes
+                                                        .remove(&id)
+                                                        .unwrap_or_else(|| {
+                                                            let idx = responses_next_output_index;
+                                                            responses_next_output_index += 1;
+                                                            idx
+                                                        });
+                                                    let data = json!({
+                                                        "type": "response.output_item.done",
+                                                        "response_id": response_id,
+                                                        "output_index": output_index,
+                                                        "item": {
+                                                            "id": id,
+                                                            "type": "function_call",
+                                                            "status": "completed",
+                                                            "call_id": id,
+                                                            "name": name,
+                                                            "arguments": input
+                                                        }
+                                                    });
+                                                    send_data(&tx, &data.to_string()).await;
+                                                }
+                                            }
+                                            ResponseFormat::OpenAI => {
                                                 if let Some((name, input)) =
                                                     tool_accumulators.remove(&id)
                                                 {
@@ -2792,6 +2907,26 @@ fn stream_proxy_response(
                                                     }
                                                 }
                                                 ResponseFormat::Responses => {
+                                                    if let Some(annotation) =
+                                                        build_responses_citation_annotations(
+                                                            std::slice::from_ref(&citation),
+                                                        )
+                                                        .into_iter()
+                                                        .next()
+                                                    {
+                                                        let data = build_responses_annotation_added_event(
+                                                            &response_id,
+                                                            &message_id,
+                                                            annotation,
+                                                            aggregated.citations.len() - 1,
+                                                            responses_sequence_number,
+                                                        );
+                                                        responses_sequence_number += 1;
+                                                        send_data(&tx, &data.to_string()).await;
+                                                    }
+                                                }
+                                                ResponseFormat::OpenAI => {
+                                                    // OpenAI format - similar to Responses
                                                     if let Some(annotation) =
                                                         build_responses_citation_annotations(
                                                             std::slice::from_ref(&citation),
@@ -2930,6 +3065,74 @@ fn stream_proxy_response(
                 .await;
                 send_data(&tx, "[DONE]").await;
             }
+            ResponseFormat::OpenAI => {
+                // 发送 tool_calls（如果有）
+                if !aggregated.tool_calls.is_empty() {
+                    let tool_calls_delta: Vec<_> = aggregated
+                        .tool_calls
+                        .iter()
+                        .enumerate()
+                        .map(|(index, (id, name, arguments))| {
+                            json!({
+                                "index": index,
+                                "id": id,
+                                "type": "function",
+                                "function": {
+                                    "name": name,
+                                    "arguments": arguments
+                                }
+                            })
+                        })
+                        .collect();
+
+                    let chunk = stream::build_openai_chunk(
+                        &format!("chatcmpl-{}", uuid::Uuid::new_v4().simple()),
+                        created_at,
+                        &model,
+                        crate::gateway::models::OpenAIChatDelta {
+                            role: None,
+                            content: None,
+                            tool_calls: Some(tool_calls_delta.iter().map(|tc| {
+                                crate::gateway::models::OpenAIDeltaToolCall {
+                                    index: tc["index"].as_i64().unwrap() as i32,
+                                    id: tc["id"].as_str().unwrap().to_string(),
+                                    call_type: "function".to_string(),
+                                    function: crate::gateway::models::OpenAIToolCallFunction {
+                                        name: tc["function"]["name"].as_str().unwrap().to_string(),
+                                        arguments: tc["function"]["arguments"].as_str().unwrap().to_string(),
+                                    },
+                                }
+                            }).collect()),
+                        },
+                        None,
+                        None,
+                    );
+                    let chunk_json = serde_json::to_string(&chunk).unwrap_or_default();
+                    send_data(&tx, &chunk_json).await;
+                }
+
+                // 发送最终 chunk（带 finish_reason 和 usage）
+                let finish_reason = if !aggregated.tool_calls.is_empty() { "tool_calls" } else { "stop" };
+                let final_chunk = stream::build_openai_chunk(
+                    &format!("chatcmpl-{}", uuid::Uuid::new_v4().simple()),
+                    created_at,
+                    &model,
+                    crate::gateway::models::OpenAIChatDelta {
+                        role: None,
+                        content: None,
+                        tool_calls: None,
+                    },
+                    Some(finish_reason.to_string()),
+                    Some(crate::gateway::models::OpenAIUsage {
+                        prompt_tokens: input_tokens,
+                        completion_tokens: output_tokens,
+                        total_tokens: input_tokens + output_tokens,
+                    }),
+                );
+                let final_json = serde_json::to_string(&final_chunk).unwrap_or_default();
+                send_data(&tx, &final_json).await;
+                send_data(&tx, "[DONE]").await;
+            }
         }
     });
 
@@ -3037,6 +3240,29 @@ async fn handle_stream_text(
             });
             send_data(tx, &data.to_string()).await;
         }
+        ResponseFormat::OpenAI => {
+            if is_thinking {
+                return;
+            }
+            let delta = crate::gateway::models::OpenAIChatDelta {
+                role: None,
+                content: Some(text.to_string()),
+                tool_calls: None,
+            };
+            let completion_id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
+            let created = chrono::Utc::now().timestamp();
+            let chunk = crate::gateway::stream::build_openai_chunk(
+                &completion_id,
+                created,
+                model,
+                delta,
+                None,
+                None,
+            );
+            if let Ok(chunk_json) = serde_json::to_string(&chunk) {
+                send_data(tx, &chunk_json).await;
+            }
+        }
     }
 }
 
@@ -3127,7 +3353,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_request_only_accepts_responses_payloads() {
+    fn normalize_request_accepts_openai_chat_payloads() {
         let responses_payload = json!({
             "model": "claude-3-7-sonnet-20250219",
             "stream": true,
@@ -3219,8 +3445,8 @@ mod tests {
 
         let responses_request = normalize_request(ResponseFormat::Responses, &responses_payload)
             .expect("responses payload should normalize");
-        let chat_error = normalize_request(ResponseFormat::Responses, &chat_payload)
-            .expect_err("chat payload should be rejected by responses-only normalization");
+        let chat_request = normalize_request(ResponseFormat::Responses, &chat_payload)
+            .expect("chat payload should normalize through the OpenAI protocol adapter");
 
         assert_eq!(responses_request.model, "claude-3-7-sonnet-20250219");
         assert!(responses_request.stream);
@@ -3255,10 +3481,20 @@ mod tests {
             responses_request.messages[2].content,
             Some(json!("命中结果"))
         );
-        assert!(
-            chat_error.contains("/v1/responses"),
-            "unexpected error: {chat_error}"
+        assert_eq!(chat_request.model, responses_request.model);
+        assert_eq!(chat_request.stream, responses_request.stream);
+        assert_eq!(chat_request.tool_choice, responses_request.tool_choice);
+        assert_eq!(chat_request.tools.as_ref().map(Vec::len), Some(1));
+        assert_eq!(chat_request.messages.len(), responses_request.messages.len());
+        assert_eq!(
+            chat_request.messages[1]
+                .tool_calls
+                .as_ref()
+                .and_then(|items| items.first())
+                .map(|call| &call.function.arguments),
+            Some(&"{\"q\":\"gateway\"}".to_string())
         );
+        assert_eq!(chat_request.messages[2].content, Some(json!("命中结果")));
     }
 
     #[tokio::test]

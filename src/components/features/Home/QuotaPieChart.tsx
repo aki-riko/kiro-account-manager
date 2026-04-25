@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import { useApp } from '../../../hooks/useApp'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { getAccountDisplayName } from '../../../utils/accountStats'
+import { getThemeAccent } from '../KiroConfig/themeAccent'
 
 import { getQuota as getQuotaFromUtils } from '../../../utils/accountStats'
 
@@ -14,6 +15,7 @@ const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4
 export default function QuotaPieChart({ accounts }) {
   const { t, theme} = useApp()
   const { maskEmail } = usePrivacy()
+  const accent = useMemo(() => getThemeAccent(theme), [theme])
   
 
   // 计算总配额（使用统一的 getQuota 函数）
