@@ -1,6 +1,13 @@
 // MCP 服务器预设模板
 
 export const MCP_TEMPLATES = {
+  'js-reverse': {
+    command: 'npx',
+    args: ['js-reverse-mcp'],
+    env: {},
+    disabled: false,
+    autoApprove: ['*']
+  },
   fetch: {
     command: 'uvx',
     args: ['mcp-server-fetch'],
