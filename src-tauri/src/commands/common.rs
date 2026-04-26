@@ -103,13 +103,35 @@ pub async fn get_usage_by_account(
         "us-east-1",
     );
 
+    // 为 BuilderId 和 social 账号设置默认 profile_arn（参考 Kiro IDE 源码）
+    let provider = account.provider.as_deref().unwrap_or("Google");
+    let profile_arn = match provider {
+        "BuilderId" => {
+            // BuilderId 优先使用账号自带的，否则使用默认值
+            account.profile_arn.as_deref().or(Some(
+                "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX",
+            ))
+        }
+        "Github" | "Google" => {
+            // Social 账号优先使用账号自带的，否则使用默认值
+            account.profile_arn.as_deref().or(Some(
+                "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK",
+            ))
+        }
+        "Enterprise" => {
+            // Enterprise 账号不使用 profile_arn
+            None
+        }
+        _ => account.profile_arn.as_deref(),
+    };
+
     let client = KiroQClient::new()?;
     let usage_call = client
         .get_usage_limits(
             access_token,
             &machine_id,
             &region,
-            account.profile_arn.as_deref(),
+            profile_arn,
             account.auth_method.as_deref(),
             account.provider.as_deref(),
         )
