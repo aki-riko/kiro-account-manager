@@ -7,7 +7,6 @@ on:
 
 jobs:
   release:
-    if: ${{ !endsWith(github.repository, '_dev') }}
     permissions:
       contents: write
     strategy:
@@ -123,7 +122,6 @@ jobs:
 
   # 生成 deb/rpm 专用的更新 JSON
   generate-linux-json:
-    if: ${{ !endsWith(github.repository, '_dev') }}
     needs: release
     runs-on: ubuntu-latest
     permissions:
