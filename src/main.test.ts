@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
-const mainSource = await readFile(new URL('./main.jsx', import.meta.url), 'utf8')
-const appSource = await readFile(new URL('./App.jsx', import.meta.url), 'utf8')
+const mainSource = await readFile(new URL('./main.tsx', import.meta.url), 'utf8')
+const appSource = await readFile(new URL('./App.tsx', import.meta.url), 'utf8')
 
 assert.doesNotMatch(mainSource, /getCurrentWindow\(\)\.show\(\)/)
 assert.doesNotMatch(mainSource, /window\.__TAURI_INTERNALS__\?\.metadata\?\.currentWindow/)

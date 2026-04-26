@@ -1,4 +1,4 @@
-import { showError } from './toast.jsx'
+import { showError } from './toast'
 
 /**
  * 统一错误日志与用户提示
@@ -6,7 +6,7 @@ import { showError } from './toast.jsx'
  * @param {unknown} error 原始错误对象
  * @param {{ userMessage?: string }} options 可选用户提示
  */
-export function handleUiError(context, error, options = {}) {
+export function handleUiError(context, error, options: any = {}) {
   const message = error instanceof Error ? error.message : String(error)
   console.error(`[${context}]`, error)
   if (options.userMessage) {

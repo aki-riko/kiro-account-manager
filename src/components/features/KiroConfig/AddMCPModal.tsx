@@ -3,7 +3,7 @@ import { X, Terminal, AlertCircle, Wand2, ClipboardPaste, Check, AlertTriangle }
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
 import { MCP_TEMPLATES } from './MCPTemplates'
-import { showSuccess } from '../../../utils/toast.jsx'
+import { showSuccess } from '../../../utils/toast'
 import { getThemeAccent, getGradientAccentButton } from './themeAccent'
 import React from 'react'
 

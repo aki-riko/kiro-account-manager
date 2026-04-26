@@ -7,7 +7,7 @@ const activeToasts = new Map()
 /**
  * 防重复显示的包装函数
  */
-const showToastOnce = (toastFn, message, options = {}) => {
+const showToastOnce = (toastFn, message, options: any = {}) => {
   // 如果相同消息已经在显示，直接返回
   if (activeToasts.has(message)) {
     return activeToasts.get(message)
@@ -120,7 +120,7 @@ export const showLoading = (message = '加载中...', options = {}) => {
 /**
  * Promise 提示（自动处理成功/失败）
  */
-export const showPromise = (promise, messages = {}) => {
+export const showPromise = (promise, messages: any = {}) => {
   return toast.promise(
     promise,
     {
