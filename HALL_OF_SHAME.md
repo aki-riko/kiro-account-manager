@@ -1,10 +1,10 @@
-# 耻辱柱 / Hall of Shame
+1# 耻辱柱 / Hall of Shame
 
 本项目遵循 MIT 协议开源，欢迎合法使用。但以下行为违反开源精神和基本道德：
 
 ## 🚫 盗用代码 + 恶意辱骂
 
-### 用户：xxxxr453er / hj01857655
+### 用户：xxxxr453er / hj01857655 (QQ: 372510145)
 - **盗用仓库**：https://github.com/xxxxr453er/Kiro-Account-Manager-copy-main
 - **恶意行为**：https://github.com/hj01857655/kiro-account-manager/issues/58
 - **违规事实**：
