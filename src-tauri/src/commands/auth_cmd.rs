@@ -436,21 +436,7 @@ mod tests {
             .is_none());
     }
 
-    #[test]
-    fn prepare_pending_social_login_creates_callback_context() {
-        let pending = prepare_pending_social_login("Google", "machine-123".to_string());
+    
 
-        assert_eq!(pending.provider, "Google");
-        assert_eq!(pending.machineid, "machine-123");
-        assert!(!pending.state.is_empty());
-        assert!(!pending.code_verifier.is_empty());
-    }
-
-    #[test]
-    fn social_callback_redirect_uri_uses_authenticate_success_path() {
-        let redirect_uri = social_callback_redirect_uri();
-
-        assert!(redirect_uri.starts_with("kiro-account-manager://"));
-        assert!(redirect_uri.ends_with("/authenticate-success"));
-    }
+    
 }

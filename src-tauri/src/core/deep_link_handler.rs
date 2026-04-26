@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const DEEP_LINK_SCHEME: &str = "kiro-account-manager";
-const DEEP_LINK_REDIRECT_URI: &str = "kiro-account-manager://kiro.kiroAgent/authenticate-success";
+const DEEP_LINK_REDIRECT_URI: &str = "kiro.kiroAgent/authenticate-success";
 
 /// OAuth 回调结果（state 已在 `handle_deep_link` 中验证）
 #[derive(Debug, Clone)]
@@ -30,7 +30,7 @@ pub struct DeepLinkCallbackWaiter {
 impl DeepLinkCallbackWaiter {
     /// 获取 `redirect_uri` (根据环境自动选择协议)
     pub fn get_redirect_uri() -> String {
-        DEEP_LINK_REDIRECT_URI.to_string()
+        format!("{}://{}", DEEP_LINK_SCHEME, DEEP_LINK_REDIRECT_URI)
     }
 
     /// 获取当前环境的协议名称
@@ -233,9 +233,9 @@ mod tests {
                 .code,
             "ok"
         );
+    /// 获取 `redirect_uri` (根据环境自动选择协议)
+    pub fn get_redirect_uri() -> String {
+        format!("{}://{}", DEEP_LINK_SCHEME, DEEP_LINK_REDIRECT_URI)
     }
-
-    
-
     
 }
