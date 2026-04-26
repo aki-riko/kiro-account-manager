@@ -628,6 +628,10 @@
   "detail.overageCap": "超额上限",
   "detail.perCredit": "积分",
   "detail.fields": "个字段",
+  "detail.availableModels": "账户可用模型",
+  "detail.loadingModels": "加载模型中...",
+  "detail.noModels": "暂无可用模型",
+  "detail.noDescription": "无描述",
 
   "mcpManager.title": "MCP 服务",
   "mcpManager.subtitle": "管理 Kiro IDE 的 MCP 服务配置",
