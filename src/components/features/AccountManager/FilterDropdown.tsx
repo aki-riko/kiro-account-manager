@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Filter, X } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useTranslation } from 'react-i18next'
@@ -158,6 +159,7 @@ function FilterDropdown({
   
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [buttonRect, setButtonRect] = useState<DOMRect | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -188,7 +190,11 @@ function FilterDropdown({
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect()
+          setButtonRect(rect)
+          setOpen(!open)
+        }}
         className={`
           cursor-pointer flex items-center gap-2.5 px-3 py-2.5
           glass-card border-2 border-border
@@ -219,18 +225,21 @@ function FilterDropdown({
         )}
       </button>
 
-      {open && (
+      {open && buttonRect && createPortal(
         <div
           ref={panelRef}
           className={`
-            absolute right-0 top-full mt-3 w-[420px] max-w-[calc(100vw-48px)]
+            fixed w-[420px] max-w-[calc(100vw-48px)]
             glass-card border border-border
-            rounded-2xl shadow-2xl z-50
+            rounded-2xl shadow-2xl z-[9999]
             overflow-hidden
           `}
           style={{
+            top: `${buttonRect.bottom + 12}px`,
+            right: `${window.innerWidth - buttonRect.right}px`,
             animation: 'slideDown 0.2s ease-out',
-            boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.25)'}}
+            boxShadow: '0 20px 40px -12px rgba(0, 0, 0, 0.25)'
+          }}
         >
             <div className={`px-4 py-4 border-b border-border space-y-3`}>
             <div className="flex items-start justify-between gap-3">
@@ -418,7 +427,8 @@ function FilterDropdown({
               background: var(--app-primary-solid-hover);
             }
           `}</style>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
