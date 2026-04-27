@@ -1209,9 +1209,6 @@ fn with_kiro_upstream_headers(
             builder = builder.header("x-amzn-kiro-profile-arn", profile_arn);
         }
     }
-    if is_external_idp_auth_method(upstream.auth_method.as_deref()) {
-        builder = builder.header("TokenType", "EXTERNAL_IDP");
-    }
     if should_add_redirect_for_internal(upstream.provider.as_deref()) {
         builder = builder.header("redirect-for-internal", "true");
     }
