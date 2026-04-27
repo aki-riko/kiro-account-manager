@@ -137,17 +137,17 @@ fn navigate_main_window_to_route(app_handle: &tauri::AppHandle, route: &str) {
         log::error!("{err}");
     }
 }
-
 fn handle_incoming_deep_link(app_handle: &tauri::AppHandle, url: &str) {
     if let Some(route) = core::deep_link_handler::get_app_callback_route(url) {
         navigate_main_window_to_route(app_handle, &route);
     } else {
-        core::deep_link_handler::handle_deep_link(url);
+        // Social OAuth 回调由后端 login_social 的 wait_for_callback 处理
+        // 不需要前端导航到 /callback 页面
+        let (_handled, _should_navigate) = core::deep_link_handler::handle_deep_link(url);
     }
 
     tray_behavior::show_main_window(app_handle);
 }
-
 /// 配置单实例插件回调
 #[allow(clippy::needless_pass_by_value)] // Tauri 框架要求回调签名为 Vec<String>
 fn setup_single_instance_callback(app: &tauri::AppHandle, argv: Vec<String>, _cwd: String) {
@@ -193,6 +193,9 @@ fn handle_deep_link_event(app_handle: &tauri::AppHandle, payload: &str) {
 
 /// 应用 setup 回调
 fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // 初始化 deep link 处理器
+    core::deep_link_handler::init();
+
     // 首次启动时检查命令行参数中的 deep link（Windows/Linux）
     let protocol_prefix = format!(
         "{}://",
@@ -205,7 +208,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 监听 deep link 事件（根据环境自动选择协议）
-    #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     {
         use tauri_plugin_deep_link::DeepLinkExt;
         let scheme = core::deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme();
@@ -223,7 +226,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
         if let Err(err) = gateway::auto_start_if_enabled(&app_handle).await {
-            log::error!("自动启动网关失败: {err}");
+            log::error!("自动启动反代失败: {err}");
         }
     });
 

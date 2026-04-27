@@ -388,7 +388,7 @@ fn ensure_citation_target_supported(target: &serde_json::Value) -> Option<()> {
 use crate::gateway::models::{
     OpenAIChatChunk, OpenAIChatChunkChoice, OpenAIChatDelta, OpenAIChatResponse,
     OpenAIChatChoice, OpenAIChatResponseMessage, OpenAIResponseToolCall, OpenAIChatUsage,
-    OpenAIToolCallFunction,
+    OpenAIToolCallFunction, OpenAIUsage,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -463,12 +463,11 @@ pub fn build_openai_response(
             index: 0,
             message,
             finish_reason: Some(finish_reason),
-            }],
-            usage: OpenAIChatUsage {
-            prompt_tokens: aggregated.input_tokens,
-            completion_tokens: aggregated.output_tokens,
-            total_tokens: aggregated.input_tokens + aggregated.output_tokens,
-            },
+        }],
+        usage: OpenAIUsage {
+            input_tokens: aggregated.input_tokens,
+            output_tokens: aggregated.output_tokens,
+        },
     }
 }
 

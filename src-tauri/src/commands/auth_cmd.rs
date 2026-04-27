@@ -1,7 +1,7 @@
 // Auth 相关命令 - 直接存储 usage_data
+// Auth 相关命令 - 直接存储 usage_data
 
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递 State
-
 use crate::core::account::Account;
 use crate::core::protocol_registry;
 use crate::auth::User;
@@ -142,7 +142,7 @@ async fn login_social(
 ) -> Result<String, String> {
     // 确保协议注册指向当前应用（解决多版本/移动应用的问题）
     protocol_registry::ensure_protocol_registration()?;
-    
+
     let provider_id = config.provider_id.clone();
     let pending = prepare_pending_social_login(&provider_id, get_machine_id());
     let redirect_uri = social_callback_redirect_uri();
@@ -151,6 +151,10 @@ async fn login_social(
 
     *lock_state(&state.pending_login, "pending_login")? = Some(pending.clone());
 
+    // 1. 注册 deep link 回调等待器
+    let waiter = crate::core::deep_link_handler::register_waiter(&pending.state);
+
+    // 2. 打开浏览器授权
     if let Err(err) = client
         .login(&provider_id, &redirect_uri, &code_challenge, &pending.state)
         .await
@@ -160,7 +164,90 @@ async fn login_social(
     }
 
     println!("\n[social] LOGIN STARTED: {provider_id}");
-    Ok(format!("social login started for {provider_id}"))
+
+    // 3. 等待回调（阻塞直到用户完成授权或超时）
+    let callback_result = waiter.wait_for_callback()?;
+
+    // 4. 用 code 换 token
+    let token_result: crate::auth::providers::SocialTokenResponse = client
+        .create_token(
+            &callback_result.code,
+            &pending.code_verifier,
+            &redirect_uri,
+            None, // invitation_code
+        )
+        .await?;
+
+    // 5. 获取配额信息
+    let usage_result = get_usage_by_provider(&provider_id, &token_result.access_token).await?;
+
+    // 封禁账号直接报错
+    if usage_result.is_banned {
+        *lock_state(&state.pending_login, "pending_login")? = None;
+        return Err("BANNED: 账号已被封禁".to_string());
+    }
+
+    let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
+    let final_email = new_email
+        .or(user_id.clone())
+        .unwrap_or_else(|| format!("{}_{}", provider_id.to_lowercase(), &token_result.refresh_token[..8]));
+
+    // 6. 保存账号
+    let mut store = lock_state(&state.store, "store")?;
+    let existing_idx = find_existing_account_idx(
+        &store.accounts,
+        Some(&final_email),
+        &provider_id,
+        &token_result.refresh_token,
+        user_id.as_ref(),
+    );
+
+    let account = if let Some(idx) = existing_idx {
+        let existing = &mut store.accounts[idx];
+        existing.access_token = Some(token_result.access_token.clone());
+        existing.refresh_token = Some(token_result.refresh_token.clone());
+        existing.profile_arn = token_result.profile_arn.clone();
+        existing.user_id = user_id;
+        existing.usage_data = Some(usage_result.usage_data);
+        existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
+        existing.clone()
+    } else {
+        let mut account = Account::new(final_email.clone(), format!("Kiro {provider_id} 账号"));
+        account.access_token = Some(token_result.access_token.clone());
+        account.refresh_token = Some(token_result.refresh_token.clone());
+        account.profile_arn = token_result.profile_arn.clone();
+        account.provider = Some(provider_id.clone());
+        account.auth_method = Some("social".to_string());
+        account.user_id = user_id;
+        account.usage_data = Some(usage_result.usage_data);
+        account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
+        account.machine_id = Some(uuid::Uuid::new_v4().to_string().to_lowercase());
+        store.accounts.insert(0, account.clone());
+        account
+    };
+
+    save_store(&store)?;
+    drop(store);
+
+    // 7. 更新认证状态（失败不影响账号已保存）
+    let user = crate::auth::User {
+        id: uuid::Uuid::new_v4().to_string(),
+        email: account.email.clone(),
+        name: account
+            .email
+            .as_ref()
+            .and_then(|e| e.split('@').next())
+            .unwrap_or("User")
+            .to_string(),
+        avatar: None,
+        provider: provider_id.clone(),
+    };
+    let _ = lock_state(&state.auth.user, "auth user").map(|mut u| *u = Some(user));
+    let _ = lock_state(&state.auth.access_token, "auth access_token").map(|mut t| *t = Some(token_result.access_token));
+
+    *lock_state(&state.pending_login, "pending_login")? = None;
+
+    Ok(format!("Successfully logged in with {provider_id}"))
 }
 
 async fn login_idc(

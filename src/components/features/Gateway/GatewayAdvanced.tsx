@@ -69,7 +69,7 @@ function GatewayAdvanced({
           </div>
 
           <div className={`text-sm text-muted-foreground`}>
-            监听地址、安全暴露、账号来源和池调度都收口到这里，属于低频但决定网关行为边界的配置。
+            监听地址、安全暴露、账号来源和池调度都收口到这里，属于低频但决定反代行为边界的配置。
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -119,7 +119,7 @@ function GatewayAdvanced({
 
                   <div className="flex flex-col gap-1.5">
                     <Label>客户端 API Keys</Label>
-                    <div className="text-xs text-muted-foreground">每行一个客户端 Key。客户端连接本地网关时可使用其中任意一个；Kiro API 的 access token 仍由网关从本地账号自动读取。</div>
+                    <div className="text-xs text-muted-foreground">每行一个客户端 Key。客户端连接本地反代时可使用其中任意一个；Kiro API 的 access token 仍由反代从本地账号自动读取。</div>
                     <Textarea
                       placeholder={'sk-primary\nsk-secondary'}
                       rows={3}
@@ -218,7 +218,7 @@ function GatewayAdvanced({
 
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col gap-1">
-                      <Label>随应用启动自动拉起网关</Label>
+                      <Label>随应用启动自动拉起反代</Label>
                       <div className="text-xs text-muted-foreground">仅影响下次启动应用时是否自动启动，不会立即修改当前运行状态。</div>
                     </div>
                     <Switch
@@ -230,7 +230,7 @@ function GatewayAdvanced({
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col gap-1">
                       <Label>仅允许本机访问</Label>
-                      <div className="text-xs text-muted-foreground">开启后，网关会拒绝非 127.0.0.1 / ::1 请求，即使你把监听地址改成 0.0.0.0。无论是否开启，客户端都必须携带任意一个已配置的客户端 API Key。</div>
+                      <div className="text-xs text-muted-foreground">开启后，反代会拒绝非 127.0.0.1 / ::1 请求，即使你把监听地址改成 0.0.0.0。无论是否开启，客户端都必须携带任意一个已配置的客户端 API Key。</div>
                     </div>
                     <Switch
                       checked={!!config.localOnly}
@@ -309,7 +309,7 @@ function GatewayAdvanced({
 
                   <div className="flex flex-col gap-1.5">
                     <Label>切换阈值</Label>
-                    <div className="text-xs text-muted-foreground">当账号使用率达到该阈值且仍有其他候选账号时，网关会优先尝试下一个账号。</div>
+                    <div className="text-xs text-muted-foreground">当账号使用率达到该阈值且仍有其他候选账号时，反代会优先尝试下一个账号。</div>
                     <Input
                       type="number"
                       value={config.threshold}

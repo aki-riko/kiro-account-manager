@@ -70,7 +70,7 @@ export function getOverviewProps() {
     },
     operationsChecklist: [
       { label: '配置健康', tone: 'green', status: '正常', detail: '字段完整。' },
-      { label: '运行状态', tone: 'green', status: '运行中', detail: '网关已在线。' },
+      { label: '运行状态', tone: 'green', status: '运行中', detail: '反代已在线。' },
     ],
     clientSamples: {
       openai: {
@@ -79,7 +79,7 @@ export function getOverviewProps() {
     },
     copyText: noop,
     handleOpenLogDir: noop,
-    copySuccess: '网关入口已复制',
+    copySuccess: '反代入口已复制',
     effectiveConfig: {
       localOnly: true,
     },

@@ -11,19 +11,19 @@ use serde::Deserialize;
 
 /// Social 登录 Token 响应
 #[derive(Debug, Deserialize)]
-struct SocialTokenResponse {
+pub struct SocialTokenResponse {
     #[serde(rename = "accessToken")]
-    access_token: String,
+    pub access_token: String,
     #[serde(rename = "refreshToken")]
-    refresh_token: String,
+    pub refresh_token: String,
     #[serde(rename = "profileArn")]
-    profile_arn: Option<String>,
+    pub profile_arn: Option<String>,
     #[serde(rename = "expiresIn")]
-    expires_in: i64,
+    pub expires_in: i64,
     #[serde(rename = "idToken")]
-    id_token: Option<String>,
+    pub id_token: Option<String>,
     #[serde(rename = "tokenType")]
-    token_type: Option<String>,
+    pub token_type: Option<String>,
 }
 
 /// Social 刷新 Token 响应

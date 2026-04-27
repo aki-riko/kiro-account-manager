@@ -8,4 +8,4 @@ mod social;
 pub use base::{AuthProvider, AuthResult, RefreshMetadata};
 pub use factory::*;
 pub use idc::{cancel_pending_login as cancel_pending_idc_login, IdcProvider};
-pub use social::SocialProvider;
+pub use social::{SocialProvider, SocialTokenResponse};

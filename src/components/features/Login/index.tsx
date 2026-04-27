@@ -154,6 +154,8 @@ function Login({ onLogin }: LoginProps) {
     
     try {
       await invoke('kiro_login', { provider })
+      // 登录成功，调用回调并跳转
+      onLogin?.()
     } catch (e) {
       console.error('Login error:', e)
       setError(getLoginErrorMessage(e))
@@ -203,11 +205,13 @@ function Login({ onLogin }: LoginProps) {
     setError('')
     
     try {
-      await invoke('kiro_login', { 
+      await invoke('kiro_login', {
         provider: 'Enterprise',
         startUrl: normalizedStartUrl,
         region: normalizedRegion
       })
+      // 登录成功，调用回调并跳转
+      onLogin?.()
     } catch (e) {
       console.error('Login error:', e)
       setError(getLoginErrorMessage(e))

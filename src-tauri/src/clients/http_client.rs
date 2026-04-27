@@ -251,6 +251,7 @@ pub fn should_send_codewhisperer_optout() -> bool {
     !content_collection_enabled
 }
 
+#[allow(dead_code)]
 pub fn is_external_idp_auth_method(auth_method: Option<&str>) -> bool {
     auth_method.is_some_and(|value| {
         let trimmed = value.trim();

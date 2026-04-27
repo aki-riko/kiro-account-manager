@@ -66,7 +66,7 @@ function GatewayPage() {
   const { t, theme } = useApp()
   const accent = useMemo(() => getThemeAccent(theme), [theme])
 
-  // 定义网关页面使用的色彩系统
+  // 定义反代页面使用的色彩系统
   const colors = useMemo(() => ({
     inputFocus: 'focus:ring-primary/20 focus:border-primary',
   }), [])
@@ -244,14 +244,14 @@ function GatewayPage() {
         label: '配置健康',
         status: hasFieldErrors ? '待修正' : '正常',
         tone: hasFieldErrors ? 'red' : 'green',
-        detail: hasFieldErrors ? '存在表单错误，保存和启动会被拦截。' : '当前表单字段满足网关启动要求。'},
+        detail: hasFieldErrors ? '存在表单错误，保存和启动会被拦截。' : '当前表单字段满足反代启动要求。'},
       {
         label: '运行状态',
         status: status.running ? '运行中' : '未启动',
         tone: status.running ? 'green' : 'gray',
         detail: status.running
           ? `当前监听 ${statusSummary.listen}，请求计数 ${statusSummary.requests}。`
-          : '当前尚未拉起网关，可直接使用现有配置启动。'},
+          : '当前尚未拉起反代，可直接使用现有配置启动。'},
       {
         label: '配置同步',
         status: hasUnsavedChanges ? '未保存' : '已保存',
@@ -264,7 +264,7 @@ function GatewayPage() {
         status: hasRuntimeChanges ? '待重启' : '已对齐',
         tone: hasRuntimeChanges ? 'orange' : 'teal',
         detail: hasRuntimeChanges
-          ? '网关仍在使用旧运行参数，需要重启后才会切换到新配置。'
+          ? '反代仍在使用旧运行参数，需要重启后才会切换到新配置。'
           : '当前运行参数与页面快照一致。'},
     ]
 
@@ -301,16 +301,16 @@ function GatewayPage() {
   const integrationGuidance = useMemo(() => ([
     {
       label: 'Anthropic / Claude',
-      detail: '使用 ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY 直连本地网关，适合 Claude Code / Claude Desktop 兼容链路。'},
+      detail: '使用 ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY 直连本地反代，适合 Claude Code / Claude Desktop 兼容链路。'},
     {
       label: 'OpenAI Chat Completions',
       detail: '使用 OPENAI_BASE_URL + OPENAI_API_KEY，支持传统 OpenAI Chat Completions 格式（/v1/chat/completions），兼容标准 OpenAI 客户端库。'},
     {
       label: 'OpenAI Responses',
-      detail: '使用 OPENAI_BASE_URL + OPENAI_API_KEY，网关会把 /v1/responses 请求映射到 Kiro 上游并保留流式事件序列。'},
+      detail: '使用 OPENAI_BASE_URL + OPENAI_API_KEY，反代会把 /v1/responses 请求映射到 Kiro 上游并保留流式事件序列。'},
     {
       label: '客户端鉴权',
-      detail: '客户端永远只看本地网关 API Key；网关到 Kiro 的 access token 由本地账号自动托管。'},
+      detail: '客户端永远只看本地反代 API Key；反代到 Kiro 的 access token 由本地账号自动托管。'},
     {
       label: '排障入口',
       detail: '日志目录、错误历史、请求明细都统一收口在观测页，不需要再翻系统日志。'},
@@ -567,7 +567,7 @@ function GatewayPage() {
           <Stack gap="sm">
             <Group justify="space-between" align="flex-start">
               <Stack gap={6}>
-                <Text fw={700} className={"text-foreground"}>Kiro API 网关</Text>
+                <Text fw={700} className={"text-foreground"}>Kiro API 反代</Text>
                 <Text size="sm" className={"text-muted-foreground"}>
                   把入口状态、客户端接入、安全边界和观测线索压到一屏里，优先处理保存/启动/重启这几类主动作。
                 </Text>
@@ -595,7 +595,7 @@ function GatewayPage() {
             <Group justify="space-between" align="flex-start">
               <Stack gap={4}>
                 <Group gap="xs">
-                  <Badge color={status.running ? 'green' : 'gray'}>{status.running ? '网关运行中' : '网关未启动'}</Badge>
+                  <Badge color={status.running ? 'green' : 'gray'}>{status.running ? '反代运行中' : '反代未启动'}</Badge>
                   <Badge color={effectiveConfig.localOnly ? 'teal' : 'yellow'}>{effectiveConfig.localOnly ? '仅本机访问' : '允许远程访问'}</Badge>
                   <Badge variant="light" color={hasUnsavedChanges ? 'yellow' : 'teal'}>
                     {hasUnsavedChanges ? '存在未保存配置' : '配置已保存'}
@@ -623,7 +623,7 @@ function GatewayPage() {
                     disabled={hasFieldErrors || saving || loading}
                   >
                     <RotateCcw size={16} className="mr-1" />
-                    重启网关
+                    重启反代
                   </Button>
                 ) : null}
                 {!status.running ? (
@@ -633,7 +633,7 @@ function GatewayPage() {
                     className="bg-green-500 hover:bg-green-600 text-white"
                   >
                     <Play size={16} className="mr-1" />
-                    启动网关
+                    启动反代
                   </Button>
                 ) : (
                   <Button
@@ -642,7 +642,7 @@ function GatewayPage() {
                     className="bg-red-500 hover:bg-red-600 text-white"
                   >
                     <Square size={16} className="mr-1" />
-                    停止网关
+                    停止反代
                   </Button>
                 )}
               </Group>

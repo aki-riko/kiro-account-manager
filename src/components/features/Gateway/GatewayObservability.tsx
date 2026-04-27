@@ -309,7 +309,7 @@ function GatewayObservability({
             />
 
             <div className={`text-sm text-muted-foreground`}>
-              这里展示最近 120 条网关请求记录，按时间倒序读取本地 JSONL 文件。最后同步时间：{lastRequestLogsSyncAt}
+              这里展示最近 120 条反代请求记录，按时间倒序读取本地 JSONL 文件。最后同步时间：{lastRequestLogsSyncAt}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-3">
@@ -419,7 +419,7 @@ function GatewayObservability({
                 <AlertDescription>
                   {requestLogs.length
                     ? '当前筛选条件下没有匹配结果，请调整结果过滤或搜索关键词。'
-                    : '当前还没有网关请求写入本地日志文件。启动网关并发起请求后，这里会显示最新记录。'}
+                    : '当前还没有反代请求写入本地日志文件。启动反代并发起请求后，这里会显示最新记录。'}
                 </AlertDescription>
               </Alert>
             ) : (

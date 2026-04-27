@@ -116,7 +116,7 @@ function GatewayOverview({
               <Stack gap={8}>
                 <Text size="xs" className={"text-muted-foreground"}>快速复制</Text>
                 <Text fw={700} className={"text-foreground"}>基础入口</Text>
-                <Button variant="outline" size="sm" onClick={() => copyText(effectiveBaseUrl, '网关入口已复制')}>
+                <Button variant="outline" size="sm" onClick={() => copyText(effectiveBaseUrl, '反代入口已复制')}>
                   <Copy size={14} className="mr-1" />
                   复制入口地址
                 </Button>

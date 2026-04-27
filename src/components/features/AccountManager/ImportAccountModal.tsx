@@ -131,7 +131,6 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
     inputFocus: 'focus:ring-primary/20 focus:border-primary',
     ringColor: theme === 'dark' ? 'ring-primary/40' : 'ring-primary/20'
   }), [theme])
-
   const [activeTab, setActiveTab] = useState('json')
   const [osType, setOsType] = useState('')
   const [jsonText, setJsonText] = useState('')
@@ -147,6 +146,17 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
   const [kiroImporting, setKiroImporting] = useState(false)
   const [kiroProgress, setKiroProgress] = useState({ current: 0, total: 0 })
   const [kiroResult, setKiroResult] = useState<any>(null)
+
+  // 从 kiro-cli 导入相关状态
+  // 在线登录相关状态
+  const [onlineLoginPending, setOnlineLoginPending] = useState(false)
+  const [onlineLoginError, setOnlineLoginError] = useState('')
+  const [showWaitingModal, setShowWaitingModal] = useState(false)
+  const [waitingProviderName, setWaitingProviderName] = useState('')
+  const [supportedProviders, setSupportedProviders] = useState<string[]>([])
+  const [showEnterpriseModal, setShowEnterpriseModal] = useState(false)
+  const [enterpriseStartUrl, setEnterpriseStartUrl] = useState('')
+  const [enterpriseRegion, setEnterpriseRegion] = useState('us-east-1')
 
   // 从 kiro-cli 导入相关状态
   const [kiroCliDbPath, setKiroCliDbPath] = useState('')
@@ -580,13 +590,13 @@ return (
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="px-6 pt-2 pb-3 border-b-0 bg-transparent h-auto">
-              <div className={`grid grid-cols-3 gap-1 p-1 rounded-xl border border-border bg-muted/30 w-full`}>
+              <div className={`grid grid-cols-4 gap-1 p-1 rounded-xl border border-border bg-muted/30 w-full`}>
                 <button
                   onClick={() => setActiveTab('json')}
                   className={`py-2 px-3 text-sm rounded-lg transition-all duration-200 font-medium cursor-pointer ${activeTab === 'json'
-                      ? `glass-card shadow-sm ring-1 ${colors.ringColor} text-foreground`
-                      : `hover:bg-muted/50 text-muted-foreground`
-                    }`}
+                    ? `glass-card shadow-sm ring-1 ${colors.ringColor} text-foreground`
+                    : `hover:bg-muted/50 text-muted-foreground`
+                  }`}
                 >
                   <div className="flex items-center justify-center gap-2">
                     <FileJson size={16} />
@@ -596,30 +606,30 @@ return (
                 <button
                   onClick={() => setActiveTab('kiro')}
                   className={`py-2 px-3 text-sm rounded-lg transition-all duration-200 font-medium cursor-pointer ${activeTab === 'kiro'
-                      ? `glass-card shadow-sm ring-1 ${colors.ringColor} text-foreground`
-                      : `hover:bg-muted/50 text-muted-foreground`
-                    }`}
+                    ? `glass-card shadow-sm ring-1 ${colors.ringColor} text-foreground`
+                    : `hover:bg-muted/50 text-muted-foreground`
+                  }`}
                 >
                   <div className="flex items-center justify-center gap-2">
-                    <Database size={16} />
+                    <Upload size={16} />
                     <span>{t('import.kiroTab')}</span>
                   </div>
                 </button>
                 <button
                   onClick={() => setActiveTab('kiro-cli')}
                   className={`py-2 px-3 text-sm rounded-lg transition-all duration-200 font-medium cursor-pointer ${activeTab === 'kiro-cli'
-                      ? `glass-card shadow-sm ring-1 ${colors.ringColor} text-foreground`
-                      : `hover:bg-muted/50 text-muted-foreground`
-                    }`}
+                    ? `glass-card shadow-sm ring-1 ${colors.ringColor} text-foreground`
+                    : `hover:bg-muted/50 text-muted-foreground`
+                  }`}
                 >
                   <div className="flex items-center justify-center gap-2">
                     <Database size={16} />
                     <span>{t('import.kiroCliTab')}</span>
                   </div>
                 </button>
+                
               </div>
             </TabsList>
-
             <TabsContent value="json" className="px-6 pb-4 pt-4 outline-none">
               <Stack gap="lg">
                 <Group>
@@ -854,6 +864,8 @@ return (
                 </div>
               </Stack>
             </TabsContent>
+
+            
           </Tabs>
         )}
       </DialogBody>

@@ -310,7 +310,7 @@ fn ensure_config_valid(config: &GatewayConfig) -> Result<(), String> {
         }
         "single" | "group" => {}
         "local" => {
-            return Err("网关不再支持 local 模式，请改用 single/group 账号池模式".to_string());
+            return Err("反代不再支持 local 模式，请改用 single/group 账号池模式".to_string());
         }
         _ => return Err("accountMode 必须是 single/group".to_string()),
     }

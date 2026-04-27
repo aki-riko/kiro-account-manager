@@ -275,7 +275,7 @@ export const buildGatewayRoutingSummary = ({ config, counts, selectedLabels = {}
   if (mode === 'single') {
     return {
       modeLabel: '指定单账号',
-      modeDescription: '网关会固定使用一个账号，适合调试或绑定到单一租户场景。',
+      modeDescription: '反代会固定使用一个账号，适合调试或绑定到单一租户场景。',
       selectionLabel: '当前账号',
       selectionValue: selectedLabels.single || '未选择账号',
       inventorySummary,
@@ -321,33 +321,33 @@ export const buildGatewayActionSummary = ({
     return {
       tone: 'yellow',
       title: '配置已变更，重启后生效',
-      description: '网关仍按已启动时的配置运行。先保存，再执行重启网关，才能让新配置生效。'}
+      description: '反代仍按已启动时的配置运行。先保存，再执行重启反代，才能让新配置生效。'}
   }
 
   if (running && unsavedChanges) {
     return {
       tone: 'blue',
       title: '当前运行配置尚未保存',
-      description: '当前页面配置已经用于运行网关，但还没有写回配置文件；如需保留下次启动沿用，请保存配置。'}
+      description: '当前页面配置已经用于运行反代，但还没有写回配置文件；如需保留下次启动沿用，请保存配置。'}
   }
 
   if (running) {
     return {
       tone: 'teal',
-      title: '网关运行中',
-      description: '当前配置与已保存状态一致；如需中断流量可直接停止网关。'}
+      title: '反代运行中',
+      description: '当前配置与已保存状态一致；如需中断流量可直接停止反代。'}
   }
 
   if (unsavedChanges) {
     return {
       tone: 'blue',
       title: '可按当前配置直接启动',
-      description: '启动网关会使用当前表单里的配置；如果希望下次应用启动也沿用这些设置，先点保存配置。'}
+      description: '启动反代会使用当前表单里的配置；如果希望下次应用启动也沿用这些设置，先点保存配置。'}
   }
 
   return {
     tone: 'blue',
-    title: '网关当前未启动',
+    title: '反代当前未启动',
     description: '可以直接启动现有配置，或先调整表单后再启动。'}
 }
 

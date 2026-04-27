@@ -53,9 +53,13 @@ impl DeepLinkCallbackWaiter {
         }
     }
 }
-
 /// 全局回调发送器存储
 static PENDING_SENDER: std::sync::OnceLock<PendingSender> = std::sync::OnceLock::new();
+
+/// 初始化 deep link 处理器（应用启动时调用）
+pub fn init() {
+    PENDING_SENDER.get_or_init(|| Mutex::new(None));
+}
 
 /// 注册一个新的回调等待器，返回接收端
 pub fn register_waiter(state: &str) -> DeepLinkCallbackWaiter {
@@ -76,7 +80,6 @@ pub fn register_waiter(state: &str) -> DeepLinkCallbackWaiter {
         timeout: Duration::from_secs(300),
     }
 }
-
 /// 取消当前等待中的 deep link 登录
 pub fn cancel_waiter() -> bool {
     let Some(storage) = PENDING_SENDER.get() else {
@@ -113,26 +116,32 @@ pub fn get_app_callback_route(url: &str) -> Option<String> {
 
     Some(route)
 }
-
 /// 处理 deep link URL（由 main.rs 调用）
-pub fn handle_deep_link(url: &str) -> bool {
+/// 返回 (是否处理成功, 是否需要导航到 /callback)
+pub fn handle_deep_link(url: &str) -> (bool, bool) {
+    log::info!("[deep_link] Received URL: {}", url);
+
     let Some(storage) = PENDING_SENDER.get() else {
-        return false;
+        log::warn!("[deep_link] PENDING_SENDER not initialized");
+        return (false, false);
     };
 
     let mut guard = storage
         .lock()
         .expect("Failed to acquire pending sender lock");
     let Some((expected_state, tx)) = guard.take() else {
-        return false;
+        log::warn!("[deep_link] No pending login waiter");
+        return (false, false);
     };
+
+    log::info!("[deep_link] Processing callback with expected state: {}", expected_state);
 
     // 解析 URL
     let parsed = match url::Url::parse(url) {
         Ok(u) => u,
         Err(e) => {
             let _ = tx.send(Err(format!("Invalid URL: {e}")));
-            return false;
+            return (false, false);
         }
     };
 
@@ -140,8 +149,8 @@ pub fn handle_deep_link(url: &str) -> bool {
     let expected_scheme = DeepLinkCallbackWaiter::get_protocol_scheme();
     if parsed.scheme() != expected_scheme {
         *guard = Some((expected_state, tx)); // 放回去
-        return false;
-    }
+        return (false, false);
+    };
 
     // 提取参数
     let params: std::collections::HashMap<_, _> = parsed.query_pairs().collect();
@@ -153,29 +162,29 @@ pub fn handle_deep_link(url: &str) -> bool {
             std::string::ToString::to_string,
         );
         let _ = tx.send(Err(format!("OAuth error: {error} - {desc}")));
-        return true;
+        return (true, true); // 错误也需要导航到 /callback 显示错误
     }
 
     let Some(code) = params.get("code") else {
         let _ = tx.send(Err("Missing code parameter".to_string()));
-        return true;
+        return (true, true);
     };
     let code = code.to_string();
 
     let Some(state) = params.get("state") else {
         let _ = tx.send(Err("Missing state parameter".to_string()));
-        return true;
+        return (true, true);
     };
     let state = state.to_string();
 
     // 验证 state
     if state != expected_state {
         let _ = tx.send(Err("State mismatch - possible CSRF attack".to_string()));
-        return true;
+        return (true, true);
     }
 
     let _ = tx.send(Ok(OAuthCallbackResult { code }));
-    true
+    (true, true) // 成功处理，需要导航到 /callback
 }
 
 #[cfg(test)]
@@ -221,11 +230,12 @@ mod tests {
 
         assert!(!handle_deep_link(
             "wrong-scheme://callback?code=ok&state=expected-state"
-        ));
+        ).0);
 
         let handled =
-            handle_deep_link("kiro-account-manager://kiro.kiroAgent/authenticate-success?code=ok&state=expected-state");
-        assert!(handled);
+            handle_deep_link("kiro://kiro.kiroAgent/authenticate-success?code=ok&state=expected-state");
+        assert!(handled.0);
+        assert!(handled.1);
         assert_eq!(
             waiter
                 .wait_for_callback()

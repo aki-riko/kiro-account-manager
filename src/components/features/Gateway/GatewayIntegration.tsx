@@ -65,7 +65,7 @@ function GatewayIntegration({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <GatewayStatCard colors={colors} label="Anthropic" value="Messages / 流式事件" detail="支持 Claude 兼容接入、消息级流式返回、账号路由与本地鉴权。" />
                 <GatewayStatCard colors={colors} label="OpenAI" value="Chat Completions / Responses" detail="支持 /v1/chat/completions（传统 OpenAI 格式）、/v1/responses、function call、流式 delta、done 与 completed 事件，并透传 tool_choice。" />
-                <GatewayStatCard colors={colors} label="网关边界" value="本地入口 + 上游凭证托管" detail="客户端只接触本地网关客户端 Key（命中任意已配置 Key 即可）；Kiro access token 与区域信息由网关自动管理。" />
+                <GatewayStatCard colors={colors} label="反代边界" value="本地入口 + 上游凭证托管" detail="客户端只接触本地反代客户端 Key（命中任意已配置 Key 即可）；Kiro access token 与区域信息由反代自动管理。" />
                 <GatewayStatCard colors={colors} label="排障支持" value="日志 / 错误 / 请求元数据" detail="默认记录端点、状态码、耗时、模型、Region、上游来源等元数据；如旧日志里仍有 body，这里也会兼容展示。" />
               </div>
             </div>
@@ -120,7 +120,7 @@ function GatewayIntegration({
             )}
           >
             <p className={`text-xs mt-2 text-muted-foreground`}>
-              OpenAI 兼容客户端支持 <code className="bg-muted px-1 py-0.5 rounded text-xs">/v1/responses</code>（Kiro 扩展格式）和 <code className="bg-muted px-1 py-0.5 rounded text-xs">/v1/chat/completions</code>（传统 OpenAI 格式），示例 model 可替换为任意网关支持的模型。
+              OpenAI 兼容客户端支持 <code className="bg-muted px-1 py-0.5 rounded text-xs">/v1/responses</code>（Kiro 扩展格式）和 <code className="bg-muted px-1 py-0.5 rounded text-xs">/v1/chat/completions</code>（传统 OpenAI 格式），示例 model 可替换为任意反代支持的模型。
             </p>
             <pre className="bg-muted rounded-md p-3 overflow-x-auto text-xs font-mono mt-2">
               <code>{clientSamples.openai.curl}</code>
@@ -169,11 +169,11 @@ function GatewayIntegration({
 
           <GatewayCodeCard title="凭证口径">
             <div className="flex flex-col gap-1.5 mt-2">
-              <p className={`text-xs text-muted-foreground`}>客户端 {'->'} 本地网关 使用 API Key</p>
+              <p className={`text-xs text-muted-foreground`}>客户端 {'->'} 本地反代 使用 API Key</p>
               <pre className="bg-muted rounded-md p-3 overflow-x-auto text-xs font-mono">
                 <code>{integrationSummary.authLabel}</code>
               </pre>
-              <p className={`text-xs text-muted-foreground`}>本地网关 {'->'} Kiro API 使用本地 access token</p>
+              <p className={`text-xs text-muted-foreground`}>本地反代 {'->'} Kiro API 使用本地 access token</p>
               <pre className="bg-muted rounded-md p-3 overflow-x-auto text-xs font-mono">
                 <code>Authorization: Bearer &lt;local kiro access token&gt;</code>
               </pre>

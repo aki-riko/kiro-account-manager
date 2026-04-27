@@ -5,7 +5,7 @@
   "nav.desktopOAuth": "在线登录",
   "nav.socialIdC": "Social/IdC",
   "nav.settings": "设置",
-  "nav.gateway": "Kiro API 网关",
+  "nav.gateway": "Kiro API 反代",
   "nav.about": "关于",
 
   "gateway.overview": "总览",

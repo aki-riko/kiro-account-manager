@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 
 #[allow(dead_code)]
@@ -183,6 +182,7 @@ pub struct KiroToolResultContent {
 // AWS EventStream 响应事件类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct AssistantResponseEvent {
     pub content: String,
     pub conversation_id: String,
@@ -192,6 +192,7 @@ pub struct AssistantResponseEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct ToolUseEvent {
     pub tool_use_id: String,
     pub name: String,
@@ -201,6 +202,7 @@ pub struct ToolUseEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct MessageMetadataEvent {
     pub conversation_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -211,6 +213,7 @@ pub struct MessageMetadataEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct UsageInfo {
     pub input_tokens: i32,
     pub output_tokens: i32,
@@ -221,6 +224,7 @@ pub struct UsageInfo {
 // ============================================================================
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct OpenAIResponsesRequest {
     pub model: String,
     pub input: Vec<NormalizedMessage>,
@@ -236,6 +240,7 @@ pub struct OpenAIResponsesRequest {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub struct OpenAIResponsesResponse {
     pub id: String,
     pub object: String,
@@ -247,6 +252,7 @@ pub struct OpenAIResponsesResponse {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type")]
+#[allow(dead_code)]
 pub enum ResponseOutputItem {
     #[serde(rename = "message")]
     Message {
@@ -261,6 +267,7 @@ pub enum ResponseOutputItem {
     },
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type")]
 pub enum ResponseContent {
@@ -269,6 +276,7 @@ pub enum ResponseContent {
 }
 
 // Responses API 流式事件
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "event")]
 pub enum ResponsesStreamEvent {

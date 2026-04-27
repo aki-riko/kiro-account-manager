@@ -395,7 +395,7 @@ fn convert_anthropic_tool(tool: &crate::gateway::models::AnthropicTool) -> Tool 
 
 fn convert_web_search_tool(
     tool_type: &str,
-    name: &str,
+    _name: &str,
     description: Option<String>,
     max_uses: Option<i32>,
     allowed_domains: Option<Vec<String>>,

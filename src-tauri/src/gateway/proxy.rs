@@ -29,7 +29,7 @@ use crate::{
     },
     commands::machine_guid::get_machine_id,
     clients::http_client::{
-        build_kiro_custom_user_agent, is_external_idp_auth_method,
+        build_kiro_custom_user_agent,
         resolve_kiro_upstream_region, should_add_redirect_for_internal,
         should_send_codewhisperer_optout,
     },
@@ -62,6 +62,7 @@ struct UpstreamCredentials {
     region: String,
     source_label: String,
     user_agent: String,
+    #[allow(dead_code)]
     auth_method: Option<String>,
     send_opt_out: bool,
 }
@@ -261,7 +262,7 @@ async fn guarded_local_response(
         && !state.config.allowed_ips.is_empty()
         && !ip_matches_allowlist(client_addr.ip(), &state.config.allowed_ips)
     {
-        let message = format!("访问地址 {} 不在网关白名单中", client_addr.ip());
+        let message = format!("访问地址 {} 不在反代白名单中", client_addr.ip());
         return gateway_error_with_log(
             &state,
             ResponseFormat::Responses,
@@ -493,7 +494,7 @@ pub async fn proxy_handler(
         && !state.config.allowed_ips.is_empty()
         && !ip_matches_allowlist(client_addr.ip(), &state.config.allowed_ips)
     {
-        let message = format!("访问地址 {} 不在网关白名单中", client_addr.ip());
+        let message = format!("访问地址 {} 不在反代白名单中", client_addr.ip());
         return gateway_error_with_log(
             &state,
             format,
@@ -851,7 +852,7 @@ pub async fn mcp_proxy_handler(
         && !state.config.allowed_ips.is_empty()
         && !ip_matches_allowlist(client_addr.ip(), &state.config.allowed_ips)
     {
-        let message = format!("MCP 访问地址 {} 不在网关白名单中", client_addr.ip());
+        let message = format!("MCP 访问地址 {} 不在反代白名单中", client_addr.ip());
         return gateway_error_with_log(
             &state,
             ResponseFormat::Responses,
@@ -1510,7 +1511,7 @@ async fn resolve_upstream_credentials(
 ) -> Result<UpstreamCredentials, String> {
     match config.account_mode.as_str() {
         "single" | "group" => resolve_managed_account_credentials(config, request_index).await,
-        "local" => Err("网关不再支持 local 模式，请改用 single/group 账号池模式".to_string()),
+        "local" => Err("反代不再支持 local 模式，请改用 single/group 账号池模式".to_string()),
         _ => Err("accountMode 必须是 single/group".to_string()),
     }
 }
@@ -1540,11 +1541,11 @@ async fn resolve_managed_account_credentials(
     };
 
     if accounts.is_empty() {
-        return Err("未找到符合网关配置的可用账号".to_string());
+        return Err("未找到符合反代配置的可用账号".to_string());
     }
 
     order_accounts(&mut accounts, &config.strategy, request_index);
-    let mut last_error = "没有可用的账号可供网关使用".to_string();
+    let mut last_error = "没有可用的账号可供反代使用".to_string();
 
     for (index, account) in accounts.iter().enumerate() {
         match refresh_token_by_provider(account).await {
@@ -2517,7 +2518,6 @@ fn stream_proxy_response(
                     raw_buffer.extend_from_slice(&bytes);
                     // 逐个解码 EventStream 消息
                     loop {
-                        match decode_message(&raw_buffer) {
                         match decode_message(&raw_buffer) {
                             Ok(Some((msg, consumed_bytes))) => {
                                 // 成功解码一个消息

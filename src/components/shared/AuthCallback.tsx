@@ -46,40 +46,14 @@ export default function AuthCallback() {
   }
 
   useEffect(() => {
-    setMessage(t('callback.processing'))
-    
-    const handleCallback = async () => {
-      try {
-        const url = new URL(window.location.href)
-        const code = url.searchParams.get('code')
-        const state = url.searchParams.get('state')
+    // 后端 login_social 已完成 OAuth 流程（token 交换 + 保存账号）
+    // 前端只需显示成功并跳转
+    setStatus('success')
+    setMessage(t('callback.success'))
 
-        if (!code || !state) {
-          setStatus('error')
-          setMessage(t('callback.missingParams'))
-          return
-        }
-
-        setStatus('processing')
-        setMessage(t('callback.exchangingToken'))
-
-        await invoke('handle_kiro_social_callback', { code, callbackState: state })
-
-        setStatus('success')
-        setMessage(t('callback.success'))
-
-        setTimeout(() => {
-          closeCurrentPage()
-        }, 3000)
-
-      } catch (error) {
-        console.error('Callback error:', error)
-        setStatus('error')
-        setMessage(error instanceof Error ? error.message : t('callback.failed'))
-      }
-    }
-
-    handleCallback()
+    setTimeout(() => {
+      closeCurrentPage()
+    }, 1500)
   }, [t])
 
   const getStatusIcon = () => {
