@@ -119,6 +119,25 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState<string | null>(null)
 
+  // 获取可用模型
+  const fetchModels = async () => {
+    setModelsLoading(true)
+    setModelsError(null)
+    try {
+      const response = await invoke<any>('list_available_models', { 
+        id: account.id, 
+        forceRefresh: false 
+      })
+      const modelsList = Array.isArray(response?.availableModels) ? response.availableModels : []
+      setModels(modelsList)
+    } catch (e) {
+      console.error('Failed to fetch models:', e)
+      setModelsError(String(e))
+    } finally {
+      setModelsLoading(false)
+    }
+  }
+
   // 清理timer
   useEffect(() => {
     return () => {
@@ -127,6 +146,11 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
       }
     }
   }, [])
+
+  // 初始化时获取模型
+  useEffect(() => {
+    fetchModels()
+  }, [account.id])
 
   useEffect(() => {
     setCurrentAccount(account)
@@ -540,7 +564,7 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[320px] overflow-y-auto pr-1">
                   {models.map((model, index) => (
                     <div 
-                      key={model.id} 
+                      key={model.modelId} 
                       className={`group p-3 bg-background rounded-xl border shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-200 ${
                         index === 0 ? 'ring-1 ring-primary/20' : ''
                       }`}
@@ -552,11 +576,11 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
                               index === 0 ? 'bg-primary animate-pulse' : 'bg-muted-foreground/40'
                             }`} />
                             <code className="text-xs font-bold text-foreground truncate">
-                              {model.id}
+                              {model.modelId}
                             </code>
                           </div>
-                          {model.name && model.name !== model.id && (
-                            <p className="text-[11px] text-primary/80 font-medium mb-1 truncate">{model.name}</p>
+                          {model.modelName && model.modelName !== model.modelId && (
+                            <p className="text-[11px] text-primary/80 font-medium mb-1 truncate">{model.modelName}</p>
                           )}
                           <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
                             {model.description || t('detail.noDescription')}
@@ -565,12 +589,12 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
                       </div>
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
                         <div className="flex items-center gap-1.5">
-                          {model.inputTypes?.includes('TEXT') && (
+                          {model.supportedInputTypes?.includes('TEXT') && (
                             <span className="text-[10px] px-1.5 h-5 bg-blue-500/10 text-blue-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
                               <FileText size={12} />Text
                             </span>
                           )}
-                          {model.inputTypes?.includes('IMAGE') && (
+                          {model.supportedInputTypes?.includes('IMAGE') && (
                             <span className="text-[10px] px-1.5 h-5 bg-purple-500/10 text-purple-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
                               <ImageIcon size={12} />Image
                             </span>
@@ -584,11 +608,11 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
                           <Hash size={12} />
                           <span className="text-green-600">
-                            {model.maxInputTokens ? (model.maxInputTokens >= 1000000 ? `${(model.maxInputTokens / 1000000).toFixed(0)}M` : `${(model.maxInputTokens / 1000).toFixed(0)}K`) : '-'}
+                            {model.tokenLimits?.maxInputTokens ? (model.tokenLimits.maxInputTokens >= 1000000 ? `${(model.tokenLimits.maxInputTokens / 1000000).toFixed(0)}M` : `${(model.tokenLimits.maxInputTokens / 1000).toFixed(0)}K`) : '-'}
                           </span>
                           <span>/</span>
                           <span className="text-orange-600">
-                            {model.maxOutputTokens ? (model.maxOutputTokens >= 1000000 ? `${(model.maxOutputTokens / 1000000).toFixed(0)}M` : `${(model.maxOutputTokens / 1000).toFixed(0)}K`) : '-'}
+                            {model.tokenLimits?.maxOutputTokens ? (model.tokenLimits.maxOutputTokens >= 1000000 ? `${(model.tokenLimits.maxOutputTokens / 1000000).toFixed(0)}M` : `${(model.tokenLimits.maxOutputTokens / 1000).toFixed(0)}K`) : '-'}
                           </span>
                         </div>
                       </div>

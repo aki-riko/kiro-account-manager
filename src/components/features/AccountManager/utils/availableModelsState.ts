@@ -1,5 +1,10 @@
 export function extractCachedAvailableModels(account) {
-  const models = account?.availableModelsCache?.response?.models
+  const response = account?.availableModelsCache?.response
+
+  if (!response) return null
+
+  const models = response.availableModels
+
   return Array.isArray(models) ? models : null
 }
 
