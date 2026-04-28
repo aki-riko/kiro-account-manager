@@ -157,27 +157,6 @@ export function TokenJsonView({ account, defaultExpanded = false }) {
 
           {/* Token JSON */}
           <div className="flex items-center justify-between mb-3">
-          {/* Available Models */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Package size={16} className="text-primary" />
-              <span className="text-sm font-medium text-foreground">{t('accountCard.availableModels')}</span>
-            </div>
-            {availableModels && availableModels.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {availableModels.map((m) => (
-                  <span key={m.modelId} className="px-3 py-1.5 rounded-full bg-muted border border-border text-xs font-medium text-foreground">
-                    {m.modelName || m.modelId}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">{t('accountCard.noAvailableModels')}</div>
-            )}
-          </div>
-
-          {/* Token JSON */}
-          <div className="flex items-center justify-between mb-3">
             <span className={`text-xs font-medium text-muted-foreground`}>
               {Object.keys(credentialsJson).length} {t('detail.fields') || '个字段'}
             </span>
