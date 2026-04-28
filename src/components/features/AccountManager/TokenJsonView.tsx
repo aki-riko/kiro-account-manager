@@ -45,7 +45,7 @@ function JsonRenderer({ json, colors, accent, indent = 0 }) {
   const entries = Object.entries(json).filter(([_, value]) => value !== undefined)
   const pad = '  '.repeat(indent)
   const padInner = '  '.repeat(indent + 1)
-
+  
   return (
     <div className="text-sm font-mono leading-relaxed">
       <span className={"text-muted-foreground"}>{'{'}</span>
@@ -76,9 +76,6 @@ function JsonRenderer({ json, colors, accent, indent = 0 }) {
     </div>
   )
 }
-    </div>
-  )
-}
 
 // Token JSON 视图（只读）
 export function TokenJsonView({ account, defaultExpanded = false }) {
@@ -87,28 +84,28 @@ export function TokenJsonView({ account, defaultExpanded = false }) {
   const colors = useMemo(() => ({
     inputFocus: 'focus:ring-primary/20 focus:border-primary'
   }), [])
-  const [expanded, setExpanded] = useState(defaultExpanded)
+    const [expanded, setExpanded] = useState(defaultExpanded)
   const [copied, setCopied] = useState(false)
   const copiedTimerRef = useRef(null)
-
+  
   const credentialsJson = useMemo(() => buildCredentialsJson(account), [account])
   const jsonStr = useMemo(() => JSON.stringify(credentialsJson, null, 2), [credentialsJson])
 
   // 解析可用模型
   const availableModels = useMemo(() => resolveAvailableModels(account.availableModelsCache, account), [account])
-
+  
   useEffect(() => () => copiedTimerRef.current && clearTimeout(copiedTimerRef.current), [])
-
+  
   const handleCopy = () => {
     navigator.clipboard.writeText(jsonStr).catch(e => console.error('Copy failed:', e))
     setCopied(true)
     if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
     copiedTimerRef.current = setTimeout(() => setCopied(false), 1500)
   }
-
+  
   return (
     <div className={`border-b border-border`} style={{ margin: 0 }}>
-      <div
+      <div 
         className={`flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-all duration-200`}
         style={{ padding: '1.75rem 3rem' }}
         onClick={() => setExpanded(!expanded)}
@@ -134,6 +131,7 @@ export function TokenJsonView({ account, defaultExpanded = false }) {
           <ChevronDown size={16} className={"text-muted-foreground"} />
         </div>
       </div>
+      
       {expanded && (
         <div className={`animate-in fade-in slide-in-from-top-2 duration-200`} style={{ margin: 0, padding: '1.25rem 3rem 2rem 3rem' }}>
           {/* Available Models */}
@@ -160,12 +158,12 @@ export function TokenJsonView({ account, defaultExpanded = false }) {
             <span className={`text-xs font-medium text-muted-foreground`}>
               {Object.keys(credentialsJson).length} {t('detail.fields') || '个字段'}
             </span>
-            <button
-              type="button"
-              onClick={handleCopy}
-              className={`
-                text-xs text-muted-foreground ${accent.textHover}
-                flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+              <button 
+                type="button" 
+                onClick={handleCopy}
+                className={`
+                text-xs text-muted-foreground ${accent.textHover} 
+                flex items-center gap-1.5 px-3 py-1.5 rounded-lg 
                 bg-muted/30 hover:bg-muted/50
                 transition-all duration-200 font-medium
               `}
@@ -184,7 +182,7 @@ export function TokenJsonView({ account, defaultExpanded = false }) {
             </button>
           </div>
           <div className={`
-            p-5 rounded-xl bg-muted/30 border border-border
+            p-5 rounded-xl bg-muted/30 border border-border 
             max-h-96 overflow-auto
             scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent
           `}>
