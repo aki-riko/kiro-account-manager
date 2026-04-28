@@ -48,7 +48,7 @@ pub struct AvailableModel {
 #[serde(rename_all = "camelCase")]
 pub struct ListAvailableModelsResponse {
     #[serde(default)]
-    pub models: Vec<AvailableModel>,
+    pub available_models: Vec<AvailableModel>,
     pub next_token: Option<String>,
     pub default_model: Option<AvailableModel>,
 }
@@ -233,11 +233,11 @@ fn mark_default_model(models: &mut [AvailableModel], default_model_id: Option<&s
 fn ensure_default_model_present(response: &mut ListAvailableModelsResponse) {
     if let Some(default_model) = response.default_model.clone() {
         if response
-            .models
+            .available_models
             .iter()
             .all(|model| model.model_id != default_model.model_id)
         {
-            response.models.insert(0, default_model);
+            response.available_models.insert(0, default_model);
         }
     }
 }
@@ -248,7 +248,7 @@ pub async fn fetch_all_available_models(
     model_provider: Option<&str>,
 ) -> Result<ListAvailableModelsResponse, String> {
     let mut aggregated = ListAvailableModelsResponse {
-        models: Vec::new(),
+        available_models: Vec::new(),
         next_token: None,
         default_model: None,
     };
@@ -271,13 +271,13 @@ pub async fn fetch_all_available_models(
             .default_model
             .as_ref()
             .map(|model| model.model_id.as_str());
-        mark_default_model(&mut response.models, default_model_id);
+        mark_default_model(&mut response.available_models, default_model_id);
 
         if let Some(default_model) = aggregated.default_model.as_mut() {
             default_model.is_default = Some(true);
         }
 
-        aggregated.models.extend(response.models);
+        aggregated.available_models.extend(response.available_models);
         next_token = response.next_token;
         if next_token.is_none() {
             break;
@@ -285,7 +285,7 @@ pub async fn fetch_all_available_models(
     }
 
     ensure_default_model_present(&mut aggregated);
-    sort_available_models_for_display(&mut aggregated.models);
+    sort_available_models_for_display(&mut aggregated.available_models);
     aggregated.next_token = None;
 
     Ok(aggregated)
@@ -357,22 +357,22 @@ mod tests {
         }))
         .expect("response should deserialize");
 
-        assert_eq!(response.models.len(), 1);
-        assert_eq!(response.models[0].model_id, "claude-sonnet-4.5");
-        assert_eq!(response.models[0].model_name, "Claude Sonnet 4.5");
+        assert_eq!(response.available_models.len(), 1);
+        assert_eq!(response.available_models[0].model_id, "claude-sonnet-4.5");
+        assert_eq!(response.available_models[0].model_name, "Claude Sonnet 4.5");
         assert_eq!(
-            response.models[0].supported_input_types,
+            response.available_models[0].supported_input_types,
             vec!["TEXT".to_string(), "IMAGE".to_string()]
         );
         assert_eq!(
-            response.models[0]
+            response.available_models[0]
                 .token_limits
                 .as_ref()
                 .and_then(|limits| limits.max_input_tokens),
             Some(200000)
         );
         assert_eq!(
-            response.models[0]
+            response.available_models[0]
                 .token_limits
                 .as_ref()
                 .and_then(|limits| limits.max_output_tokens),
@@ -424,16 +424,16 @@ mod tests {
         }))
         .expect("full response should deserialize");
 
-        assert_eq!(response.models.len(), 1);
-        assert_eq!(response.models[0].model_id, "claude-sonnet-4");
-        assert_eq!(response.models[0].model_name, "Claude Sonnet 4");
+        assert_eq!(response.available_models.len(), 1);
+        assert_eq!(response.available_models[0].model_id, "claude-sonnet-4");
+        assert_eq!(response.available_models[0].model_name, "Claude Sonnet 4");
         assert_eq!(
-            response.models[0].description,
+            response.available_models[0].description,
             "Hybrid reasoning and coding for regular use"
         );
-        assert_eq!(response.models[0].is_default, Some(true));
+        assert_eq!(response.available_models[0].is_default, Some(true));
         assert_eq!(
-            response.models[0]
+            response.available_models[0]
                 .prompt_caching
                 .as_ref()
                 .and_then(|value| value.supports_prompt_caching),
@@ -586,13 +586,13 @@ mod tests {
         ensure_default_model_present(&mut response);
 
         let auto_count = response
-            .models
+            .available_models
             .iter()
             .filter(|model| model.model_id == "auto")
             .count();
         assert_eq!(auto_count, 1);
         assert_eq!(
-            response.models.first().map(|model| model.model_id.as_str()),
+            response.available_models.first().map(|model| model.model_id.as_str()),
             Some("auto")
         );
     }
@@ -624,7 +624,7 @@ mod tests {
         let cached = read_available_models_cache(&account, Some("anthropic"), false)
             .expect("cache should be readable");
 
-        assert_eq!(cached.models.len(), 2);
+        assert_eq!(cached.available_models.len(), 2);
         assert_eq!(
             cached
                 .default_model
@@ -793,3 +793,4 @@ mod tests {
         );
     }
 }
+
