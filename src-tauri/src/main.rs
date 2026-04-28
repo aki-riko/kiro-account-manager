@@ -171,7 +171,7 @@ fn handle_deep_link_event(app_handle: &tauri::AppHandle, payload: &str) {
         return;
     }
 
-    handle_incoming_deep_link(app_handle, &url);
+    auth::handle_incoming_deep_link(app_handle, &url);
 }
 
 /// 应用 setup 回调
@@ -186,7 +186,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     );
     for arg in std::env::args() {
         if arg.starts_with(&protocol_prefix) {
-            handle_incoming_deep_link(app.handle(), &arg);
+            auth::handle_incoming_deep_link(app.handle(), &arg);
         }
     }
 
