@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import React from 'react'
 
 interface GatewaySurfaceCardProps extends React.HTMLAttributes<HTMLDivElement> {
-  colors?: any;
+  colors?: Record<string, string>;
 }
 
 export function GatewaySurfaceCard({ colors, className = '', children, ...props }: GatewaySurfaceCardProps) {
@@ -33,12 +33,12 @@ export function GatewaySubCard({ className = '', children, ...props }: GatewaySu
 }
 
 interface GatewaySectionHeaderProps {
-  colors?: any;
-  icon?: any;
+  colors?: Record<string, string>;
+  icon?: React.ComponentType<{ size?: number }>;
   title: string;
   badge?: React.ReactNode;
   actions?: React.ReactNode;
-  groupProps?: any;
+  groupProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
 export function GatewaySectionHeader({ colors, icon: Icon, title, badge, actions, groupProps = {} }: GatewaySectionHeaderProps) {
@@ -54,11 +54,11 @@ export function GatewaySectionHeader({ colors, icon: Icon, title, badge, actions
 }
 
 interface GatewayStatCardProps {
-  colors?: any;
+  colors?: Record<string, string>;
   label: string;
   value: string | number;
   detail?: string;
-  valueProps?: any;
+  valueProps?: React.HTMLAttributes<HTMLParagraphElement>;
   className?: string;
 }
 
