@@ -1699,15 +1699,71 @@ fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> 
 
 fn order_accounts(accounts: &mut [Account], strategy: &str, request_index: u64) {
     match strategy {
-        "most_quota" => accounts.sort_by(|left, right| {
-            remaining_quota(right)
-                .partial_cmp(&remaining_quota(left))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        }),
-        "random" => accounts.shuffle(&mut thread_rng()),
+        "balanced" => {
+            // Balanced (Least-Used): 优先使用成功次数最少的账号
+            accounts.sort_by(|left, right| {
+                // 优先级：priority (升序)
+                match left.priority.cmp(&right.priority) {
+                    std::cmp::Ordering::Equal => {
+                        // 成功次数：success_count (升序 - 最少使用优先)
+                        match left.success_count.cmp(&right.success_count) {
+                            std::cmp::Ordering::Equal => {
+                                // 剩余配额：remaining_quota (降序 - 更多配额优先)
+                                remaining_quota(right)
+                                    .partial_cmp(&remaining_quota(left))
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            }
+                            other => other,
+                        }
+                    }
+                    other => other,
+                }
+            });
+        }
+        "most_quota" => {
+            // Most Quota: 在同优先级内，优先使用剩余配额最多的账号
+            accounts.sort_by(|left, right| {
+                match left.priority.cmp(&right.priority) {
+                    std::cmp::Ordering::Equal => {
+                        remaining_quota(right)
+                            .partial_cmp(&remaining_quota(left))
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    }
+                    other => other,
+                }
+            });
+        }
+        "random" => {
+            // Random: 按优先级分组，在每个优先级组内随机打乱
+            accounts.sort_by_key(|a| a.priority);
+
+            let mut start = 0;
+            while start < accounts.len() {
+                let current_priority = accounts[start].priority;
+                let mut end = start + 1;
+                while end < accounts.len() && accounts[end].priority == current_priority {
+                    end += 1;
+                }
+                accounts[start..end].shuffle(&mut thread_rng());
+                start = end;
+            }
+        }
         _ => {
-            if !accounts.is_empty() {
-                accounts.rotate_left((request_index as usize) % accounts.len());
+            // Round Robin: 按优先级分组，在每个优先级组内轮询
+            accounts.sort_by_key(|a| a.priority);
+
+            let mut start = 0;
+            while start < accounts.len() {
+                let current_priority = accounts[start].priority;
+                let mut end = start + 1;
+                while end < accounts.len() && accounts[end].priority == current_priority {
+                    end += 1;
+                }
+                let group_len = end - start;
+                if group_len > 0 {
+                    accounts[start..end].rotate_left((request_index as usize) % group_len);
+                }
+                start = end;
             }
         }
     }

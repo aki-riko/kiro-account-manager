@@ -327,10 +327,18 @@ function GatewayAdvanced({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="round_robin">轮询 round_robin</SelectItem>
+                        <SelectItem value="balanced">均衡使用 balanced (Least-Used)</SelectItem>
                         <SelectItem value="most_quota">优先剩余额度 most_quota</SelectItem>
                         <SelectItem value="random">随机 random</SelectItem>
                       </SelectContent>
                     </Select>
+                    <div className="text-xs text-muted-foreground">
+                      {config.strategy === 'balanced' && '优先使用成功次数最少的账号，实现负载均衡'}
+                      {config.strategy === 'round_robin' && '按顺序轮流使用账号'}
+                      {config.strategy === 'most_quota' && '优先使用剩余配额最多的账号'}
+                      {config.strategy === 'random' && '随机选择账号'}
+                      {config.strategy && ' · 所有策略都会优先考虑账号优先级（数字越小优先级越高）'}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-1.5">

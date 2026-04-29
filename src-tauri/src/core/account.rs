@@ -154,6 +154,9 @@ pub struct Account {
     // 成功计数（用于 balanced 策略）
     #[serde(default)]
     pub success_count: u64,
+    // 账号优先级（数字越小优先级越高，用于所有策略的预排序）
+    #[serde(default)]
+    pub priority: u32,
 }
 
 impl Account {
@@ -190,6 +193,7 @@ impl Account {
             last_failure_at: None,
             disabled_reason: None,
             success_count: 0,
+            priority: 0,
         }
     }
 
@@ -226,6 +230,7 @@ impl Account {
             last_failure_at: None,
             disabled_reason: None,
             success_count: 0,
+            priority: 0,
         }
     }
 
