@@ -107,22 +107,36 @@ function GatewayObservability({
   filteredRequestLogs}: GatewayObservabilityProps) {
   // Local state for immediate input feedback
   const [searchInput, setSearchInput] = useState(requestLogQuery)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Debounced search handler - 使用 useCallback 确保防抖函数稳定
+  // Debounced search handler - 修复内存泄漏问题
   const debouncedSetQuery = useCallback((value: string) => {
-    const timeoutId = setTimeout(() => {
+    // 清除之前的 timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    // 设置新的 timeout
+    timeoutRef.current = setTimeout(() => {
       setRequestLogQuery(value)
+      timeoutRef.current = null
     }, 300)
-    return () => clearTimeout(timeoutId)
   }, [setRequestLogQuery])
 
   // Handle search input change
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value
     setSearchInput(value)
-    const cleanup = debouncedSetQuery(value)
-    return cleanup
+    debouncedSetQuery(value)
   }, [debouncedSetQuery])
+
+  // 组件卸载时清理 timeout
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
 
   return (
     <>
