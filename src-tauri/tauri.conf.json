@@ -53,7 +53,7 @@
       "endpoints": [
         "https://github.com/hj01857655/kiro-account-manager/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZFNzJDNURDNEIyRkExOEYKUldTUG9TOUwzTVZ5YmdaZVg1RHY5ZUdzZUx3Z3NacXBVYWNiQU9HOGRsbDFzeFU3TjZ0MVBnWHkK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBBOEYwQzk3MEI2MjBGRkQKUldUOUQySUxsd3lQQ2xIZGxKNkFQd2JGUUJjUXpBaWRvdjcxTmNNZnJGVHlDaU5xR2pOZlkzd1IK",
       "windows": {
         "installMode": "passive"
       }
