@@ -108,22 +108,20 @@ function GatewayObservability({
   // Local state for immediate input feedback
   const [searchInput, setSearchInput] = useState(requestLogQuery)
 
-  // Debounced search handler
-  const debouncedSetQuery = useMemo(() => {
-    let timeoutId: NodeJS.Timeout
-    return (value: string) => {
-      clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => {
-        setRequestLogQuery(value)
-      }, 300)
-    }
+  // Debounced search handler - 使用 useCallback 确保防抖函数稳定
+  const debouncedSetQuery = useCallback((value: string) => {
+    const timeoutId = setTimeout(() => {
+      setRequestLogQuery(value)
+    }, 300)
+    return () => clearTimeout(timeoutId)
   }, [setRequestLogQuery])
 
   // Handle search input change
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value
     setSearchInput(value)
-    debouncedSetQuery(value)
+    const cleanup = debouncedSetQuery(value)
+    return cleanup
   }, [debouncedSetQuery])
 
   return (

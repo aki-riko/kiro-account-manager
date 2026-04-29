@@ -19,57 +19,124 @@ export function useGatewayPolling({
   statusInterval = 2000,
   logsInterval = 5000
 }: UseGatewayPollingOptions) {
+  // 状态轮询
   useEffect(() => {
-    const timer = setInterval(() => {
-      // 暂停不可见标签页的轮询以节省资源
-      if (document.hidden) {
+    let timer: NodeJS.Timeout | null = null
+    let isActive = true
+
+    const poll = () => {
+      if (!isActive || document.hidden) {
         return
       }
 
       fetchGatewayStatus()
         .then((status) => {
-          onStatus({
-            status,
-            fallbackConfig,
-            syncedAt: formatGatewayTimestamp()
-          })
+          if (isActive) {
+            onStatus({
+              status,
+              fallbackConfig,
+              syncedAt: formatGatewayTimestamp()
+            })
+          }
         })
-        .catch(() => {})
-    }, statusInterval)
+        .catch((error) => {
+          console.error('[Gateway] Failed to fetch status:', error)
+        })
+    }
 
-    return () => clearInterval(timer)
+    // 立即执行一次
+    poll()
+
+    // 设置定时轮询
+    timer = setInterval(poll, statusInterval)
+
+    // 监听页面可见性变化
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // 页面隐藏时清除定时器
+        if (timer) {
+          clearInterval(timer)
+          timer = null
+        }
+      } else {
+        // 页面可见时重新启动轮询
+        if (!timer && isActive) {
+          poll()
+          timer = setInterval(poll, statusInterval)
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isActive = false
+      if (timer) {
+        clearInterval(timer)
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [fallbackConfig, onStatus, statusInterval])
 
+  // 请求日志轮询
   useEffect(() => {
     if (activeTab !== 'observability') {
       return undefined
     }
 
-    fetchGatewayRequestLogs()
-      .then((logs) => {
-        onRequestLogs({
-          logs,
-          syncedAt: formatGatewayTimestamp()
-        })
-      })
-      .catch(() => {})
+    let timer: NodeJS.Timeout | null = null
+    let isActive = true
 
-    const timer = setInterval(() => {
-      // 暂停不可见标签页的轮询以节省资源
-      if (document.hidden) {
+    const poll = () => {
+      if (!isActive || document.hidden) {
         return
       }
 
       fetchGatewayRequestLogs()
         .then((logs) => {
-          onRequestLogs({
-            logs,
-            syncedAt: formatGatewayTimestamp()
-          })
+          if (isActive) {
+            onRequestLogs({
+              logs,
+              syncedAt: formatGatewayTimestamp()
+            })
+          }
         })
-        .catch(() => {})
-    }, logsInterval)
+        .catch((error) => {
+          console.error('[Gateway] Failed to fetch request logs:', error)
+        })
+    }
 
-    return () => clearInterval(timer)
+    // 立即执行一次
+    poll()
+
+    // 设置定时轮询
+    timer = setInterval(poll, logsInterval)
+
+    // 监听页面可见性变化
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // 页面隐藏时清除定时器
+        if (timer) {
+          clearInterval(timer)
+          timer = null
+        }
+      } else {
+        // 页面可见时重新启动轮询
+        if (!timer && isActive) {
+          poll()
+          timer = setInterval(poll, logsInterval)
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isActive = false
+      if (timer) {
+        clearInterval(timer)
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [activeTab, onRequestLogs, logsInterval])
 }
