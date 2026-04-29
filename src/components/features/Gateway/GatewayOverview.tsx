@@ -166,8 +166,7 @@ function GatewayOverview({
             badge={<Badge color={effectiveConfig.localOnly ? 'teal' : 'yellow'}>{effectiveSecuritySummary.exposureLabel}</Badge>}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <GatewayStatCard colors={colors} label="路由模式" value={effectiveRoutingSummary.modeLabel} detail={effectiveRoutingSummary.selectionValue} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <GatewayStatCard colors={colors} label="池策略" value={effectiveRoutingSummary.strategySummary} />
             <GatewayStatCard colors={colors} label="运行快照" value={`${statusSummary.requests} 次请求`} detail={statusSummary.listen} />
             <GatewayStatCard colors={colors} label="最后同步" value={statusSummary.sync} />

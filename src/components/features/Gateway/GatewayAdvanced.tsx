@@ -1,4 +1,4 @@
-import { Server, Dice6, Plus } from 'lucide-react'
+import { Server, Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,9 +17,6 @@ interface GatewayAdvancedProps {
   hasFieldErrors: boolean;
   hasUnsavedChanges: boolean;
   fieldErrors: Record<string, string>;
-  inputClassNames: any;
-  selectClassNames: any;
-  switchClassNames: any;
   setField: (key: string, value: any) => void;
   handleGenerateApiKey: () => void;
   securitySummary: any;
@@ -39,9 +36,6 @@ function GatewayAdvanced({
   hasFieldErrors,
   hasUnsavedChanges,
   fieldErrors,
-  inputClassNames,
-  selectClassNames,
-  switchClassNames,
   setField,
   handleGenerateApiKey,
   securitySummary,
@@ -70,13 +64,6 @@ function GatewayAdvanced({
 
           <div className={`text-sm text-muted-foreground`}>
             监听地址、安全暴露、账号来源和池调度都收口到这里，属于低频但决定反代行为边界的配置。
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            <GatewayStatCard colors={colors} label="暴露范围" value={securitySummary.exposureLabel} />
-            <GatewayStatCard colors={colors} label="客户端鉴权" value={securitySummary.apiKeyState} />
-            <GatewayStatCard colors={colors} label="候选范围" value={routingSummary.inventorySummary} />
-            <GatewayStatCard colors={colors} label="路由策略" value={routingSummary.strategySummary} />
           </div>
 
           <Accordion type="multiple" defaultValue={['common', 'routing']} className="w-full">
@@ -326,10 +313,42 @@ function GatewayAdvanced({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="round_robin">轮询 round_robin</SelectItem>
-                        <SelectItem value="balanced">均衡使用 balanced (Least-Used)</SelectItem>
-                        <SelectItem value="most_quota">优先剩余额度 most_quota</SelectItem>
-                        <SelectItem value="random">随机 random</SelectItem>
+                        <SelectItem value="round_robin">
+                          <div className="flex items-center gap-2">
+                            <RotateCw size={14} />
+                            <span>轮询 round_robin</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="balanced">
+                          <div className="flex items-center gap-2">
+                            <Scale size={14} />
+                            <span>均衡使用 balanced (Least-Used)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="most_quota">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp size={14} />
+                            <span>优先剩余额度 most_quota</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="random">
+                          <div className="flex items-center gap-2">
+                            <Shuffle size={14} />
+                            <span>随机 random</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="weighted_random">
+                          <div className="flex items-center gap-2">
+                            <Zap size={14} />
+                            <span>加权随机 weighted_random</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="least_connections">
+                          <div className="flex items-center gap-2">
+                            <Activity size={14} />
+                            <span>最少连接 least_connections</span>
+                          </div>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                     <div className="text-xs text-muted-foreground">
@@ -337,6 +356,8 @@ function GatewayAdvanced({
                       {config.strategy === 'round_robin' && '按顺序轮流使用账号'}
                       {config.strategy === 'most_quota' && '优先使用剩余配额最多的账号'}
                       {config.strategy === 'random' && '随机选择账号'}
+                      {config.strategy === 'weighted_random' && '根据健康分数和剩余配额加权随机选择，配额多且健康的账号被选中概率更高'}
+                      {config.strategy === 'least_connections' && '优先使用当前活跃连接数最少的账号，适合高并发场景'}
                     </div>
                   </div>
 

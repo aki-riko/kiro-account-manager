@@ -301,18 +301,19 @@ function GatewayPage() {
   const integrationGuidance = useMemo(() => ([
     {
       label: 'Anthropic / Claude',
+      value: 'Messages API',
       detail: '使用 ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY 直连本地反代，适合 Claude Code / Claude Desktop 兼容链路。'},
     {
       label: 'OpenAI Chat Completions',
-      detail: '使用 OPENAI_BASE_URL + OPENAI_API_KEY，支持传统 OpenAI Chat Completions 格式（/v1/chat/completions），兼容标准 OpenAI 客户端库。'},
+      value: '/v1/chat/completions',
+      detail: '使用 OPENAI_BASE_URL + OPENAI_API_KEY，支持传统 OpenAI Chat Completions 格式，兼容标准 OpenAI 客户端库。'},
     {
       label: 'OpenAI Responses',
+      value: '/v1/responses',
       detail: '使用 OPENAI_BASE_URL + OPENAI_API_KEY，反代会把 /v1/responses 请求映射到 Kiro 上游并保留流式事件序列。'},
     {
-      label: '客户端鉴权',
-      detail: '客户端永远只看本地反代 API Key；反代到 Kiro 的 access token 由本地账号自动托管。'},
-    {
       label: '排障入口',
+      value: '观测页',
       detail: '日志目录、错误历史、请求明细都统一收口在观测页，不需要再翻系统日志。'},
   ]), [])
 
@@ -709,7 +710,7 @@ function GatewayPage() {
             </TabsTrigger>
             <TabsTrigger value="advanced" className="flex items-center gap-2">
               <Settings size={16} />
-              {t('gateway.advanced')}
+              {t('gateway.config')}
             </TabsTrigger>
           </TabsList>
 
@@ -771,13 +772,10 @@ function GatewayPage() {
               lastRequestLogsSyncAt={lastRequestLogsSyncAt}
               requestLogOutcome={requestLogOutcome}
               setRequestLogOutcome={setRequestLogOutcome}
-              selectClassNames={selectClassNames}
               requestLogQuery={requestLogQuery}
               setRequestLogQuery={setRequestLogQuery}
-              inputClassNames={inputClassNames}
               requestLogSummary={requestLogSummary}
               requestMetrics={requestMetrics}
-              renderMetricList={renderMetricList}
               filteredRequestLogs={filteredRequestLogs}
             />
           </TabsContent>
@@ -789,9 +787,6 @@ function GatewayPage() {
               hasFieldErrors={hasFieldErrors}
               hasUnsavedChanges={hasUnsavedChanges}
               fieldErrors={fieldErrors}
-              inputClassNames={inputClassNames}
-              selectClassNames={selectClassNames}
-              switchClassNames={switchClassNames}
               setField={setField}
               handleGenerateApiKey={handleGenerateApiKey}
               securitySummary={securitySummary}

@@ -21,6 +21,10 @@ interface Account {
     total?: number
   }
   isAvailable?: boolean
+  healthScore?: number
+  successCount?: number
+  failureCount?: number
+  activeConnections?: number
 }
 
 interface AccountPoolStatusProps {
@@ -136,6 +140,22 @@ function AccountPoolStatus({ config, accounts, groups }: AccountPoolStatusProps)
                 const isCurrent = account.id === currentAccountId
                 const isAvailable = !isOverThreshold
 
+                // Calculate health score and metrics
+                const healthScore = account.healthScore ?? null
+                const successCount = account.successCount ?? 0
+                const failureCount = account.failureCount ?? 0
+                const activeConnections = account.activeConnections ?? 0
+                const totalRequests = successCount + failureCount
+                const successRate = totalRequests > 0 ? (successCount / totalRequests) * 100 : null
+
+                // Determine health badge color
+                const getHealthBadgeVariant = (score: number | null) => {
+                  if (score === null) return 'outline'
+                  if (score >= 80) return 'default' // green
+                  if (score >= 50) return 'secondary' // yellow
+                  return 'destructive' // red
+                }
+
                 return (
                   <div
                     key={account.id}
@@ -170,11 +190,39 @@ function AccountPoolStatus({ config, accounts, groups }: AccountPoolStatusProps)
                           ) : (
                             <AlertCircle size={14} className="text-orange-600" />
                           )}
+                          {/* 健康分数 */}
+                          {healthScore !== null && (
+                            <Badge variant={getHealthBadgeVariant(healthScore)} className="text-xs">
+                              健康 {healthScore.toFixed(0)}
+                            </Badge>
+                          )}
                         </div>
                         {/* 邮箱/用户ID */}
                         <div className="text-xs text-muted-foreground truncate">
                           {account.email || account.userId || account.id}
                         </div>
+                        {/* 健康指标 */}
+                        {(totalRequests > 0 || activeConnections > 0) && (
+                          <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                            {totalRequests > 0 && (
+                              <span>
+                                成功 <span className="text-green-600 font-semibold">{successCount}</span>
+                                {failureCount > 0 && (
+                                  <> / 失败 <span className="text-red-600 font-semibold">{failureCount}</span></>
+                                )}
+                                {successRate !== null && (
+                                  <> ({successRate.toFixed(0)}%)</>
+                                )}
+                              </span>
+                            )}
+                            {activeConnections > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Activity size={10} />
+                                连接 <span className="font-semibold">{activeConnections}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* 右侧：配额信息 */}
@@ -216,11 +264,22 @@ function AccountPoolStatus({ config, accounts, groups }: AccountPoolStatusProps)
                 <div className="flex items-start gap-2">
                   <Clock size={16} className="text-blue-600 mt-0.5 shrink-0" />
                   <div className="text-xs text-blue-800 dark:text-blue-200">
-                    <div className="font-semibold mb-1">轮询策略：{config.strategy === 'round_robin' ? '轮询' : '最低使用率优先'}</div>
+                    <div className="font-semibold mb-1">
+                      轮询策略：
+                      {config.strategy === 'round_robin' && '轮询'}
+                      {config.strategy === 'balanced' && '均衡使用'}
+                      {config.strategy === 'most_quota' && '优先剩余额度'}
+                      {config.strategy === 'random' && '随机'}
+                      {config.strategy === 'weighted_random' && '加权随机'}
+                      {config.strategy === 'least_connections' && '最少连接'}
+                    </div>
                     <div>
-                      {config.strategy === 'round_robin'
-                        ? '按顺序依次使用账号，配额超过阈值时自动切换到下一个'
-                        : '优先使用配额使用率最低的账号'}
+                      {config.strategy === 'round_robin' && '按顺序依次使用账号，配额超过阈值时自动切换到下一个'}
+                      {config.strategy === 'balanced' && '优先使用成功次数最少的账号，实现负载均衡'}
+                      {config.strategy === 'most_quota' && '优先使用剩余配额最多的账号'}
+                      {config.strategy === 'random' && '随机选择账号'}
+                      {config.strategy === 'weighted_random' && '根据健康分数和剩余配额加权随机选择，配额多且健康的账号被选中概率更高'}
+                      {config.strategy === 'least_connections' && '优先使用当前活跃连接数最少的账号，适合高并发场景'}
                     </div>
                   </div>
                 </div>

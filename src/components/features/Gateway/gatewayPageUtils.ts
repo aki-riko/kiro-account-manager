@@ -437,13 +437,56 @@ export const buildGatewayRequestLogSummary = (entries: any) => {
   const maxDuration = logs.reduce((max, item) => Math.max(max, Number(item?.durationMs || 0)), 0)
   const latestOccurredAt = logs[0]?.occurredAt || '-'
 
+  // Prompt Caching 统计
+  let totalInputTokens = 0
+  let totalOutputTokens = 0
+  let totalCacheReadTokens = 0
+  let totalCacheCreationTokens = 0
+  let requestsWithCache = 0
+
+  logs.forEach(item => {
+    const inputTokens = Number(item?.inputTokens || 0)
+    const outputTokens = Number(item?.outputTokens || 0)
+    const cacheReadTokens = Number(item?.cacheReadInputTokens || 0)
+    const cacheCreationTokens = Number(item?.cacheCreationInputTokens || 0)
+
+    totalInputTokens += inputTokens
+    totalOutputTokens += outputTokens
+    totalCacheReadTokens += cacheReadTokens
+    totalCacheCreationTokens += cacheCreationTokens
+
+    if (cacheReadTokens > 0 || cacheCreationTokens > 0) {
+      requestsWithCache++
+    }
+  })
+
+  // 计算缓存命中率
+  const cacheHitRate = logs.length > 0 
+    ? Math.round((requestsWithCache / logs.length) * 100) 
+    : 0
+
+  // 计算节省成本百分比（缓存读取成本是输入成本的 10%）
+  const totalCacheableTokens = totalCacheReadTokens + totalCacheCreationTokens
+  const costSavings = totalCacheableTokens > 0
+    ? Math.round((totalCacheReadTokens / totalCacheableTokens) * 90)
+    : 0
+
   return {
     total: logs.length,
     errors,
     streaming,
     success,
     maxDurationLabel: formatGatewayRequestDuration(maxDuration),
-    latestOccurredAt}
+    latestOccurredAt,
+    // Prompt Caching 统计
+    totalInputTokens,
+    totalOutputTokens,
+    totalCacheReadTokens,
+    totalCacheCreationTokens,
+    requestsWithCache,
+    cacheHitRate,
+    costSavings,
+  }
 }
 
 interface MetricEntry {

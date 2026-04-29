@@ -574,7 +574,7 @@ pub async fn build_kiro_payload(
                     
                     // 如果需要缓存系统提示，在用户上下文中添加缓存点
                     if should_add_cache_point {
-                        if let Some(ref mut ctx) = user_context {
+                        if let Some(ref mut _ctx) = user_context {
                             // 注意：缓存点应该添加在系统提示之后，工具定义之前
                             // 但由于 Kiro API 的限制，我们只能在消息级别添加缓存点
                             // 这里我们通过在第一条用户消息后添加缓存点来实现

@@ -7,7 +7,6 @@ use axum::{
 };
 use chrono::Local;
 use futures_util::StreamExt;
-use rand::{seq::SliceRandom, thread_rng};
 use regex::Regex;
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -593,6 +592,10 @@ async fn guarded_local_response(
         "success",
         None,
         Some(serialized.as_str()),
+        None, // input_tokens
+        None, // output_tokens
+        None, // cache_read_input_tokens
+        None, // cache_creation_input_tokens
     );
     Json(response_body).into_response()
 }
@@ -665,6 +668,10 @@ fn write_request_log(
     outcome: &str,
     error: Option<&str>,
     _response_body: Option<&str>,
+    input_tokens: Option<i32>,
+    output_tokens: Option<i32>,
+    cache_read_input_tokens: Option<i32>,
+    cache_creation_input_tokens: Option<i32>,
 ) {
     let duration_ms = context
         .started_at
@@ -686,6 +693,10 @@ fn write_request_log(
         error: error.map(str::to_string),
         request_body: None,
         response_body: None,
+        input_tokens,
+        output_tokens,
+        cache_read_input_tokens,
+        cache_creation_input_tokens,
     };
     let _ = append_gateway_request_log(&entry);
 }
@@ -742,6 +753,10 @@ async fn gateway_error_with_log(
         "error",
         Some(error.message),
         logged_response_body.as_deref(),
+        None, // input_tokens
+        None, // output_tokens
+        None, // cache_read_input_tokens
+        None, // cache_creation_input_tokens
     );
     gateway_error_response(format, error.status, error.error_type, error.message)
 }
@@ -850,7 +865,7 @@ pub async fn proxy_handler(
         ..base_log_context.clone()
     };
 
-    let upstream = match resolve_upstream_credentials(&state.config, request_index).await {
+    let upstream = match resolve_upstream_credentials(&state.config, &state).await {
         Ok(creds) => creds,
         Err(message) => {
             let sanitized = sanitize_error(&message);
@@ -913,6 +928,10 @@ pub async fn proxy_handler(
                 "success",
                 None,
                 Some(response_body.as_str()),
+                Some(outcome.aggregated.input_tokens),
+                Some(outcome.aggregated.output_tokens),
+                outcome.aggregated.cache_read_input_tokens,
+                outcome.aggregated.cache_creation_input_tokens,
             );
             let body = format!("data: {}\n\ndata: [DONE]\n\n", response);
             return Response::builder()
@@ -967,6 +986,10 @@ pub async fn proxy_handler(
             "success",
             None,
             Some(response_body.as_str()),
+            Some(outcome.aggregated.input_tokens),
+            Some(outcome.aggregated.output_tokens),
+            outcome.aggregated.cache_read_input_tokens,
+            outcome.aggregated.cache_creation_input_tokens,
         );
         return Json(response).into_response();
     }
@@ -1072,22 +1095,120 @@ pub async fn proxy_handler(
         ..upstream_log_context.clone()
     };
 
-    let upstream_resp = match send_generate_request(&state.http, &upstream, &payload_value).await
-    {
-        Ok(resp) => resp,
-        Err((status, error_type, message, upstream_response_body)) => {
+    // 账号重试循环：遇到 429 错误时切换账号
+    const MAX_ACCOUNT_RETRIES: u32 = 3;
+    let mut account_attempt = 0;
+    let mut tried_account_ids: HashSet<String> = HashSet::new();
+    
+    let upstream_resp = loop {
+        account_attempt += 1;
+        
+        if account_attempt > MAX_ACCOUNT_RETRIES {
+            // 所有账号都尝试过了，返回最后一个错误
             return gateway_error_with_log(
                 &state,
                 format,
                 &upstream_payload_log_context,
                 GatewayErrorDetails {
-                    status,
-                    error_type,
-                    message: &message,
-                    response_body: upstream_response_body.as_deref(),
+                    status: StatusCode::SERVICE_UNAVAILABLE,
+                    error_type: "rate_limit_error",
+                    message: "所有账号均达到速率限制，请稍后再试",
+                    response_body: None,
                 },
             )
             .await;
+        }
+        
+        // 如果不是第一次尝试，需要重新选择账号
+        let current_upstream = if account_attempt > 1 {
+            match resolve_upstream_credentials(&state.config, &state).await {
+                Ok(creds) => {
+                    // 检查是否已经尝试过这个账号
+                    let account_id = extract_account_id_from_upstream(&creds);
+                    if tried_account_ids.contains(&account_id) {
+                        log::warn!(
+                            "[Gateway] 账号 {} 已尝试过，继续尝试下一个 (尝试: {}/{})",
+                            creds.source_label,
+                            account_attempt,
+                            MAX_ACCOUNT_RETRIES
+                        );
+                        continue;
+                    }
+                    tried_account_ids.insert(account_id);
+                    creds
+                }
+                Err(message) => {
+                    let sanitized = sanitize_error(&message);
+                    log::warn!(
+                        "[Gateway] 重新选择账号失败 (尝试: {}/{}): {}",
+                        account_attempt,
+                        MAX_ACCOUNT_RETRIES,
+                        sanitized
+                    );
+                    // 如果是账号不可用，继续尝试
+                    if message.contains("未找到符合反代配置的可用账号") {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                        continue;
+                    }
+                    // 其他错误直接返回
+                    return gateway_error_with_log(
+                        &state,
+                        format,
+                        &upstream_payload_log_context,
+                        GatewayErrorDetails {
+                            status: StatusCode::UNAUTHORIZED,
+                            error_type: "authentication_error",
+                            message: &sanitized,
+                            response_body: None,
+                        },
+                    )
+                    .await;
+                }
+            }
+        } else {
+            // 第一次尝试，使用已选择的账号
+            let account_id = extract_account_id_from_upstream(&upstream);
+            tried_account_ids.insert(account_id);
+            upstream.clone()
+        };
+        
+        // 发送请求
+        match send_generate_request(&state.http, &current_upstream, &payload_value).await {
+            Ok(resp) => break resp,
+            Err((status, error_type, message, upstream_response_body)) => {
+                // 检查是否是 429 错误
+                if status == StatusCode::TOO_MANY_REQUESTS {
+                    let account_id = extract_account_id_from_upstream(&current_upstream);
+                    
+                    // 标记账号为速率限制
+                    state.load_balancer.mark_rate_limited(&account_id).await;
+                    state.load_balancer.record_failure(&account_id).await;
+                    
+                    log::warn!(
+                        "[Gateway] 账号 {} 返回 429 错误，标记为速率限制并切换账号 (尝试: {}/{})",
+                        current_upstream.source_label,
+                        account_attempt,
+                        MAX_ACCOUNT_RETRIES
+                    );
+                    
+                    // 继续尝试下一个账号
+                    continue;
+                }
+                
+                // 其他错误直接返回
+                return gateway_error_with_log(
+                    &state,
+                    format,
+                    &upstream_payload_log_context,
+                    GatewayErrorDetails {
+                        status,
+                        error_type,
+                        message: &message,
+                        response_body: upstream_response_body.as_deref(),
+                    },
+                )
+                .await;
+            }
         }
     };
 
@@ -1098,6 +1219,10 @@ pub async fn proxy_handler(
             "stream",
             None,
             Some(STREAMING_RESPONSE_PLACEHOLDER),
+            None, // input_tokens - 流式开始时未知
+            None, // output_tokens
+            None, // cache_read_input_tokens
+            None, // cache_creation_input_tokens
         );
         return stream_proxy_response(
             state.clone(),
@@ -1177,6 +1302,10 @@ pub async fn proxy_handler(
         "success",
         None,
         Some(body.as_str()),
+        Some(aggregated.input_tokens),
+        Some(aggregated.output_tokens),
+        aggregated.cache_read_input_tokens,
+        aggregated.cache_creation_input_tokens,
     );
     Json(response).into_response()
 }
@@ -1251,7 +1380,7 @@ pub async fn mcp_proxy_handler(
         .await;
     }
 
-    let upstream = match resolve_upstream_credentials(&state.config, request_index).await {
+    let upstream = match resolve_upstream_credentials(&state.config, &state).await {
         Ok(creds) => creds,
         Err(message) => {
             let sanitized = sanitize_error(&message);
@@ -1360,6 +1489,10 @@ pub async fn mcp_proxy_handler(
         "success",
         None,
         Some(logged_response_body.as_str()),
+        None, // input_tokens - MCP 代理无 tokens
+        None, // output_tokens
+        None, // cache_read_input_tokens
+        None, // cache_creation_input_tokens
     );
     builder.body(Body::from(body)).unwrap_or_else(|error| {
         gateway_error_response(
@@ -1522,10 +1655,16 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
         }
 
         let body = upstream_resp.text().await.unwrap_or_default();
+        
+        // 429 错误不重试，直接返回（让外层切换账号）
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            let (mapped_status, error_type, message) = map_upstream_error(status, &body);
+            return Err((mapped_status, error_type, message, Some(body)));
+        }
+        
+        // 其他错误（403、5xx）才重试
         let should_retry = attempt < MAX_RETRIES
-            && (status == StatusCode::TOO_MANY_REQUESTS
-                || status == StatusCode::FORBIDDEN
-                || status.is_server_error());
+            && (status == StatusCode::FORBIDDEN || status.is_server_error());
 
         if should_retry {
             let backoff_ms = 1000 * 2u64.pow(attempt - 1);
@@ -1876,10 +2015,10 @@ fn verify_client_auth(headers: &HeaderMap, config: &GatewayConfig) -> Result<(),
 
 async fn resolve_upstream_credentials(
     config: &GatewayConfig,
-    request_index: u64,
+    state: &RouterState,
 ) -> Result<UpstreamCredentials, String> {
     match config.account_mode.as_str() {
-        "single" | "group" => resolve_managed_account_credentials(config, request_index).await,
+        "single" | "group" => resolve_managed_account_credentials(config, state).await,
         "local" => Err("反代不再支持 local 模式，请改用 single/group 账号池模式".to_string()),
         _ => Err("accountMode 必须是 single/group".to_string()),
     }
@@ -1887,7 +2026,7 @@ async fn resolve_upstream_credentials(
 
 async fn resolve_managed_account_credentials(
     config: &GatewayConfig,
-    request_index: u64,
+    state: &RouterState,
 ) -> Result<UpstreamCredentials, String> {
     let mut store = AccountStore::new();
     store.reload();
@@ -1930,7 +2069,7 @@ async fn resolve_managed_account_credentials(
         let _ = store.save_to_file();
     }
 
-    let mut accounts = match config.account_mode.as_str() {
+    let accounts = match config.account_mode.as_str() {
         "single" => store
             .accounts
             .iter()
@@ -1952,87 +2091,101 @@ async fn resolve_managed_account_credentials(
         return Err("未找到符合反代配置的可用账号".to_string());
     }
 
-    order_accounts(&mut accounts, &config.strategy, request_index);
-    let mut last_error = "没有可用的账号可供反代使用".to_string();
+    // 使用 LoadBalancer 选择账号
+    let selected_account = state.load_balancer.select_account(&accounts).await;
 
-    for (index, account) in accounts.iter().enumerate() {
-        match refresh_token_by_provider(account).await {
-            Ok(refresh) => {
-                let provider = account.provider.as_deref().unwrap_or("Google").to_string();
-                let usage_result = get_usage_by_provider(&provider, &refresh.access_token).await;
-                let mut usage_data = None;
-                let mut is_banned = false;
-                let mut is_auth_error = false;
+    let Some(account) = selected_account else {
+        return Err("LoadBalancer 未能选择可用账号".to_string());
+    };
 
-                if let Ok(usage) = usage_result {
-                    usage_data = Some(usage.usage_data);
-                    is_banned = usage.is_banned;
-                    is_auth_error = usage.is_auth_error;
-                }
+    // 增加连接计数
+    state.load_balancer.increment_connections(&account.id).await;
+    let request_start = Instant::now();
 
-                // 失败追踪：如果账号被封禁或认证失败，累加失败计数
-                let should_increment_failure = is_banned || is_auth_error;
+    match refresh_token_by_provider(&account).await {
+        Ok(refresh) => {
+            let provider = account.provider.as_deref().unwrap_or("Google").to_string();
+            let usage_result = get_usage_by_provider(&provider, &refresh.access_token).await;
+            let mut usage_data = None;
+            let mut is_banned = false;
+            let mut is_auth_error = false;
 
-                persist_account_refresh(
-                    account,
-                    &refresh,
-                    usage_data.clone(),
-                    is_banned,
-                    is_auth_error,
-                    should_increment_failure,
-                );
-
-                if (is_banned || is_auth_error) && index + 1 < accounts.len() {
-                    last_error = format!("账号 {} 已不可用，尝试下一个账号", account.label);
-                    continue;
-                }
-
-                if let Some(usage_data) = usage_data {
-                    if usage_exceeds_threshold(&usage_data, config.threshold)
-                        && index + 1 < accounts.len()
-                    {
-                        last_error = format!(
-                            "账号 {} 已达到阈值 {}%，尝试下一个账号",
-                            account.label, config.threshold
-                        );
-                        continue;
-                    }
-                }
-
-                let machine_id = account
-                    .machine_id
-                    .clone()
-                    .filter(|value| !value.trim().is_empty())
-                    .unwrap_or_else(get_machine_id);
-                let profile_arn = refresh.profile_arn.or_else(|| account.profile_arn.clone());
-                let region = resolve_kiro_upstream_region(
-                    profile_arn.as_deref(),
-                    account.region.as_deref(),
-                    &config.region,
-                );
-
-                return Ok(UpstreamCredentials {
-                    access_token: refresh.access_token,
-                    profile_arn,
-                    provider: account.provider.clone(),
-                    region,
-                    source_label: format_managed_upstream_source(config, account),
-                    user_agent: build_kiro_custom_user_agent(&machine_id),
-                    auth_method: account.auth_method.clone(),
-                    send_opt_out: should_send_codewhisperer_optout(),
-                });
+            if let Ok(usage) = usage_result {
+                usage_data = Some(usage.usage_data);
+                is_banned = usage.is_banned;
+                is_auth_error = usage.is_auth_error;
             }
-            Err(error) => {
-                last_error = format!(
-                    "刷新账号 {} 失败: {}",
-                    account.label,
-                    sanitize_error(&error)
-                );
+
+            // 失败追踪：如果账号被封禁或认证失败，累加失败计数
+            let should_increment_failure = is_banned || is_auth_error;
+
+            persist_account_refresh(
+                &account,
+                &refresh,
+                usage_data.clone(),
+                is_banned,
+                is_auth_error,
+                should_increment_failure,
+            );
+
+            // 减少连接计数
+            state.load_balancer.decrement_connections(&account.id).await;
+
+            if is_banned || is_auth_error {
+                // 记录失败
+                state.load_balancer.record_failure(&account.id).await;
+                return Err(format!("账号 {} 已不可用", account.label));
             }
+
+            if let Some(usage_data) = &usage_data {
+                if usage_exceeds_threshold(usage_data, config.threshold) {
+                    return Err(format!(
+                        "账号 {} 已达到阈值 {}%",
+                        account.label, config.threshold
+                    ));
+                }
+            }
+
+            // 记录成功
+            let response_time_ms = request_start.elapsed().as_millis() as u64;
+            state.load_balancer.record_success(&account.id, response_time_ms).await;
+
+            let machine_id = account
+                .machine_id
+                .clone()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(get_machine_id);
+            let profile_arn = refresh.profile_arn.or_else(|| account.profile_arn.clone());
+            let region = resolve_kiro_upstream_region(
+                profile_arn.as_deref(),
+                account.region.as_deref(),
+                &config.region,
+            );
+
+            Ok(UpstreamCredentials {
+                access_token: refresh.access_token,
+                profile_arn,
+                provider: account.provider.clone(),
+                region,
+                source_label: format_managed_upstream_source(config, &account),
+                user_agent: build_kiro_custom_user_agent(&machine_id),
+                auth_method: account.auth_method.clone(),
+                send_opt_out: should_send_codewhisperer_optout(),
+            })
+        }
+        Err(error) => {
+            // 减少连接计数
+            state.load_balancer.decrement_connections(&account.id).await;
+            // 记录失败
+            state.load_balancer.record_failure(&account.id).await;
+
+            Err(format!(
+                "刷新账号 {} 失败: {}",
+                account.label,
+                sanitize_error(&error)
+            ))
         }
     }
-
-    Err(last_error)
 }
 
 fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> String {
@@ -2062,81 +2215,6 @@ fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> 
         ),
         _ => account_label,
     }
-}
-
-fn order_accounts(accounts: &mut [Account], strategy: &str, request_index: u64) {
-    match strategy {
-        "balanced" => {
-            // Balanced (Least-Used): 优先使用成功次数最少的账号
-            accounts.sort_by(|left, right| {
-                // 成功次数：success_count (升序 - 最少使用优先)
-                match left.success_count.cmp(&right.success_count) {
-                    std::cmp::Ordering::Equal => {
-                        // 剩余配额：remaining_quota (降序 - 更多配额优先)
-                        remaining_quota(right)
-                            .partial_cmp(&remaining_quota(left))
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    }
-                    other => other,
-                }
-            });
-        }
-        "most_quota" => {
-            // Most Quota: 优先使用剩余配额最多的账号
-            accounts.sort_by(|left, right| {
-                remaining_quota(right)
-                    .partial_cmp(&remaining_quota(left))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-        }
-        "random" => {
-            // Random: 随机打乱
-            accounts.shuffle(&mut thread_rng());
-        }
-        "weighted_random" => {
-            // Weighted Random: 加权随机（根据配额和成功率）
-            // 注意：这里只是排序，实际的加权随机在 LoadBalancer 中实现
-            // 这里按健康分数排序作为后备
-            accounts.sort_by(|left, right| {
-                let score_left = calculate_health_score(left);
-                let score_right = calculate_health_score(right);
-                score_right.partial_cmp(&score_left).unwrap_or(std::cmp::Ordering::Equal)
-            });
-        }
-        "least_connections" => {
-            // Least Connections: 优先使用活跃连接最少的账号
-            // 注意：连接数在 LoadBalancer 中跟踪，这里按成功率排序作为后备
-            accounts.sort_by(|left, right| {
-                let success_rate_left = calculate_success_rate(left);
-                let success_rate_right = calculate_success_rate(right);
-                success_rate_right.partial_cmp(&success_rate_left).unwrap_or(std::cmp::Ordering::Equal)
-            });
-        }
-        _ => {
-            // Round Robin: 轮询
-            if !accounts.is_empty() {
-                accounts.rotate_left((request_index as usize) % accounts.len());
-            }
-        }
-    }
-}
-
-/// 计算账号健康分数（0-100）
-fn calculate_health_score(account: &Account) -> f64 {
-    let success_rate = calculate_success_rate(account);
-    let quota_percent = remaining_quota(account);
-    
-    // 健康分数 = 成功率 × 0.7 + 配额百分比 × 0.3
-    success_rate * 0.7 + quota_percent * 0.3
-}
-
-/// 计算账号成功率（0-100）
-fn calculate_success_rate(account: &Account) -> f64 {
-    let total = account.success_count + (account.failure_count as u64);
-    if total == 0 {
-        return 100.0; // 新账号默认 100%
-    }
-    (account.success_count as f64 / total as f64) * 100.0
 }
 
 fn persist_account_refresh(
@@ -2197,19 +2275,6 @@ fn persist_account_refresh(
 
         let _ = store.save_to_file();
     }
-}
-
-fn remaining_quota(account: &Account) -> f64 {
-    let Some(usage_data) = account.usage_data.as_ref() else {
-        return 0.0;
-    };
-    let Some((current, limit)) = extract_usage_totals(usage_data) else {
-        return 0.0;
-    };
-    if limit <= 0 {
-        return 0.0;
-    }
-    (limit - current).max(0) as f64
 }
 
 fn usage_exceeds_threshold(usage_data: &Value, threshold: i32) -> bool {
@@ -2903,6 +2968,16 @@ fn sanitize_error(message: &str) -> String {
 
 fn short_uuid() -> String {
     uuid::Uuid::new_v4().to_string().replace('-', "")
+}
+
+fn extract_account_id_from_upstream(upstream: &UpstreamCredentials) -> String {
+    // 从 source_label 提取账号标识
+    // 格式：single:email@example.com 或 group:group_name:email@example.com
+    upstream.source_label
+        .split(':')
+        .last()
+        .unwrap_or(&upstream.source_label)
+        .to_string()
 }
 
 fn stream_proxy_response(

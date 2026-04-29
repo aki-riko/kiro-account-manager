@@ -21,6 +21,11 @@ export function useGatewayPolling({
 }: UseGatewayPollingOptions) {
   useEffect(() => {
     const timer = setInterval(() => {
+      // 暂停不可见标签页的轮询以节省资源
+      if (document.hidden) {
+        return
+      }
+
       fetchGatewayStatus()
         .then((status) => {
           onStatus({
@@ -50,6 +55,11 @@ export function useGatewayPolling({
       .catch(() => {})
 
     const timer = setInterval(() => {
+      // 暂停不可见标签页的轮询以节省资源
+      if (document.hidden) {
+        return
+      }
+
       fetchGatewayRequestLogs()
         .then((logs) => {
           onRequestLogs({

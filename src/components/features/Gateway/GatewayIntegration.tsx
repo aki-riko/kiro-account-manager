@@ -38,7 +38,7 @@ function GatewayIntegration({
                 key={item.label}
                 colors={colors}
                 label={item.label}
-                value={item.label}
+                value={item.value}
                 detail={item.detail}
                 valueProps={{ size: 'sm' }}
               />

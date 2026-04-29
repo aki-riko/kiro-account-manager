@@ -154,6 +154,8 @@ pub struct LoadBalancer {
     health_map: Arc<RwLock<HashMap<String, AccountHealth>>>,
     /// 健康检查间隔
     health_check_interval: Duration,
+    /// 速率限制的账号（临时屏蔽）
+    rate_limited_accounts: Arc<RwLock<HashMap<String, Instant>>>,
 }
 
 impl LoadBalancer {
@@ -163,6 +165,7 @@ impl LoadBalancer {
             current_index: Arc::new(RwLock::new(0)),
             health_map: Arc::new(RwLock::new(HashMap::new())),
             health_check_interval: Duration::from_secs(30),
+            rate_limited_accounts: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -197,13 +200,23 @@ impl LoadBalancer {
         }
     }
 
-    /// 过滤健康的账号
+    /// 过滤健康的账号（排除速率限制的账号）
     async fn filter_healthy_accounts(&self, accounts: &[Account]) -> Vec<Account> {
         let health_map = self.health_map.read().await;
+        let rate_limited = self.rate_limited_accounts.read().await;
 
         accounts
             .iter()
             .filter(|acc| {
+                // 检查是否被速率限制
+                if let Some(blocked_at) = rate_limited.get(&acc.id) {
+                    if blocked_at.elapsed().as_secs() < 60 {
+                        log::debug!("[LoadBalancer] 跳过被速率限制的账号: {}", acc.label);
+                        return false;
+                    }
+                }
+                
+                // 检查健康状态
                 health_map
                     .get(&acc.id)
                     .map(|h| h.is_healthy)
@@ -351,6 +364,55 @@ impl LoadBalancer {
             .entry(account_id.to_string())
             .or_insert_with(|| AccountHealth::new(account_id.to_string()))
             .record_failure();
+    }
+
+    /// 标记账号为速率限制（临时屏蔽 60 秒）
+    pub async fn mark_rate_limited(&self, account_id: &str) {
+        let mut rate_limited = self.rate_limited_accounts.write().await;
+        rate_limited.insert(account_id.to_string(), Instant::now());
+        log::info!("[LoadBalancer] 账号 {} 被标记为速率限制，将屏蔽 60 秒", account_id);
+    }
+
+    /// 检查账号是否被速率限制
+    pub async fn is_rate_limited(&self, account_id: &str) -> bool {
+        let mut rate_limited = self.rate_limited_accounts.write().await;
+        
+        if let Some(blocked_at) = rate_limited.get(account_id) {
+            if blocked_at.elapsed().as_secs() < 60 {
+                return true;
+            } else {
+                // 60 秒后自动解除屏蔽
+                rate_limited.remove(account_id);
+                log::info!("[LoadBalancer] 账号 {} 速率限制已解除", account_id);
+            }
+        }
+        
+        false
+    }
+
+    /// 清除账号的速率限制标记
+    pub async fn clear_rate_limit(&self, account_id: &str) {
+        let mut rate_limited = self.rate_limited_accounts.write().await;
+        if rate_limited.remove(account_id).is_some() {
+            log::info!("[LoadBalancer] 手动清除账号 {} 的速率限制", account_id);
+        }
+    }
+
+    /// 获取所有被速率限制的账号
+    pub async fn get_rate_limited_accounts(&self) -> Vec<String> {
+        let mut rate_limited = self.rate_limited_accounts.write().await;
+        
+        // 清理过期的屏蔽
+        rate_limited.retain(|account_id, blocked_at| {
+            if blocked_at.elapsed().as_secs() >= 60 {
+                log::info!("[LoadBalancer] 账号 {} 速率限制已自动解除", account_id);
+                false
+            } else {
+                true
+            }
+        });
+        
+        rate_limited.keys().cloned().collect()
     }
 
     /// 获取账号健康状态
