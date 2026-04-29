@@ -1,4 +1,4 @@
-import { Server } from 'lucide-react'
+import { Server, Dice6, Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -136,25 +136,48 @@ function GatewayAdvanced({
                       autoComplete="off"
                     />
                     {fieldErrors.clientApiKeysText && <div className="text-xs text-red-500">{fieldErrors.clientApiKeysText}</div>}
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button size="sm" variant="outline" onClick={handleGenerateApiKey}>追加客户端 Key</Button>
+                          <Button size="icon" variant="outline" onClick={handleGenerateApiKey} className="h-8 w-8">
+                            <Dice6 className="h-4 w-4" />
+                          </Button>
                         </TooltipTrigger>
-                        <TooltipContent>生成一个 sk- 格式的 API Key</TooltipContent>
+                        <TooltipContent>随机生成并追加 Key</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            size="icon" 
+                            variant="outline" 
+                            onClick={() => {
+                              setConfig((prev: any) => ({
+                                ...prev,
+                                clientApiKeysText: prev.clientApiKeysText ? `${prev.clientApiKeysText}\n` : ''
+                              }))
+                            }}
+                            className="h-8 w-8"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>追加空行</TooltipContent>
                       </Tooltip>
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-1.5">
                     <Label>账号来源</Label>
+                    <div className="text-xs text-muted-foreground">
+                      推荐使用"按分组账号池"模式，自动轮询多个账号，配额用完自动切换，无需手动操作。
+                    </div>
                     <Select value={config.accountMode} onValueChange={(v) => setField('accountMode', v || 'single')}>
                       <SelectTrigger className={fieldErrors.accountMode ? 'border-red-500' : ''}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="single">指定单账号</SelectItem>
-                        <SelectItem value="group">按分组账号池</SelectItem>
+                        <SelectItem value="single">指定单账号（需手动切换）</SelectItem>
+                        <SelectItem value="group">按分组账号池（自动轮询）</SelectItem>
                       </SelectContent>
                     </Select>
                     {fieldErrors.accountMode && <div className="text-xs text-red-500">{fieldErrors.accountMode}</div>}
@@ -180,6 +203,9 @@ function GatewayAdvanced({
                   {config.accountMode === 'group' ? (
                     <div className="flex flex-col gap-1.5">
                       <Label>账号分组</Label>
+                      <div className="text-xs text-muted-foreground">
+                        选择一个分组，反代会自动从该分组的所有可用账号中轮询，配额用完自动切换到下一个账号。
+                      </div>
                       <Select value={config.groupId} onValueChange={(v) => setField('groupId', v)}>
                         <SelectTrigger className={fieldErrors.groupId ? 'border-red-500' : ''}>
                           <SelectValue placeholder="选择一个分组" />

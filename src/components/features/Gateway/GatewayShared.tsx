@@ -11,7 +11,7 @@ export function GatewaySurfaceCard({ colors, className = '', children, ...props 
       className={`glass-card border-border border rounded-md ${className}`.trim()}
       {...props}
     >
-      <CardContent className="p-4">
+      <CardContent className="p-3">
         {children}
       </CardContent>
     </Card>
@@ -25,7 +25,7 @@ interface GatewaySubCardProps extends React.HTMLAttributes<HTMLDivElement> {
 export function GatewaySubCard({ className = '', children, ...props }: GatewaySubCardProps) {
   return (
     <Card className={`border rounded-md ${className}`} {...props}>
-      <CardContent className="p-4">
+      <CardContent className="p-3">
         {children}
       </CardContent>
     </Card>

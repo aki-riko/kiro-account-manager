@@ -2,6 +2,7 @@ import { Check, Copy, FolderOpen, Radio, RefreshCw, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Stack, Group, Badge, Card, Code, Text } from '@/components/shared/layout'
 import { GatewayPathCard, GatewaySectionHeader, GatewayStatCard, GatewaySubCard, GatewaySurfaceCard } from './GatewayShared'
+import AccountPoolStatus from './AccountPoolStatus'
 import React from 'react'
 
 interface GatewayOverviewProps {
@@ -21,6 +22,8 @@ interface GatewayOverviewProps {
   effectiveConfig: any;
   logDir: string;
   latestErrorEntry: any;
+  accounts: any[];
+  groups: any[];
 }
 
 function GatewayOverview({
@@ -39,7 +42,9 @@ function GatewayOverview({
   copySuccess,
   effectiveConfig,
   logDir,
-  latestErrorEntry}: GatewayOverviewProps) {
+  latestErrorEntry,
+  accounts,
+  groups}: GatewayOverviewProps) {
   const overviewTone = latestErrorEntry ? 'orange' : actionSummary.tone
 
   return (
@@ -96,7 +101,7 @@ function GatewayOverview({
               </Group>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {operationsChecklist.map((item) => (
-                  <Card key={item.label} className="border rounded-xl p-6">
+                  <Card key={item.label} className="border rounded-xl p-4">
                     <Stack gap={6}>
                       <Group justify="space-between" align="flex-start">
                         <Text size="xs" className={"text-muted-foreground"}>{item.label}</Text>
@@ -167,6 +172,13 @@ function GatewayOverview({
             <GatewayStatCard colors={colors} label="运行快照" value={`${statusSummary.requests} 次请求`} detail={statusSummary.listen} />
             <GatewayStatCard colors={colors} label="最后同步" value={statusSummary.sync} />
           </div>
+
+          {/* 账号池状态可视化 */}
+          <AccountPoolStatus
+            config={effectiveConfig}
+            accounts={accounts}
+            groups={groups}
+          />
 
           <GatewayPathCard value={logDir || '尚未获取'} />
 
