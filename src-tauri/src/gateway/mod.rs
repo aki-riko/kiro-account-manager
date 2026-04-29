@@ -1,9 +1,11 @@
 mod converter;
 mod eventstream;
+mod load_balancer;
 mod models;
 mod proxy;
 mod stream;
 mod thinking_parser;
+mod token_cache;
 
 use axum::{
     extract::{ConnectInfo, State},
@@ -35,6 +37,7 @@ use tokio::{
 };
 
 use crate::clients::http_client::{build_streaming_http_client, is_supported_kiro_region};
+use crate::gateway::token_cache::TokenCache;
 
 #[cfg(test)]
 thread_local! {
@@ -146,7 +149,7 @@ struct RouterState {
     last_error: Arc<AsyncMutex<Option<String>>>,
     http: Client,
     responses_sessions: ResponsesSessionStore,
-    token_cache: Arc<AsyncMutex<HashMap<String, usize>>>,
+    token_cache: Arc<AsyncMutex<TokenCache>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -611,7 +614,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
     let request_count = Arc::new(AtomicU64::new(0));
     let last_error = Arc::new(AsyncMutex::new(None));
     let responses_sessions = Arc::new(AsyncMutex::new(HashMap::new()));
-    let token_cache = Arc::new(AsyncMutex::new(HashMap::new()));
+    let token_cache = Arc::new(AsyncMutex::new(TokenCache::new()));
 
     let http = build_streaming_http_client()
         .map_err(|e| format!("初始化 HTTP 客户端失败: {e}"))?;
@@ -816,6 +819,7 @@ mod tests {
             last_error: Arc::new(AsyncMutex::new(None)),
             http: Client::new(),
             responses_sessions: Arc::new(AsyncMutex::new(HashMap::new())),
+            token_cache: Arc::new(AsyncMutex::new(TokenCache::new())),
         }
     }
 
@@ -840,6 +844,7 @@ mod tests {
             last_error: Arc::new(AsyncMutex::new(None)),
             http: Client::new(),
             responses_sessions: Arc::new(AsyncMutex::new(HashMap::new())),
+            token_cache: Arc::new(AsyncMutex::new(TokenCache::new())),
         }
     }
 

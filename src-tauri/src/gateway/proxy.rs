@@ -39,7 +39,6 @@ const MAX_FAILURES_PER_ACCOUNT: u32 = 3;
 const MAX_KIRO_PAYLOAD_SIZE: usize = 615 * 1024; // 615KB - Kiro API 的 HTTP 请求大小限制
 
 // Token 限制的默认值（当无法从 API 获取时使用）
-const DEFAULT_MAX_INPUT_TOKENS: usize = 200_000; // Claude Sonnet 4.5 的默认限制
 const SUMMARIZATION_THRESHOLD_PERCENT: f64 = 0.8; // 80% 触发总结（Kiro IDE 的阈值）
 
 use super::{
@@ -248,6 +247,7 @@ impl TokenizerType {
     fn from_model_id(model_id: &str) -> Self {
         let model_lower = model_id.to_lowercase();
         
+        // Claude 系列：4.5, 4.6, 4.7 及所有变体
         if model_lower.contains("claude") {
             TokenizerType::Claude
         } else if model_lower.contains("gpt") || model_lower.contains("o1") || model_lower.contains("o3") {
@@ -334,7 +334,7 @@ fn estimate_text_tokens(text: &str, tokenizer_type: TokenizerType) -> usize {
     match tokenizer_type {
         TokenizerType::Claude => {
             // Claude: length / 4
-            (text.len() + 3) / 4
+            text.len().div_ceil(4)
         }
         TokenizerType::OpenAI => {
             // OpenAI: 使用 Generic 方法（tiktoken 需要额外依赖，这里简化处理）
@@ -359,11 +359,11 @@ fn estimate_text_tokens(text: &str, tokenizer_type: TokenizerType) -> usize {
 /// - total = base_tokens + newline_tokens + code_block_tokens
 fn estimate_generic_tokens(text: &str) -> usize {
     // 基础估算：4 字符 = 1 token（向上取整）
-    let base_tokens = (text.len() + 3) / 4;
+    let base_tokens = text.len().div_ceil(4);
 
     // 换行符：每行 +0.5 token（向上取整）
     let lines = text.lines().count();
-    let newline_tokens = (lines + 1) / 2;
+    let newline_tokens = lines.div_ceil(2);
 
     // 代码块：每个 ``` +2 tokens
     let code_blocks = text.matches("```").count();
@@ -375,24 +375,36 @@ fn estimate_generic_tokens(text: &str) -> usize {
 /// 获取模型的最大输入 token 数
 ///
 /// 根据模型 ID 返回对应的 maxInputTokens
-/// 参考 ListAvailableModels API 返回的 tokenLimits.maxInputTokens
+/// 
+/// 数据来源：
+/// - Kiro 官方文档：https://kiro.dev/docs/models/
+/// - Claude Opus 4.6/4.7：1M tokens
+/// - Claude Sonnet 4.6：1M tokens
+/// - 其他 Claude 4.x：200k tokens
 async fn get_model_max_input_tokens(model_id: &str) -> usize {
     let model_lower = model_id.to_lowercase();
     
     // 根据模型 ID 返回对应的 token 限制
-    // 数据来源：ListAvailableModels API 响应
     if model_lower == "auto" {
         1_000_000 // auto 模型支持 1M tokens
-    } else if model_lower.contains("claude") {
-        200_000 // Claude 系列默认 200k tokens
-    } else if model_lower.contains("gpt") || model_lower.contains("o1") || model_lower.contains("o3") {
-        200_000 // OpenAI 系列默认 200k tokens
-    } else if model_lower.contains("deepseek") {
-        200_000 // DeepSeek 默认 200k tokens
-    } else if model_lower.contains("llama") {
-        128_000 // Llama 系列默认 128k tokens
+    } else if model_lower.contains("opus-4.7") || model_lower.contains("opus-4-7") {
+        1_000_000 // Claude Opus 4.7: 1M tokens
+    } else if model_lower.contains("opus-4.6") || model_lower.contains("opus-4-6") {
+        1_000_000 // Claude Opus 4.6: 1M tokens
+    } else if model_lower.contains("sonnet-4.6") || model_lower.contains("sonnet-4-6") {
+        1_000_000 // Claude Sonnet 4.6: 1M tokens
+    } else if model_lower.contains("qwen") {
+        256_000 // Qwen3 Coder Next: 256k tokens
+    } else if model_lower.contains("llama") || model_lower.contains("deepseek") {
+        128_000 // Llama/DeepSeek: 128k tokens
     } else {
-        DEFAULT_MAX_INPUT_TOKENS // 未知模型使用默认值
+        // Claude 4.5/4.0、OpenAI、MiniMax、GLM 等其他模型默认 200k tokens
+        // 包括：
+        // - claude-opus-4.5, claude-sonnet-4.5/4.0, claude-haiku-4.5/4.6/4.7
+        // - gpt-4, gpt-4-turbo, o1, o3
+        // - minimax-m2.5, minimax-m2.1
+        // - glm-5
+        200_000
     }
 }
 
@@ -443,7 +455,7 @@ fn trim_kiro_payload_history(payload: &mut Value, max_bytes: usize) -> bool {
 
         // 检查第一条消息是否是 Assistant 消息且包含 tool_uses
         let first_is_assistant_with_tools = history
-            .get(0)
+            .first()
             .and_then(|msg| msg.get("assistant_response_message"))
             .and_then(|msg| msg.get("tool_uses"))
             .and_then(|tools| tools.as_array())
@@ -971,8 +983,8 @@ pub async fn proxy_handler(
 
     // 尝试从缓存获取
     let estimated_tokens = {
-        let cache = state.token_cache.lock().await;
-        cache.get(&cache_key).copied()
+        let mut cache = state.token_cache.lock().await;
+        cache.get(&cache_key)
     };
 
     // 如果缓存未命中，计算并存入缓存
@@ -2081,6 +2093,25 @@ fn order_accounts(accounts: &mut [Account], strategy: &str, request_index: u64) 
             // Random: 随机打乱
             accounts.shuffle(&mut thread_rng());
         }
+        "weighted_random" => {
+            // Weighted Random: 加权随机（根据配额和成功率）
+            // 注意：这里只是排序，实际的加权随机在 LoadBalancer 中实现
+            // 这里按健康分数排序作为后备
+            accounts.sort_by(|left, right| {
+                let score_left = calculate_health_score(left);
+                let score_right = calculate_health_score(right);
+                score_right.partial_cmp(&score_left).unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+        "least_connections" => {
+            // Least Connections: 优先使用活跃连接最少的账号
+            // 注意：连接数在 LoadBalancer 中跟踪，这里按成功率排序作为后备
+            accounts.sort_by(|left, right| {
+                let success_rate_left = calculate_success_rate(left);
+                let success_rate_right = calculate_success_rate(right);
+                success_rate_right.partial_cmp(&success_rate_left).unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
         _ => {
             // Round Robin: 轮询
             if !accounts.is_empty() {
@@ -2088,6 +2119,24 @@ fn order_accounts(accounts: &mut [Account], strategy: &str, request_index: u64) 
             }
         }
     }
+}
+
+/// 计算账号健康分数（0-100）
+fn calculate_health_score(account: &Account) -> f64 {
+    let success_rate = calculate_success_rate(account);
+    let quota_percent = remaining_quota(account);
+    
+    // 健康分数 = 成功率 × 0.7 + 配额百分比 × 0.3
+    success_rate * 0.7 + quota_percent * 0.3
+}
+
+/// 计算账号成功率（0-100）
+fn calculate_success_rate(account: &Account) -> f64 {
+    let total = account.success_count + (account.failure_count as u64);
+    if total == 0 {
+        return 100.0; // 新账号默认 100%
+    }
+    (account.success_count as f64 / total as f64) * 100.0
 }
 
 fn persist_account_refresh(
@@ -3008,11 +3057,15 @@ fn stream_proxy_response(
                                         KiroEvent::Usage {
                                             input_tokens: input,
                                             output_tokens: output,
+                                            cache_read_input_tokens,
+                                            cache_creation_input_tokens,
                                         } => {
                                             input_tokens = input;
                                             output_tokens = output;
                                             aggregated.input_tokens = input;
                                             aggregated.output_tokens = output;
+                                            aggregated.cache_read_input_tokens = cache_read_input_tokens;
+                                            aggregated.cache_creation_input_tokens = cache_creation_input_tokens;
                                         }
                                         KiroEvent::ContextUsage { percentage } => {
                                             aggregated.context_usage_percentage = Some(percentage);
@@ -3782,6 +3835,7 @@ async fn send_data(tx: &mpsc::Sender<Result<Bytes, Infallible>>, payload: &str) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gateway::token_cache::TokenCache;
     use serde_json::json;
     use std::sync::{
         atomic::AtomicU64,
@@ -3801,7 +3855,7 @@ mod tests {
             last_error: Arc::new(AsyncMutex::new(None)),
             http: Client::new(),
             responses_sessions: Arc::new(AsyncMutex::new(HashMap::new())),
-            token_cache: Arc::new(AsyncMutex::new(HashMap::new())),
+            token_cache: Arc::new(AsyncMutex::new(TokenCache::new())),
         }
     }
 
@@ -3948,6 +4002,205 @@ mod tests {
             Some(&"{\"q\":\"gateway\"}".to_string())
         );
         assert_eq!(chat_request.messages[2].content, Some(json!("命中结果")));
+    }
+
+    #[test]
+    fn test_tokenizer_type_from_model_id() {
+        assert!(matches!(
+            TokenizerType::from_model_id("claude-3-7-sonnet-20250219"),
+            TokenizerType::Claude
+        ));
+        assert!(matches!(
+            TokenizerType::from_model_id("gpt-4"),
+            TokenizerType::OpenAI
+        ));
+        assert!(matches!(
+            TokenizerType::from_model_id("o1-preview"),
+            TokenizerType::OpenAI
+        ));
+        assert!(matches!(
+            TokenizerType::from_model_id("llama-3-70b"),
+            TokenizerType::Llama
+        ));
+        assert!(matches!(
+            TokenizerType::from_model_id("unknown-model"),
+            TokenizerType::Generic
+        ));
+    }
+
+    #[test]
+    fn test_estimate_text_tokens_claude() {
+        let text = "Hello, world!";
+        let tokens = estimate_text_tokens(text, TokenizerType::Claude);
+        assert_eq!(tokens, (text.len() + 3) / 4);
+    }
+
+    #[test]
+    fn test_estimate_text_tokens_llama() {
+        let text = "Hello, world!";
+        let tokens = estimate_text_tokens(text, TokenizerType::Llama);
+        assert_eq!(tokens, ((text.len() as f64 / 3.5).ceil() as usize).max(1));
+    }
+
+    #[test]
+    fn test_estimate_text_tokens_generic() {
+        let text = "Hello\nWorld\n```rust\nfn main() {}\n```";
+        let tokens = estimate_text_tokens(text, TokenizerType::Generic);
+
+        let base_tokens = (text.len() + 3) / 4;
+        let lines = text.lines().count();
+        let newline_tokens = (lines + 1) / 2;
+        let code_blocks = text.matches("```").count();
+        let code_block_tokens = code_blocks * 2;
+        let expected = base_tokens + newline_tokens + code_block_tokens;
+
+        assert_eq!(tokens, expected);
+    }
+
+    #[test]
+    fn test_estimate_request_tokens() {
+        let messages = vec![
+            NormalizedMessage {
+                role: "user".to_string(),
+                content: Some(json!("Hello, how are you?")),
+                tool_calls: None,
+                tool_call_id: None,
+                metadata: None,
+            },
+            NormalizedMessage {
+                role: "assistant".to_string(),
+                content: Some(json!("I'm doing well, thank you!")),
+                tool_calls: None,
+                tool_call_id: None,
+                metadata: None,
+            },
+        ];
+
+        let tokens = estimate_request_tokens(&messages, "claude-3-7-sonnet-20250219");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_check_payload_size() {
+        let payload = json!({
+            "model": "claude-3-7-sonnet-20250219",
+            "messages": [
+                {"role": "user", "content": "Hello"}
+            ]
+        });
+
+        let size = check_payload_size(&payload);
+        assert!(size > 0);
+    }
+
+    #[test]
+    fn test_trim_kiro_payload_history_removes_oldest_messages() {
+        let mut payload = json!({
+            "conversationState": {
+                "history": [
+                    {
+                        "user_input_message": {
+                            "user_input_message_context": {
+                                "text": "First message"
+                            }
+                        }
+                    },
+                    {
+                        "assistant_response_message": {
+                            "text": "First response"
+                        }
+                    },
+                    {
+                        "user_input_message": {
+                            "user_input_message_context": {
+                                "text": "Second message"
+                            }
+                        }
+                    },
+                    {
+                        "assistant_response_message": {
+                            "text": "Second response"
+                        }
+                    }
+                ]
+            }
+        });
+
+        let max_bytes = 100;
+        let trimmed = trim_kiro_payload_history(&mut payload, max_bytes);
+
+        assert!(trimmed);
+        let history = payload
+            .pointer("/conversationState/history")
+            .and_then(|v| v.as_array())
+            .unwrap();
+        assert!(history.len() < 4);
+        assert!(history.len() >= 2);
+    }
+
+    #[test]
+    fn test_trim_kiro_payload_history_preserves_tool_call_pairs() {
+        let mut payload = json!({
+            "conversationState": {
+                "history": [
+                    {
+                        "assistant_response_message": {
+                            "text": "Let me search for that",
+                            "tool_uses": [
+                                {
+                                    "id": "call_1",
+                                    "name": "search",
+                                    "input": {"q": "test"}
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "user_input_message": {
+                            "user_input_message_context": {
+                                "tool_results": [
+                                    {
+                                        "call_id": "call_1",
+                                        "output": "Found results"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        "user_input_message": {
+                            "user_input_message_context": {
+                                "text": "Recent message"
+                            }
+                        }
+                    }
+                ]
+            }
+        });
+
+        let max_bytes = 200;
+        let trimmed = trim_kiro_payload_history(&mut payload, max_bytes);
+
+        if trimmed {
+            let history = payload
+                .pointer("/conversationState/history")
+                .and_then(|v| v.as_array())
+                .unwrap();
+
+            if history.len() == 1 {
+                assert!(history[0].get("user_input_message").is_some());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_model_max_input_tokens() {
+        assert_eq!(get_model_max_input_tokens("auto").await, 1_000_000);
+        assert_eq!(get_model_max_input_tokens("claude-3-7-sonnet-20250219").await, 200_000);
+        assert_eq!(get_model_max_input_tokens("gpt-4").await, 200_000);
+        assert_eq!(get_model_max_input_tokens("deepseek-chat").await, 200_000);
+        assert_eq!(get_model_max_input_tokens("llama-3-70b").await, 128_000);
+        assert_eq!(get_model_max_input_tokens("unknown-model").await, 200_000);
     }
 
     #[tokio::test]
@@ -4103,6 +4356,8 @@ mod tests {
             output_tokens: 20,
             context_usage_percentage: None,
             citations: Vec::new(),
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
         };
         let response = build_anthropic_response(
             "claude-sonnet-4-5",
@@ -4136,6 +4391,8 @@ mod tests {
             output_tokens: 24,
             context_usage_percentage: None,
             citations: Vec::new(),
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
         };
         let response = build_responses_response_with_ids(
             "gpt-4.1",
@@ -4384,6 +4641,8 @@ mod tests {
             output_tokens: 5,
             context_usage_percentage: None,
             citations: Vec::new(),
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
         };
 
         let event = build_stream_responses_completed_event(

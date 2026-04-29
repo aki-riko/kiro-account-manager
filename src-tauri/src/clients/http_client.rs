@@ -347,7 +347,7 @@ pub fn build_http_client_with_user_agent(user_agent: &str) -> Result<Client, Str
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_kiro_runtime_headers, is_external_idp_auth_method, is_supported_kiro_region,
+        is_external_idp_auth_method, is_supported_kiro_region,
         parse_region_from_profile_arn, resolve_kiro_upstream_region,
         should_add_redirect_for_internal,
     };
