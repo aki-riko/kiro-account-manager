@@ -18,7 +18,7 @@ import AccountListView from './AccountListView'
 import ImportAccountModal from './ImportAccountModal'
 import AccountDetailModal from './AccountDetailModal'
 import EditAccountModal from './EditAccountModal'
-import BatchTagModal from './BatchTagModal'
+import BatchEditModal from './BatchEditModal'
 import ConfirmModal from './ConfirmModal'
 import { AccountListSkeleton, AccountTableSkeleton } from '../../shared/Skeleton'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
@@ -41,7 +41,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   const [editingAccount, setEditingAccount] = useState<any>(null)
   const [editingLabelAccount, setEditingLabelAccount] = useState<any>(null)
   const [showImportModal, setShowImportModal] = useState(false)
-  const [showBatchTagModal, setShowBatchTagModal] = useState(false)
+  const [showBatchEditModal, setShowBatchEditModal] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null)
@@ -466,7 +466,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
         onSearchChange={handleSearchChange}
         selectedCount={selectedIds.length}
         onBatchDelete={onBatchDelete}
-        onBatchTag={() => setShowBatchTagModal(true)}
+        onBatchEdit={() => setShowBatchEditModal(true)}
         onImport={() => setShowImportModal(true)}
         onExport={async () => {
           if (selectedIds.length === 0) {
@@ -627,19 +627,23 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onNavigate={onNavigate}
         />
       )}
-      {showBatchTagModal && (
-        <BatchTagModal
+      {showBatchEditModal && (
+        <BatchEditModal
           accountIds={selectedIds}
           accounts={accounts}
-          onClose={() => setShowBatchTagModal(false)}
-          onSuccess={({ accountIds: updatedIds, selectedTagIds }) => {
-            setShowBatchTagModal(false)
+          onClose={() => setShowBatchEditModal(false)}
+          onSuccess={({ accountIds: updatedIds, selectedTagIds, selectedGroupId }) => {
+            setShowBatchEditModal(false)
             setAccounts(prev => prev.map(account => {
               if (!updatedIds.includes(account.id)) return account
               const nextTagLinks = Array.isArray(selectedTagIds)
                 ? selectedTagIds.map(tagId => ({ tagId }))
                 : account.tagLinks
-              return { ...account, tagLinks: nextTagLinks }
+              return { 
+                ...account, 
+                tagLinks: nextTagLinks,
+                groupId: selectedGroupId
+              }
             }))
             loadTagDefinitions()
             setSelectedIds([])

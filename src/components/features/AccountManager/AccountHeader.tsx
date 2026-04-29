@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { Search, Download, Upload, RefreshCcw, RotateCw, Trash2, Tag, ArrowUp, ArrowDown, X, TrendingUp, Clock, Calendar, CheckSquare, Square, Sparkles, LayoutGrid, List } from 'lucide-react'
+import { Search, Download, Upload, RefreshCcw, RotateCw, Trash2, Tag, ArrowUp, ArrowDown, X, TrendingUp, Clock, Calendar, CheckSquare, Square, Sparkles, LayoutGrid, List, Folder, Edit } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import FilterDropdown from './FilterDropdown'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
@@ -10,7 +10,7 @@ interface AccountHeaderProps {
   onSearchChange: (value: string) => void;
   selectedCount: number;
   onBatchDelete: () => void;
-  onBatchTag: () => void;
+  onBatchEdit: () => void;
   onImport: () => void;
   onExport: () => void;
   onRefresh: () => void;
@@ -41,7 +41,7 @@ function AccountHeader({
   onSearchChange,
   selectedCount,
   onBatchDelete,
-  onBatchTag,
+  onBatchEdit,
   onImport,
   onExport,
   onRefresh,
@@ -277,12 +277,12 @@ function AccountHeader({
                 </button>
               </div>
               <button
-                onClick={onBatchTag}
+                onClick={onBatchEdit}
                 className={`px-4 py-2.5 text-sm font-medium rounded-xl flex items-center gap-2 transition-all duration-200 hover:shadow-lg cursor-pointer bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} text-white shadow-md ${accent.shadow}`}
-                title={t('tags.batchSet')}
+                title="批量编辑（标签和分组）"
               >
-                <Tag size={16} />
-                ({selectedCount})
+                <Edit size={16} />
+                批量编辑 ({selectedCount})
               </button>
               <button
                 onClick={onBatchDelete}
