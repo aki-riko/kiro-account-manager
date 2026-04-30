@@ -27,10 +27,13 @@ use crate::{
         RefreshResult,
     },
     commands::machine_guid::get_machine_id,
-    clients::http_client::{
-        build_kiro_custom_user_agent,
-        resolve_kiro_upstream_region, should_add_redirect_for_internal,
-        should_send_codewhisperer_optout,
+    clients::{
+        http_client::{
+            build_kiro_custom_user_agent,
+            resolve_kiro_upstream_region, should_add_redirect_for_internal,
+            should_send_codewhisperer_optout,
+        },
+        kiro_q_client::KiroQClient,
     },
 };
 
@@ -43,8 +46,8 @@ const SUMMARIZATION_THRESHOLD_PERCENT: f64 = 0.8; // 80% 触发总结（Kiro IDE
 use super::{
     append_gateway_request_log,
     converter::{
-        build_kiro_payload, get_available_models, normalize_anthropic_request,
-        normalize_responses_request,
+        build_kiro_payload, get_available_models,
+        normalize_anthropic_request, normalize_responses_request,
     },
     eventstream::decode_message,
     effective_client_api_keys,
@@ -224,6 +227,37 @@ fn build_count_tokens_response(payload: &Value) -> Value {
 
 fn build_health_response() -> Value {
     json!({ "ok": true })
+}
+
+/// 获取账号可用模型列表
+///
+/// 调用 Kiro Q API 的 ListAvailableModels 接口获取账号权限内的模型
+async fn get_available_models_for_upstream(
+    upstream: &UpstreamCredentials,
+) -> Result<Vec<String>, String> {
+    let client = KiroQClient::new()?;
+
+    let response = client
+        .list_available_models(
+            &upstream.access_token,
+            &get_machine_id(),
+            &upstream.region,
+            upstream.profile_arn.as_deref(),
+            None, // model_provider
+            None, // next_token
+        )
+        .await?;
+
+    // 解析返回的模型列表
+    let models = response
+        .get("models")
+        .and_then(|v| v.as_array())
+        .ok_or("Invalid response: missing models array")?
+        .iter()
+        .filter_map(|m| m.get("modelId").and_then(|id| id.as_str()).map(String::from))
+        .collect();
+
+    Ok(models)
 }
 
 fn check_payload_size(payload: &Value) -> usize {
@@ -1053,25 +1087,51 @@ pub async fn proxy_handler(
         .await;
     }
 
-    let upstream_payload =
-        match build_kiro_payload(&state.http, &request, upstream.profile_arn.clone()).await {
-            Ok(payload) => payload,
-            Err(message) => {
-                let sanitized = sanitize_error(&message);
-                return gateway_error_with_log(
-                    &state,
-                    format,
-                    &upstream_log_context,
-                    GatewayErrorDetails {
-                        status: StatusCode::BAD_REQUEST,
-                        error_type: "invalid_request_error",
-                        message: &sanitized,
-                        response_body: None,
-                    },
-                )
-                .await;
-            }
-        };
+    // 获取账号可用模型列表（用于模型降级）
+    let available_models = match get_available_models_for_upstream(&upstream).await {
+        Ok(models) => {
+            log::debug!(
+                "[Gateway] 账号 {} 可用模型: {:?}",
+                upstream.source_label,
+                models
+            );
+            Some(models)
+        }
+        Err(e) => {
+            log::warn!(
+                "[Gateway] 无法获取账号 {} 的可用模型列表: {}，将不进行模型降级",
+                upstream.source_label,
+                e
+            );
+            None
+        }
+    };
+
+    let upstream_payload = match build_kiro_payload(
+        &state.http,
+        &request,
+        upstream.profile_arn.clone(),
+        available_models.as_deref(),
+    )
+    .await
+    {
+        Ok(payload) => payload,
+        Err(message) => {
+            let sanitized = sanitize_error(&message);
+            return gateway_error_with_log(
+                &state,
+                format,
+                &upstream_log_context,
+                GatewayErrorDetails {
+                    status: StatusCode::BAD_REQUEST,
+                    error_type: "invalid_request_error",
+                    message: &sanitized,
+                    response_body: None,
+                },
+            )
+            .await;
+        }
+    };
     
     // 【第二层防护】Payload 大小裁剪（硬限制 - 615KB）
     // 如果 payload 超过 Kiro API 的 HTTP 请求大小限制，自动裁剪历史记录
@@ -1536,14 +1596,38 @@ async fn execute_request_with_server_tools(
     );
     let mut server_tool_calls = Vec::new();
 
+    // 获取账号可用模型列表（用于模型降级）
+    let available_models = match get_available_models_for_upstream(upstream).await {
+        Ok(models) => {
+            log::debug!(
+                "[Gateway] 账号 {} 可用模型: {:?}",
+                upstream.source_label,
+                models
+            );
+            Some(models)
+        }
+        Err(e) => {
+            log::warn!(
+                "[Gateway] 无法获取账号 {} 的可用模型列表: {}，将不进行模型降级",
+                upstream.source_label,
+                e
+            );
+            None
+        }
+    };
+
     for _ in 0.._max_uses {
-        let upstream_payload =
-            build_kiro_payload(&state.http, &working_request, upstream.profile_arn.clone())
-                .await
-                .map_err(|message| {
-                    (
-                        StatusCode::BAD_REQUEST,
-                        "invalid_request_error",
+        let upstream_payload = build_kiro_payload(
+            &state.http,
+            &working_request,
+            upstream.profile_arn.clone(),
+            available_models.as_deref(),
+        )
+        .await
+        .map_err(|message| {
+            (
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
                         sanitize_error(&message),
                     )
                 })?;

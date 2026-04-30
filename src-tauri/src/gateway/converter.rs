@@ -448,33 +448,93 @@ fn string_array_from_values(values: &[Value]) -> Vec<String> {
 pub fn get_internal_model_id(external_model: &str) -> Result<String, String> {
     let normalized_model = normalize_external_model_alias(external_model);
     let model_id = match normalized_model.as_str() {
+        // OpenAI GPT 模型映射到 Claude
+        "gpt-5.5" | "gpt-5.5-turbo" | "gpt-5.5-preview" => "claude-opus-4.7",
+        "gpt-4o" | "gpt-4o-2024-11-20" | "gpt-4o-2024-08-06" => "claude-opus-4.7",
+        "gpt-4o-mini" | "gpt-4o-mini-2024-07-18" => "claude-sonnet-4.7",
+        "o1" | "o1-preview" | "o1-2024-12-17" => "claude-opus-4.7",
+        "o1-mini" | "o1-mini-2024-09-12" => "claude-sonnet-4.7",
+        "o3" | "o3-mini" | "o3-mini-2025-01-31" => "claude-sonnet-4.7",
+        "gpt-4-turbo" | "gpt-4-turbo-preview" | "gpt-4-1106-preview" | "gpt-4-0125-preview" => "claude-opus-4.7",
+        "gpt-4" | "gpt-4-0613" | "gpt-4-32k" => "claude-opus-4.7",
+        "gpt-3.5-turbo" | "gpt-3.5-turbo-16k" | "gpt-3.5-turbo-0125" => "claude-haiku-4.7",
+        // Claude 4.7 系列
+        "claude-opus-4-7" | "claude-opus-4.7" | "opus-4-7" | "opus" => "claude-opus-4.7",
+        "claude-sonnet-4-7" | "claude-sonnet-4.7" | "sonnet-4-7" | "sonnet" => "claude-sonnet-4.7",
+        "claude-haiku-4-7" | "claude-haiku-4.7" | "haiku-4-7" | "haiku" => "claude-haiku-4.7",
+        // Claude 4.6 系列
         "claude-opus-4-6-20260205" => "claude-opus-4.6",
         "claude-opus-4-6" | "claude-opus-4.6" | "opus-4-6" => "claude-opus-4.6",
-        "claude-opus-4-5" | "claude-opus-4-5-20251101" | "claude-opus-4.5" | "opus" => {
-            "claude-opus-4.5"
-        }
-        "claude-haiku-4-5" | "claude-haiku-4-5-20251001" | "claude-haiku-4.5" | "haiku" => {
-            "claude-haiku-4.5"
-        }
         "claude-sonnet-4-6-20260217" => "claude-sonnet-4.6",
         "claude-sonnet-4-6" | "claude-sonnet-4.6" | "sonnet-4-6" => "claude-sonnet-4.6",
+        "claude-haiku-4-6" | "claude-haiku-4.6" | "haiku-4-6" => "claude-haiku-4.6",
+        // Claude 4.5 系列
+        "claude-opus-4-5" | "claude-opus-4-5-20251101" | "claude-opus-4.5" => {
+            "claude-opus-4.5"
+        }
         "claude-sonnet-4-5"
         | "claude-sonnet-4-5-20250929"
         | "claude-sonnet-4.5"
-        | "claude-sonnet-latest"
-        | "sonnet" => "claude-sonnet-4.5",
+        | "claude-sonnet-latest" => "claude-sonnet-4.5",
+        "claude-haiku-4-5" | "claude-haiku-4-5-20251001" | "claude-haiku-4.5" => {
+            "claude-haiku-4.5"
+        }
+        // Claude 4 系列
         "claude-sonnet-4" | "claude-sonnet-4-20250514" => "claude-sonnet-4",
+        // Claude 3.x 系列
         "claude-3-7-sonnet-20250219" | "claude-3.7-sonnet" => "claude-3-7-sonnet-20250219",
         "claude-3-5-sonnet-20241022" | "claude-3-5-sonnet-latest" | "claude-3.5-sonnet" => {
             "claude-3-5-sonnet-20241022"
         }
+        // 特殊模式
         "auto" | "default" => "auto",
+        // 前缀匹配（支持未来版本）
+        other if other.starts_with("gpt-5.5-") => "claude-opus-4.7",
+        other if other.starts_with("claude-opus-4-7-") => "claude-opus-4.7",
+        other if other.starts_with("claude-sonnet-4-7-") => "claude-sonnet-4.7",
+        other if other.starts_with("claude-haiku-4-7-") => "claude-haiku-4.7",
         other if other.starts_with("claude-opus-4-6-") => "claude-opus-4.6",
         other if other.starts_with("claude-sonnet-4-6-") => "claude-sonnet-4.6",
+        other if other.starts_with("claude-haiku-4-6-") => "claude-haiku-4.6",
         other => other,
     };
 
     Ok(model_id.to_string())
+}
+
+/// 带降级的模型映射函数
+///
+/// 根据账号可用模型列表，自动将不可用的高版本模型降级到 4.5
+pub fn get_internal_model_id_with_fallback(
+    external_model: &str,
+    available_models: &[String],
+) -> Result<String, String> {
+    let mapped_model = get_internal_model_id(external_model)?;
+
+    // 检查是否在可用列表中
+    if available_models.contains(&mapped_model) {
+        return Ok(mapped_model);
+    }
+
+    // 降级策略：4.7/4.6 -> 4.5
+    let fallback = if mapped_model.contains("opus-4.7") || mapped_model.contains("opus-4.6") {
+        "claude-opus-4.5"
+    } else if mapped_model.contains("sonnet-4.7") || mapped_model.contains("sonnet-4.6") {
+        "claude-sonnet-4.5"
+    } else if mapped_model.contains("haiku-4.7") || mapped_model.contains("haiku-4.6") {
+        "claude-haiku-4.5"
+    } else {
+        // 如果不是 4.6/4.7 模型，或者降级后的模型也不可用，返回原模型
+        return Ok(mapped_model);
+    };
+
+    log::warn!(
+        "[Gateway] 模型 {} 不可用，降级到 {}",
+        mapped_model,
+        fallback
+    );
+
+    Ok(fallback.to_string())
 }
 
 fn normalize_external_model_alias(external_model: &str) -> String {
@@ -485,8 +545,13 @@ pub async fn build_kiro_payload(
     client: &Client,
     request: &NormalizedRequest,
     profile_arn: Option<String>,
+    available_models: Option<&[String]>,
 ) -> Result<KiroPayload, String> {
-    let model_id = get_internal_model_id(&request.model)?;
+    let model_id = if let Some(models) = available_models {
+        get_internal_model_id_with_fallback(&request.model, models)?
+    } else {
+        get_internal_model_id(&request.model)?
+    };
     let conversation_id = request
         .previous_response_id
         .clone()
@@ -679,18 +744,27 @@ pub async fn build_kiro_payload(
 
 pub fn get_available_models() -> Vec<ModelInfo> {
     [
+        // Claude 4.7 系列
+        "claude-opus-4-7",
+        "claude-sonnet-4-7",
+        "claude-haiku-4-7",
+        // Claude 4.6 系列
         "claude-opus-4-6",
         "claude-opus-4-6-20260205",
-        "claude-opus-4-5",
-        "claude-opus-4-5-20251101",
-        "claude-haiku-4-5",
-        "claude-haiku-4-5-20251001",
         "claude-sonnet-4-6",
         "claude-sonnet-4-6-20260217",
+        "claude-haiku-4-6",
+        // Claude 4.5 系列
+        "claude-opus-4-5",
+        "claude-opus-4-5-20251101",
         "claude-sonnet-4-5",
         "claude-sonnet-4-5-20250929",
+        "claude-haiku-4-5",
+        "claude-haiku-4-5-20251001",
+        // Claude 4 系列
         "claude-sonnet-4",
         "claude-sonnet-4-20250514",
+        // Claude 3.x 系列
         "claude-3-7-sonnet-20250219",
     ]
     .into_iter()
@@ -2080,6 +2154,7 @@ mod tests {
             &Client::new(),
             &request,
             Some("arn:aws:codewhisperer:::profile/test".to_string()),
+            None,
         )
         .await
         .expect("payload should build");
@@ -2144,7 +2219,7 @@ mod tests {
             previous_response_id: None,
         };
 
-        let payload = build_kiro_payload(&Client::new(), &request, None)
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
             .await
             .expect("payload should build");
 
@@ -2179,7 +2254,7 @@ mod tests {
             previous_response_id: None,
         };
 
-        let payload = build_kiro_payload(&Client::new(), &request, None)
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
             .await
             .expect("payload should build");
 
@@ -2408,7 +2483,7 @@ mod tests {
             previous_response_id: None,
         };
 
-        let payload = build_kiro_payload(&Client::new(), &request, None)
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
             .await
             .expect("payload should build");
 
@@ -2446,7 +2521,7 @@ mod tests {
             previous_response_id: Some("resp_prev_123".to_string()),
         };
 
-        let payload = build_kiro_payload(&Client::new(), &request, None)
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
             .await
             .expect("payload should build");
 
@@ -2485,7 +2560,7 @@ mod tests {
             previous_response_id: None,
         };
 
-        let error = build_kiro_payload(&Client::new(), &request, None)
+        let error = build_kiro_payload(&Client::new(), &request, None, None)
             .await
             .expect_err("unknown tool choice should fail");
 
@@ -2526,7 +2601,7 @@ mod tests {
             previous_response_id: None,
         };
 
-        let payload = build_kiro_payload(&Client::new(), &request, None)
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
             .await
             .expect("payload should build");
         let current = &payload
@@ -2615,7 +2690,7 @@ mod tests {
             previous_response_id: None,
         };
 
-        let payload = build_kiro_payload(&Client::new(), &request, None)
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
             .await
             .expect("payload should build");
         assert!(
@@ -2661,7 +2736,7 @@ mod tests {
             previous_response_id: None,
         };
 
-        let payload = build_kiro_payload(&Client::new(), &request, None)
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
             .await
             .expect("payload should build");
         let current = &payload
@@ -2741,7 +2816,7 @@ mod tests {
             previous_response_id: None,
         };
 
-        let payload = build_kiro_payload(&Client::new(), &request, None)
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
             .await
             .expect("payload should build");
         let history = payload

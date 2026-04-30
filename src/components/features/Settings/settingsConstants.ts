@@ -1,14 +1,14 @@
 export const AI_MODELS = [
-  { value: 'claude-sonnet-4', label: 'Claude Sonnet 4 - 1.3x', recommended: false },
-  { value: 'claude-sonnet-4.5', label: 'Claude Sonnet 4.5 - 1.3x', recommended: true },
-  { value: 'claude-opus-4.5', label: 'Claude Opus 4.5 - 2.2x', recommended: false },
-  { value: 'claude-haiku-4.5', label: 'Claude Haiku 4.5 - 0.4x', recommended: false },
+  { value: 'claude-sonnet-4.7', label: 'Claude Sonnet 4.7 - 1.3x', recommended: true },
+  { value: 'claude-opus-4.7', label: 'Claude Opus 4.7 - 2.2x', recommended: false },
+  { value: 'claude-haiku-4.7', label: 'Claude Haiku 4.7 - 0.4x', recommended: false },
   { value: 'claude-sonnet-4.6', label: 'Claude Sonnet 4.6 - 1.3x', recommended: false },
   { value: 'claude-opus-4.6', label: 'Claude Opus 4.6 - 2.2x', recommended: false },
   { value: 'claude-haiku-4.6', label: 'Claude Haiku 4.6 - 0.4x', recommended: false },
-  { value: 'claude-sonnet-4.7', label: 'Claude Sonnet 4.7 - 1.3x', recommended: false },
-  { value: 'claude-opus-4.7', label: 'Claude Opus 4.7 - 2.2x', recommended: false },
-  { value: 'claude-haiku-4.7', label: 'Claude Haiku 4.7 - 0.4x', recommended: false },
+  { value: 'claude-sonnet-4.5', label: 'Claude Sonnet 4.5 - 1.3x', recommended: false },
+  { value: 'claude-opus-4.5', label: 'Claude Opus 4.5 - 2.2x', recommended: false },
+  { value: 'claude-haiku-4.5', label: 'Claude Haiku 4.5 - 0.4x', recommended: false },
+  { value: 'claude-sonnet-4', label: 'Claude Sonnet 4 - 1.3x', recommended: false },
 ]
 
 export const NOTIFICATION_SETTINGS_FIELD_MAP = {
