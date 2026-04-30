@@ -673,6 +673,14 @@ fn write_request_log(
     cache_read_input_tokens: Option<i32>,
     cache_creation_input_tokens: Option<i32>,
 ) {
+    // 调试日志：记录 tokens 信息
+    if input_tokens.is_none() && output_tokens.is_none() {
+        eprintln!("⚠️  [write_request_log] No tokens info for request #{}", context.request_index);
+    } else {
+        eprintln!("📊 [write_request_log] Request #{}: input={:?}, output={:?}, cache_read={:?}, cache_creation={:?}",
+            context.request_index, input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens);
+    }
+    
     let duration_ms = context
         .started_at
         .elapsed()

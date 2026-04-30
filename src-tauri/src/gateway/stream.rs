@@ -242,6 +242,7 @@ pub fn aggregate_kiro_response(raw: &str) -> AggregatedKiroResponse {
     let mut remaining = raw;
     let mut tool_accumulators: std::collections::HashMap<String, (String, String)> =
         std::collections::HashMap::new();
+    let mut found_usage = false;
 
     while let Some(start) = remaining.find('{') {
         remaining = &remaining[start..];
@@ -275,6 +276,9 @@ pub fn aggregate_kiro_response(raw: &str) -> AggregatedKiroResponse {
                     cache_read_input_tokens,
                     cache_creation_input_tokens,
                 } => {
+                    found_usage = true;
+                    eprintln!("📊 [aggregate_kiro_response] Found usage event: input={}, output={}, cache_read={:?}, cache_creation={:?}",
+                        input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens);
                     aggregated.input_tokens = input_tokens;
                     aggregated.output_tokens = output_tokens;
                     aggregated.cache_read_input_tokens = cache_read_input_tokens;
@@ -292,6 +296,10 @@ pub fn aggregate_kiro_response(raw: &str) -> AggregatedKiroResponse {
         }
 
         remaining = &remaining[json_len..];
+    }
+
+    if !found_usage {
+        eprintln!("⚠️  [aggregate_kiro_response] No usage event found in response");
     }
 
     aggregated.tool_calls = deduplicate_tool_calls(aggregated.tool_calls);
