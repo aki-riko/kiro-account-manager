@@ -8,12 +8,10 @@ use toml_edit::{value, DocumentMut};
 
 #[command]
 pub async fn check_claude_code_installed() -> Result<bool, String> {
-    // 检查 claude 命令是否存在
-    let output = if cfg!(target_os = "windows") {
-        Command::new("where").arg("claude").output()
-    } else {
-        Command::new("which").arg("claude").output()
-    };
+    // 检查 claude 命令是否存在，使用 --version 验证
+    let output = Command::new("claude")
+        .arg("--version")
+        .output();
 
     match output {
         Ok(result) => Ok(result.status.success()),
@@ -23,12 +21,10 @@ pub async fn check_claude_code_installed() -> Result<bool, String> {
 
 #[command]
 pub async fn check_codex_cli_installed() -> Result<bool, String> {
-    // 检查 codex 命令是否存在
-    let output = if cfg!(target_os = "windows") {
-        Command::new("where").arg("codex").output()
-    } else {
-        Command::new("which").arg("codex").output()
-    };
+    // 检查 codex 命令是否存在，使用 --version 验证
+    let output = Command::new("codex")
+        .arg("--version")
+        .output();
 
     match output {
         Ok(result) => Ok(result.status.success()),
