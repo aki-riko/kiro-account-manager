@@ -260,6 +260,7 @@ pub(crate) fn effective_client_api_keys(config: &GatewayConfig) -> Vec<String> {
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .filter(|value| !value.starts_with("#disabled#")) // 过滤禁用的 Key
     {
         keys.push(key.to_string());
     }
@@ -269,6 +270,7 @@ pub(crate) fn effective_client_api_keys(config: &GatewayConfig) -> Vec<String> {
         .iter()
         .map(|item| item.trim())
         .filter(|item| !item.is_empty())
+        .filter(|item| !item.starts_with("#disabled#")) // 过滤禁用的 Key
     {
         if !keys.iter().any(|existing| existing == key) {
             keys.push(key.to_string());

@@ -172,19 +172,19 @@ function GatewayConfig({
                     <div className="flex text-sm">
                       <div className="flex-shrink-0 w-[60px] p-3 font-semibold">#</div>
                       <div className="flex-1 p-3 font-semibold">API Key</div>
-                      <div className="flex-shrink-0 w-[100px] p-3 font-semibold">状态</div>
+                      <div className="flex-shrink-0 w-[100px] p-3 font-semibold text-center">启用</div>
                       <div className="flex-shrink-0 w-[80px] p-3 font-semibold">操作</div>
                     </div>
                   </div>
                   
                   <div className="max-h-[240px] overflow-y-auto">
                     {(() => {
-                      const keys = (config.clientApiKeysText || '')
+                      const rawKeys = (config.clientApiKeysText || '')
                         .split(/[\n,]+/)
                         .map((k: string) => k.trim())
                         .filter(Boolean)
                       
-                      if (keys.length === 0) {
+                      if (rawKeys.length === 0) {
                         return (
                           <div className="p-6 text-center text-sm text-muted-foreground">
                             暂无 API Key，点击"生成"或"添加"按钮创建
@@ -192,42 +192,62 @@ function GatewayConfig({
                         )
                       }
 
-                      return keys.map((key: string, idx: number) => (
+                      // 解析 Key 的启用状态（使用 #disabled# 前缀标记禁用的 Key）
+                      const keys = rawKeys.map((rawKey: string) => {
+                        const isDisabled = rawKey.startsWith('#disabled#')
+                        const key = isDisabled ? rawKey.substring(10) : rawKey
+                        return { key, enabled: !isDisabled }
+                      })
+
+                      return keys.map((item: { key: string; enabled: boolean }, idx: number) => (
                         <div key={idx} className="flex text-sm border-b last:border-b-0 hover:bg-muted/30 transition-colors">
-                          <div className="flex-shrink-0 w-[60px] p-3 font-mono text-xs text-muted-foreground">
+                          <div className="flex-shrink-0 w-[60px] p-3 font-mono text-xs text-muted-foreground flex items-center">
                             {idx + 1}
                           </div>
                           <div className="flex-1 p-3">
                             <Input
-                              value={key}
+                              value={item.key}
                               onChange={(e) => {
                                 const newKeys = [...keys]
-                                newKeys[idx] = e.target.value
+                                newKeys[idx] = { ...newKeys[idx], key: e.target.value }
+                                const newRawKeys = newKeys.map(k => k.enabled ? k.key : `#disabled#${k.key}`)
                                 setConfig((prev: any) => ({
                                   ...prev,
-                                  clientApiKeysText: newKeys.join('\n'),
-                                  apiKey: newKeys[0] || ''
+                                  clientApiKeysText: newRawKeys.join('\n'),
+                                  apiKey: newKeys.find(k => k.enabled)?.key || newKeys[0]?.key || ''
                                 }))
                               }}
                               className="h-8 font-mono text-xs"
                               placeholder="sk-..."
+                              disabled={!item.enabled}
                             />
                           </div>
-                          <div className="flex-shrink-0 w-[100px] p-3">
-                            <Badge variant={idx === 0 ? 'default' : 'secondary'} className="text-xs">
-                              {idx === 0 ? '主 Key' : '备用'}
-                            </Badge>
+                          <div className="flex-shrink-0 w-[100px] p-3 flex items-center justify-center">
+                            <Switch
+                              checked={item.enabled}
+                              onCheckedChange={(checked) => {
+                                const newKeys = [...keys]
+                                newKeys[idx] = { ...newKeys[idx], enabled: checked }
+                                const newRawKeys = newKeys.map(k => k.enabled ? k.key : `#disabled#${k.key}`)
+                                setConfig((prev: any) => ({
+                                  ...prev,
+                                  clientApiKeysText: newRawKeys.join('\n'),
+                                  apiKey: newKeys.find(k => k.enabled)?.key || newKeys[0]?.key || ''
+                                }))
+                              }}
+                            />
                           </div>
-                          <div className="flex-shrink-0 w-[80px] p-3">
+                          <div className="flex-shrink-0 w-[80px] p-3 flex items-center">
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => {
-                                const newKeys = keys.filter((_: string, i: number) => i !== idx)
+                                const newKeys = keys.filter((_: any, i: number) => i !== idx)
+                                const newRawKeys = newKeys.map(k => k.enabled ? k.key : `#disabled#${k.key}`)
                                 setConfig((prev: any) => ({
                                   ...prev,
-                                  clientApiKeysText: newKeys.join('\n'),
-                                  apiKey: newKeys[0] || ''
+                                  clientApiKeysText: newRawKeys.join('\n'),
+                                  apiKey: newKeys.find(k => k.enabled)?.key || newKeys[0]?.key || ''
                                 }))
                               }}
                               className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
@@ -246,7 +266,7 @@ function GatewayConfig({
                 )}
                 
                 <div className="text-xs text-muted-foreground">
-                  客户端可使用任意一个 Key 进行认证，第一个 Key 为主 Key
+                  客户端可使用任意已启用的 Key 进行认证，禁用的 Key 不会被使用
                 </div>
               </div>
             </div>
