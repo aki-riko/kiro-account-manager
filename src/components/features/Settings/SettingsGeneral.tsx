@@ -230,6 +230,44 @@ function SettingsGeneral({
         </CardContent>
       </Card>
 
+      {/* 应用数据目录 */}
+      <Card className="card-glow animate-slide-in-left delay-225">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-1 h-5 bg-primary rounded-full"></div>
+            <FolderOpen size={18} className="text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">{t('settings.appDataDir')}</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-5">{t('settings.appDataDirDesc')}</p>
+
+          <div className="space-y-3">
+            <div className="rounded-xl p-4 border border-border bg-muted/30">
+              <div className="flex items-center gap-2 mb-3">
+                <code className="flex-1 text-sm px-3 py-2 rounded-lg font-mono text-foreground border border-border bg-card break-all">
+                  {appDataDir || t('common.loading')}
+                </code>
+                {appDataDir && (
+                  <button onClick={() => copyToClipboard(appDataDir, 'appDataDir')} className="p-2 rounded-lg hover:bg-muted/50 transition-colors flex-shrink-0" title="复制路径">
+                    {copiedField === 'appDataDir' ? <Check size={16} className="text-green-500" /> : <Copy size={16} className="text-muted-foreground" />}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={handleOpenAppDataDir}
+              disabled={!appDataDir}
+              className="w-full px-4 py-3 rounded-xl flex items-center justify-center gap-2 font-medium bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ExternalLink size={16} />
+              {t('settings.openInExplorer')}
+            </button>
+
+            <p className="text-xs text-muted-foreground">{t('settings.appDataDirTip')}</p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 浏览器 */}
       <Card className="card-glow animate-slide-in-left delay-250">
         <CardContent className="p-6">
@@ -406,44 +444,6 @@ function SettingsGeneral({
                 {t('common.reset')}
               </button>
             )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 应用数据目录 */}
-      <Card className="card-glow animate-slide-in-left delay-325">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-1 h-5 bg-primary rounded-full"></div>
-            <FolderOpen size={18} className="text-primary" />
-            <h2 className="text-lg font-semibold text-foreground">{t('settings.appDataDir')}</h2>
-          </div>
-          <p className="text-sm text-muted-foreground mb-5">{t('settings.appDataDirDesc')}</p>
-
-          <div className="space-y-3">
-            <div className="rounded-xl p-4 border border-border bg-muted/30">
-              <div className="flex items-center gap-2 mb-3">
-                <code className="flex-1 text-sm px-3 py-2 rounded-lg font-mono text-foreground border border-border bg-card break-all">
-                  {appDataDir || t('common.loading')}
-                </code>
-                {appDataDir && (
-                  <button onClick={() => copyToClipboard(appDataDir, 'appDataDir')} className="p-2 rounded-lg hover:bg-muted/50 transition-colors flex-shrink-0" title="复制路径">
-                    {copiedField === 'appDataDir' ? <Check size={16} className="text-green-500" /> : <Copy size={16} className="text-muted-foreground" />}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <button
-              onClick={handleOpenAppDataDir}
-              disabled={!appDataDir}
-              className="w-full px-4 py-3 rounded-xl flex items-center justify-center gap-2 font-medium bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ExternalLink size={16} />
-              {t('settings.openInExplorer')}
-            </button>
-
-            <p className="text-xs text-muted-foreground">{t('settings.appDataDirTip')}</p>
           </div>
         </CardContent>
       </Card>

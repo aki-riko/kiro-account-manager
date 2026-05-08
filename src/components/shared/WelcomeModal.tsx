@@ -118,6 +118,9 @@ function WelcomeModal() {
                       <p className={`text-sm text-foreground`}>一对一技术支持</p>
                     </div>
                   </div>
+                  <p className={`text-xs text-muted-foreground pt-1 border-t border-border/50`}>
+                    💡 提示：赞助时请备注你的 GitHub 用户名或邮箱，方便联系
+                  </p>
                 </div>
                 
                 {/* 二维码 - 简化 */}
