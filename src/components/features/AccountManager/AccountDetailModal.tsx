@@ -120,18 +120,21 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
   const [modelsError, setModelsError] = useState<string | null>(null)
 
   // 获取可用模型
-  const fetchModels = async () => {
+  const fetchModels = async (forceRefresh = false) => {
     setModelsLoading(true)
     setModelsError(null)
     try {
+      console.log('[AccountDetailModal] Fetching models for account:', account.id, 'forceRefresh:', forceRefresh)
       const response = await invoke<any>('list_available_models', { 
         id: account.id, 
-        forceRefresh: false 
+        forceRefresh 
       })
+      console.log('[AccountDetailModal] Models response:', response)
       const modelsList = Array.isArray(response?.availableModels) ? response.availableModels : []
+      console.log('[AccountDetailModal] Models list:', modelsList.length, 'models')
       setModels(modelsList)
     } catch (e) {
-      console.error('Failed to fetch models:', e)
+      console.error('[AccountDetailModal] Failed to fetch models:', e)
       setModelsError(String(e))
     } finally {
       setModelsLoading(false)
@@ -545,6 +548,14 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
               <span className={`ml-auto text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium`}>
                 {models.length}
               </span>
+              <button
+                onClick={() => fetchModels(true)}
+                disabled={modelsLoading}
+                className="p-1.5 rounded-lg hover:bg-muted/50 transition-colors disabled:opacity-50"
+                title="强制刷新模型列表"
+              >
+                <RefreshCw size={14} className={modelsLoading ? "animate-spin text-muted-foreground" : "text-muted-foreground"} />
+              </button>
             </div>
             <div className="bg-gradient-to-br from-muted/20 to-muted/40 border rounded-xl p-4">
               {modelsLoading ? (
