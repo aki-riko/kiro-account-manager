@@ -166,8 +166,8 @@ export const createGatewayFieldErrors = (config: any) => {
     errors.region = `region 不受支持: ${region}`
   }
 
-  if (!['single', 'group'].includes(accountMode)) {
-    errors.accountMode = 'accountMode 必须是 single/group'
+  if (!['single', 'group', 'pool'].includes(accountMode)) {
+    errors.accountMode = 'accountMode 必须是 single/group/pool'
   } else if (accountMode === 'single' && !String(config?.accountId || '').trim()) {
     errors.accountId = 'single 模式必须选择账号'
   } else if (accountMode === 'group' && !String(config?.groupId || '').trim()) {
@@ -325,6 +325,16 @@ export const buildGatewayRoutingSummary = ({ config, counts, selectedLabels = {}
       modeDescription: '先锁定账号分组，再按策略和阈值从该分组中挑选可用账号。',
       selectionLabel: '当前分组',
       selectionValue: selectedLabels.group || '未选择分组',
+      inventorySummary,
+      strategySummary: `策略 ${config?.strategy || 'round_robin'} / 阈值 ${Number(config?.threshold) || 90}%`}
+  }
+
+  if (mode === 'pool') {
+    return {
+      modeLabel: '账号管理池',
+      modeDescription: '使用所有可用账号，按策略和阈值自动选择，不限制分组。',
+      selectionLabel: '账号范围',
+      selectionValue: '所有可用账号',
       inventorySummary,
       strategySummary: `策略 ${config?.strategy || 'round_robin'} / 阈值 ${Number(config?.threshold) || 90}%`}
   }

@@ -156,7 +156,7 @@ function GatewayConfig({
                   <div className="flex flex-col gap-1.5">
                     <Label>账号来源</Label>
                     <div className="text-xs text-muted-foreground">
-                      推荐使用"按分组账号池"模式，自动轮询多个账号，配额用完自动切换
+                      推荐使用"账号管理池"模式，自动使用所有可用账号，配额用完自动切换
                     </div>
                     <Select value={config.accountMode} onValueChange={(v) => setField('accountMode', v || 'single')}>
                       <SelectTrigger className={fieldErrors.accountMode ? 'border-red-500' : ''}>
@@ -164,7 +164,8 @@ function GatewayConfig({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="single">指定单账号</SelectItem>
-                        <SelectItem value="group">按分组账号池（推荐）</SelectItem>
+                        <SelectItem value="group">按分组账号池</SelectItem>
+                        <SelectItem value="pool">账号管理池（推荐）</SelectItem>
                       </SelectContent>
                     </Select>
                     {fieldErrors.accountMode && <div className="text-xs text-red-500">{fieldErrors.accountMode}</div>}

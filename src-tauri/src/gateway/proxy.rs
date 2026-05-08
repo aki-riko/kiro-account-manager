@@ -2112,9 +2112,9 @@ async fn resolve_upstream_credentials(
     state: &RouterState,
 ) -> Result<UpstreamCredentials, String> {
     match config.account_mode.as_str() {
-        "single" | "group" => resolve_managed_account_credentials(config, state).await,
-        "local" => Err("反代不再支持 local 模式，请改用 single/group 账号池模式".to_string()),
-        _ => Err("accountMode 必须是 single/group".to_string()),
+        "single" | "group" | "pool" => resolve_managed_account_credentials(config, state).await,
+        "local" => Err("反代不再支持 local 模式，请改用 single/group/pool 账号池模式".to_string()),
+        _ => Err("accountMode 必须是 single/group/pool".to_string()),
     }
 }
 
@@ -2148,6 +2148,18 @@ async fn resolve_managed_account_credentials(
                     account.disabled_reason.as_deref() == Some("TooManyFailures")
                 })
         }
+        "pool" => {
+            let pool_accounts: Vec<_> = store
+                .accounts
+                .iter()
+                .filter(|account| account.is_available())
+                .collect();
+
+            !pool_accounts.is_empty()
+                && pool_accounts.iter().all(|account| {
+                    account.disabled_reason.as_deref() == Some("TooManyFailures")
+                })
+        }
         _ => false,
     };
 
@@ -2176,6 +2188,12 @@ async fn resolve_managed_account_credentials(
             .filter(|account| {
                 config.group_id.as_deref() == account.group_id.as_deref() && account.is_available()
             })
+            .cloned()
+            .collect::<Vec<_>>(),
+        "pool" => store
+            .accounts
+            .iter()
+            .filter(|account| account.is_available())
             .cloned()
             .collect::<Vec<_>>(),
         _ => Vec::new(),
@@ -2307,6 +2325,7 @@ fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> 
             "group:{}:{account_label}",
             config.group_id.as_deref().unwrap_or("unknown")
         ),
+        "pool" => format!("pool:{account_label}"),
         _ => account_label,
     }
 }
