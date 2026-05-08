@@ -378,8 +378,8 @@ function GatewayConfig({
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                   <div className="flex flex-col gap-1">
-                    <Label>仅允许本机访问</Label>
-                    <div className="text-xs text-muted-foreground">开启后拒绝非本机请求</div>
+                    <Label>仅本机访问（推荐）</Label>
+                    <div className="text-xs text-muted-foreground">开启后只允许 127.0.0.1/::1 访问，拒绝局域网其他设备</div>
                   </div>
                   <Switch
                     checked={!!config.localOnly}
@@ -391,8 +391,8 @@ function GatewayConfig({
 
                 {!config.localOnly && (
                   <div className="flex flex-col gap-1.5">
-                    <Label>IP 白名单</Label>
-                    <div className="text-xs text-muted-foreground">支持单个 IP 或 CIDR，每行或逗号分隔</div>
+                    <Label>IP 白名单（允许远程访问）</Label>
+                    <div className="text-xs text-muted-foreground">允许局域网其他设备访问，支持单个 IP 或 CIDR，每行或逗号分隔</div>
                     <Textarea
                       placeholder={'192.168.1.10\n10.0.0.0/24'}
                       rows={2}
