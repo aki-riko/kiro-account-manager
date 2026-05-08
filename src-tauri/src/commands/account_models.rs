@@ -47,7 +47,7 @@ pub struct AvailableModel {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListAvailableModelsResponse {
-    #[serde(default)]
+    #[serde(default, alias = "models")]
     pub available_models: Vec<AvailableModel>,
     pub next_token: Option<String>,
     pub default_model: Option<AvailableModel>,
@@ -704,6 +704,37 @@ mod tests {
             .expect("cache write should succeed");
 
         assert!(read_available_models_cache(&account, None, true).is_none());
+    }
+
+    #[test]
+    fn deserialize_list_available_models_response_supports_both_models_and_available_models() {
+        // 测试 AWS API 格式（models）
+        let response_api: ListAvailableModelsResponse = serde_json::from_value(serde_json::json!({
+            "models": [
+                {
+                    "modelId": "auto",
+                    "modelName": "Auto"
+                }
+            ],
+            "nextToken": null
+        }))
+        .expect("API format (models) should deserialize");
+        assert_eq!(response_api.available_models.len(), 1);
+        assert_eq!(response_api.available_models[0].model_id, "auto");
+
+        // 测试缓存格式（availableModels）
+        let response_cache: ListAvailableModelsResponse = serde_json::from_value(serde_json::json!({
+            "availableModels": [
+                {
+                    "modelId": "claude-sonnet-4.5",
+                    "modelName": "Claude Sonnet 4.5"
+                }
+            ],
+            "nextToken": null
+        }))
+        .expect("Cache format (availableModels) should deserialize");
+        assert_eq!(response_cache.available_models.len(), 1);
+        assert_eq!(response_cache.available_models[0].model_id, "claude-sonnet-4.5");
     }
 
     #[test]
