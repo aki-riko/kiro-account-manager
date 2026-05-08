@@ -86,7 +86,7 @@ function GatewayPage() {
   const [saving, setSaving] = useState(false)
   const [copySuccess, setCopySuccess] = useState('')
   const [logDir, setLogDir] = useState('')
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('config')
   const [requestLogs, setRequestLogs] = useState<any[]>([])
   const [requestLogsLoading, setRequestLogsLoading] = useState(false)
   const [requestLogOutcome, setRequestLogOutcome] = useState('all')
@@ -701,11 +701,15 @@ function GatewayPage() {
           value={activeTab}
           onValueChange={(value) => {
             startTransition(() => {
-              setActiveTab(value || 'overview')
+              setActiveTab(value || 'config')
             })
           }}
         >
           <TabsList>
+            <TabsTrigger value="config" className="flex items-center gap-2">
+              <Settings size={16} />
+              {t('gateway.config')}
+            </TabsTrigger>
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <LayoutDashboard size={16} />
               {t('gateway.overview')}
@@ -717,10 +721,6 @@ function GatewayPage() {
             <TabsTrigger value="observability" className="flex items-center gap-2">
               <ActivityIcon size={16} />
               {t('gateway.observability')}
-            </TabsTrigger>
-            <TabsTrigger value="advanced" className="flex items-center gap-2">
-              <Settings size={16} />
-              {t('gateway.config')}
             </TabsTrigger>
           </TabsList>
 
@@ -790,7 +790,7 @@ function GatewayPage() {
             />
           </TabsContent>
 
-          <TabsContent value="advanced">
+          <TabsContent value="config">
             <GatewayAdvanced
               colors={colors}
               config={config}
