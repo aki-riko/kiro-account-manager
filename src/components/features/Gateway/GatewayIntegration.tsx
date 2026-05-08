@@ -177,7 +177,7 @@ function GatewayIntegration({
           </GatewayCodeCard>
 
           <GatewayCodeCard
-            title="Claude Code"
+            title="Claude Code CLI"
             code={clientSamples.claudeCode.config}
             actions={(
               <>
