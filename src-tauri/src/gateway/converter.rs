@@ -2031,6 +2031,7 @@ mod tests {
                 user_location: None,
             }]),
             tool_choice: Some(json!({"type":"auto"})),
+            thinking: None,
             metadata: None,
         };
 
@@ -2071,6 +2072,7 @@ mod tests {
                 user_location: Some(json!({ "type": "approximate", "city": "Singapore" })),
             }]),
             tool_choice: Some(json!({ "type": "auto" })),
+            thinking: None,
             metadata: None,
         };
 
@@ -2135,6 +2137,7 @@ mod tests {
             stop_sequences: None,
             tools: None,
             tool_choice: None,
+            thinking: None,
             metadata: None,
         };
 
@@ -2223,6 +2226,7 @@ mod tests {
             }]),
             tool_choice: None,
             previous_response_id: None,
+        thinking: None,
         };
 
         let payload = build_kiro_payload(
@@ -2292,6 +2296,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
+        thinking: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -2327,6 +2332,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
+        thinking: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -2556,6 +2562,7 @@ mod tests {
             }]),
             tool_choice: Some(json!({ "type": "function", "name": "search_docs" })),
             previous_response_id: None,
+        thinking: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -2594,6 +2601,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: Some("resp_prev_123".to_string()),
+        thinking: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -2633,6 +2641,7 @@ mod tests {
             }]),
             tool_choice: Some(json!({ "type": "function", "name": "missing_tool" })),
             previous_response_id: None,
+        thinking: None,
         };
 
         let error = build_kiro_payload(&Client::new(), &request, None, None)
@@ -2674,6 +2683,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
+        thinking: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -2763,6 +2773,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
+        thinking: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -2809,6 +2820,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
+        thinking: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -2889,6 +2901,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
+        thinking: None,
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
