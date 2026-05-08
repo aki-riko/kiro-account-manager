@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { Activity, Play, RotateCcw, Square, LayoutDashboard, Plug, Activity as ActivityIcon, Settings } from 'lucide-react'
+import { Activity, Play, RotateCcw, Square, Plug, Activity as ActivityIcon, Settings } from 'lucide-react'
 import { Alert as AlertPrimitive, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -8,7 +8,6 @@ import { Stack, Group, Badge, Card, Text } from '@/components/shared/layout'
 import GatewayAdvanced from './GatewayAdvanced'
 import GatewayIntegration from './GatewayIntegration'
 import GatewayObservability from './GatewayObservability'
-import GatewayOverview from './GatewayOverview'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
 import { GatewayConfig, GatewayStatus } from './gatewayPageState'
 import {
@@ -710,10 +709,6 @@ function GatewayPage() {
               <Settings size={16} />
               {t('gateway.config')}
             </TabsTrigger>
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <LayoutDashboard size={16} />
-              {t('gateway.overview')}
-            </TabsTrigger>
             <TabsTrigger value="integration" className="flex items-center gap-2">
               <Plug size={16} />
               {t('gateway.integration')}
@@ -723,29 +718,6 @@ function GatewayPage() {
               {t('gateway.observability')}
             </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="overview">
-            <GatewayOverview
-              colors={colors}
-              loading={loading}
-              handleRefresh={handleRefresh}
-              effectiveBaseUrl={effectiveBaseUrl}
-              effectiveRoutingSummary={effectiveRoutingSummary}
-              effectiveSecuritySummary={effectiveSecuritySummary}
-              statusSummary={statusSummary}
-              actionSummary={actionSummary}
-              operationsChecklist={operationsChecklist}
-              clientSamples={clientSamples}
-              copyText={copyText}
-              handleOpenLogDir={handleOpenLogDir}
-              copySuccess={copySuccess}
-              effectiveConfig={effectiveConfig}
-              logDir={logDir}
-              latestErrorEntry={latestErrorEntry}
-              accounts={accounts}
-              groups={groups}
-            />
-          </TabsContent>
 
           <TabsContent value="integration">
             <GatewayIntegration
