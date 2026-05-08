@@ -1,9 +1,8 @@
 // Token 凭证 JSON 视图组件
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Copy, Check, ChevronDown, Key, Clock, Package } from 'lucide-react'
+import { Copy, Check, ChevronDown, Key, Clock } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
-import { resolveAvailableModels } from './utils/availableModelsState'
 
 // 构建凭证 JSON 对象（直接使用整个账号对象）
 function buildCredentialsJson(account) {
@@ -90,12 +89,6 @@ export function TokenJsonView({ account, defaultExpanded = false }) {
   
   const credentialsJson = useMemo(() => buildCredentialsJson(account), [account])
   const jsonStr = useMemo(() => JSON.stringify(credentialsJson, null, 2), [credentialsJson])
-
-  // 解析可用模型
-  const availableModels = useMemo(() => {
-    const cached = account?.availableModelsCache?.response?.availableModels
-    return Array.isArray(cached) ? cached : null
-  }, [account])
   
   useEffect(() => () => copiedTimerRef.current && clearTimeout(copiedTimerRef.current), [])
   
@@ -137,25 +130,6 @@ export function TokenJsonView({ account, defaultExpanded = false }) {
       
       {expanded && (
         <div className={`animate-in fade-in slide-in-from-top-2 duration-200`} style={{ margin: 0, padding: '1.25rem 3rem 2rem 3rem' }}>
-          {/* Available Models */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Package size={16} className="text-primary" />
-              <span className="text-sm font-medium text-foreground">{t('accountCard.availableModels')}</span>
-            </div>
-            {availableModels && availableModels.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {availableModels.map((m) => (
-                  <span key={m.modelId} className="px-3 py-1.5 rounded-full bg-muted border border-border text-xs font-medium text-foreground">
-                    {m.modelName || m.modelId}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">{t('accountCard.noAvailableModels')}</div>
-            )}
-          </div>
-
           {/* Token JSON */}
           <div className="flex items-center justify-between mb-3">
             <span className={`text-xs font-medium text-muted-foreground`}>

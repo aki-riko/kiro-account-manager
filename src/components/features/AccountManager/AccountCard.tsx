@@ -198,10 +198,29 @@ const AccountCard = memo(function AccountCard({
               style={{ width: `${Math.min(percent, 100)}%` }}
             />
           </div>
-          <div className="flex items-center justify-between text-[10px] font-medium">
+          <div className="flex items-center justify-between text-[10px] font-medium mb-1.5">
             <span className="text-foreground">{formatUsage(used)} / {formatUsage(quota)}</span>
             <span className="text-muted-foreground">{t('common.remaining')} {formatUsage(quota - used)}</span>
           </div>
+          {(account.expiresAt || nextDateReset) && (
+            <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-border/30">
+              {account.expiresAt && (
+                <span className={`${cardData.isExpired ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>
+                  AccessToken过期: {new Date(account.expiresAt.replace(/\//g, '-')).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              {nextDateReset && (
+                <span className="text-muted-foreground">
+                  主配额重置: {new Date(nextDateReset * 1000).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                </span>
+              )}
+            </div>
+          )}
+          {account.lastError && (
+            <div className="text-[10px] pt-1.5 border-t border-border/30 mt-1.5">
+              <span className="text-red-500 font-medium">❌ {account.lastError}</span>
+            </div>
+          )}
         </div>
 
         <div className="mt-auto pt-3 border-t border-border/50 flex items-center justify-between">
