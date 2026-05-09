@@ -14,8 +14,6 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 [net]
 # 使用 git CLI 而非内置 git（更快）
 git-fetch-with-cli = true
-# 并行下载依赖
-http-multiplexing = true
 
 # 注册表配置
 [registries.crates-io]

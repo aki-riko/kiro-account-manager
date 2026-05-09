@@ -68,11 +68,6 @@ incremental = true
 opt-level = 0        # 禁用优化，避免编译器崩溃
 codegen-units = 256  # 增加并行编译单元
 
-# 依赖包使用优化编译（加速运行，不影响编译速度）
-[profile.dev.package."*"]
-opt-level = 2
-debug = false
-
 # 发布配置：优化二进制体积
 [profile.release]
 codegen-units = 16   # 提高并行度，加快编译（从 8 改为 16）
