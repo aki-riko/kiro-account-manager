@@ -68,7 +68,36 @@ export function useSwitchAccount(onLocalTokenChange) {
         return
       }
 
-      // 先同步账号（刷新 token + 获取最新配额）
+      // 检查 Token 是否过期或即将过期（1 小时内）
+      let needsRefresh = false
+      if (account.expiresAt) {
+        try {
+          const expiryDate = new Date(account.expiresAt.replace(/\//g, '-'))
+          const now = new Date()
+          const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000)
+          
+          // 如果已过期或 1 小时内过期，需要刷新
+          if (expiryDate <= oneHourFromNow) {
+            needsRefresh = true
+            console.log('[Switch] Token 即将过期，先刷新 Token:', account.email, 'expires:', account.expiresAt)
+          }
+        } catch (e) {
+          console.warn('[Switch] 解析过期时间失败:', e)
+        }
+      }
+
+      // 如果需要刷新，先刷新 Token（不刷新配额，节省时间）
+      if (needsRefresh) {
+        try {
+          await invoke('refresh_account_token', { id: account.id })
+          console.log('[Switch] Token 刷新成功')
+        } catch (e) {
+          console.error('[Switch] Token 刷新失败:', e)
+          // 刷新失败不阻断切换，让后续流程处理
+        }
+      }
+
+      // 同步账号（获取最新配额，如果 Token 仍然失效会再次刷新）
       const syncResult = await invoke<SyncResult>('sync_account', { id: account.id })
       let refreshedAccount = syncResult.account
 
