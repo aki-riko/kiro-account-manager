@@ -58,6 +58,17 @@ jobs:
           toolchain: 1.90.0
           targets: ${{ matrix.target }}
 
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@2e7f9ec7921547d4b46598398ca573513895d0bd
+        with:
+          version: "v0.8.1"
+
+      - name: Configure sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+
       - name: Install dependencies
         shell: bash
         run: npm ci
