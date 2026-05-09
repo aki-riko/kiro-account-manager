@@ -53,8 +53,11 @@ export function useAutoRefresh(appSettings: AppSettings | null, settingsLoading:
           if (errorMsg.includes('BANNED')) {
             // 发送封禁事件，让前端弹窗通知
             emit('account-banned', { email: account.email, id: account.id })
-          } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('invalid')) {
-            // 发送 Token 失效事件
+          } else if (errorMsg.includes('AUTH_ERROR')) {
+            // AUTH_ERROR: 静默处理，不弹窗（账号已自动标记为 invalid）
+            console.log(`[AutoRefresh] 账号 ${account.email} Token 已失效，已自动标记`)
+          } else if (errorMsg.includes('invalid')) {
+            // 其他 invalid 错误才弹窗
             emit('account-token-invalid', { email: account.email, id: account.id })
           } else if (errorMsg.includes('request failed') || errorMsg.includes('network') || errorMsg.includes('timeout') || errorMsg.includes('connection')) {
             networkErrorCount++

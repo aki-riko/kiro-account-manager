@@ -238,7 +238,8 @@ impl AWSSSOClient {
                 if text.to_lowercase().contains("invalid")
                     && text.to_lowercase().contains("refresh")
                 {
-                    return Err(format!("RefreshToken 无效或已过期。\n\n可能的原因：\n1. Region 选择错误（请确认账号注册时使用的 Region）\n2. RefreshToken 已过期\n3. ClientId 或 ClientSecret 不匹配\n\n错误详情: {text}"));
+                    // invalid_grant 错误：静默返回，不显示详细错误信息
+                    return Err("AUTH_ERROR: RefreshToken 已失效".to_string());
                 }
                 return Err(format!("Token refresh failed (400 Bad Request)\n\n可能的原因：\n1. Region 选择错误\n2. RefreshToken 无效\n\n错误详情: {text}"));
             }

@@ -200,7 +200,10 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
       const errorMsg = result.error
       if (errorMsg.includes('BANNED')) {
         showError(t('accounts.accountBanned'))
-      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
+      } else if (errorMsg.includes('AUTH_ERROR')) {
+        // AUTH_ERROR: 静默处理，不弹窗
+        console.log('[Sync] Token 已失效，已自动标记账号状态')
+      } else if (errorMsg.includes('401') || errorMsg.includes('invalid')) {
         showError(t('accounts.tokenInvalid'))
       } else if (errorMsg.includes('error sending request') || errorMsg.includes('connection') || errorMsg.includes('network') || errorMsg.includes('timeout')) {
         showError('❌ 网络连接失败\n\n可能原因：\n• 网络不稳定\n• 代理设置有误\n• 防火墙拦截\n\n解决方法：\n1. 检查网络连接\n2. 检查代理设置\n3. 关闭防火墙或添加白名单')
@@ -224,7 +227,10 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
       const errorMsg = String(e)
       if (errorMsg.includes('BANNED')) {
         showError('账号已封禁')
-      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
+      } else if (errorMsg.includes('AUTH_ERROR')) {
+        // AUTH_ERROR: 静默处理，不弹窗（账号已自动标记为 invalid）
+        console.log('[Refresh] Token 已失效，已自动标记账号状态')
+      } else if (errorMsg.includes('401') || errorMsg.includes('invalid')) {
         showError('Token 无效，刷新失败')
       } else if (errorMsg.includes('error sending request') || errorMsg.includes('connection') || errorMsg.includes('network') || errorMsg.includes('timeout')) {
         showError('❌ 网络连接失败\n\n可能原因：\n• 网络不稳定\n• 代理设置有误\n• 防火墙拦截\n\n解决方法：\n1. 检查网络连接\n2. 检查代理设置\n3. 关闭防火墙或添加白名单')
