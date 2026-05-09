@@ -67,6 +67,7 @@ custom-protocol = ["tauri/custom-protocol"]
 incremental = true
 opt-level = 0        # 禁用优化，避免编译器崩溃
 codegen-units = 256  # 增加并行编译单元
+split-debuginfo = "unpacked"  # Windows: 加速调试信息生成
 
 # 发布配置：优化二进制体积
 [profile.release]
