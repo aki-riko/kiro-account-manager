@@ -1,0 +1,7 @@
+[build]
+# 并行编译任务数（根据 CPU 核心数调整）
+jobs = 8
+
+# 使用 lld 链接器（所有平台）
+[target.'cfg(all())']
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
