@@ -63,7 +63,7 @@ function App() {
     requestAnimationFrame(() => {
       dismissBootSplash()
       requestAnimationFrame(() => {
-        invoke('reveal_main_window').catch(() => {})
+        invoke('show_main_window').catch(() => {})
       })
     })
   }, [])

@@ -232,7 +232,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tauri::command]
-fn reveal_main_window(app: tauri::AppHandle) -> Result<(), String> {
+fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or("main window not found")?;
@@ -368,7 +368,7 @@ fn main() {
             // 浏览器检测
             detect_installed_browsers,
             // 窗口控制
-            reveal_main_window,
+            show_main_window,
             // MCP 管理命令
             get_mcp_config,
             save_mcp_server,
