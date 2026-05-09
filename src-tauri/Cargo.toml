@@ -25,13 +25,13 @@ tauri-plugin-log = "2"
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs"], default-features = false }
 axum = "0.8"
 tokio-stream = "0.1"
 futures-util = "0.3"
 uuid = { version = "1.6", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
-reqwest = { version = "0.12", features = ["json", "cookies", "stream"] }
+reqwest = { version = "0.12", features = ["json", "cookies", "stream"], default-features = false }
 url = "2.5"
 open = "5.0"
 tiny_http = "0.12"
@@ -67,6 +67,11 @@ custom-protocol = ["tauri/custom-protocol"]
 incremental = true
 opt-level = 0        # 禁用优化，避免编译器崩溃
 codegen-units = 256  # 增加并行编译单元
+
+# 依赖包使用优化编译（加速运行，不影响编译速度）
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
 
 # 发布配置：优化二进制体积
 [profile.release]

@@ -1,7 +1,22 @@
 [build]
 # 并行编译任务数（根据 CPU 核心数调整）
 jobs = 8
+# 增量编译（默认开启，但显式声明）
+incremental = true
+# 使用 pipelined 编译（Rust 1.90+ 支持）
+pipelining = true
 
 # 使用 lld 链接器（所有平台）
 [target.'cfg(all())']
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# 网络配置
+[net]
+# 使用 git CLI 而非内置 git（更快）
+git-fetch-with-cli = true
+# 并行下载依赖
+http-multiplexing = true
+
+# 注册表配置
+[registries.crates-io]
+protocol = "sparse"  # 使用稀疏索引（更快）
