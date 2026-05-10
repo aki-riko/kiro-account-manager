@@ -17,7 +17,6 @@ export interface AppSettings {
   enableCodebaseIndexing: boolean;
   enableTabAutocomplete: boolean;
   usageSummary: boolean;
-  codeReferences: boolean;
   enableDebugLogs: boolean;
   notifyActionRequired: boolean;
   notifyFailure: boolean;
@@ -57,7 +56,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   enableCodebaseIndexing: true,
   enableTabAutocomplete: true,
   usageSummary: true,
-  codeReferences: true,
   enableDebugLogs: false,
   notifyActionRequired: true,
   notifyFailure: true,
