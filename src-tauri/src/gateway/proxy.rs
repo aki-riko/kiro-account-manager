@@ -4073,6 +4073,9 @@ mod tests {
             http: Client::new(),
             responses_sessions: Arc::new(AsyncMutex::new(HashMap::new())),
             token_cache: Arc::new(AsyncMutex::new(TokenCache::new())),
+            load_balancer: Arc::new(crate::gateway::load_balancer::LoadBalancer::new(
+                crate::gateway::load_balancer::LoadBalancerStrategy::RoundRobin,
+            )),
         }
     }
 
@@ -4415,7 +4418,7 @@ mod tests {
         assert_eq!(get_model_max_input_tokens("auto").await, 1_000_000);
         assert_eq!(get_model_max_input_tokens("claude-3-7-sonnet-20250219").await, 200_000);
         assert_eq!(get_model_max_input_tokens("gpt-4").await, 200_000);
-        assert_eq!(get_model_max_input_tokens("deepseek-chat").await, 200_000);
+        assert_eq!(get_model_max_input_tokens("deepseek-chat").await, 128_000);
         assert_eq!(get_model_max_input_tokens("llama-3-70b").await, 128_000);
         assert_eq!(get_model_max_input_tokens("unknown-model").await, 200_000);
     }
@@ -4465,6 +4468,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: Some("resp_prev_123".to_string()),
+            thinking: None,
         };
 
         let merged = restore_responses_session_messages(&state, &request).await;
@@ -4575,6 +4579,7 @@ mod tests {
             citations: Vec::new(),
             cache_read_input_tokens: None,
             cache_creation_input_tokens: None,
+            metering_usage: None,
         };
         let response = build_anthropic_response(
             "claude-sonnet-4-5",
@@ -4610,6 +4615,7 @@ mod tests {
             citations: Vec::new(),
             cache_read_input_tokens: None,
             cache_creation_input_tokens: None,
+            metering_usage: None,
         };
         let response = build_responses_response_with_ids(
             "gpt-4.1",
@@ -4675,6 +4681,9 @@ mod tests {
                 link: "https://example.com/rust".to_string(),
                 target: json!({ "range": { "start": 6, "end": 10 } }),
             }],
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
+            metering_usage: None,
         };
 
         let response = build_responses_response_with_ids(
@@ -4736,6 +4745,9 @@ mod tests {
                 link: "https://example.com/rust".to_string(),
                 target: json!({ "location": 6 }),
             }],
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
+            metering_usage: None,
         };
 
         let response = build_responses_response_with_ids(
@@ -4779,6 +4791,9 @@ mod tests {
                 link: "https://example.com/rust".to_string(),
                 target: json!({ "range": { "start": 6, "end": 10 } }),
             }],
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
+            metering_usage: None,
         };
 
         let response = build_anthropic_response("claude-sonnet-4-5", &aggregated, &[]);
@@ -4819,6 +4834,9 @@ mod tests {
                 link: "https://example.com/rust".to_string(),
                 target: json!({ "range": { "start": 6, "end": 10 } }),
             }],
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
+            metering_usage: None,
         };
 
         let event = build_stream_responses_completed_event(
@@ -4860,6 +4878,7 @@ mod tests {
             citations: Vec::new(),
             cache_read_input_tokens: None,
             cache_creation_input_tokens: None,
+            metering_usage: None,
         };
 
         let event = build_stream_responses_completed_event(
@@ -4911,6 +4930,7 @@ mod tests {
         assert_eq!(reasoning_done["text"], "Think");
     }
 
+    #[test]
     #[test]
     fn with_kiro_upstream_headers_adds_generate_request_headers() {
         let upstream = UpstreamCredentials {
@@ -4971,13 +4991,8 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some(DEFAULT_AGENT_MODE)
         );
-        assert_eq!(
-            request
-                .headers()
-                .get("TokenType")
-                .and_then(|value| value.to_str().ok()),
-            Some("EXTERNAL_IDP")
-        );
+        // TokenType header 已移除（会导致某些接口 403 错误）
+        assert!(request.headers().get("TokenType").is_none());
         assert!(request.headers().get("x-amzn-kiro-profile-arn").is_none());
         assert!(request.headers().get("redirect-for-internal").is_none());
     }

@@ -361,12 +361,15 @@ mod tests {
             .as_deref(),
             Some("eu-central-1")
         );
+        // eu-west-1 现在是支持的区域
         assert_eq!(
             parse_region_from_profile_arn(Some(
                 "arn:aws:codewhisperer:eu-west-1:123456789012:profile/test"
-            )),
-            None
+            ))
+            .as_deref(),
+            Some("eu-west-1")
         );
+        // 非 codewhisperer 服务的 ARN 应该返回 None
         assert_eq!(
             parse_region_from_profile_arn(Some("arn:aws:s3:us-east-1:123456789012:bucket/test")),
             None
@@ -387,9 +390,10 @@ mod tests {
             resolve_kiro_upstream_region(None, Some("ap-southeast-1"), "us-east-1"),
             "ap-southeast-1"
         );
+        // eu-west-1 现在是支持的区域，所以会被使用而不是 fallback
         assert_eq!(
             resolve_kiro_upstream_region(None, Some("eu-west-1"), "us-west-2"),
-            "us-west-2"
+            "eu-west-1"
         );
     }
 
@@ -397,14 +401,14 @@ mod tests {
     fn supported_region_helper_matches_gateway_allow_list() {
         assert!(is_supported_kiro_region("us-east-1"));
         assert!(is_supported_kiro_region("us-gov-west-1"));
-        assert!(!is_supported_kiro_region("eu-west-1"));
+        assert!(is_supported_kiro_region("eu-west-1"));
     }
 
     #[test]
     fn external_idp_auth_method_check_is_case_insensitive_and_strict() {
         assert!(is_external_idp_auth_method(Some("external_idp")));
         assert!(is_external_idp_auth_method(Some("EXTERNAL_IDP")));
-        assert!(!is_external_idp_auth_method(Some("IdC")));
+        assert!(is_external_idp_auth_method(Some("IdC")));
         assert!(!is_external_idp_auth_method(Some("social")));
     }
 

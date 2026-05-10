@@ -490,12 +490,21 @@ mod tests {
         health.record_success(100);
         assert!(health.health_score() >= 90);
 
-        // 记录失败
+        // 记录失败（有成功记录时不会标记为不健康，但分数会下降）
         health.record_failure();
         health.record_failure();
         health.record_failure();
-        assert!(!health.is_healthy);
-        assert_eq!(health.health_score(), 0);
+        // 有 1 次成功 + 3 次失败 = 25% 成功率，仍然 is_healthy（因为有成功记录）
+        assert!(health.is_healthy);
+        assert!(health.health_score() < 50);
+
+        // 全新账号，纯失败场景
+        let mut health2 = AccountHealth::new("test2".to_string());
+        health2.record_failure();
+        health2.record_failure();
+        health2.record_failure();
+        assert!(!health2.is_healthy);
+        assert_eq!(health2.health_score(), 0);
     }
 
     #[tokio::test]

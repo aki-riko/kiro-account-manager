@@ -781,13 +781,8 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("application/json")
         );
-        assert_eq!(
-            request
-                .headers()
-                .get("TokenType")
-                .and_then(|value| value.to_str().ok()),
-            Some("EXTERNAL_IDP")
-        );
+        // ListAvailableModels 不需要 TokenType header（会导致 403）
+        assert!(request.headers().get("TokenType").is_none());
         assert_eq!(
             request
                 .headers()
