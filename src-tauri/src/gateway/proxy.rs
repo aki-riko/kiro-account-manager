@@ -3209,6 +3209,7 @@ fn stream_proxy_response(
         let response_id = format!("resp_{}", short_uuid());
         let message_id = format!("msg_{}", short_uuid());
         let created_at = chrono::Utc::now().timestamp();
+        let completion_id = format!("chatcmpl-{}", short_uuid());
         let mut responses_sequence_number = 0usize;
         let mut responses_next_output_index = 1usize;
         let mut responses_tool_output_indexes: HashMap<String, usize> = HashMap::new();
@@ -3364,6 +3365,8 @@ fn stream_proxy_response(
                                                 &model,
                                                 &anthropic_id,
                                                 &response_id,
+                                                &completion_id,
+                                                created_at,
                                                 &text,
                                                 true,
                                                 &mut message_started,
@@ -3384,6 +3387,8 @@ fn stream_proxy_response(
                                                     &model,
                                                     &anthropic_id,
                                                     &response_id,
+                                                    &completion_id,
+                                                    created_at,
                                                     &segment.content,
                                                     segment.segment_type == SegmentType::Thinking,
                                                     &mut message_started,
@@ -3780,6 +3785,8 @@ fn stream_proxy_response(
                 &model,
                 &anthropic_id,
                 &response_id,
+                &completion_id,
+                created_at,
                 &segment.content,
                 segment.segment_type == SegmentType::Thinking,
                 &mut message_started,
@@ -3884,7 +3891,7 @@ fn stream_proxy_response(
                         .collect();
 
                     let chunk = stream::build_openai_chunk(
-                        &format!("chatcmpl-{}", uuid::Uuid::new_v4().simple()),
+                        &completion_id,
                         created_at,
                         &model,
                         crate::gateway::models::OpenAIChatDelta {
@@ -3910,9 +3917,9 @@ fn stream_proxy_response(
                 }
 
                 // 发送最终 chunk（带 finish_reason 和 usage）
-                let finish_reason = if !aggregated.tool_calls.is_empty() { "tool_calls" } else { "stop" };
+                let finish_reason = if saw_tool_calls { "tool_calls" } else { "stop" };
                 let final_chunk = stream::build_openai_chunk(
-                    &format!("chatcmpl-{}", uuid::Uuid::new_v4().simple()),
+                    &completion_id,
                     created_at,
                     &model,
                     crate::gateway::models::OpenAIChatDelta {
@@ -3966,6 +3973,8 @@ async fn handle_stream_text(
     model: &str,
     anthropic_id: &str,
     response_id: &str,
+    completion_id: &str,
+    created: i64,
     text: &str,
     is_thinking: bool,
     message_started: &mut bool,
@@ -4056,14 +4065,17 @@ async fn handle_stream_text(
                 return;
             }
             let delta = crate::gateway::models::OpenAIChatDelta {
-                role: None,
+                role: if !*message_started {
+                    *message_started = true;
+                    Some("assistant".to_string())
+                } else {
+                    None
+                },
                 content: Some(text.to_string()),
                 tool_calls: None,
             };
-            let completion_id = format!("chatcmpl-{}", uuid::Uuid::new_v4().simple());
-            let created = chrono::Utc::now().timestamp();
             let chunk = crate::gateway::stream::build_openai_chunk(
-                &completion_id,
+                completion_id,
                 created,
                 model,
                 delta,
