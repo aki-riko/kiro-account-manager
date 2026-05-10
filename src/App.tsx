@@ -60,12 +60,7 @@ function App() {
   const { checkAndRestoreLockedModel } = useModelLock(appSettings, settingsLoading)
 
   useEffect(() => {
-    requestAnimationFrame(() => {
-      dismissBootSplash()
-      requestAnimationFrame(() => {
-        invoke('show_main_window').catch(() => {})
-      })
-    })
+    dismissBootSplash()
   }, [])
 
   useEffect(() => {

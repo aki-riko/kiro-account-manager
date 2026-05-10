@@ -20,7 +20,7 @@
         "width": 1400,
         "minWidth": 1200,
         "minHeight": 700,
-        "visible": false,
+        "visible": true,
         "center": true,
         "decorations": true,
         "shadow": true,
