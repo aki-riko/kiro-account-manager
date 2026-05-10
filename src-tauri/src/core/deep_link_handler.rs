@@ -190,7 +190,7 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        get_app_callback_route, handle_deep_link, register_waiter, DeepLinkCallbackWaiter,
+        handle_deep_link, register_waiter, DeepLinkCallbackWaiter,
     };
     use std::time::Duration;
 

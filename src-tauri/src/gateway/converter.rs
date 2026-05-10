@@ -910,6 +910,7 @@ fn convert_anthropic_content(content: &Value) -> Value {
     match content {
         Value::String(text) => Value::String(text.clone()),
         Value::Array(items) => {
+            // 检查是否包含 tool_result
             let has_tool_result = items
                 .iter()
                 .any(|item| item.get("type").and_then(Value::as_str) == Some("tool_result"));
@@ -917,6 +918,16 @@ fn convert_anthropic_content(content: &Value) -> Value {
                 return content.clone();
             }
 
+            // 检查是否包含图片（必须保留原始数组，extract_images 需要从中提取）
+            let has_image = items.iter().any(|item| {
+                let t = item.get("type").and_then(Value::as_str).unwrap_or_default();
+                t == "image" || t == "image_url" || t == "input_image"
+            });
+            if has_image {
+                return content.clone();
+            }
+
+            // 只有纯文本内容才转换为字符串
             let text = extract_text_blocks(content, &["text"]);
             if text.is_empty() {
                 content.clone()
@@ -3082,4 +3093,105 @@ mod tests {
             .iter()
             .any(|id| id == "claude-sonnet-4.6-thinking"));
     }
+
+    #[test]
+    fn normalize_anthropic_request_preserves_image_content() {
+        // 测试：包含图片的 content 应该保留为数组，不应该被转换为字符串
+        let request = AnthropicMessagesRequest {
+            model: "claude-sonnet-4-5".to_string(),
+            messages: vec![crate::gateway::models::AnthropicMessage {
+                role: "user".to_string(),
+                content: json!([
+                    {
+                        "type": "text",
+                        "text": "这是什么图片？"
+                    },
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                        }
+                    }
+                ]),
+            }],
+            max_tokens: 1024,
+            system: None,
+            stream: false,
+            temperature: None,
+            top_p: None,
+            stop_sequences: None,
+            tools: None,
+            tool_choice: None,
+            thinking: None,
+            metadata: None,
+        };
+
+        let converted = normalize_anthropic_request(&request);
+        
+        // 验证 content 仍然是数组（而不是被转换成字符串）
+        assert_eq!(converted.messages.len(), 1);
+        let content = converted.messages[0].content.as_ref().expect("content should exist");
+        
+        // 关键断言：content 应该是 Array，不是 String
+        assert!(content.is_array(), "content should be an array to preserve image data");
+        
+        let content_array = content.as_array().expect("content should be array");
+        assert_eq!(content_array.len(), 2, "should have 2 items: text and image");
+        
+        // 验证图片 block 仍然存在
+        let image_block = &content_array[1];
+        assert_eq!(
+            image_block.get("type").and_then(Value::as_str),
+            Some("image"),
+            "image block should be preserved"
+        );
+        assert!(
+            image_block.get("source").is_some(),
+            "image source should be preserved"
+        );
+    }
+
+    #[tokio::test]
+    async fn extract_images_works_with_preserved_image_array() {
+        // 测试：extract_images 能从保留的数组中提取图片
+        let content = json!([
+            {
+                "type": "text",
+                "text": "这是什么图片？"
+            },
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                }
+            }
+        ]);
+
+        let client = Client::new();
+        let images = extract_images(&client, Some(&content)).await;
+        
+        // 验证成功提取了图片
+        assert_eq!(images.len(), 1, "should extract 1 image");
+        assert_eq!(images[0].format, "png", "image format should be png");
+        
+        // 验证图片数据
+        match &images[0].source {
+            ImageSource::Bytes { bytes } => {
+                assert!(!bytes.is_empty(), "image bytes should not be empty");
+                assert_eq!(
+                    bytes,
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                    "image bytes should match"
+                );
+            }
+            ImageSource::Other { .. } => {
+                panic!("expected ImageSource::Bytes, got ImageSource::Other");
+            }
+        }
+    }
 }
+

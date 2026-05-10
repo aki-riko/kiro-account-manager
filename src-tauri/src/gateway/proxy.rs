@@ -5034,7 +5034,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn with_kiro_upstream_headers_adds_generate_request_headers() {
         let upstream = UpstreamCredentials {
             access_token: "token-1".to_string(),

@@ -469,8 +469,8 @@ pub fn get_supported_providers() -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        clear_auth_state, prepare_pending_social_login, require_login_email,
-        resolve_idc_login_email, social_callback_redirect_uri,
+        clear_auth_state, require_login_email,
+        resolve_idc_login_email,
     };
     use crate::auth::AuthState;
     use crate::auth::User;
@@ -538,8 +538,4 @@ mod tests {
             .expect("refresh_token lock should work")
             .is_none());
     }
-
-    
-
-    
 }
