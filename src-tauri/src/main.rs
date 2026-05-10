@@ -20,7 +20,7 @@ use core::account::{AccountStore, GroupTagStore};
 use auth::AuthState;
 use state::AppState;
 use std::sync::Mutex;
-use tauri::{Listener, Manager};
+use tauri::Listener;
 use services::session_storage::SessionStorage;
 
 // 导入命令
