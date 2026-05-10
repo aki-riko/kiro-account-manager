@@ -1,15 +1,16 @@
 [build]
-# 并行编译任务数（根据 CPU 核心数调整）
-jobs = 8
-# 增量编译（默认开启，但显式声明）
+# 增量编译（开发时加速）
 incremental = true
-# 使用 pipelined 编译（Rust 1.90+ 支持）
+# pipelined 编译（Rust 1.90+ 稳定特性，减少等待时间）
 pipelining = true
 
-# Windows 使用默认链接器（lld 在 Windows 上可能有兼容性问题）
-# Linux 使用 lld 链接器
-# macOS 使用默认链接器（不支持 lld）
+# Linux 使用 lld 链接器（比默认 ld 快 3-5 倍）
+# Windows 使用默认 link.exe（MSVC，最稳定）
+# macOS 使用默认 Apple ld（Xcode 15+ 已是 ld-prime，足够快）
 [target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.aarch64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 # 网络配置
