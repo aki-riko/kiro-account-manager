@@ -38,8 +38,7 @@
 - Kiro IDE 必须关闭后再触发切号/重置机器 ID；代理变更需重启 IDE 才生效。
 
 ## Public Repo Sync
-- 开发以私有仓库 `dev` 为主；公开仓库默认分支为 `public`，旧版本分支为 `v1.5.1`。
-- 同步到公开仓库时，移除 `docs/` 等内部内容，但保留 `screenshots/`。
+- 开发直接在公开仓库 `public` 分支进行。
 - 公开仓库 Release 工作流直接从公开仓库构建，需在 GitHub Actions 配置 `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
 
 ## Agent-Specific Notes
