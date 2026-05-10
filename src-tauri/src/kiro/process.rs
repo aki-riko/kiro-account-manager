@@ -1,5 +1,6 @@
 // 进程管理相关功能
 
+#[cfg(target_os = "windows")]
 use crate::utils::cmd_output::decode_cmd_output;
 use std::process::Command;
 

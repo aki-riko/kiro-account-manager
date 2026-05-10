@@ -2,6 +2,7 @@
 
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
 
+#[cfg(target_os = "windows")]
 use crate::utils::cmd_output::decode_cmd_output;
 use serde::{Deserialize, Serialize};
 
