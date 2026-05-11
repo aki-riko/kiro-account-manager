@@ -16,6 +16,9 @@ interface InstallationInfo {
   ide_installed?: boolean
   ideInstalled?: boolean
   installed?: boolean
+  ide_executable_exists?: boolean
+  config_dir_exists?: boolean
+  error_message?: string
 }
 
 interface SyncResult {
@@ -59,10 +62,12 @@ export function useSwitchAccount(onLocalTokenChange) {
       const ideInfo = await invoke<InstallationInfo>('check_ide_installation')
       const installed = ideInfo?.ide_installed ?? ideInfo?.ideInstalled ?? ideInfo?.installed
       if (!installed) {
+        // 使用后端返回的详细错误信息
+        const errorMsg = ideInfo?.error_message || t('switch.ideNotInstalledMessage')
         setSwitchDialog({
           type: 'error',
           title: t('switch.ideNotInstalled'),
-          message: t('switch.ideNotInstalledMessage'),
+          message: errorMsg,
           account: null})
         setSwitchingId(null)
         return

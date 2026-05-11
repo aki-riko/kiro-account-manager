@@ -340,6 +340,9 @@ pub async fn switch_kiro_account(
 pub struct IdeInstallationInfo {
     pub ide_installed: bool,
     pub ide_path: Option<String>,
+    pub ide_executable_exists: bool,
+    pub config_dir_exists: bool,
+    pub error_message: Option<String>,
 }
 
 /// 检测 Kiro IDE 是否安装
@@ -347,17 +350,62 @@ pub struct IdeInstallationInfo {
 pub async fn check_ide_installation() -> IdeInstallationInfo {
     tokio::task::spawn_blocking(|| {
         let (ide_path, ide_exists) = detect_kiro_ide_executable();
+        
+        // 检查配置目录是否存在
+        let config_exists = check_kiro_config_dir();
+
+        let ide_installed = ide_exists && config_exists;
+        
+        // 生成详细的错误提示
+        let error_message = if !ide_installed {
+            if !ide_exists && !config_exists {
+                Some("未检测到默认路径的 Kiro IDE 可执行文件和配置文件。\n\n请先安装并登录 Kiro IDE，或在「设置」→「通用」中配置「自定义 Kiro IDE 安装路径」。".to_string())
+            } else if !ide_exists {
+                Some("未检测到默认路径的 Kiro IDE 可执行文件。\n\n请检查 IDE 是否已安装，或在「设置」→「通用」中配置「自定义 Kiro IDE 安装路径」。".to_string())
+            } else if !config_exists {
+                Some("未检测到 Kiro IDE 配置文件（~/.aws/sso/cache/kiro-auth-token.json）。\n\n请先在 Kiro IDE 中登录账号。".to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         IdeInstallationInfo {
-            ide_installed: ide_exists,
+            ide_installed,
             ide_path,
+            ide_executable_exists: ide_exists,
+            config_dir_exists: config_exists,
+            error_message,
         }
     })
     .await
     .unwrap_or(IdeInstallationInfo {
         ide_installed: false,
         ide_path: None,
+        ide_executable_exists: false,
+        config_dir_exists: false,
+        error_message: Some("检测 IDE 安装状态时发生错误".to_string()),
     })
+}
+
+/// 检查 Kiro IDE 配置文件是否存在
+fn check_kiro_config_dir() -> bool {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"));
+    
+    if let Ok(home_dir) = home {
+        let cache_dir = std::path::Path::new(&home_dir)
+            .join(".aws")
+            .join("sso")
+            .join("cache");
+        
+        // 检查 kiro-auth-token.json 是否存在
+        let token_file = cache_dir.join("kiro-auth-token.json");
+        token_file.exists()
+    } else {
+        false
+    }
 }
 
 /// 检测 IDE 可执行文件
