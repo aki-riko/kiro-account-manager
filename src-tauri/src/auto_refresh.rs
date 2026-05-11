@@ -31,7 +31,7 @@ pub fn start_auto_refresh_task(app_handle: AppHandle) {
             }
 
             // 获取刷新间隔（分钟）
-            let interval_minutes = settings.auto_refresh_interval.unwrap_or(10);
+            let interval_minutes = settings.auto_refresh_interval.unwrap_or(50);
             let interval_duration = Duration::from_secs((interval_minutes as u64) * 60);
 
             log::info!(
@@ -62,7 +62,7 @@ pub fn start_auto_refresh_task(app_handle: AppHandle) {
                 }
 
                 // 如果间隔改变了，退出内层循环，重新初始化定时器
-                let current_interval = current_settings.auto_refresh_interval.unwrap_or(10);
+                let current_interval = current_settings.auto_refresh_interval.unwrap_or(50);
                 if current_interval != interval_minutes {
                     log::info!(
                         "[AutoRefresh] 刷新间隔已改变: {} -> {} 分钟",
