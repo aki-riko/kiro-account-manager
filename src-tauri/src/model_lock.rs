@@ -10,12 +10,33 @@ pub fn start_model_lock_task(app_handle: AppHandle) {
     tokio::spawn(async move {
         log::info!("[ModelLock] 后台任务已启动");
 
+        let mut retry_count = 0;
+        const MAX_RETRIES: u32 = 3;
+
         loop {
             // 读取配置
             let settings = match get_app_settings_inner() {
-                Ok(s) => s,
+                Ok(s) => {
+                    retry_count = 0; // 成功后重置重试计数
+                    s
+                }
                 Err(e) => {
-                    log::error!("[ModelLock] 读取配置失败: {}", e);
+                    retry_count += 1;
+                    log::error!(
+                        "[ModelLock] 读取配置失败 ({}/{}): {}",
+                        retry_count,
+                        MAX_RETRIES,
+                        e
+                    );
+
+                    if retry_count >= MAX_RETRIES {
+                        log::error!(
+                            "[ModelLock] 达到最大重试次数 ({}), 后台任务停止",
+                            MAX_RETRIES
+                        );
+                        return;
+                    }
+
                     tokio::time::sleep(Duration::from_secs(60)).await;
                     continue;
                 }
