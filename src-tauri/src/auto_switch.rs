@@ -39,6 +39,19 @@ pub fn start_auto_switch_task(app_handle: AppHandle) {
             let interval_minutes = settings
                 .auto_switch_interval
                 .unwrap_or(DEFAULT_INTERVAL);
+            
+            // 获取自动刷新间隔
+            let refresh_interval = settings.auto_refresh_interval.unwrap_or(50);
+            
+            // 如果自动换号间隔小于自动刷新间隔，发出警告
+            if interval_minutes < refresh_interval {
+                log::warn!(
+                    "[AutoSwitch] 自动换号间隔 ({} 分钟) 小于自动刷新间隔 ({} 分钟)，可能导致使用过期数据",
+                    interval_minutes,
+                    refresh_interval
+                );
+            }
+            
             let interval_duration = Duration::from_secs((interval_minutes as u64) * 60);
 
             log::info!(
@@ -104,7 +117,7 @@ async fn check_and_auto_switch(app_handle: &AppHandle, threshold: f64) {
     // 获取 AppState
     let state = app_handle.state::<AppState>();
 
-    // 获取所有账号
+    // 获取所有账号（从本地存储读取，不调用 API）
     let accounts = {
         match state.store.lock() {
             Ok(mut s) => {
@@ -134,13 +147,8 @@ async fn check_and_auto_switch(app_handle: &AppHandle, threshold: f64) {
 
     log::debug!("[AutoSwitch] 当前账号: {:?}", current_account.email);
 
-    // 先刷新当前账号状态获取最新余额
-    let current_account = match sync_current_account(app_handle, &current_account).await {
-        Some(acc) => acc,
-        None => return, // 刷新失败或账号已失效
-    };
-
-    // 计算剩余额度
+    // 直接使用本地数据计算剩余额度（不刷新，避免频繁调用 API）
+    // 注意：自动刷新任务已经在定期更新所有账号数据，这里直接读取即可
     let remaining = calculate_remaining(&current_account);
     log::debug!(
         "[AutoSwitch] 当前账号剩余额度: {}, 阈值: {}",
@@ -210,74 +218,6 @@ async fn get_current_account(accounts: &[Account]) -> Option<Account> {
                 .unwrap_or(false)
         })
         .cloned()
-}
-
-/// 刷新当前账号状态
-async fn sync_current_account(
-    app_handle: &AppHandle,
-    account: &Account,
-) -> Option<Account> {
-    let state = app_handle.state::<AppState>();
-
-    match crate::commands::account_cmd::sync_account(state, account.id.clone()).await {
-        Ok(result) => Some(result.account),
-        Err(e) => {
-            let error_msg = e.to_string();
-
-            if error_msg.contains("BANNED") {
-                log::warn!("[AutoSwitch] 账号 {:?} 已被封禁", account.email);
-                // 更新账号状态
-                let state = app_handle.state::<AppState>();
-                let _ = update_account_status(state, &account.id, "banned");
-                let _ = app_handle.emit(
-                    "account-banned",
-                    serde_json::json!({
-                        "email": account.email,
-                        "id": account.id
-                    }),
-                );
-            } else if error_msg.contains("AUTH_ERROR")
-                || error_msg.contains("401")
-                || error_msg.contains("invalid")
-            {
-                log::warn!("[AutoSwitch] 账号 {:?} Token 已失效", account.email);
-                // 更新账号状态
-                let state = app_handle.state::<AppState>();
-                let _ = update_account_status(state, &account.id, "invalid");
-                let _ = app_handle.emit("accounts-updated", ());
-            } else {
-                log::error!(
-                    "[AutoSwitch] 刷新账号 {:?} 失败: {}",
-                    account.email,
-                    error_msg
-                );
-            }
-
-            None
-        }
-    }
-}
-
-/// 更新账号状态
-fn update_account_status(
-    state: tauri::State<'_, AppState>,
-    account_id: &str,
-    status: &str,
-) -> Result<(), String> {
-    crate::commands::account_cmd::update_account(
-        state,
-        crate::commands::account_cmd::UpdateAccountParams {
-            id: account_id.to_string(),
-            label: None,
-            status: Some(status.to_string()),
-            access_token: None,
-            refresh_token: None,
-            client_id: None,
-            client_secret: None,
-            machine_id: None,
-        },
-    )
-    .map(|_| ())
 }
 
 /// 计算剩余额度
@@ -429,7 +369,7 @@ fn apply_machine_guid(
     account: &Account,
     settings: &AppSettings,
 ) -> Result<Account, String> {
-    let mut account = account.clone();
+    let account = account.clone();
 
     // 如果启用了机器码绑定
     if settings.bind_machine_id_to_account == Some(true) {

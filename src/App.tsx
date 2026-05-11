@@ -8,9 +8,6 @@ import WelcomeModal from './components/shared/WelcomeModal'
 import { dismissBootSplash } from './utils/bootSplash'
 
 import { useApp } from './hooks/useApp'
-import { useAutoRefresh } from './hooks/useAutoRefresh'
-import { useAutoSwitch } from './hooks/useAutoSwitch'
-import { useModelLock } from './hooks/useModelLock'
 import { useAppSettings } from './contexts/AppSettingsContext'
 import { useDialog } from './contexts/DialogContext'
 import { AccountProvider } from './contexts/AccountContext'
@@ -53,11 +50,6 @@ function App() {
   useEffect(() => {
     setMountedRouteIds(prev => getMountedRouteIds(prev, activeMenu))
   }, [activeMenu])
-
-  // 后端自动运行，前端无需调用
-  useAutoRefresh()
-  useAutoSwitch()
-  useModelLock()
 
   useEffect(() => {
     dismissBootSplash()

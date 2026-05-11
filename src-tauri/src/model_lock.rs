@@ -111,5 +111,7 @@ async fn check_and_restore_model(_app_handle: &AppHandle, locked_model: &str) {
         } else {
             log::info!("[ModelLock] 已恢复锁定模型: {}", locked_model);
         }
+    } else {
+        log::debug!("[ModelLock] 模型未变更，保持锁定: {}", locked_model);
     }
 }

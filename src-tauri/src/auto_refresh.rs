@@ -83,7 +83,7 @@ pub fn start_auto_refresh_task(app_handle: AppHandle) {
 
 /// 刷新所有账号
 async fn refresh_all_accounts(app_handle: &AppHandle) {
-    log::info!("[AutoRefresh] 开始刷新所有账号");
+    log::debug!("[AutoRefresh] 开始刷新所有账号");
 
     // 获取 AppState
     let state = app_handle.state::<AppState>();
@@ -125,10 +125,10 @@ async fn refresh_all_accounts(app_handle: &AppHandle) {
         return;
     }
 
-    log::info!("[AutoRefresh] 需要刷新 {} 个账号", valid_accounts.len());
+    log::debug!("[AutoRefresh] 需要刷新 {} 个账号", valid_accounts.len());
 
     // 计算并发数（每 10 个账号 1 个并发，最少 1，最多 5）
-    let concurrency = (valid_accounts.len() / 10).max(1).min(5);
+    let concurrency = (valid_accounts.len() / 10).clamp(1, 5);
     log::debug!("[AutoRefresh] 使用并发数: {}", concurrency);
 
     // 统计结果
