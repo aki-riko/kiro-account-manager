@@ -37,7 +37,7 @@ export interface RequestLogSummary {
   maxDurationLabel: string
   requestsWithCache: number
   cacheHitRate: string
-  costSavings: string
+  costSavings: number
   totalCacheReadTokens: number
   totalCacheCreationTokens: number
   totalInputTokens: number
@@ -51,11 +51,11 @@ export interface RequestMetrics {
   total: number
   successRateLabel: string
   errorRateLabel: string
-  topModels: Array<{ label: string; count: number; percent: number }>
-  topUpstreams: Array<{ label: string; count: number; percent: number }>
-  topStatuses: Array<{ label: string; count: number; percent: number }>
-  topEndpoints: Array<{ label: string; count: number; percent: number }>
-  topRegions: Array<{ label: string; count: number; percent: number }>
+  topModels: Array<{ label: string; count: number; percent: string }>
+  topUpstreams: Array<{ label: string; count: number; percent: string }>
+  topStatuses: Array<{ label: string; count: number; percent: string }>
+  topEndpoints: Array<{ label: string; count: number; percent: string }>
+  topRegions: Array<{ label: string; count: number; percent: string }>
 }
 
 export interface ErrorHistoryItem {

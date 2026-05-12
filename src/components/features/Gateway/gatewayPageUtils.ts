@@ -533,7 +533,7 @@ export const buildGatewayRequestLogSummary = (entries: any) => {
     totalCacheCreationTokens,
     requestsWithCache,
     cacheHitRate: `${cacheHitRate.toFixed(1)}%`,
-    costSavings
+    costSavings: `${costSavings.toFixed(2)}`
   }
 }
 interface MetricEntry {
