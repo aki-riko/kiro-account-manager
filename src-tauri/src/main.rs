@@ -8,7 +8,6 @@ mod state;
 
 // 功能模块
 mod auth;
-mod auto_refresh;
 mod auto_switch;
 mod model_lock;
 mod clients;
@@ -229,10 +228,6 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             log::error!("自动启动反代失败: {err}");
         }
     });
-
-    // 启动自动刷新后台任务
-    let app_handle = app.handle().clone();
-    auto_refresh::start_auto_refresh_task(app_handle);
 
     // 启动模型锁定后台任务
     let app_handle = app.handle().clone();
