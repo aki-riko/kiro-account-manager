@@ -482,12 +482,7 @@ pub fn get_internal_model_id(external_model: &str) -> Result<String, String> {
         // ============================================================
         "claude-opus-4-7" | "claude-opus-4.7" | "opus-4-7" | "opus" => "claude-opus-4.7",
         "claude-opus-4-7-thinking" | "claude-opus-4.7-thinking" => "claude-opus-4.7",
-        // TODO: 待 Kiro API 支持 Sonnet/Haiku 4.7 后启用
-        // "claude-sonnet-4-7" | "claude-sonnet-4.7" | "sonnet-4-7" => "claude-sonnet-4.7",
-        // "claude-sonnet-4-7-thinking" | "claude-sonnet-4.7-thinking" => "claude-sonnet-4.7",
-        // "claude-haiku-4-7" | "claude-haiku-4.7" | "haiku-4-7" => "claude-haiku-4.7",
-        // "claude-haiku-4-7-thinking" | "claude-haiku-4.7-thinking" => "claude-haiku-4.7",
-        // ============================================================
+
         // Claude 4.6 系列（Opus 和 Sonnet）
         // ============================================================
         "claude-opus-4-6" | "claude-opus-4.6" | "opus-4-6" => "claude-opus-4.6",
