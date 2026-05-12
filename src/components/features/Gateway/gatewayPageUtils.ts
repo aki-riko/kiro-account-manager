@@ -96,10 +96,10 @@ export const buildGatewayConnectHost = (host: string, localOnly: boolean): strin
   const value = String(host || '').trim()
   if (!value) {
     return '127.0.0.1'
-  }
-
   if (value === '0.0.0.0' || value === '::') {
-    return localOnly ? '127.0.0.1' : 'localhost'
+    return localOnly ? '127.0.0.1' : '<局域网IP>'
+  }
+    return localOnly ? '127.0.0.1' : '<局域网IP>'
   }
 
   return value
