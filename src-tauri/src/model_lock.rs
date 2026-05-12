@@ -37,15 +37,15 @@ pub fn start_model_lock_task(app_handle: AppHandle) {
                         return;
                     }
 
-                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    tokio::time::sleep(Duration::from_secs(300)).await;
                     continue;
                 }
             };
 
             // 检查是否启用模型锁定
             if settings.lock_model != Some(true) || settings.locked_model.is_none() {
-                log::debug!("[ModelLock] 模型锁定已禁用，等待 60 秒后重新检查");
-                tokio::time::sleep(Duration::from_secs(60)).await;
+                log::debug!("[ModelLock] 模型锁定已禁用，等待 30 分钟后重新检查");
+                tokio::time::sleep(Duration::from_secs(1800)).await;
                 continue;
             }
 

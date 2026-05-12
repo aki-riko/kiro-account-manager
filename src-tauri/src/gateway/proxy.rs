@@ -262,6 +262,8 @@ struct RequestLogContext<'a> {
     started_at: Instant,
     #[allow(dead_code)]
     request_body: Option<&'a str>,
+    /// 从原始请求体提取的 model（用于错误日志）
+    model_hint: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -764,6 +766,15 @@ fn serialize_logged_value(value: &Value) -> String {
     serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
 }
 
+/// 从原始请求体 JSON 中提取 model 字段（用于错误日志）
+fn extract_model_from_payload(payload_str: &str) -> Option<String> {
+    serde_json::from_str::<Value>(payload_str)
+        .ok()?
+        .get("model")?
+        .as_str()
+        .map(String::from)
+}
+
 fn write_request_log(
     context: &RequestLogContext<'_>,
     status: StatusCode,
@@ -787,7 +798,10 @@ fn write_request_log(
         request_index: context.request_index,
         endpoint: context.endpoint.to_string(),
         client_ip: context.client_addr.ip().to_string(),
-        model: context.request.map(|item| item.model.clone()),
+        model: context
+            .request
+            .map(|item| item.model.clone())
+            .or_else(|| context.model_hint.clone()),
         stream: context.request.map(|item| item.stream).unwrap_or(false),
         upstream_source: context.upstream.map(|item| item.source_label.clone()),
         region: context.upstream.map(|item| item.region.clone()),
@@ -878,6 +892,7 @@ pub async fn proxy_handler(
     let endpoint = request_endpoint(format);
     let started_at = Instant::now();
     let raw_request_body = payload.to_string();
+    let model_hint = extract_model_from_payload(&raw_request_body);
     let base_log_context = RequestLogContext {
         request_index,
         endpoint,
@@ -886,6 +901,7 @@ pub async fn proxy_handler(
         upstream: None,
         started_at,
         request_body: Some(raw_request_body.as_str()),
+        model_hint,
     };
 
     if state.config.local_only && !client_addr.ip().is_loopback() {
