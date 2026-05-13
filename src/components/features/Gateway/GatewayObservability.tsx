@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -51,6 +51,20 @@ interface RequestLogSummary {
   costSavings: number
 }
 
+interface GatewayRequestStats {
+  total: number
+  success: number
+  error: number
+  streaming: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheReadTokens: number
+  totalCacheCreationTokens: number
+  requestsWithCache: number
+  maxDurationMs: number
+  avgDurationMs: number
+}
+
 interface GatewayObservabilityProps {
   status: any
   handleRefresh: () => void
@@ -62,10 +76,12 @@ export function GatewayObservability({
 }: GatewayObservabilityProps) {
   const [requestLogs, setRequestLogs] = useState<ProcessedRequestLog[]>([])
   const [requestMetrics, setRequestMetrics] = useState<RequestLogSummary | null>(null)
+  const [requestStats, setRequestStats] = useState<GatewayRequestStats | null>(null)
   const [isRequestDetailExpanded, setIsRequestDetailExpanded] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState<'all' | 'success' | 'error'>('all')
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
+  const [displayLimit, setDisplayLimit] = useState(50)
 
   const isRunning = status?.running === true
 
@@ -76,15 +92,16 @@ export function GatewayObservability({
     return true
   })
 
-  const fetchRequestLogs = async () => {
+  const fetchRequestLogs = async (limit?: number) => {
     if (!isRunning) return
     setIsRefreshing(true)
     try {
-      // 限制返回50条最新日志，避免数据量过大导致API 400错误
-      const logs = await invoke<any[]>('get_gateway_request_logs', { limit: 50 })
-
-      // 调试：打印原始日志数据
-      console.log('[GatewayObservability] 原始日志数据:', logs)
+      const fetchLimit = limit || displayLimit
+      // 并行获取日志和统计数据
+      const [logs, stats] = await Promise.all([
+        invoke<any[]>('get_gateway_request_logs', { limit: fetchLimit }),
+        invoke<GatewayRequestStats>('get_gateway_request_stats')
+      ])
 
       // 映射后端字段到前端字段
       const processedLogs: ProcessedRequestLog[] = logs.map(log => {
@@ -109,18 +126,11 @@ export function GatewayObservability({
           errorType: log.errorType
         }
 
-        // 调试：打印处理后的数据
-        if (log.inputTokens || log.outputTokens) {
-          console.log('[GatewayObservability] Token 数据:', {
-            原始: { inputTokens: log.inputTokens, outputTokens: log.outputTokens, cacheRead: log.cacheReadInputTokens, cacheCreation: log.cacheCreationInputTokens },
-            处理后: { inputTokens: processed.inputTokens, outputTokens: processed.outputTokens, cacheRead: processed.cacheReadTokens, cacheCreation: processed.cacheCreationTokens }
-          })
-        }
-
         return processed
       })
 
       setRequestLogs(processedLogs)
+      setRequestStats(stats)
     } catch (error) {
       console.error('Failed to fetch request logs:', error)
     } finally {
@@ -137,28 +147,35 @@ export function GatewayObservability({
   }, [isRunning])
 
   useEffect(() => {
-    if (requestLogs.length === 0) {
+    if (requestLogs.length === 0 || !requestStats) {
       setRequestMetrics(null)
       return
     }
 
-    const total = requestLogs.length
-    const errors = requestLogs.filter(log => log.status >= 400).length
-    const streaming = requestLogs.filter(log => log.streaming).length
-    const success = total - errors
+    // 使用后端统计数据作为真实数据源
+    const total = requestStats.total
+    const errors = requestStats.error
+    const streaming = requestStats.streaming
+    const success = requestStats.success
 
-    const maxDuration = Math.max(...requestLogs.map(log => log.duration))
+    // 从最近的日志中获取最大延迟和最新时间
+    const maxDuration = requestLogs.length > 0
+      ? Math.max(...requestLogs.map(log => log.duration))
+      : requestStats.maxDurationMs
     const maxDurationLabel = maxDuration >= 1000 ? `${(maxDuration / 1000).toFixed(2)}s` : `${maxDuration}ms`
 
     const latestOccurredAt = requestLogs.length > 0 ? requestLogs[0].timestamp : null
 
-    const totalInputTokens = requestLogs.reduce((sum, log) => sum + (log.inputTokens || 0), 0)
-    const totalOutputTokens = requestLogs.reduce((sum, log) => sum + (log.outputTokens || 0), 0)
-    const totalCacheReadTokens = requestLogs.reduce((sum, log) => sum + (log.cacheReadTokens || 0), 0)
-    const totalCacheCreationTokens = requestLogs.reduce((sum, log) => sum + (log.cacheCreationTokens || 0), 0)
+    // 使用后端统计的 token 数据
+    const totalInputTokens = requestStats.totalInputTokens
+    const totalOutputTokens = requestStats.totalOutputTokens
+    const totalCacheReadTokens = requestStats.totalCacheReadTokens
+    const totalCacheCreationTokens = requestStats.totalCacheCreationTokens
 
-    const requestsWithCache = requestLogs.filter(log => (log.cacheReadTokens || 0) > 0 || (log.cacheCreationTokens || 0) > 0).length
-    const cacheHitRate = requestsWithCache > 0 ? ((requestsWithCache / total) * 100).toFixed(1) + '%' : '0%'
+    const requestsWithCache = requestStats.requestsWithCache
+    const cacheHitRate = total > 0 && requestsWithCache > 0
+      ? ((requestsWithCache / total) * 100).toFixed(1) + '%'
+      : '0%'
 
     const inputCost = totalInputTokens * 0.003 / 1000
     const outputCost = totalOutputTokens * 0.015 / 1000
@@ -183,7 +200,7 @@ export function GatewayObservability({
       cacheHitRate,
       costSavings
     })
-  }, [requestLogs])
+  }, [requestLogs, requestStats])
 
   
 
@@ -216,6 +233,7 @@ export function GatewayObservability({
                 try {
                   await invoke('clear_gateway_request_logs')
                   setRequestLogs([])
+                  setRequestStats(null)
                 } catch (error) {
                   console.error('Failed to clear logs:', error)
                 }
@@ -352,6 +370,28 @@ export function GatewayObservability({
             <Radio size={16} />
             <h3 className="font-semibold">请求日志</h3>
             <Badge variant="outline">{requestMetrics?.total || 0}</Badge>
+            {requestLogs.length < (requestMetrics?.total || 0) && (
+              <span className="text-xs text-muted-foreground">
+                (显示最近 {requestLogs.length} 条)
+              </span>
+            )}
+          </div>
+          <div className="flex gap-2 items-center">
+            <span className="text-xs text-muted-foreground">显示条数:</span>
+            <select
+              className="text-xs border rounded px-2 py-1"
+              value={displayLimit}
+              onChange={(e) => {
+                const newLimit = Number(e.target.value)
+                setDisplayLimit(newLimit)
+                fetchRequestLogs(newLimit)
+              }}
+            >
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={200}>200</option>
+              <option value={500}>500</option>
+            </select>
           </div>
         </div>
 
@@ -391,9 +431,8 @@ export function GatewayObservability({
                     {filteredLogs.map((log) => {
                       const isExpanded = expandedLogId === log.id
                       return (
-                        <>
+                        <React.Fragment key={log.id}>
                           <tr
-                            key={log.id}
                             className="border-b hover:bg-muted/50 transition-colors cursor-pointer"
                             onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
                           >
@@ -452,7 +491,7 @@ export function GatewayObservability({
                               </td>
                             </tr>
                           )}
-                        </>
+                        </React.Fragment>
                       )
                     })}
                   </tbody>
