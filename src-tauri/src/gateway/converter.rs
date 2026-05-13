@@ -680,6 +680,23 @@ pub async fn build_kiro_payload(
     // 避免客户端传入无效的工具名却静默成功。
     normalize_tool_choice(&request.tool_choice, &request.tools)?;
 
+    // 方案 2：强制限制 history 长度，避免 Kiro IDE 上下文导致 payload 超限
+    const MAX_HISTORY_MESSAGES: usize = 30;
+    const KEEP_RECENT_MESSAGES: usize = 20;
+
+    let mut request = request.clone();
+    if request.messages.len() > MAX_HISTORY_MESSAGES {
+        let remove_count = request.messages.len() - KEEP_RECENT_MESSAGES;
+        log::info!(
+            "[网关] 消息数量 {} 超过限制 {}，裁剪前 {} 条消息，保留最近 {} 条",
+            request.messages.len(),
+            MAX_HISTORY_MESSAGES,
+            remove_count,
+            KEEP_RECENT_MESSAGES
+        );
+        request.messages.drain(0..remove_count);
+    }
+
     let model_id = if let Some(models) = available_models {
         get_internal_model_id_with_fallback(&request.model, models)?
     } else {

@@ -1593,7 +1593,73 @@ pub async fn proxy_handler(
             );
         }
     }
-    
+
+    // 方案 3：二次检查 payload 大小，确保裁剪后仍然符合限制
+    let mut payload_json = serde_json::to_string(&payload_value)
+        .unwrap_or_else(|_| String::new());
+    let mut payload_size = payload_json.len();
+
+    if payload_size > MAX_KIRO_PAYLOAD_SIZE {
+        log::warn!(
+            "[网关] 裁剪后 payload 大小 {} 字节仍超过限制 {} 字节，继续裁剪...",
+            payload_size,
+            MAX_KIRO_PAYLOAD_SIZE
+        );
+
+        // 继续裁剪，直到满足大小限制
+        let mut retry_count = 0;
+        const MAX_TRIM_RETRIES: u32 = 3;
+
+        while payload_size > MAX_KIRO_PAYLOAD_SIZE && retry_count < MAX_TRIM_RETRIES {
+            retry_count += 1;
+            let trimmed = trim_kiro_payload_history(&mut payload_value, MAX_KIRO_PAYLOAD_SIZE);
+
+            if !trimmed {
+                log::error!(
+                    "[网关] 无法继续裁剪 payload（第 {} 次尝试），可能历史记录已为空",
+                    retry_count
+                );
+                break;
+            }
+
+            payload_json = serde_json::to_string(&payload_value)
+                .unwrap_or_else(|_| String::new());
+            let new_size = payload_json.len();
+
+            log::info!(
+                "[网关] 第 {} 次裁剪：payload 从 {} 字节减少到 {} 字节",
+                retry_count,
+                payload_size,
+                new_size
+            );
+
+            if new_size >= payload_size {
+                log::error!(
+                    "[网关] 裁剪无效，payload 大小未减少（{} -> {} 字节）",
+                    payload_size,
+                    new_size
+                );
+                break;
+            }
+
+            payload_size = new_size;
+        }
+
+        let final_payload_size = check_payload_size(&payload_value);
+        if final_payload_size > MAX_KIRO_PAYLOAD_SIZE {
+            log::error!(
+                "[网关] 多次裁剪后 payload 大小 {} 字节仍超过限制 {} 字节",
+                final_payload_size,
+                MAX_KIRO_PAYLOAD_SIZE
+            );
+        } else {
+            log::info!(
+                "[网关] 多次裁剪成功，最终 payload 大小 {} 字节",
+                final_payload_size
+            );
+        }
+    }
+
     let upstream_request_body = serde_json::to_string_pretty(&payload_value)
         .unwrap_or_else(|_| "[failed to serialize upstream payload]".to_string());
     let upstream_payload_log_context = RequestLogContext {
