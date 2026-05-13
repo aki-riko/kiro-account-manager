@@ -41,10 +41,11 @@ const MAX_FAILURES_PER_ACCOUNT: u32 = 3;
 const MAX_KIRO_PAYLOAD_SIZE: usize = 615 * 1024; // 615KB - Kiro API 的 HTTP 请求大小限制
 
 // Token 限制的默认值（当无法从 API 获取时使用）
-const SUMMARIZATION_THRESHOLD_PERCENT: f64 = 0.95; // 95% 触发总结（给用户更多空间）
+const SUMMARIZATION_THRESHOLD_PERCENT: f64 = 0.70; // 70% 触发裁剪（预留更多安全空间，避免 Kiro IDE 上下文导致超限）
 
 use super::{
     append_gateway_request_log,
+    compress::compress_conversation_history,
     converter::{
         build_kiro_payload, get_available_models,
         normalize_anthropic_request, normalize_responses_request,
@@ -1228,7 +1229,7 @@ pub async fn proxy_handler(
 
     if estimated_tokens > threshold_tokens {
         log::warn!(
-            "[网关] Token 数量 {} 超过阈值 {} ({}的95%)。检查当前消息是否过大...",
+            "[网关] Token 数量 {} 超过阈值 {} ({}的70%)。检查当前消息是否过大...",
             estimated_tokens,
             threshold_tokens,
             max_input_tokens
@@ -1240,7 +1241,7 @@ pub async fn proxy_handler(
             if last_msg_tokens > threshold_tokens {
                 // 当前消息本身就太大，无法裁剪
                 let error_message = format!(
-                    "Your current message is too long ({} tokens, exceeds {} tokens threshold). Please shorten your message and try again. Maximum input: {} tokens.",
+                    "Your current message is too long ({} tokens, exceeds {} tokens threshold). Please shorten your message or start a new conversation. Maximum input: {} tokens.",
                     last_msg_tokens,
                     threshold_tokens,
                     max_input_tokens
@@ -1264,46 +1265,122 @@ pub async fn proxy_handler(
             }
         }
 
-        // 尝试裁剪历史消息到 70% 的安全水平
-        let target_tokens = (max_input_tokens as f64 * 0.70) as usize;
-        let trimmed = trim_messages_by_tokens(
-            &mut request.messages,
-            target_tokens,
-            &request.model
-        );
+        // 尝试压缩历史消息
+        log::info!("[网关] 尝试压缩历史消息...");
 
-        if trimmed {
-            let new_token_count = estimate_request_tokens(&request.messages, &request.model);
-            log::info!(
-                "[网关] 成功裁剪消息，从 {} tokens 到 {} tokens",
-                estimated_tokens,
-                new_token_count
-            );
-        } else {
-            // 裁剪失败（消息太少或无法继续裁剪），返回错误
-            let error_message = format!(
-                "Input is too long. Estimated {} tokens exceeds the threshold of {} tokens (95% of {}). Unable to trim further (minimum message count reached).",
-                estimated_tokens,
-                threshold_tokens,
-                max_input_tokens
-            );
-            // 临时创建 log context 用于错误记录
-            let temp_log_context = RequestLogContext {
-                request: Some(&request),
-                ..base_log_context.clone()
-            };
-            return gateway_error_with_log(
-                &state,
-                format,
-                &temp_log_context,
-                GatewayErrorDetails {
-                    status: StatusCode::BAD_REQUEST,
-                    error_type: "invalid_request_error",
-                    message: &error_message,
-                    response_body: None,
-                },
-            )
-            .await;
+        // 获取上游凭证用于压缩
+        let compress_result = match resolve_upstream_credentials(&state.config, &state).await {
+            Ok(creds) => {
+                // 获取缓存和会话 ID
+                let mut cache_guard = state.response_cache.lock().await;
+                let session_id = extract_session_id_from_request(&request);
+
+                // 尝试压缩（传入缓存）
+                let result = compress_conversation_history(
+                    &state.http,
+                    &creds.access_token,
+                    &creds.region,
+                    &mut request.messages,
+                    &request.model,
+                    max_input_tokens,
+                    Some(&mut *cache_guard),
+                    session_id.as_deref(),
+                ).await;
+
+                drop(cache_guard);
+                result
+            }
+            Err(e) => {
+                log::error!("[网关] 获取压缩凭证失败: {}, 跳过压缩", e);
+                Ok(false) // 返回未压缩
+            }
+        };
+
+        match compress_result {
+            Ok(compressed) => {
+                if compressed {
+                    let new_token_count = estimate_request_tokens(&request.messages, &request.model);
+                    log::info!(
+                        "[网关] 成功压缩消息，从 {} tokens 到 {} tokens",
+                        estimated_tokens,
+                        new_token_count
+                    );
+                } else {
+                    log::warn!("[网关] 压缩未执行（消息数不足），尝试简单裁剪...");
+                    let target_tokens = (max_input_tokens as f64 * 0.50) as usize;
+                    let trimmed = trim_messages_by_tokens(
+                        &mut request.messages,
+                        target_tokens,
+                        &request.model
+                    );
+
+                    if trimmed {
+                        let new_token_count = estimate_request_tokens(&request.messages, &request.model);
+                        log::info!(
+                            "[网关] 成功裁剪消息，从 {} tokens 到 {} tokens",
+                            estimated_tokens,
+                            new_token_count
+                        );
+                    } else {
+                        let error_message = format!(
+                            "Input is too long. Estimated {} tokens exceeds the threshold of {} tokens (70% of {}). Unable to compress or trim further.",
+                            estimated_tokens,
+                            threshold_tokens,
+                            max_input_tokens
+                        );
+                        let temp_log_context = RequestLogContext {
+                            request: Some(&request),
+                            ..base_log_context.clone()
+                        };
+                        return gateway_error_with_log(
+                            &state,
+                            format,
+                            &temp_log_context,
+                            GatewayErrorDetails {
+                                status: StatusCode::BAD_REQUEST,
+                                error_type: "invalid_request_error",
+                                message: &error_message,
+                                response_body: None,
+                            },
+                        )
+                        .await;
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("[网关] 压缩失败: {}, 尝试简单裁剪", e);
+                // 压缩失败，尝试简单裁剪
+                let target_tokens = (max_input_tokens as f64 * 0.50) as usize;
+                let trimmed = trim_messages_by_tokens(
+                    &mut request.messages,
+                    target_tokens,
+                    &request.model
+                );
+
+                if !trimmed {
+                    let error_message = format!(
+                        "Input is too long. Estimated {} tokens exceeds the threshold. Compression failed: {}",
+                        estimated_tokens,
+                        e
+                    );
+                    let temp_log_context = RequestLogContext {
+                        request: Some(&request),
+                        ..base_log_context.clone()
+                    };
+                    return gateway_error_with_log(
+                        &state,
+                        format,
+                        &temp_log_context,
+                        GatewayErrorDetails {
+                            status: StatusCode::BAD_REQUEST,
+                            error_type: "invalid_request_error",
+                            message: &error_message,
+                            response_body: None,
+                        },
+                    )
+                    .await;
+                }
+            }
         }
     }
 
@@ -4366,6 +4443,32 @@ fn stream_proxy_response(
         }
         aggregated.tool_calls = stream::deduplicate_tool_calls(aggregated.tool_calls);
 
+        // 流式结束后，使用本地估算 token（在发送响应之前）
+        if aggregated.input_tokens == 0 || aggregated.output_tokens == 0 {
+            log::info!("[流式] 响应中没有 token 信息，使用本地估算");
+
+            // 估算输入 tokens（从请求消息中）
+            let request_text = serde_json::to_string(&request_messages).unwrap_or_default();
+            aggregated.input_tokens = super::token_estimator::estimate_tokens(&request_text, &model);
+
+            // 估算输出 tokens（从响应文本中）
+            let response_text = format!("{}{}", aggregated.text, aggregated.thinking);
+            aggregated.output_tokens = super::token_estimator::estimate_tokens(&response_text, &model);
+
+            log::info!(
+                "[流式] 估算的 tokens: input={}, output={} (model={})",
+                aggregated.input_tokens,
+                aggregated.output_tokens,
+                model
+            );
+        } else {
+            log::info!(
+                "[流式] 使用响应中的 token 信息: input={}, output={}",
+                aggregated.input_tokens,
+                aggregated.output_tokens
+            );
+        }
+
         match format {
             ResponseFormat::Anthropic => {
                 close_content_block(&tx, &mut text_block_index).await;
@@ -4473,24 +4576,7 @@ fn stream_proxy_response(
             }
         }
 
-        // 流式结束后，使用本地估算 token
-        log::info!("[流式] 使用本地 token 估算");
-
-        // 估算输入 tokens（从请求消息中）
-        let request_text = serde_json::to_string(&request_messages).unwrap_or_default();
-        aggregated.input_tokens = super::token_estimator::estimate_tokens(&request_text, &model);
-
-        // 估算输出 tokens（从响应文本中）
-        let response_text = format!("{}{}", aggregated.text, aggregated.thinking);
-        aggregated.output_tokens = super::token_estimator::estimate_tokens(&response_text, &model);
-
-        log::info!(
-            "[Stream] Estimated tokens: input={}, output={} (model={})",
-            aggregated.input_tokens,
-            aggregated.output_tokens,
-            model
-        );
-
+        // 记录请求日志（token 已经在发送响应前估算好了）
         write_request_log(
             &log_context,
             StatusCode::OK,
@@ -4717,6 +4803,32 @@ async fn send_event(
 
 async fn send_data(tx: &mpsc::Sender<Result<Bytes, Infallible>>, payload: &str) -> bool {
     send_event(tx, None, payload).await
+}
+
+/// 从请求中提取会话 ID（用于缓存）
+fn extract_session_id_from_request(request: &NormalizedRequest) -> Option<String> {
+    // 尝试从 previous_response_id 提取会话 ID
+    if let Some(prev_id) = &request.previous_response_id {
+        // 从 response ID 中提取会话部分（假设格式为 "session_xxx_response_yyy"）
+        if let Some(session_part) = prev_id.split('_').nth(1) {
+            return Some(format!("session_{}", session_part));
+        }
+        // 如果格式不匹配，直接使用 previous_response_id 作为会话标识
+        return Some(prev_id.clone());
+    }
+
+    // 如果没有 previous_response_id，使用消息内容的哈希作为会话标识
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    for msg in &request.messages {
+        msg.role.hash(&mut hasher);
+        if let Some(content) = &msg.content {
+            content.to_string().hash(&mut hasher);
+        }
+    }
+    Some(format!("session_{:x}", hasher.finish()))
 }
 
 #[cfg(test)]

@@ -27,26 +27,44 @@ const IMAGE_FETCH_TIMEOUT_SECONDS: u64 = 15;
 pub fn normalize_anthropic_request(request: &AnthropicMessagesRequest) -> NormalizedRequest {
     let mut messages = Vec::new();
 
+    // 处理 system prompt，提取 cache_control
     if let Some(system) = &request.system {
-        let system_text = extract_text_blocks(system, &["text"]);
+        let (system_text, system_cache_point) = extract_text_and_cache_control(system);
         if !system_text.is_empty() {
+            let mut metadata = None;
+            if let Some(cache_point) = system_cache_point {
+                metadata = Some(json!({"cache_point": cache_point}));
+            }
             messages.push(NormalizedMessage {
                 role: "system".to_string(),
                 content: Some(Value::String(system_text)),
                 tool_calls: None,
                 tool_call_id: None,
-                metadata: None,
+                metadata,
             });
         }
     }
 
+    // 处理消息，提取每条消息中的 cache_control
     for message in &request.messages {
+        let cache_point = extract_cache_control_from_content(&message.content);
+        let mut metadata = extract_anthropic_message_metadata(message);
+
+        // 如果消息内容中有 cache_control，添加到 metadata
+        if let Some(cp) = cache_point {
+            let mut meta_obj = metadata.unwrap_or_else(|| json!({}));
+            if let Some(obj) = meta_obj.as_object_mut() {
+                obj.insert("cache_point".to_string(), cp);
+            }
+            metadata = Some(meta_obj);
+        }
+
         messages.push(NormalizedMessage {
             role: message.role.clone(),
             content: Some(convert_anthropic_content(&message.content)),
             tool_calls: extract_anthropic_tool_calls(&message.content),
             tool_call_id: extract_anthropic_tool_result_id(&message.content),
-            metadata: extract_anthropic_message_metadata(message),
+            metadata,
         });
     }
 
@@ -71,16 +89,6 @@ pub fn normalize_anthropic_request(request: &AnthropicMessagesRequest) -> Normal
 
     // 检测模型名是否包含 "thinking" 后缀，若包含则自动启用 thinking
     override_thinking_from_model_name(&mut normalized);
-
-    // 所有 Claude 模型都支持 prompt caching，直接启用
-    // 在第一条消息的 metadata 中添加 cache_point 信息
-    if let Some(first_message) = normalized.messages.first_mut() {
-        let mut metadata = first_message.metadata.clone().unwrap_or_else(|| json!({}));
-        if let Some(obj) = metadata.as_object_mut() {
-            obj.insert("cache_point".to_string(), json!({"type": "default"}));
-        }
-        first_message.metadata = Some(metadata);
-    }
 
     normalized
 }
@@ -216,6 +224,7 @@ pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> NormalizedR
                 tool_type: t.tool_type.clone(),
                 function: t.function.clone(),
                 web_search: None,
+                cache_control: None,
             })
             .collect()
     });
@@ -397,6 +406,7 @@ fn convert_anthropic_tool(tool: &crate::gateway::models::AnthropicTool) -> Tool 
             tool.allowed_domains.clone(),
             tool.blocked_domains.clone(),
             tool.user_location.clone(),
+            tool.cache_control.clone(),
         );
     }
 
@@ -408,6 +418,7 @@ fn convert_anthropic_tool(tool: &crate::gateway::models::AnthropicTool) -> Tool 
             parameters: Some(normalize_json_schema(tool.input_schema.clone())),
         },
         web_search: None,
+        cache_control: tool.cache_control.clone(),
     }
 }
 
@@ -419,6 +430,7 @@ fn convert_web_search_tool(
     allowed_domains: Option<Vec<String>>,
     blocked_domains: Option<Vec<String>>,
     user_location: Option<Value>,
+    cache_control: Option<Value>,
 ) -> Tool {
     Tool {
         tool_type: tool_type.to_string(),
@@ -435,6 +447,7 @@ fn convert_web_search_tool(
             blocked_domains,
             user_location,
         }),
+        cache_control,
     }
 }
 
@@ -1204,6 +1217,7 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
                 .and_then(Value::as_array)
                 .map(|values| string_array_from_values(values)),
             item.get("user_location").cloned(),
+            None,
         ));
     }
 
@@ -1238,6 +1252,7 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
                 parameters,
             },
             web_search: None,
+            cache_control: None,
         });
     }
 
@@ -1256,6 +1271,7 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
             parameters: item.get("parameters").cloned(),
         },
         web_search: None,
+        cache_control: None,
     })
 }
 
@@ -1593,6 +1609,97 @@ fn extract_text_blocks(value: &Value, text_types: &[&str]) -> String {
             .to_string(),
         _ => String::new(),
     }
+}
+
+/// 从 Anthropic 的 system/messages 内容中提取文本和 cache_control
+///
+/// Anthropic 格式：
+/// ```json
+/// [
+///   {"type": "text", "text": "...", "cache_control": {"type": "ephemeral"}},
+///   {"type": "text", "text": "..."}
+/// ]
+/// ```
+///
+/// 转换为 Kiro 格式的 cache_point：
+/// ```json
+/// {"type": "default"}
+/// ```
+fn extract_text_and_cache_control(value: &Value) -> (String, Option<Value>) {
+    match value {
+        Value::String(text) => (text.clone(), None),
+        Value::Array(items) => {
+            let mut texts = Vec::new();
+            let mut cache_point = None;
+
+            for item in items {
+                let item_type = item.get("type").and_then(Value::as_str).unwrap_or_default();
+
+                // 提取文本
+                if item_type == "text" {
+                    if let Some(text) = item.get("text").and_then(Value::as_str) {
+                        texts.push(text.to_string());
+                    }
+                } else if item_type == "image" {
+                    texts.push("[Image]".to_string());
+                }
+
+                // 提取 cache_control（转换为 cache_point）
+                if let Some(cache_control) = item.get("cache_control") {
+                    cache_point = Some(convert_cache_control_to_cache_point(cache_control));
+                }
+            }
+
+            (texts.join("\n"), cache_point)
+        }
+        Value::Object(map) => {
+            let text = map
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let cache_point = map
+                .get("cache_control")
+                .map(convert_cache_control_to_cache_point);
+            (text, cache_point)
+        }
+        _ => (String::new(), None),
+    }
+}
+
+/// 从消息内容中提取 cache_control
+fn extract_cache_control_from_content(content: &Value) -> Option<Value> {
+    match content {
+        Value::Array(items) => {
+            // 查找最后一个带 cache_control 的内容块
+            items
+                .iter()
+                .rev()
+                .find_map(|item| item.get("cache_control"))
+                .map(convert_cache_control_to_cache_point)
+        }
+        Value::Object(obj) => obj
+            .get("cache_control")
+            .map(convert_cache_control_to_cache_point),
+        _ => None,
+    }
+}
+
+/// 将 Anthropic 的 cache_control 转换为 Kiro 的 cache_point
+///
+/// Anthropic 格式：
+/// ```json
+/// {"type": "ephemeral", "ttl": "5m"}  // 或 "1h"
+/// ```
+///
+/// Kiro 格式：
+/// ```json
+/// {"type": "default"}
+/// ```
+fn convert_cache_control_to_cache_point(_cache_control: &Value) -> Value {
+    // Kiro API 使用简化的 cache_point 格式
+    // 不需要 ttl 参数，直接使用 {"type": "default"}
+    json!({"type": "default"})
 }
 
 fn extract_tool_results(content: Option<&Value>) -> Vec<KiroToolResult> {
@@ -1964,9 +2071,17 @@ fn normalize_tool_choice(
 
 fn convert_tools(tools: &Option<Vec<Tool>>) -> Option<Vec<KiroTool>> {
     tools.as_ref().map(|items| {
-        items
-            .iter()
-            .map(|tool| KiroTool::ToolSpecification {
+        let mut result = Vec::new();
+        for tool in items {
+            // 如果工具有 cache_control，先插入 CachePoint
+            if let Some(cache_control) = &tool.cache_control {
+                result.push(KiroTool::CachePoint {
+                    cache_point: convert_cache_control_to_cache_point(cache_control),
+                });
+            }
+
+            // 然后插入工具定义
+            result.push(KiroTool::ToolSpecification {
                 tool_specification: KiroToolSpec {
                     name: tool.function.name.clone(),
                     description: tool_description(tool),
@@ -1974,8 +2089,9 @@ fn convert_tools(tools: &Option<Vec<Tool>>) -> Option<Vec<KiroTool>> {
                         json: tool_input_schema(tool),
                     },
                 },
-            })
-            .collect()
+            });
+        }
+        result
     })
 }
 
@@ -2068,6 +2184,7 @@ fn process_tools_with_long_descriptions(
                     parameters: tool.function.parameters.clone(),
                 },
                 web_search: tool.web_search.clone(),
+                cache_control: tool.cache_control.clone(),
             });
         } else {
             processed.push(tool.clone());

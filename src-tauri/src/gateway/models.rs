@@ -75,6 +75,8 @@ pub struct Tool {
     pub function: ToolFunction,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub web_search: Option<WebSearchToolOptions>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,10 +1,11 @@
+mod compress;
 mod converter;
 mod eventstream;
 pub(crate) mod load_balancer;
 pub mod log_store;
 mod models;
 mod proxy;
-mod response_cache;
+pub mod response_cache;
 mod stream;
 mod thinking_parser;
 mod token_cache;
@@ -894,7 +895,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
         token_cache,
         load_balancer,
         log_store: log_store.clone(),
-        response_cache,
+        response_cache: response_cache.clone(),
     };
 
     let app = router(state);

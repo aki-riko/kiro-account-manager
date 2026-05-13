@@ -13,6 +13,10 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 [target.aarch64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
+# Windows 指定 MSVC 链接器路径（避免与 Git 的 link.exe 冲突）
+[target.x86_64-pc-windows-msvc]
+linker = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link.exe"
+
 # 网络配置
 [net]
 # 使用 git CLI 而非内置 git（更快）
