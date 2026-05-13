@@ -702,7 +702,7 @@ fn trim_kiro_payload_history(payload: &mut Value, max_bytes: usize) -> bool {
                     history.remove(0);
                     history.remove(0); // 删除第二条（现在变成第一条了）
                     removed_count += 2;
-                    log::debug!("[Gateway] Removed tool call/result pair. Remaining: {}", history.len());
+                    log::debug!("[网关] 移除工具调用/结果对。剩余: {}", history.len());
                     continue;
                 } else {
                     // 删除后会少于 2 条消息，停止裁剪
@@ -714,7 +714,7 @@ fn trim_kiro_payload_history(payload: &mut Value, max_bytes: usize) -> bool {
         // 单个消息可以安全删除
         history.remove(0);
         removed_count += 1;
-        log::debug!("[Gateway] Removed single message. Remaining: {}", history.len());
+        log::debug!("[网关] 移除单条消息。剩余: {}", history.len());
     }
 
     let final_len = payload
@@ -727,7 +727,7 @@ fn trim_kiro_payload_history(payload: &mut Value, max_bytes: usize) -> bool {
 
     if trimmed {
         log::info!(
-            "[Gateway] Trimmed history from {} to {} messages (removed {} messages)",
+            "[网关] 历史记录从 {} 条消息裁剪到 {} 条 (移除了 {} 条消息)",
             original_len,
             final_len,
             removed_count
@@ -917,23 +917,42 @@ fn write_request_log(
         .min(u128::from(u64::MAX)) as u64;
 
     // 添加日志：记录 token 信息
-    if input_tokens.is_some() || output_tokens.is_some() {
-        log::info!(
-            "[Gateway Log] Request #{} | endpoint={} | model={:?} | stream={} | status={} | duration={}ms | input_tokens={:?} | output_tokens={:?} | cache_read={:?} | cache_creation={:?}",
-            context.request_index,
-            context.endpoint,
-            context.request.map(|r| r.model.as_str()).or(context.model_hint.as_deref()),
-            context.request.map(|r| r.stream).unwrap_or(false),
-            status.as_u16(),
-            duration_ms,
-            input_tokens,
-            output_tokens,
-            cache_read_input_tokens,
-            cache_creation_input_tokens
-        );
+    let has_tokens = input_tokens.is_some() || output_tokens.is_some();
+    let has_valid_tokens = input_tokens.unwrap_or(0) > 0 || output_tokens.unwrap_or(0) > 0;
+
+    if has_tokens {
+        if has_valid_tokens {
+            log::info!(
+                "[网关日志] 请求 #{} | 端点={} | 模型={:?} | 流式={} | 状态={} | 耗时={}ms | 输入={} | 输出={} | 缓存读取={} | 缓存创建={}",
+                context.request_index,
+                context.endpoint,
+                context.request.map(|r| r.model.as_str()).or(context.model_hint.as_deref()),
+                context.request.map(|r| r.stream).unwrap_or(false),
+                status.as_u16(),
+                duration_ms,
+                input_tokens.unwrap_or(0),
+                output_tokens.unwrap_or(0),
+                cache_read_input_tokens.map(|v| v.to_string()).unwrap_or_else(|| "0".to_string()),
+                cache_creation_input_tokens.map(|v| v.to_string()).unwrap_or_else(|| "0".to_string())
+            );
+        } else {
+            log::warn!(
+                "[网关日志] ⚠️  请求 #{} | 端点={} | 模型={:?} | 流式={} | 状态={} | 耗时={}ms | 输入={} | 输出={} | 缓存读取={} | 缓存创建={} | 警告: 所有 token 都为 0!",
+                context.request_index,
+                context.endpoint,
+                context.request.map(|r| r.model.as_str()).or(context.model_hint.as_deref()),
+                context.request.map(|r| r.stream).unwrap_or(false),
+                status.as_u16(),
+                duration_ms,
+                input_tokens.unwrap_or(0),
+                output_tokens.unwrap_or(0),
+                cache_read_input_tokens.map(|v| v.to_string()).unwrap_or_else(|| "0".to_string()),
+                cache_creation_input_tokens.map(|v| v.to_string()).unwrap_or_else(|| "0".to_string())
+            );
+        }
     } else {
         log::debug!(
-            "[Gateway Log] Request #{} | endpoint={} | status={} | duration={}ms | NO TOKENS",
+            "[网关日志] 请求 #{} | 端点={} | 状态={} | 耗时={}ms | 无 token 信息",
             context.request_index,
             context.endpoint,
             status.as_u16(),
@@ -1137,6 +1156,14 @@ pub async fn proxy_handler(
             .await;
         }
     };
+
+    // 添加日志：记录原始请求中的 stream 字段
+    log::info!(
+        "[请求解析] 请求 #{} | 原始 payload 中的 stream={:?} | 解析后的 request.stream={}",
+        request_index,
+        payload.get("stream"),
+        request.stream
+    );
     let mut request = if matches!(format, ResponseFormat::Responses) {
         let mut resumed = request.clone();
         resumed.messages = restore_responses_session_messages(&state, &request).await;
@@ -1177,7 +1204,7 @@ pub async fn proxy_handler(
 
     if estimated_tokens > threshold_tokens {
         log::warn!(
-            "[Gateway] Token count {} exceeds threshold {} (95% of {}). Checking if current message is too large...",
+            "[网关] Token 数量 {} 超过阈值 {} ({}的95%)。检查当前消息是否过大...",
             estimated_tokens,
             threshold_tokens,
             max_input_tokens
@@ -1224,7 +1251,7 @@ pub async fn proxy_handler(
         if trimmed {
             let new_token_count = estimate_request_tokens(&request.messages, &request.model);
             log::info!(
-                "[Gateway] Successfully trimmed messages from {} to {} tokens",
+                "[网关] 成功裁剪消息，从 {} tokens 到 {} tokens",
                 estimated_tokens,
                 new_token_count
             );
@@ -1449,7 +1476,7 @@ pub async fn proxy_handler(
     let original_size = check_payload_size(&payload_value);
     if original_size > MAX_KIRO_PAYLOAD_SIZE {
         log::info!(
-            "[Gateway] Payload size {} bytes exceeds limit {} bytes. Trimming history...",
+            "[网关] Payload 大小 {} 字节超过限制 {} 字节。裁剪历史记录...",
             original_size,
             MAX_KIRO_PAYLOAD_SIZE
         );
@@ -1457,7 +1484,7 @@ pub async fn proxy_handler(
         if trimmed {
             let final_size = check_payload_size(&payload_value);
             log::info!(
-                "[Gateway] Payload trimmed from {} bytes to {} bytes",
+                "[网关] Payload 从 {} 字节裁剪到 {} 字节",
                 original_size,
                 final_size
             );
@@ -1638,13 +1665,12 @@ pub async fn proxy_handler(
 
     // 添加调试日志：记录原始响应体大小和前几个字节
     log::info!(
-        "[Non-Stream Response] Raw bytes size: {} bytes, first 100 bytes: {:?}",
+        "[非流式响应] 原始字节大小: {} 字节, 前 100 字节: {:?}",
         raw_bytes.len(),
         &raw_bytes[..raw_bytes.len().min(100)]
     );
 
-    // 调试：将原始响应体写入文件
-    #[cfg(debug_assertions)]
+    // 调试：将原始响应体写入文件（无论是否 Debug 模式）
     {
         use std::fs;
         use std::path::PathBuf;
@@ -1655,9 +1681,9 @@ pub async fn proxy_handler(
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
         let debug_file = debug_dir.join(format!("response_{}.bin", timestamp));
         if let Err(e) = fs::write(&debug_file, &raw_bytes) {
-            log::error!("Failed to write debug response file: {}", e);
+            log::error!("写入调试响应文件失败: {}", e);
         } else {
-            log::info!("Debug response written to: {:?}", debug_file);
+            log::info!("✅ 调试响应已写入: {:?}", debug_file);
         }
     }
 
@@ -1674,7 +1700,7 @@ pub async fn proxy_handler(
                 let event_type = msg.headers.get(":event-type").map(String::as_str);
 
                 log::info!(
-                    "[Non-Stream Response] Message #{}: type={:?}, event={:?}, payload_size={} bytes",
+                    "[非流式响应] 消息 #{}: type={:?}, event={:?}, payload_size={} 字节",
                     message_count,
                     message_type,
                     event_type,
@@ -1721,11 +1747,12 @@ pub async fn proxy_handler(
             }
             Ok(None) => {
                 // 缓冲区数据不足，已处理完所有消息
-                log::info!("[Non-Stream Response] EventStream decoding complete, remaining buffer: {} bytes", buffer.len());
+                log::info!(
+                    "[非流式响应] EventStream 解码完成，剩余缓冲区: {} 字节", buffer.len());
                 break;
             }
             Err(e) => {
-                log::error!("EventStream 解码失败: {}, remaining buffer: {} bytes", e, buffer.len());
+                log::error!("EventStream 解码失败: {}, 剩余缓冲区: {} 字节", e, buffer.len());
                 break;
             }
         }
@@ -1734,8 +1761,7 @@ pub async fn proxy_handler(
     // 将所有 JSON payload 拼接成一个字符串用于聚合解析
     let body = json_payloads.join("");
 
-    // 调试：将解析出的 JSON 写入文件
-    #[cfg(debug_assertions)]
+    // 调试：将解析出的 JSON 写入文件（无论是否 Debug 模式）
     {
         use std::fs;
         use std::path::PathBuf;
@@ -1743,34 +1769,43 @@ pub async fn proxy_handler(
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
         let json_file = debug_dir.join(format!("parsed_{}.json", timestamp));
         if let Err(e) = fs::write(&json_file, &body) {
-            log::error!("Failed to write parsed JSON file: {}", e);
+            log::error!("写入解析后的 JSON 文件失败: {}", e);
         } else {
-            log::info!("Parsed JSON written to: {:?}", json_file);
+            log::info!("✅ 解析后的 JSON 已写入: {:?}", json_file);
         }
     }
 
     // 添加调试日志：记录解码后的 JSON 数量和预览
     log::info!(
-        "[Non-Stream Response] Decoded {} EventStream messages, total body length: {} chars, body preview: {}",
+        "[非流式响应] 解码了 {} 条 EventStream 消息, 总 body 长度: {} 字符, body 预览: {}",
         json_payloads.len(),
         body.len(),
         body.chars().take(1000).collect::<String>()
     );
 
-    let aggregated = aggregate_kiro_response(&body);
+    let mut aggregated = aggregate_kiro_response(&body);
 
-    // 添加调试日志：记录解析后的 tokens
+    // 直接使用本地估算 token（不依赖响应中的 token 信息）
+    log::info!("[非流式响应] 使用本地 token 估算");
+
+    // 估算输入 tokens（从请求消息中）
+    let request_text = serde_json::to_string(&request.messages).unwrap_or_default();
+    aggregated.input_tokens = super::token_estimator::estimate_tokens(&request_text, &request.model);
+
+    // 估算输出 tokens（从响应文本中）
+    let response_text = format!("{}{}", aggregated.text, aggregated.thinking);
+    aggregated.output_tokens = super::token_estimator::estimate_tokens(&response_text, &request.model);
+
     log::info!(
-        "[Non-Stream Response] Aggregated tokens: input={}, output={}, cache_read={:?}, cache_creation={:?}",
+        "[非流式响应] 估算的 tokens: input={}, output={} (model={})",
         aggregated.input_tokens,
         aggregated.output_tokens,
-        aggregated.cache_read_input_tokens,
-        aggregated.cache_creation_input_tokens
+        request.model
     );
 
     // 调试：记录 aggregated 的详细信息
     log::info!(
-        "[Non-Stream Response] Aggregated details: text_len={}, thinking_len={}, tool_calls={}, citations={}",
+        "[非流式响应] 聚合详情: text_len={}, thinking_len={}, tool_calls={}, citations={}",
         aggregated.text.len(),
         aggregated.thinking.len(),
         aggregated.tool_calls.len(),
@@ -1997,41 +2032,41 @@ pub async fn mcp_proxy_handler(
     let logged_response_body = String::from_utf8_lossy(&body).to_string();
     
     // 🔍 详细日志：记录完整的 MCP 响应（用于调试 SENSITIVE_STRING 问题）
-    log::info!("[MCP Proxy] ========== MCP 响应详情 ==========");
-    log::info!("[MCP Proxy] 请求方法: {}", payload.get("method").and_then(|v| v.as_str()).unwrap_or("unknown"));
-    log::info!("[MCP Proxy] 响应状态: {}", status);
-    log::info!("[MCP Proxy] 响应大小: {} bytes", body.len());
+    log::info!("[MCP 代理] ========== MCP 响应详情 ==========");
+    log::info!("[MCP 代理] 请求方法: {}", payload.get("method").and_then(|v| v.as_str()).unwrap_or("unknown"));
+    log::info!("[MCP 代理] 响应状态: {}", status);
+    log::info!("[MCP 代理] 响应大小: {} 字节", body.len());
     
     // 尝试解析 JSON 并美化输出
     if let Ok(json_value) = serde_json::from_str::<Value>(&logged_response_body) {
         // 检查是否是 tools/list 响应
         if let Some(result) = json_value.get("result") {
             if let Some(tools) = result.get("tools").and_then(|v| v.as_array()) {
-                log::info!("[MCP Proxy] ✅ 成功解析 tools/list 响应");
-                log::info!("[MCP Proxy] 工具数量: {}", tools.len());
-                log::info!("[MCP Proxy] 工具列表:");
+                log::info!("[MCP 代理] ✅ 成功解析 tools/list 响应");
+                log::info!("[MCP 代理] 工具数量: {}", tools.len());
+                log::info!("[MCP 代理] 工具列表:");
                 for (idx, tool) in tools.iter().enumerate().take(5) {
                     if let Some(name) = tool.get("name").and_then(|v| v.as_str()) {
-                        log::info!("[MCP Proxy]   {}. {}", idx + 1, name);
+                        log::info!("[MCP 代理]   {}. {}", idx + 1, name);
                     }
                 }
                 if tools.len() > 5 {
-                    log::info!("[MCP Proxy]   ... 还有 {} 个工具", tools.len() - 5);
+                    log::info!("[MCP 代理]   ... 还有 {} 个工具", tools.len() - 5);
                 }
             } else {
-                log::info!("[MCP Proxy] 响应 result 字段: {}", serde_json::to_string_pretty(result).unwrap_or_else(|_| "无法序列化".to_string()));
+                log::info!("[MCP 代理] 响应 result 字段: {}", serde_json::to_string_pretty(result).unwrap_or_else(|_| "无法序列化".to_string()));
             }
         }
         
         // 输出完整响应（美化格式）
-        log::debug!("[MCP Proxy] 完整响应 JSON:\n{}", serde_json::to_string_pretty(&json_value).unwrap_or_else(|_| logged_response_body.clone()));
+        log::debug!("[MCP 代理] 完整响应 JSON:\n{}", serde_json::to_string_pretty(&json_value).unwrap_or_else(|_| logged_response_body.clone()));
     } else {
         // 非 JSON 响应，输出原始内容
-        log::warn!("[MCP Proxy] ⚠️  响应不是有效的 JSON");
-        log::debug!("[MCP Proxy] 原始响应: {}", logged_response_body.chars().take(1000).collect::<String>());
+        log::warn!("[MCP 代理] ⚠️  响应不是有效的 JSON");
+        log::debug!("[MCP 代理] 原始响应: {}", logged_response_body.chars().take(1000).collect::<String>());
     }
-    
-    log::info!("[MCP Proxy] ========================================");
+
+    log::info!("[MCP 代理] ========================================");
     write_request_log(
         &upstream_log_context,
         status,
@@ -2125,7 +2160,7 @@ async fn execute_request_with_server_tools(
         })?;
 
         log::info!(
-            "[Web Search Response] Raw bytes size: {} bytes",
+            "[网络搜索响应] 原始字节大小: {} 字节",
             raw_bytes.len()
         );
 
@@ -2140,7 +2175,7 @@ async fn execute_request_with_server_tools(
                     let message_type = msg.headers.get(":message-type").map(String::as_str);
 
                     log::info!(
-                        "[Web Search Response] Message #{}: type={:?}, payload_size={} bytes",
+                        "[网络搜索响应] 消息 #{}: type={:?}, payload_size={} 字节",
                         message_count,
                         message_type,
                         msg.payload.len()
@@ -2159,7 +2194,7 @@ async fn execute_request_with_server_tools(
                     if matches!(message_type, Some("event")) {
                         let json_text = String::from_utf8_lossy(&msg.payload);
                         log::info!(
-                            "[Web Search Response] Event payload preview: {}",
+                            "[网络搜索响应] Event payload 预览: {}",
                             json_text.chars().take(200).collect::<String>()
                         );
                         json_payloads.push(json_text.to_string());
@@ -2168,7 +2203,7 @@ async fn execute_request_with_server_tools(
                     buffer.drain(..consumed_bytes);
                 }
                 Ok(None) => {
-                    log::info!("[Web Search Response] EventStream decoding complete");
+                    log::info!("[网络搜索响应] EventStream 解码完成");
                     break;
                 }
                 Err(e) => {
@@ -2180,20 +2215,31 @@ async fn execute_request_with_server_tools(
 
         let body = json_payloads.join("");
         log::info!(
-            "[Web Search Response] Decoded {} messages, body length: {} chars",
+            "[网络搜索响应] 解码了 {} 条消息, body 长度: {} 字符",
             json_payloads.len(),
             body.len()
         );
 
-        let aggregated = aggregate_kiro_response(&body);
+        let mut aggregated = aggregate_kiro_response(&body);
+
+        // 直接使用本地估算 token（不依赖响应中的 token 信息）
+        log::info!("[网络搜索响应] 使用本地 token 估算");
+
+        // 估算输入 tokens（从请求消息中）
+        let request_text = serde_json::to_string(&working_request.messages).unwrap_or_default();
+        aggregated.input_tokens = super::token_estimator::estimate_tokens(&request_text, &working_request.model);
+
+        // 估算输出 tokens（从响应文本中）
+        let response_text = format!("{}{}", aggregated.text, aggregated.thinking);
+        aggregated.output_tokens = super::token_estimator::estimate_tokens(&response_text, &working_request.model);
 
         log::info!(
-            "[Web Search Response] Aggregated tokens: input={}, output={}, cache_read={:?}, cache_creation={:?}",
+            "[网络搜索响应] 估算的 tokens: input={}, output={} (model={})",
             aggregated.input_tokens,
             aggregated.output_tokens,
-            aggregated.cache_read_input_tokens,
-            aggregated.cache_creation_input_tokens
+            working_request.model
         );
+
         let web_search_calls: Vec<(String, String, String)> = aggregated
             .tool_calls
             .iter()
@@ -2311,7 +2357,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
         // 403 认证错误：直接返回，不在这里重试
         // 外层会通过LoadBalancer切换账号或刷新token
         if status == StatusCode::FORBIDDEN {
-            log::warn!("[Gateway] 上游认证失败 (403)，返回错误");
+            log::warn!("[网关] 上游认证失败 (403)，返回错误");
             let (mapped_status, error_type, message) = map_upstream_error(status, &body);
             return Err((mapped_status, error_type, message, Some(body)));
         }
@@ -2396,7 +2442,7 @@ async fn call_mcp_tool(
         }
     });
 
-    log::debug!("[Gateway] MCP 工具调用请求: tool={}, arguments={}", tool_name, serde_json::to_string(&arguments).unwrap_or_default());
+    log::debug!("[网关] MCP 工具调用请求: tool={}, arguments={}", tool_name, serde_json::to_string(&arguments).unwrap_or_default());
 
     let response = with_kiro_upstream_headers(
         http.post(upstream_url),
@@ -2410,7 +2456,7 @@ async fn call_mcp_tool(
     .send()
     .await
     .map_err(|error| {
-        log::error!("[Gateway] MCP 上游请求失败: {}", error);
+        log::error!("[网关] MCP 上游请求失败: {}", error);
         (
             StatusCode::BAD_GATEWAY,
             "api_error",
@@ -2420,7 +2466,7 @@ async fn call_mcp_tool(
 
     let status = response.status();
     let body = response.text().await.map_err(|error| {
-        log::error!("[Gateway] 读取 MCP 上游响应失败: {}", error);
+        log::error!("[网关] 读取 MCP 上游响应失败: {}", error);
         (
             StatusCode::BAD_GATEWAY,
             "api_error",
@@ -2428,11 +2474,11 @@ async fn call_mcp_tool(
         )
     })?;
     
-    log::debug!("[Gateway] MCP 工具调用响应: status={}, body={}", status, body);
+    log::debug!("[网关] MCP 工具调用响应: status={}, body={}", status, body);
     
     if !status.is_success() {
         let (mapped_status, error_type, message) = map_upstream_error(status, &body);
-        log::error!("[Gateway] MCP 工具调用失败: status={}, error_type={}, message={}", mapped_status, error_type, message);
+        log::error!("[网关] MCP 工具调用失败: status={}, error_type={}, message={}", mapped_status, error_type, message);
         return Err((mapped_status, error_type, message));
     }
 
@@ -2445,7 +2491,7 @@ async fn call_mcp_tool(
                 .and_then(Value::as_str)
                 .unwrap_or("MCP 工具调用失败")
                 .to_string();
-            log::error!("[Gateway] MCP 工具调用返回错误: {}", message);
+            log::error!("[网关] MCP 工具调用返回错误: {}", message);
             return Err((
                 StatusCode::BAD_GATEWAY,
                 "api_error",
@@ -3821,6 +3867,13 @@ fn stream_proxy_response(
                                             cache_read_input_tokens,
                                             cache_creation_input_tokens,
                                         } => {
+                                            log::info!(
+                                                "[Stream] ✅ Received Usage event: input={}, output={}, cache_read={:?}, cache_write={:?}",
+                                                input,
+                                                output,
+                                                cache_read_input_tokens,
+                                                cache_creation_input_tokens
+                                            );
                                             input_tokens = input;
                                             output_tokens = output;
                                             aggregated.input_tokens = input;
@@ -4392,7 +4445,24 @@ fn stream_proxy_response(
             }
         }
 
-        // 流式结束后记录完整的 tokens
+        // 流式结束后，使用本地估算 token
+        log::info!("[流式] 使用本地 token 估算");
+
+        // 估算输入 tokens（从请求消息中）
+        let request_text = serde_json::to_string(&request_messages).unwrap_or_default();
+        aggregated.input_tokens = super::token_estimator::estimate_tokens(&request_text, &model);
+
+        // 估算输出 tokens（从响应文本中）
+        let response_text = format!("{}{}", aggregated.text, aggregated.thinking);
+        aggregated.output_tokens = super::token_estimator::estimate_tokens(&response_text, &model);
+
+        log::info!(
+            "[Stream] Estimated tokens: input={}, output={} (model={})",
+            aggregated.input_tokens,
+            aggregated.output_tokens,
+            model
+        );
+
         write_request_log(
             &log_context,
             StatusCode::OK,
