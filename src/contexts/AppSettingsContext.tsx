@@ -14,6 +14,7 @@ export interface AppSettings {
   autoSwitchEnabled: boolean;
   autoSwitchThreshold: number;
   autoSwitchInterval: number;
+  switchTarget: 'ide' | 'cli' | 'both';
   enableCodebaseIndexing: boolean;
   enableTabAutocomplete: boolean;
   usageSummary: boolean;
@@ -53,6 +54,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoSwitchEnabled: false,
   autoSwitchThreshold: 1,
   autoSwitchInterval: 5,
+  switchTarget: 'ide',
   enableCodebaseIndexing: true,
   enableTabAutocomplete: true,
   usageSummary: true,

@@ -14,6 +14,7 @@ import {
   DialogBody,
   DialogFooter} from '../../shared/dialog'
 import { Button } from '../../shared/button'
+import { Switch } from '../../ui/switch'
 import { Account } from '../../../types/account'
 import React from 'react'
 
@@ -86,9 +87,10 @@ QuotaCard.displayName = 'QuotaCard'
 interface AccountDetailModalProps {
   account: Account;
   onClose: () => void;
+  onRefresh?: () => void;
 }
 
-function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
+function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalProps) {
   const { t } = useApp()
   const { showError } = useDialog()
   const [currentAccount, setCurrentAccount] = useState<Account>(account)
@@ -111,6 +113,7 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
     refreshToken: currentAccount.refreshToken || ''})
 
   const [refreshing, setRefreshing] = useState(false)
+  const [overageToggleLoading, setOverageToggleLoading] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
   const copiedTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -489,6 +492,34 @@ function AccountDetailModal({ account, onClose }: AccountDetailModalProps) {
                     )}
                   </div>
                 </div>
+                {currentAccount.usageData?.subscriptionInfo?.overageCapability === 'OVERAGE_CAPABLE' && (
+                  <div className={`p-3 rounded-lg bg-muted/30`}>
+                    <div className={`text-xs text-muted-foreground mb-1`}>超额开关</div>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        size="sm"
+                        checked={currentAccount.usageData?.overageConfiguration?.overageStatus === 'ENABLED'}
+                        disabled={overageToggleLoading}
+                        onCheckedChange={async (checked) => {
+                          setOverageToggleLoading(true)
+                          try {
+                            await invoke('set_overage_status', { id: currentAccount.id, enabled: checked })
+                            // 刷新账号信息
+                            await invoke('sync_account', { id: currentAccount.id })
+                            onRefresh?.()
+                          } catch (e) {
+                            console.error('Failed to toggle overage:', e)
+                          } finally {
+                            setOverageToggleLoading(false)
+                          }
+                        }}
+                      />
+                      <span className={`text-xs ${currentAccount.usageData?.overageConfiguration?.overageStatus === 'ENABLED' ? 'text-green-500' : 'text-muted-foreground'}`}>
+                        {overageToggleLoading ? '切换中...' : (currentAccount.usageData?.overageConfiguration?.overageStatus === 'ENABLED' ? '已开启' : '已关闭')}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {breakdown?.overageRate != null && (
                   <>
                     <div className={`p-3 rounded-lg bg-muted/30`}>

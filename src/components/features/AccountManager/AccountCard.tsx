@@ -67,7 +67,7 @@ const AccountCard = memo(function AccountCard({
     const used = getUsed(account)
     const subType = getSubType(account)
     const subPlan = getSubPlan(account)
-    const percent = getUsagePercent(used, quota)
+    const percent = quota > 0 ? Math.round((used / quota) * 100) : 0
     const statusMeta = getAccountStatusMeta(account, t)
     const isBanned = isBannedStatus(account)
     const isNormal = statusMeta.key === 'active'
@@ -187,26 +187,38 @@ const AccountCard = memo(function AccountCard({
         <div className="mt-1 bg-muted/20 rounded-xl p-3 border border-border/30">
           <div className="flex items-center justify-between text-[11px] mb-2">
             <span className="text-muted-foreground font-medium">{t('common.usage')}</span>
-            <span className={`font-bold ${percent > 80 ? 'text-red-500' : percent > 50 ? 'text-orange-500' : 'text-green-500'}`}>
-              {Math.round(percent)}%
+            <span className={`font-bold ${percent > 100 ? 'text-purple-500' : percent > 80 ? 'text-red-500' : percent > 50 ? 'text-orange-500' : 'text-green-500'}`}>
+              {percent > 100 ? '超额' : `${Math.round(percent)}%`}
             </span>
           </div>
           <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-2">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${percent > 80 ? 'bg-red-500' : percent > 50 ? 'bg-orange-500' : 'bg-green-500'
+              className={`h-full rounded-full transition-all duration-700 ${percent > 100 ? 'bg-purple-500' : percent > 80 ? 'bg-red-500' : percent > 50 ? 'bg-orange-500' : 'bg-green-500'
                 }`}
               style={{ width: `${Math.min(percent, 100)}%` }}
             />
           </div>
           <div className="flex items-center justify-between text-[10px] font-medium">
             <span className="text-foreground">{formatUsage(used)} / {formatUsage(quota)}</span>
-            <span className="text-muted-foreground">剩余 {formatUsage(Math.max(0, quota - used))}</span>
+            {used > quota ? (
+              <span className="text-purple-500 font-bold">超额 {formatUsage(used - quota)}</span>
+            ) : (
+              <span className="text-muted-foreground">剩余 {formatUsage(quota - used)}</span>
+            )}
           </div>
           {breakdown?.currentOverages != null && breakdown.currentOverages > 0 && (
             <div className="flex items-center justify-between text-[10px] pt-2 mt-2 border-t border-border/30">
-              <span className="text-orange-500 font-medium">⚡ 超额: {formatUsage(breakdown.currentOverages)}</span>
+              <span className="text-orange-500 font-medium">⚡ 超额: {formatUsage(breakdown.currentOverages)} credits</span>
               {breakdown.overageCharges != null && (
                 <span className="text-orange-500 font-bold">${breakdown.overageCharges.toFixed(2)}</span>
+              )}
+            </div>
+          )}
+          {breakdown?.currentOverages === 0 && account.usageData?.overageConfiguration?.overageStatus === 'ENABLED' && account.usageData?.subscriptionInfo?.overageCapability === 'OVERAGE_CAPABLE' && (
+            <div className="flex items-center justify-between text-[10px] pt-2 mt-2 border-t border-border/30">
+              <span className="text-green-500 font-medium">⚡ 超额已开启</span>
+              {breakdown?.overageRate != null && (
+                <span className="text-muted-foreground">${breakdown.overageRate}/credit</span>
               )}
             </div>
           )}

@@ -71,6 +71,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   const {
     switchingId,
     switchDialog,
+    setSwitchDialog,
     handleSwitchAccount,
     confirmSwitch,
     closeSwitchDialog} = useSwitchAccount(setLocalToken)
@@ -667,7 +668,26 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onConfirm={switchDialog.type === 'confirm' ? confirmSwitch : closeSwitchDialog}
           onCancel={closeSwitchDialog}
           confirmText={switchDialog.type === 'confirm' ? t('switch.confirmBtn') : t('common.ok')}
-          customContent={null}
+          customContent={switchDialog.type === 'confirm' ? (
+            <div className="flex items-center gap-3 mt-3 p-3 rounded-xl bg-muted/30 border border-border">
+              <span className="text-xs text-muted-foreground font-medium shrink-0">切换目标</span>
+              <div className="flex gap-1.5 flex-1">
+                {(['ide', 'cli', 'both'] as const).map(target => (
+                  <button
+                    key={target}
+                    onClick={() => setSwitchDialog({ ...switchDialog, switchTarget: target })}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                      (switchDialog as any).switchTarget === target
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    {target === 'ide' ? '🖥 IDE' : target === 'cli' ? '⌨ CLI' : '🔗 Both'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         />
       )}
       </div>

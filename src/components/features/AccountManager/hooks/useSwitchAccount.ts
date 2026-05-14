@@ -46,7 +46,8 @@ export function useSwitchAccount(onLocalTokenChange) {
       type: 'confirm',
       title: t('switch.title'),
       message: `${t('switch.confirmSwitch')} ${account.email}？`,
-      account})
+      account,
+      switchTarget: 'ide'})
   }, [t])
 
   // 确认切换
@@ -109,9 +110,25 @@ export function useSwitchAccount(onLocalTokenChange) {
       const settings = appSettings || {}
       refreshedAccount = await applyMachineGuid(refreshedAccount, settings)
 
+      const switchTarget = (switchDialog as any)?.switchTarget || (settings as any).switchTarget || 'ide'
+
       // IDE 切号
-      const params = buildSwitchParams(refreshedAccount)
-      await invoke('switch_kiro_account', { params })
+      if (switchTarget === 'ide' || switchTarget === 'both') {
+        const params = buildSwitchParams(refreshedAccount)
+        await invoke('switch_kiro_account', { params })
+      }
+
+      // CLI 切号
+      if (switchTarget === 'cli' || switchTarget === 'both') {
+        try {
+          const cliPath = await invoke<string>('get_kiro_cli_default_path')
+          if (cliPath) {
+            await invoke('switch_to_cli_account', { accountId: refreshedAccount.id, dbPath: cliPath })
+          }
+        } catch (e) {
+          console.warn('[Switch] CLI 切号失败:', e)
+        }
+      }
 
       // 更新当前账号标识
       invoke('get_kiro_local_token').then(onLocalTokenChange).catch(() => onLocalTokenChange(null))
@@ -146,13 +163,47 @@ export function useSwitchAccount(onLocalTokenChange) {
       // 总计
       const totalUsed = mainUsed + trialUsed + bonusUsed
       const totalLimit = mainLimit + trialLimit + bonusLimit
-      const remaining = totalLimit - totalUsed
       const provider = refreshedAccount.provider || 'Unknown'
+
+      // 超额信息
+      const overageConfig = usageData?.overageConfiguration
+      const overageEnabled = overageConfig?.overageStatus === 'ENABLED'
+      const currentOverages = breakdown?.currentOverages ?? 0
+      const overageCharges = breakdown?.overageCharges ?? 0
+      const overageCap = breakdown?.overageCap ?? 0
+      const overageRate = breakdown?.overageRate ?? 0
+      const subTitle = usageData?.subscriptionInfo?.subscriptionTitle || ''
+
+      // 正确计算：剩余 = 限额 - min(已用, 限额)
+      const baseUsed = Math.min(mainUsed, mainLimit)
+      const remaining = Math.max(0, mainLimit - baseUsed)
+
+      // 构建消息
+      let message = `${refreshedAccount.email}\n\n`
+      message += `📊 ${t('switch.quota')}: ${mainUsed}/${mainLimit}`
+      if (remaining > 0) {
+        message += ` (${t('switch.remaining')} ${remaining})`
+      } else {
+        message += ` (已用完)`
+      }
+      message += `\n`
+      message += `🏷️ ${t('switch.type')}: ${provider}`
+      if (subTitle) message += ` (${subTitle})`
+      message += `\n`
+      message += `🎯 切换目标: ${switchTarget === 'both' ? 'IDE + CLI' : switchTarget === 'cli' ? 'CLI' : 'IDE'}`
+      message += `\n`
+      if (overageEnabled && currentOverages > 0) {
+        message += `⚡ 超额: ${currentOverages} credits ($${overageCharges.toFixed(2)}) | 费率: $${overageRate}/credit | 上限: ${overageCap}`
+      } else if (overageEnabled) {
+        message += `⚡ 超额: 已开启，未超额`
+      } else {
+        message += `⚡ 超额: 未开启`
+      }
 
       setSwitchDialog({
         type: 'success',
         title: t('switch.success'),
-        message: `${refreshedAccount.email}\n\n📊 ${t('switch.quota')}: ${totalUsed}/${totalLimit} (${t('switch.remaining')} ${remaining})\n🏷️ ${t('switch.type')}: ${provider}`,
+        message,
         account: null})
     } catch (e) {
       setSwitchDialog({
@@ -172,6 +223,7 @@ export function useSwitchAccount(onLocalTokenChange) {
     switchingId,
     setSwitchingId,
     switchDialog,
+    setSwitchDialog,
     handleSwitchAccount,
     confirmSwitch,
     closeSwitchDialog}
