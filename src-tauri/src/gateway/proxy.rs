@@ -23,8 +23,8 @@ use url::Url;
 use crate::{
     core::account::{Account, AccountStore},
     commands::common::{
-        calc_expires_at, calc_status, get_usage_by_provider, refresh_token_by_provider,
-        RefreshResult,
+        calc_expires_at, calc_status, get_usage_by_provider, is_token_expiring_soon,
+        refresh_token_by_provider, RefreshResult,
     },
     commands::machine_guid::get_machine_id,
     clients::{
@@ -161,7 +161,7 @@ async fn restore_responses_session_messages(
                             call_type: "function".to_string(),
                             function: ToolCallFunction {
                                 name: name.clone(),
-                                arguments: arguments.clone(),
+                                arguments: if arguments.is_empty() { "{}".to_string() } else { arguments.clone() },
                             },
                         })
                         .collect(),
@@ -990,8 +990,8 @@ fn write_request_log(
         outcome: outcome.to_string(),
         duration_ms,
         error: error.map(str::to_string),
-        request_body: None,
-        response_body: None,
+        request_body: context.request_body.map(str::to_string),
+        response_body: _response_body.map(str::to_string),
         input_tokens,
         output_tokens,
         cache_read_input_tokens,
@@ -1100,6 +1100,27 @@ pub async fn proxy_handler(
     let endpoint = request_endpoint(format);
     let started_at = Instant::now();
     let raw_request_body = payload.to_string();
+
+    // 写入客户端请求到日志文件
+    {
+        let log_dir = dirs::data_dir()
+            .unwrap_or_default()
+            .join(".kiro-account-manager")
+            .join("logs");
+        let _ = std::fs::create_dir_all(&log_dir);
+        let entry = format!("[{}] CLIENT REQUEST #{} ({}): {}\n",
+            chrono::Local::now().format("%H:%M:%S"),
+            request_index,
+            endpoint,
+            &raw_request_body[..raw_request_body.len().min(50000)]
+        );
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_dir.join("gateway-client.log"))
+            .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
+    }
+
     let model_hint = extract_model_from_payload(&raw_request_body);
     let base_log_context = RequestLogContext {
         request_index,
@@ -2133,15 +2154,6 @@ pub async fn mcp_proxy_handler(
 
     let upstream_url = format!("https://q.{}.amazonaws.com/mcp", upstream.region);
 
-    // 记录完整的 MCP 请求
-    if let Ok(payload_json) = serde_json::to_string_pretty(&payload) {
-        log::info!("=== MCP API 请求 (Responses 格式) ===");
-        log::info!("URL: {}", upstream_url);
-        log::info!("Method: {}", payload.get("method").and_then(|v| v.as_str()).unwrap_or("unknown"));
-        log::info!("Payload:\n{}", payload_json);
-        log::info!("======================================");
-    }
-
     let upstream_resp = match with_kiro_upstream_headers(
         state.http.post(upstream_url),
         &upstream,
@@ -2478,12 +2490,19 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
         upstream.region
     );
 
-    // 记录完整的请求信息
-    if let Ok(payload_json) = serde_json::to_string_pretty(upstream_payload) {
-        log::info!("=== Kiro API 请求 ===");
-        log::info!("URL: {}", upstream_url);
-        log::info!("Payload:\n{}", payload_json);
-        log::info!("=====================");
+    // 追加最新请求到日志文件
+    if let Ok(payload_json) = serde_json::to_string(upstream_payload) {
+        let log_dir = dirs::data_dir()
+            .unwrap_or_default()
+            .join(".kiro-account-manager")
+            .join("logs");
+        let _ = std::fs::create_dir_all(&log_dir);
+        let entry = format!("[{}] REQUEST: {}\n", chrono::Local::now().format("%H:%M:%S"), payload_json);
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_dir.join("gateway-upstream.log"))
+            .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
     const MAX_RETRIES: u32 = 3;
@@ -2520,11 +2539,19 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
 
         let body = upstream_resp.text().await.unwrap_or_default();
 
-        // 记录错误响应的详细信息
-        log::error!("=== Kiro API 错误响应 ===");
-        log::error!("Status: {}", status);
-        log::error!("Body:\n{}", body);
-        log::error!("========================");
+        // 追加错误响应到日志文件
+        {
+            let log_dir = dirs::data_dir()
+                .unwrap_or_default()
+                .join(".kiro-account-manager")
+                .join("logs");
+            let entry = format!("[{}] RESPONSE {}: {}\n", chrono::Local::now().format("%H:%M:%S"), status.as_u16(), body);
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_dir.join("gateway-upstream.log"))
+                .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
+        }
 
         // 429 限流错误不重试，直接返回
         if status == StatusCode::TOO_MANY_REQUESTS {
@@ -2619,15 +2646,6 @@ async fn call_mcp_tool(
             "arguments": arguments
         }
     });
-
-    // 记录完整的 MCP 请求
-    if let Ok(payload_json) = serde_json::to_string_pretty(&payload) {
-        log::info!("=== MCP API 请求 ===");
-        log::info!("URL: {}", upstream_url);
-        log::info!("Tool: {}", tool_name);
-        log::info!("Payload:\n{}", payload_json);
-        log::info!("====================");
-    }
 
     let response = with_kiro_upstream_headers(
         http.post(upstream_url),
@@ -2726,7 +2744,7 @@ fn normalized_assistant_message_from_aggregated(
                         call_type: "function".to_string(),
                         function: ToolCallFunction {
                             name: name.clone(),
-                            arguments: arguments.clone(),
+                            arguments: if arguments.is_empty() { "{}".to_string() } else { arguments.clone() },
                         },
                     })
                     .collect(),
@@ -3018,6 +3036,42 @@ async fn resolve_managed_account_credentials(
     state.load_balancer.increment_connections(&account.id).await;
     let request_start = Instant::now();
 
+    // 检查 token 是否需要刷新（只有快过期时才刷新）
+    let need_refresh = match &account.expires_at {
+        Some(expires_at) => is_token_expiring_soon(expires_at),
+        None => true, // 没有过期时间，强制刷新
+    };
+
+    // 如果 token 没过期且有 access_token，直接使用
+    if !need_refresh {
+        if let Some(access_token) = &account.access_token {
+            if !access_token.is_empty() {
+                let profile_arn = account.profile_arn.clone()
+                    .or_else(|| Some(resolve_default_profile_arn(account.provider.as_deref())));
+                let machine_id = account
+                    .machine_id
+                    .clone()
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(get_machine_id);
+                let region = resolve_kiro_upstream_region(
+                    profile_arn.as_deref(),
+                    account.region.as_deref(),
+                    &state.config.region,
+                );
+                return Ok(UpstreamCredentials {
+                    access_token: access_token.clone(),
+                    profile_arn,
+                    provider: account.provider.clone(),
+                    region,
+                    source_label: format_managed_upstream_source(&state.config, &account),
+                    user_agent: build_kiro_custom_user_agent(&machine_id),
+                    auth_method: account.auth_method.clone(),
+                    send_opt_out: should_send_codewhisperer_optout(),
+                });
+            }
+        }
+    }
+
     match refresh_token_by_provider(&account).await {
         Ok(refresh) => {
             let provider = account.provider.as_deref().unwrap_or("Google").to_string();
@@ -3073,7 +3127,8 @@ async fn resolve_managed_account_credentials(
                 .clone()
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(get_machine_id);
-            let profile_arn = refresh.profile_arn.or_else(|| account.profile_arn.clone());
+            let profile_arn = refresh.profile_arn.or_else(|| account.profile_arn.clone())
+                .or_else(|| Some(resolve_default_profile_arn(account.provider.as_deref())));
             let region = resolve_kiro_upstream_region(
                 profile_arn.as_deref(),
                 account.region.as_deref(),
@@ -3105,6 +3160,18 @@ async fn resolve_managed_account_credentials(
         }
     }
 }
+/// 根据账号 provider 返回默认的 profileArn
+/// BuilderId 账号和 Social 账号（Github/Google）使用不同的 profileArn
+fn resolve_default_profile_arn(provider: Option<&str>) -> String {
+    const BUILDER_ID_PROFILE_ARN: &str = "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX";
+    const SOCIAL_PROFILE_ARN: &str = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK";
+
+    match provider {
+        Some("Github") | Some("Google") => SOCIAL_PROFILE_ARN.to_string(),
+        _ => BUILDER_ID_PROFILE_ARN.to_string(),
+    }
+}
+
 fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> String {
     // 只使用 email 或 user_id，都没有则返回 "unknown"
     let account_label = if let Some(email) = account
@@ -4047,6 +4114,24 @@ fn stream_proxy_response(
                                 // 将 payload 转换为文本
                                 let json_text = String::from_utf8_lossy(&msg.payload);
 
+                                // 写入每个 EventStream 事件到文件
+                                {
+                                    let log_dir = dirs::data_dir()
+                                        .unwrap_or_default()
+                                        .join(".kiro-account-manager")
+                                        .join("logs");
+                                    let entry = format!("[{}] EVENT {}: {}\n",
+                                        chrono::Local::now().format("%H:%M:%S%.3f"),
+                                        event_type.unwrap_or("unknown"),
+                                        json_text
+                                    );
+                                    let _ = std::fs::OpenOptions::new()
+                                        .create(true)
+                                        .append(true)
+                                        .open(log_dir.join("gateway-eventstream.log"))
+                                        .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
+                                }
+
                                 // 记录每个 Kiro API 事件（trace 级别，避免刷屏）
                                 log::trace!("[Kiro API 响应事件] {}", json_text);
 
@@ -4520,6 +4605,13 @@ fn stream_proxy_response(
             )
             .await;
         }
+        // 收集未关闭的工具调用（没有收到 stop 事件的）
+        for (id, (name, input)) in tool_accumulators.drain() {
+            if !name.is_empty() {
+                log::warn!("[流式] 收集未关闭的工具调用: id={}, name={}", id, name);
+                aggregated.tool_calls.push((id, name, input));
+            }
+        }
         aggregated.tool_calls = stream::deduplicate_tool_calls(aggregated.tool_calls);
 
         // 流结束后打印完整聚合响应
@@ -4564,6 +4656,40 @@ fn stream_proxy_response(
             ResponseFormat::Anthropic => {
                 close_content_block(&tx, &mut text_block_index).await;
                 close_content_block(&tx, &mut thinking_block_index).await;
+
+                // 发送未关闭的工具调用（没有收到 stop 事件的）
+                for (id, name, input) in &aggregated.tool_calls {
+                    let block_index = next_block_index;
+                    next_block_index += 1;
+                    let parsed_input: Value = serde_json::from_str(input).unwrap_or_else(|_| json!({}));
+                    let start = json!({
+                        "type": "content_block_start",
+                        "index": block_index,
+                        "content_block": {
+                            "type": "tool_use",
+                            "id": id,
+                            "name": name,
+                            "input": {}
+                        }
+                    });
+                    send_event(&tx, Some("content_block_start"), &start.to_string()).await;
+                    let delta = json!({
+                        "type": "content_block_delta",
+                        "index": block_index,
+                        "delta": {
+                            "type": "input_json_delta",
+                            "partial_json": serde_json::to_string(&parsed_input).unwrap_or_else(|_| "{}".to_string())
+                        }
+                    });
+                    send_event(&tx, Some("content_block_delta"), &delta.to_string()).await;
+                    let stop = json!({
+                        "type": "content_block_stop",
+                        "index": block_index
+                    });
+                    send_event(&tx, Some("content_block_stop"), &stop.to_string()).await;
+                    saw_tool_calls = true;
+                }
+
                 let mut usage = json!({
                     "input_tokens": aggregated.input_tokens,
                     "output_tokens": aggregated.output_tokens
@@ -4668,13 +4794,59 @@ fn stream_proxy_response(
         }
 
         // 记录请求日志（token 已经在发送响应前估算好了）
+        let response_body_log = if aggregated.text.is_empty() {
+            None
+        } else {
+            Some(aggregated.text.clone())
+        };
+
+        // 写入客户端响应到日志文件
+        {
+            let log_dir = dirs::data_dir()
+                .unwrap_or_default()
+                .join(".kiro-account-manager")
+                .join("logs");
+            let tool_calls_summary: Vec<String> = aggregated.tool_calls.iter()
+                .map(|(id, name, _)| format!("{}({})", name, id))
+                .collect();
+            let entry = format!("[{}] CLIENT RESPONSE #{}: text_len={}, thinking_len={}, tool_calls=[{}], input={}, output={}\n",
+                chrono::Local::now().format("%H:%M:%S"),
+                log_context.request_index,
+                aggregated.text.len(),
+                aggregated.thinking.len(),
+                tool_calls_summary.join(", "),
+                aggregated.input_tokens,
+                aggregated.output_tokens,
+            );
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_dir.join("gateway-client.log"))
+                .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
+
+            // 也写入 upstream 成功响应
+            let upstream_entry = format!("[{}] RESPONSE 200: text_len={}, thinking_len={}, tool_calls={:?}, input={}, output={}\n",
+                chrono::Local::now().format("%H:%M:%S"),
+                aggregated.text.len(),
+                aggregated.thinking.len(),
+                aggregated.tool_calls.iter().map(|(id, name, args)| format!("{}({})={}", name, id, &args[..args.len().min(100)])).collect::<Vec<_>>(),
+                aggregated.input_tokens,
+                aggregated.output_tokens,
+            );
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_dir.join("gateway-upstream.log"))
+                .and_then(|mut f| std::io::Write::write_all(&mut f, upstream_entry.as_bytes()));
+        }
+
         write_request_log(
             &log_context,
             StatusCode::OK,
             "stream",
             None,
             None, // error_type
-            None,
+            response_body_log.as_deref(),
             Some(aggregated.input_tokens),
             Some(aggregated.output_tokens),
             aggregated.cache_read_input_tokens,
@@ -4884,11 +5056,22 @@ async fn send_event(
     event: Option<&str>,
     payload: &str,
 ) -> bool {
-    // 记录发送给客户端的事件（trace 级别，避免刷屏）
-    if let Some(event_name) = event {
-        log::trace!("[发送给客户端] event: {}, data: {}", event_name, payload);
-    } else {
-        log::trace!("[发送给客户端] data: {}", payload);
+    // 写入发给客户端的每个 SSE 事件到文件
+    {
+        let log_dir = dirs::data_dir()
+            .unwrap_or_default()
+            .join(".kiro-account-manager")
+            .join("logs");
+        let entry = if let Some(event_name) = event {
+            format!("[{}] SSE event={}: {}\n", chrono::Local::now().format("%H:%M:%S%.3f"), event_name, &payload[..payload.len().min(2000)])
+        } else {
+            format!("[{}] SSE data: {}\n", chrono::Local::now().format("%H:%M:%S%.3f"), &payload[..payload.len().min(2000)])
+        };
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_dir.join("gateway-client-sse.log"))
+            .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
     let chunk = if let Some(event) = event {

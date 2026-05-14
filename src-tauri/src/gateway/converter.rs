@@ -680,87 +680,132 @@ pub async fn build_kiro_payload(
     // 避免客户端传入无效的工具名却静默成功。
     normalize_tool_choice(&request.tool_choice, &request.tools)?;
 
-    // 方案 2：强制限制 history 长度，避免 Kiro IDE 上下文导致 payload 超限
+    // 裁剪策略：基于 Kiro API 的 7 条 history 验证规则
+    // 1. STARTS_WITH_USER_MESSAGE - 必须以 user 开始
+    // 2. ENDS_WITH_USER_MESSAGE - 必须以 user 结束
+    // 3. ALTERNATING_MESSAGES - user/assistant 严格交替
+    // 4. TOOL_USES_AND_RESULTS - assistant 有 toolUses → 下一条 user 必须有 toolResults
+    // 5. TOOL_RESULTS_AND_NO_USES - user 有 toolResults → 前一条 assistant 必须有 toolUses
+    // 6. TOOL_RESULTS_ORPHAN_IDS - toolResults 的 ID 必须匹配 assistant 的 toolUseId
+    // 7. NON_EMPTY_USER_MESSAGE - user 消息必须有 content 或 toolResults
     const MAX_HISTORY_MESSAGES: usize = 30;
     const KEEP_RECENT_MESSAGES: usize = 20;
 
     let mut request = request.clone();
-    if request.messages.len() > MAX_HISTORY_MESSAGES {
+
+    // 分离 system 消息和对话消息（user/assistant/tool）
+    let mut system_messages: Vec<NormalizedMessage> = Vec::new();
+    let mut conversation_messages: Vec<NormalizedMessage> = Vec::new();
+
+    for msg in request.messages.iter() {
+        if msg.role == "system" {
+            system_messages.push(msg.clone());
+        } else {
+            conversation_messages.push(msg.clone());
+        }
+    }
+
+    // 只对对话消息进行裁剪
+    if conversation_messages.len() > MAX_HISTORY_MESSAGES {
         log::warn!(
-            "[网关] 消息数量 {} 超过限制 {}，开始裁剪",
-            request.messages.len(),
+            "[网关] 对话消息数量 {} 超过限制 {}，开始裁剪",
+            conversation_messages.len(),
             MAX_HISTORY_MESSAGES
         );
 
-        // 保留最后一条 user 消息（当前请求）
-        let last_user = request.messages.last().cloned();
-        if last_user.is_none() || last_user.as_ref().map(|m| m.role.as_str()) != Some("user") {
-            log::error!("[网关] 最后一条消息不是 user，无法裁剪");
-            return Err("Invalid message format: last message must be user".into());
-        }
+        // 策略：从后往前收集"完整轮次"
+        // 一个完整轮次 = user + assistant（可能带 toolUses）+ user（带 toolResults）+ ...
+        // 确保不切断 toolUse/toolResult 配对
+        let total = conversation_messages.len();
+        let mut keep_from_index = total; // 从这个索引开始保留
 
-        // 从倒数第二条开始，成对保留（user + assistant）
-        let mut kept_messages = vec![last_user.unwrap()];
-        let target_count = KEEP_RECENT_MESSAGES;
+        // 从最后一条消息往前扫描，收集完整轮次
+        let mut kept_count = 0;
+        let mut idx = total;
 
-        let mut idx = request.messages.len().saturating_sub(2);
-        while kept_messages.len() < target_count && idx > 0 {
-            // 取一对：assistant (idx) + user (idx-1)
-            if idx >= 1 {
-                let assistant_msg = &request.messages[idx];
-                let user_msg = &request.messages[idx - 1];
+        while idx > 0 && kept_count < KEEP_RECENT_MESSAGES {
+            idx -= 1;
+            let msg = &conversation_messages[idx];
 
-                if assistant_msg.role == "assistant" && user_msg.role == "user" {
-                    kept_messages.insert(0, assistant_msg.clone());
-                    kept_messages.insert(0, user_msg.clone());
+            // 如果是 user/tool 消息，直接计入
+            if msg.role == "user" || msg.role == "tool" {
+                kept_count += 1;
+                keep_from_index = idx;
 
-                    if idx >= 2 {
-                        idx -= 2;
-                    } else {
-                        break;
+                // 检查这个 user 消息是否有 toolResults
+                let has_tool_results = msg.content.as_ref()
+                    .and_then(|c| c.as_array())
+                    .map(|arr| arr.iter().any(|item| {
+                        item.get("type").and_then(|t| t.as_str()) == Some("tool_result")
+                    }))
+                    .unwrap_or(false)
+                    || msg.tool_call_id.is_some();
+
+                // 如果有 toolResults，必须保留前面的 assistant（带 toolUses）
+                if has_tool_results && idx > 0 {
+                    let prev = &conversation_messages[idx - 1];
+                    if prev.role == "assistant" {
+                        idx -= 1;
+                        kept_count += 1;
+                        keep_from_index = idx;
                     }
-                } else {
-                    log::error!(
-                        "[网关] 消息格式错误：idx={}, roles={}/{}",
-                        idx,
-                        user_msg.role,
-                        assistant_msg.role
-                    );
-                    break;
                 }
+            } else if msg.role == "assistant" {
+                kept_count += 1;
+                keep_from_index = idx;
+
+                // 如果 assistant 有 tool_calls，必须保留后面的 user（带 toolResults）
+                // 但因为我们是从后往前扫描，后面的已经被保留了，所以只需确保
+                // 前面有 user 消息（规则 3：交替）
+                // 继续往前找 user
+            }
+        }
+
+        // 确保从 keep_from_index 开始的第一条是 user（规则 1）
+        while keep_from_index < total && conversation_messages[keep_from_index].role != "user" {
+            keep_from_index += 1;
+        }
+
+        // 确保最后一条是 user（规则 2）
+        let mut end_index = total;
+        while end_index > keep_from_index && conversation_messages[end_index - 1].role != "user" {
+            end_index -= 1;
+        }
+
+        if keep_from_index >= end_index {
+            // 极端情况：裁剪后没有有效消息，只保留最后一条 user
+            if let Some(last_user_idx) = conversation_messages.iter().rposition(|m| m.role == "user") {
+                conversation_messages = vec![conversation_messages[last_user_idx].clone()];
             } else {
-                break;
+                return Err("No user message found in conversation".into());
             }
-        }
-
-        // 验证裁剪后的消息格式
-        let mut expected_role = "user";
-        for (i, msg) in kept_messages.iter().enumerate() {
-            if msg.role != expected_role {
-                log::error!(
-                    "[网关] 裁剪后消息格式错误：位置 {}, 期望 {}, 实际 {}",
-                    i,
-                    expected_role,
-                    msg.role
-                );
-                return Err("Invalid message format after trimming".into());
-            }
-            expected_role = if expected_role == "user" { "assistant" } else { "user" };
-        }
-
-        if kept_messages.last().map(|m| m.role.as_str()) != Some("user") {
-            log::error!("[网关] 裁剪后最后一条消息不是 user");
-            return Err("Invalid message format: last message must be user after trimming".into());
+        } else {
+            conversation_messages = conversation_messages[keep_from_index..end_index].to_vec();
         }
 
         log::info!(
-            "[网关] 裁剪完成：{} → {} 条消息",
-            request.messages.len(),
-            kept_messages.len()
+            "[网关] 裁剪完成：{} → {} 条对话消息",
+            total,
+            conversation_messages.len()
         );
-
-        request.messages = kept_messages;
     }
+
+    // 合并回去：system 消息在前，对话消息在后
+    request.messages = system_messages;
+    request.messages.extend(conversation_messages);
+
+    // 验证最终消息格式
+    if request.messages.is_empty() {
+        log::error!("[网关] 合并后消息为空");
+        return Err("No messages after merging".into());
+    }
+
+    log::info!(
+        "[网关] 消息格式验证通过：总计 {} 条消息（system: {}, 对话: {}）",
+        request.messages.len(),
+        request.messages.iter().filter(|m| m.role == "system").count(),
+        request.messages.iter().filter(|m| m.role != "system").count()
+    );
 
     let model_id = if let Some(models) = available_models {
         get_internal_model_id_with_fallback(&request.model, models)?
@@ -804,13 +849,13 @@ pub async fn build_kiro_payload(
     }
 
     let merged_messages = merge_adjacent_messages(&other_messages);
+
     let first_user_index = merged_messages
         .iter()
         .position(|message| matches!(message.role.as_str(), "user" | "tool"));
 
-    let history = if merged_messages.len() > 1 {
+    let (history, sanitized_current) = if merged_messages.len() > 1 {
         let mut history_items = Vec::new();
-        let history_len = merged_messages.len() - 1; // 不包括当前消息
 
         for (index, message) in merged_messages[..merged_messages.len() - 1]
             .iter()
@@ -818,15 +863,7 @@ pub async fn build_kiro_payload(
         {
             match message.role.as_str() {
                 "assistant" => {
-                    let mut assistant_msg = build_history_assistant_message(message);
-                    
-                    // Prompt Caching 策略 3：缓存早期对话历史
-                    // 在倒数第 10 轮对话之前添加缓存点（如果对话足够长）
-                    if history_len > 10 && index == history_len - 10 {
-                        assistant_msg.cache_point = Some(json!({
-                            "type": "default"
-                        }));
-                    }
+                    let assistant_msg = build_history_assistant_message(message);
                     
                     history_items.push(HistoryItem::Assistant {
                         assistant_response_message: assistant_msg,
@@ -846,17 +883,22 @@ pub async fn build_kiro_payload(
                     }
                     
                     let images = extract_images(client, message.content.as_ref()).await;
-                    let mut user_context = build_user_context(
+                    let tool_results = extract_tool_results(message.content.as_ref());
+                    let user_context = build_user_context(
                         None,
-                        extract_tool_results(message.content.as_ref()),
+                        tool_results.clone(),
                     );
+                    
+                    // 规则 7：user 消息必须有 content 或 toolResults
+                    if content.trim().is_empty() && tool_results.is_empty() {
+                        content = "Continue".to_string();
+                    }
                     
                     // 如果需要缓存系统提示，在用户上下文中添加缓存点
                     if should_add_cache_point {
-                        if let Some(ref mut _ctx) = user_context {
+                        if let Some(ref _ctx) = user_context {
                             // 注意：缓存点应该添加在系统提示之后，工具定义之前
                             // 但由于 Kiro API 的限制，我们只能在消息级别添加缓存点
-                            // 这里我们通过在第一条用户消息后添加缓存点来实现
                         }
                     }
                     
@@ -893,48 +935,109 @@ pub async fn build_kiro_payload(
             }
         }
 
-        if history_items.is_empty() {
-            None
+        // 把 currentMessage 也加入 history_items 一起 sanitize（参考项目做法）
+        let current_msg = &merged_messages[merged_messages.len() - 1];
+        let current_tool_results_for_history = match current_msg.role.as_str() {
+            "tool" => extract_tool_results_from_tool_message(current_msg),
+            _ => extract_tool_results(current_msg.content.as_ref()),
+        };
+        let current_content_for_history = extract_text_content(current_msg.content.as_ref());
+        history_items.push(HistoryItem::User {
+            user_input_message: HistoryUserMessage {
+                content: if current_content_for_history.trim().is_empty() && current_tool_results_for_history.is_empty() {
+                    "Continue".to_string()
+                } else {
+                    current_content_for_history
+                },
+                model_id: model_id.clone(),
+                origin: "AI_EDITOR".to_string(),
+                images: None,
+                user_input_message_context: if current_tool_results_for_history.is_empty() {
+                    None
+                } else {
+                    Some(UserInputMessageContext {
+                        additional_context: None,
+                        app_studio_context: None,
+                        console_state: None,
+                        diagnostic: None,
+                        editor_state: None,
+                        env_state: None,
+                        git_state: None,
+                        shell_state: None,
+                        tool_results: Some(current_tool_results_for_history),
+                        tools: None,
+                        user_settings: None,
+                    })
+                },
+            },
+        });
+
+        // sanitize 所有消息（包括 currentMessage）
+        let all_sanitized = sanitize_history(history_items);
+
+        // 分割：最后一条作为 currentMessage 的数据源，其余作为 history
+        if all_sanitized.len() <= 1 {
+            (None, all_sanitized.into_iter().last())
         } else {
-            Some(history_items)
+            let history_part: Vec<HistoryItem> = all_sanitized[..all_sanitized.len() - 1].to_vec();
+            let current_part = all_sanitized.into_iter().last();
+            (Some(history_part), current_part)
         }
     } else {
-        None
+        (None, None)
     };
 
+    // 从 sanitized currentMessage item 中提取 content 和 toolResults
     let current_message = merged_messages
         .last()
         .ok_or_else(|| "没有当前消息".to_string())?;
-    let mut current_content = extract_text_content(current_message.content.as_ref());
+
+    let mut current_content = if let Some(HistoryItem::User { user_input_message }) = &sanitized_current {
+        user_input_message.content.clone()
+    } else {
+        extract_text_content(current_message.content.as_ref())
+    };
+
     if history.is_none() && !system_prompt.is_empty() {
         current_content = join_with_double_newline(&system_prompt, &current_content);
     }
     if let Some(tool_docs) = tool_docs_for_current {
         current_content = join_with_double_newline(&tool_docs, &current_content);
     }
-    if current_message.role == "assistant" || current_content.is_empty() {
-        current_content = if current_content.is_empty() {
-            "Continue".to_string()
-        } else {
-            current_content
-        };
+    if current_content.trim().is_empty() {
+        current_content = "Continue".to_string();
     }
 
-    let current_tool_results = match current_message.role.as_str() {
-        "tool" => extract_tool_results_from_tool_message(current_message),
-        _ => extract_tool_results(current_message.content.as_ref()),
+    // toolResults 从 sanitized item 中获取（如果有的话）
+    let current_tool_results = if let Some(HistoryItem::User { user_input_message }) = &sanitized_current {
+        user_input_message.user_input_message_context
+            .as_ref()
+            .and_then(|ctx| ctx.tool_results.clone())
+            .unwrap_or_default()
+    } else {
+        match current_message.role.as_str() {
+            "tool" => extract_tool_results_from_tool_message(current_message),
+            _ => extract_tool_results(current_message.content.as_ref()),
+        }
     };
-    let current_images = extract_images(client, current_message.content.as_ref()).await;
 
-    // 从 metadata 中提取 cache_point 信息
-    // 所有 Claude 模型都支持 prompt caching，直接启用
-    let cache_point = request
-        .messages
-        .first()
-        .and_then(|msg| msg.metadata.as_ref())
-        .and_then(|meta| meta.get("cache_point"))
-        .cloned()
-        .unwrap_or_else(|| json!({"type": "default"}));
+    // 最终保护：如果 content 和 toolResults 都为空，设置默认 content
+    if current_content.trim().is_empty() && current_tool_results.is_empty() {
+        current_content = "Continue".to_string();
+    }
+    // 如果有 toolResults，content 必须为空（Kiro API 要求）
+    // 同时检查原始消息中是否有 tool_result 内容
+    let original_has_tool_results = match current_message.content.as_ref() {
+        Some(Value::Array(arr)) => arr.iter().any(|item| {
+            item.get("type").and_then(|t| t.as_str()) == Some("tool_result")
+        }),
+        _ => false,
+    } || current_message.tool_call_id.is_some();
+
+    if !current_tool_results.is_empty() || original_has_tool_results {
+        current_content = String::new();
+    }
+    let current_images = extract_images(client, current_message.content.as_ref()).await;
 
     // 始终设置 agent_continuation_id 和 agent_task_type
     // 根据抓包验证，Kiro API 在所有情况下都接受这两个字段
@@ -949,8 +1052,7 @@ pub async fn build_kiro_payload(
                     content: current_content,
                     model_id,
                     origin: "AI_EDITOR".to_string(),
-                    // 所有 Claude 模型都支持 prompt caching，始终启用
-                    cache_point: Some(cache_point),
+                    cache_point: None,
                     client_cache_config: None,
                     documents: None,
                     images: images_option(current_images),
@@ -1419,6 +1521,162 @@ fn extract_anthropic_tool_result_id(content: &Value) -> Option<String> {
 
 
 
+/// 修复 history 使其符合 Kiro API 的 7 条验证规则
+/// 参考 Kiro IDE 源码中的 v10 函数，按顺序执行修复步骤：
+/// 1. 确保以 user 开始
+/// 2. 过滤空 user 消息
+/// 3. 补充缺失的 toolResults
+/// 4. 修复交替（插入占位消息）
+/// 5. 确保以 user 结束
+fn sanitize_history(mut items: Vec<HistoryItem>) -> Vec<HistoryItem> {
+    if items.is_empty() {
+        return items;
+    }
+
+    // 步骤 1：确保以 user 开始
+    if !matches!(items.first(), Some(HistoryItem::User { .. })) {
+        items.insert(0, HistoryItem::User {
+            user_input_message: HistoryUserMessage {
+                content: "Hello".to_string(),
+                model_id: String::new(),
+                origin: "AI_EDITOR".to_string(),
+                images: None,
+                user_input_message_context: None,
+            },
+        });
+    }
+
+    // 步骤 2：过滤空 user 消息（保留第一个 user 和有 content/toolResults 的 user）
+    let first_user_idx = items.iter().position(|item| matches!(item, HistoryItem::User { .. }));
+    items = items.into_iter().enumerate().filter(|(idx, item)| {
+        match item {
+            HistoryItem::User { user_input_message } => {
+                // 保留第一个 user
+                if Some(*idx) == first_user_idx {
+                    return true;
+                }
+                // 保留有 content 的 user
+                if !user_input_message.content.trim().is_empty() {
+                    return true;
+                }
+                // 保留有 toolResults 的 user
+                if let Some(ctx) = &user_input_message.user_input_message_context {
+                    if let Some(results) = &ctx.tool_results {
+                        if !results.is_empty() {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            _ => true,
+        }
+    }).map(|(_, item)| item).collect();
+
+    // 步骤 3：补充缺失的 toolResults
+    // 如果 assistant 有 toolUses 但下一条 user 没有对应 toolResults，插入错误占位
+    let mut patched: Vec<HistoryItem> = Vec::new();
+    for (idx, item) in items.iter().enumerate() {
+        patched.push(item.clone());
+
+        if let HistoryItem::Assistant { assistant_response_message } = item {
+            if let Some(tool_uses) = &assistant_response_message.tool_uses {
+                if !tool_uses.is_empty() {
+                    // 检查下一条是否是带 toolResults 的 user
+                    let next = items.get(idx + 1);
+                    let next_has_results = match next {
+                        Some(HistoryItem::User { user_input_message }) => {
+                            user_input_message.user_input_message_context
+                                .as_ref()
+                                .and_then(|ctx| ctx.tool_results.as_ref())
+                                .map(|r| !r.is_empty())
+                                .unwrap_or(false)
+                        }
+                        _ => false,
+                    };
+
+                    if !next_has_results {
+                        // 插入错误占位的 toolResults
+                        let error_results: Vec<KiroToolResult> = tool_uses.iter().map(|tu| {
+                            KiroToolResult {
+                                tool_use_id: tu.tool_use_id.clone(),
+                                content: vec![KiroToolResultContent::Text {
+                                    text: "Tool execution failed".to_string(),
+                                }],
+                                status: "error".to_string(),
+                            }
+                        }).collect();
+
+                        patched.push(HistoryItem::User {
+                            user_input_message: HistoryUserMessage {
+                                content: String::new(),
+                                model_id: String::new(),
+                                origin: "AI_EDITOR".to_string(),
+                                images: None,
+                                user_input_message_context: Some(UserInputMessageContext {
+                                    additional_context: None,
+                                    app_studio_context: None,
+                                    console_state: None,
+                                    diagnostic: None,
+                                    editor_state: None,
+                                    env_state: None,
+                                    git_state: None,
+                                    shell_state: None,
+                                    tool_results: Some(error_results),
+                                    tools: None,
+                                    user_settings: None,
+                                }),
+                            },
+                        });
+                    }
+                }
+            }
+        }
+    }
+    items = patched;
+
+    // 步骤 4：修复交替（两个连续 user 之间插入 assistant，两个连续 assistant 之间插入 user）
+    let mut alternated: Vec<HistoryItem> = Vec::new();
+    for item in items {
+        if let Some(last) = alternated.last() {
+            let both_user = matches!(last, HistoryItem::User { .. }) && matches!(&item, HistoryItem::User { .. });
+            let both_assistant = matches!(last, HistoryItem::Assistant { .. }) && matches!(&item, HistoryItem::Assistant { .. });
+
+            if both_user {
+                // 插入占位 assistant
+                alternated.push(HistoryItem::Assistant {
+                    assistant_response_message: HistoryAssistantMessage {
+                        content: "understood".to_string(),
+                        tool_uses: None,
+                        reasoning_content: None,
+                        references: None,
+                        supplementary_web_links: None,
+                        followup_prompt: None,
+                        message_id: None,
+                        cache_point: None,
+                    },
+                });
+            } else if both_assistant {
+                // 插入占位 user
+                alternated.push(HistoryItem::User {
+                    user_input_message: HistoryUserMessage {
+                        content: "Continue".to_string(),
+                        model_id: String::new(),
+                        origin: "AI_EDITOR".to_string(),
+                        images: None,
+                        user_input_message_context: None,
+                    },
+                });
+            }
+        }
+        alternated.push(item);
+    }
+    items = alternated;
+
+    items
+}
+
+
 fn merge_adjacent_messages(messages: &[&NormalizedMessage]) -> Vec<NormalizedMessage> {
     let mut merged: Vec<NormalizedMessage> = Vec::new();
 
@@ -1553,9 +1811,21 @@ pub fn history_assistant_message_from_response_content(
 }
 
 fn build_history_assistant_message(message: &NormalizedMessage) -> HistoryAssistantMessage {
+    let content = extract_text_content(message.content.as_ref());
+    let tool_uses = extract_tool_uses(message);
+    // Kiro API 要求 assistant content 非空
+    let content = if content.trim().is_empty() {
+        if tool_uses.is_some() {
+            " ".to_string() // 有 toolUses 时用空格占位
+        } else {
+            "I understand.".to_string()
+        }
+    } else {
+        content
+    };
     HistoryAssistantMessage {
-        content: extract_text_content(message.content.as_ref()),
-        tool_uses: extract_tool_uses(message),
+        content,
+        tool_uses,
         reasoning_content: assistant_metadata_value(message, "reasoningContent")
             .or_else(|| extract_reasoning_content(message.content.as_ref()))
             .and_then(|value| meaningful_optional_value(Some(value))),
@@ -2155,22 +2425,6 @@ fn convert_tools(tools: &Option<Vec<Tool>>) -> Option<Vec<KiroTool>> {
     tools.as_ref().map(|items| {
         let mut result = Vec::new();
 
-        // 检查最后一个 tool 是否有 cache_control
-        let has_cache_control = items.last()
-            .and_then(|tool| tool.cache_control.as_ref())
-            .is_some();
-
-        // 如果最后一个 tool 有 cache_control，在所有 tool 之前插入 CachePoint
-        if has_cache_control {
-            if let Some(last_tool) = items.last() {
-                if let Some(cache_control) = &last_tool.cache_control {
-                    result.push(KiroTool::CachePoint {
-                        cache_point: convert_cache_control_to_cache_point(cache_control),
-                    });
-                }
-            }
-        }
-
         // 插入所有工具定义
         for tool in items {
             result.push(KiroTool::ToolSpecification {
@@ -2181,6 +2435,13 @@ fn convert_tools(tools: &Option<Vec<Tool>>) -> Option<Vec<KiroTool>> {
                         json: tool_input_schema(tool),
                     },
                 },
+            });
+        }
+
+        // 始终在 tools 数组末尾添加 cachePoint，触发 Prompt Caching
+        if !result.is_empty() {
+            result.push(KiroTool::CachePoint {
+                cache_point: json!({"type": "default"}),
             });
         }
 

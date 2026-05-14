@@ -250,20 +250,25 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
         });
     }
 
-    if let Some(tool_use_id) = value.get("toolUseId").and_then(|item| item.as_str()) {
-        let name = value
+    if let Some(tool_use_id) = value.get("toolUseId").and_then(|item| item.as_str())
+        .or_else(|| value.get("toolUseEvent").and_then(|e| e.get("toolUseId")).and_then(|item| item.as_str()))
+    {
+        // 支持 toolUseEvent 包装格式
+        let tool_data = value.get("toolUseEvent").unwrap_or(&value);
+
+        let name = tool_data
             .get("name")
             .and_then(|item| item.as_str())
             .unwrap_or_default()
             .to_string();
 
-        if value.get("stop").and_then(|item| item.as_bool()) == Some(true) {
+        if tool_data.get("stop").and_then(|item| item.as_bool()) == Some(true) {
             return Some(KiroEvent::ToolUseStop {
                 id: tool_use_id.to_string(),
             });
         }
 
-        if let Some(input) = value.get("input") {
+        if let Some(input) = tool_data.get("input") {
             let input_delta = if let Some(text) = input.as_str() {
                 log::debug!("[Tool Use] input 是字符串: {}", text.chars().take(100).collect::<String>());
                 text.to_string()
