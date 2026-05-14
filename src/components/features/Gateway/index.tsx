@@ -1,8 +1,10 @@
 import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { Activity, Play, RotateCcw, Square, Activity as ActivityIcon, Settings } from 'lucide-react'
+import { Activity, Play, RotateCcw, Square, Activity as ActivityIcon, Settings, Zap } from 'lucide-react'
 import { Alert as AlertPrimitive, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
 import { Stack, Group, Badge, Card, Text } from '@/components/shared/layout'
 import GatewayConfigComponent from './GatewayConfig'
@@ -93,6 +95,10 @@ function GatewayPage() {
   const [savedConfigSnapshot, setSavedConfigSnapshot] = useState(() => buildGatewayConfigSnapshot(DEFAULT_GATEWAY_CONFIG))
   const [appliedRuntimeSnapshot, setAppliedRuntimeSnapshot] = useState<any>(null)
   const [lastStatusSyncAt, setLastStatusSyncAt] = useState('-')
+  const [showClientConfig, setShowClientConfig] = useState(false)
+  const [clientConfigLoading, setClientConfigLoading] = useState(false)
+  const [clientConfigResults, setClientConfigResults] = useState<any[]>([])
+  const [selectedClients, setSelectedClients] = useState<string[]>(['claudeCode'])
 
   const accountOptions = useMemo(
     () => accounts.map(account => ({
@@ -574,6 +580,24 @@ function GatewayPage() {
     }
   }
 
+  const handleConfigureClients = async () => {
+    setClientConfigLoading(true)
+    try {
+      const apiKey = effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || ''
+      const results = await invoke<any[]>('configure_proxy_clients', {
+        clients: selectedClients,
+        host: effectiveConfig.host,
+        port: effectiveConfig.port,
+        apiKey: apiKey.split('\n')[0]?.trim() || apiKey.trim(),
+      })
+      setClientConfigResults(results)
+    } catch (e) {
+      pushError(e)
+    } finally {
+      setClientConfigLoading(false)
+    }
+  }
+
   return (
     <GatewayConfigProvider>
       <GatewayStatusProvider>
@@ -633,6 +657,14 @@ function GatewayPage() {
                 >
                   <Activity size={16} className="mr-1" />
                   保存配置
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowClientConfig(!showClientConfig)}
+                  title="一键配置 Claude Code / Codex 等客户端"
+                >
+                  <Zap size={16} className="mr-1" />
+                  配置客户端
                 </Button>
                 {status.running ? (
                   <Button
@@ -701,6 +733,7 @@ function GatewayPage() {
                 {actionSummary.description}
               </Text>
             </ThemedAlert>
+
           </Stack>
         </Card>
 
@@ -753,6 +786,95 @@ function GatewayPage() {
             />
           </TabsContent>
         </Tabs>
+
+        {/* 快速配置客户端弹窗 */}
+        <Dialog open={showClientConfig} onOpenChange={(open) => { setShowClientConfig(open); if (!open) setClientConfigResults([]) }}>
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader className="">
+              <DialogTitle className="">⚡ 快速配置客户端</DialogTitle>
+              <DialogDescription className="">
+                一键将反代地址写入客户端配置文件，配置前自动备份
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-4 mt-2">
+              {/* 客户端选择 */}
+              <div className="flex gap-3">
+                {[
+                  { id: 'claudeCode', label: 'Claude Code CLI', desc: '~/.claude/settings.json' },
+                  { id: 'codex', label: 'Codex CLI', desc: '~/.codex/auth.json + config.toml' },
+                ].map(client => (
+                  <div
+                    key={client.id}
+                    onClick={() => setSelectedClients(prev =>
+                      prev.includes(client.id) ? prev.filter(c => c !== client.id) : [...prev, client.id]
+                    )}
+                    className={`flex-1 p-3 rounded-xl border cursor-pointer transition-all ${
+                      selectedClients.includes(client.id)
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : 'border-border bg-muted/20 hover:bg-muted/40'
+                    }`}
+                  >
+                    <Text size="sm" fw={600} className="text-foreground">{client.label}</Text>
+                    <Text size="xs" className="text-muted-foreground font-mono mt-1">{client.desc}</Text>
+                  </div>
+                ))}
+              </div>
+
+              {/* 配置预览 */}
+              <div className="bg-muted/30 border border-border rounded-xl p-3">
+                <Text size="xs" className="text-muted-foreground mb-2">将写入的配置：</Text>
+                <div className="flex flex-col gap-2 font-mono text-[11px]">
+                  {selectedClients.includes('claudeCode') && (
+                    <div className="flex flex-col gap-0.5 p-2 rounded-lg bg-muted/30">
+                      <span className="text-muted-foreground text-[10px] font-sans">Claude Code → ~/.claude/settings.json</span>
+                      <span className="text-foreground">ANTHROPIC_BASE_URL = {effectiveBaseUrl}</span>
+                      <span className="text-foreground">ANTHROPIC_API_KEY = {(effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || '').split('\n')[0]?.substring(0, 12)}***</span>
+                    </div>
+                  )}
+                  {selectedClients.includes('codex') && (
+                    <div className="flex flex-col gap-0.5 p-2 rounded-lg bg-muted/30">
+                      <span className="text-muted-foreground text-[10px] font-sans">Codex → ~/.codex/config.toml + auth.json</span>
+                      <span className="text-foreground">base_url = "{effectiveBaseUrl}/v1"</span>
+                      <span className="text-foreground">OPENAI_API_KEY = {(effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || '').split('\n')[0]?.substring(0, 12)}***</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 执行按钮 */}
+              <Button
+                onClick={handleConfigureClients}
+                disabled={selectedClients.length === 0 || clientConfigLoading}
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                <Zap size={16} className="mr-1" />
+                {clientConfigLoading ? '配置中...' : `一键配置 ${selectedClients.length} 个客户端`}
+              </Button>
+
+              {/* 结果展示 */}
+              {clientConfigResults.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {clientConfigResults.map((result: any, idx: number) => (
+                    <div key={idx} className={`p-3 rounded-lg border ${result.success ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+                      <Text size="sm" fw={600} className={result.success ? 'text-green-600' : 'text-red-500'}>
+                        {result.success ? '✓' : '✗'} {result.client}
+                      </Text>
+                      {result.success && result.paths?.length > 0 && (
+                        <Text size="xs" className="text-muted-foreground font-mono mt-1">
+                          {result.paths.join(', ')}
+                        </Text>
+                      )}
+                      {result.error && (
+                        <Text size="xs" className="text-red-500 mt-1">{result.error}</Text>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </Stack>
     </div>
           </GatewayObservabilityProvider>

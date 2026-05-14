@@ -34,7 +34,7 @@ use commands::account_cmd::{
     add_account_by_idc, add_account_by_social, add_local_kiro_account, delete_account,
     delete_account_remote, delete_accounts, export_accounts, get_account_usage, get_accounts,
     get_accounts_by_group, get_accounts_by_tag, get_available_accounts, import_accounts,
-    list_available_models, refresh_account_token, sync_account, update_account, verify_account,
+    list_available_models, refresh_account_token, set_overage_status, sync_account, update_account, verify_account,
     check_token_status, check_all_tokens_status, refresh_all_expiring_tokens,
 };
 //应用设置
@@ -56,7 +56,7 @@ use commands::cli_config_cmd::{
 
 //网关反代
 use commands::gateway_cmd::{
-    clear_gateway_request_logs, get_gateway_config, get_gateway_log_dir, get_gateway_request_logs,
+    clear_gateway_request_logs, configure_proxy_clients, get_gateway_config, get_gateway_log_dir, get_gateway_request_logs,
     get_gateway_request_stats, get_gateway_model_stats, get_gateway_endpoint_stats,
     get_gateway_status, open_gateway_log_dir, save_gateway_config, start_gateway, stop_gateway,
 };
@@ -149,10 +149,12 @@ fn setup_log_plugin() -> tauri_plugin_log::Builder {
             let target = metadata.target();
             target.starts_with("kiro_account_manager")
         })
-        // 写入日志文件而不是控制台
-        .target(tauri_plugin_log::Target::new(
-            tauri_plugin_log::TargetKind::LogDir { file_name: Some("gateway".to_string()) }
-        ))
+        // 只写入日志文件，不输出到控制台/Webview
+        .targets([
+            tauri_plugin_log::Target::new(
+                tauri_plugin_log::TargetKind::LogDir { file_name: Some("gateway".to_string()) }
+            ),
+        ])
         // 日志轮转：每个文件最大 10MB，保留最近 5 个文件
         .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
         .max_file_size(10_000_000)
@@ -382,6 +384,7 @@ fn main() {
             get_accounts_by_group,
             get_accounts_by_tag,
             get_account_usage,
+            set_overage_status,
             // Token 状态检查命令
             check_token_status,
             check_all_tokens_status,
@@ -484,6 +487,7 @@ fn main() {
             get_gateway_endpoint_stats,
             open_gateway_log_dir,
             clear_gateway_request_logs,
+            configure_proxy_clients,
             // 缓存管理命令
             get_cache_config,
             get_cache_stats,
