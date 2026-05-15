@@ -833,6 +833,17 @@ pub async fn build_kiro_payload(
         system_prompt.push_str(&tool_docs);
     }
 
+    // Thinking 模式：在 system prompt 前注入 thinking 标签
+    // Kiro API 通过 system prompt 中的 <thinking_mode> 标签启用思考
+    if request.thinking.is_some() {
+        let thinking_prompt = "<thinking_mode>enabled</thinking_mode>\n<max_thinking_length>200000</max_thinking_length>";
+        system_prompt = if system_prompt.is_empty() {
+            thinking_prompt.to_string()
+        } else {
+            format!("{}\n\n{}", thinking_prompt, system_prompt)
+        };
+    }
+
     if other_messages.is_empty() {
         return Err("没有可发送的消息".to_string());
     }
