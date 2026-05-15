@@ -297,6 +297,112 @@ function GatewayConfig({
               </div>
             </div>
 
+            {/* 模型映射 */}
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                <div className="w-1 h-4 bg-purple-500 rounded-full"></div>
+                模型映射
+                <Badge variant="secondary" className="text-[10px]">{config.modelMappings?.length || 0}</Badge>
+              </div>
+              
+              <div className="border rounded-lg overflow-hidden">
+                {(!config.modelMappings || config.modelMappings.length === 0) ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    暂无映射规则，客户端请求的模型名将直接使用
+                  </div>
+                ) : (
+                  <div className="max-h-[200px] overflow-y-auto">
+                    {config.modelMappings.map((rule, idx) => (
+                      <div key={rule.id} className={`flex items-center gap-2 p-2.5 border-b last:border-b-0 hover:bg-muted/30 ${!rule.enabled ? 'opacity-50' : ''}`}>
+                        <Switch
+                          size="sm"
+                          checked={rule.enabled}
+                          onCheckedChange={(checked) => {
+                            const newMappings = [...config.modelMappings]
+                            newMappings[idx] = { ...newMappings[idx], enabled: checked }
+                            setField('modelMappings', newMappings)
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-medium truncate">{rule.name || rule.sourceModel}</span>
+                            <Badge variant="outline" className="text-[9px] px-1 py-0">{rule.ruleType}</Badge>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground font-mono truncate">
+                            {rule.sourceModel} → {rule.targetModels.join(', ')}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-[10px] text-red-500 hover:text-red-600"
+                          onClick={() => {
+                            const newMappings = config.modelMappings.filter((_, i) => i !== idx)
+                            setField('modelMappings', newMappings)
+                          }}
+                        >
+                          删除
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* 添加规则 */}
+                <div className="border-t p-2.5 bg-muted/20">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="源模型 (如 claude-sonnet-4)"
+                      className="h-7 text-xs flex-1"
+                      id="mapping-source"
+                    />
+                    <Input
+                      placeholder="目标模型 (如 claude-sonnet-4.5-thinking)"
+                      className="h-7 text-xs flex-1"
+                      id="mapping-target"
+                    />
+                    <Select defaultValue="replace">
+                      <SelectTrigger className="h-7 text-xs w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="replace">替换</SelectItem>
+                        <SelectItem value="alias">别名</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        const sourceEl = document.getElementById('mapping-source') as HTMLInputElement
+                        const targetEl = document.getElementById('mapping-target') as HTMLInputElement
+                        if (!sourceEl?.value || !targetEl?.value) return
+                        const newRule = {
+                          id: crypto.randomUUID(),
+                          name: `${sourceEl.value} → ${targetEl.value}`,
+                          enabled: true,
+                          ruleType: 'replace',
+                          sourceModel: sourceEl.value.trim(),
+                          targetModels: [targetEl.value.trim()],
+                          weights: []
+                        }
+                        setField('modelMappings', [...(config.modelMappings || []), newRule])
+                        sourceEl.value = ''
+                        targetEl.value = ''
+                      }}
+                    >
+                      <Plus size={12} className="mr-0.5" />
+                      添加
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="text-xs text-muted-foreground">
+                客户端请求的模型名会根据规则映射到实际模型，支持替换和别名
+              </div>
+            </div>
+
             {/* 账号路由 */}
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
