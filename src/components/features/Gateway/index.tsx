@@ -1,5 +1,5 @@
-import { startTransition, useCallback, useEffect, useMemo, useState } from 'react'
-import { Play, RotateCcw, Square, Zap, Save, ScrollText } from 'lucide-react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Play, Square, Zap, ScrollText } from 'lucide-react'
 import { Alert as AlertPrimitive, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -101,6 +101,36 @@ function GatewayPage() {
   const runtimeSnapshot = useMemo(() => buildGatewayRuntimeSnapshot(config), [config])
   const hasUnsavedChanges = configSnapshot !== savedConfigSnapshot
   const hasRuntimeChanges = !!status.running && !!appliedRuntimeSnapshot && runtimeSnapshot !== appliedRuntimeSnapshot
+
+  // 自动保存 + 自动重启（防抖 1.5 秒）
+  const autoSaveTimer = useRef<NodeJS.Timeout | null>(null)
+  const isInitialLoad = useRef(true)
+  useEffect(() => {
+    // 跳过初始加载
+    if (isInitialLoad.current) {
+      isInitialLoad.current = false
+      return
+    }
+    if (!hasUnsavedChanges) return
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(async () => {
+      try {
+        await saveGatewayConfig(config)
+        setSavedConfigSnapshot(buildGatewayConfigSnapshot(config))
+        if (status.running) {
+          await stopGateway()
+          const st = await startGateway(config)
+          const nextStatus = buildGatewayStatusState(st, st, config)
+          setStatus(nextStatus)
+          setAppliedRuntimeSnapshot(nextStatus.runtimeConfig ? buildGatewayRuntimeSnapshot(nextStatus.runtimeConfig) : buildGatewayRuntimeSnapshot(config))
+          setLastStatusSyncAt(formatGatewayTimestamp())
+        }
+      } catch (e) {
+        pushError(e)
+      }
+    }, 1500)
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
+  }, [configSnapshot])
   
   const effectiveConfig = useMemo(
     () => (status.running && status.runtimeConfig ? status.runtimeConfig : config),
@@ -450,15 +480,6 @@ function GatewayPage() {
               </Stack>
 
               <Group gap="xs">
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={!hasUnsavedChanges || hasFieldErrors || saving || loading}
-                >
-                  <Save size={14} className="mr-1" />
-                  {status.running ? '保存并重启' : '保存'}
-                </Button>
                 <Button
                   variant="outline"
                   size="sm"
