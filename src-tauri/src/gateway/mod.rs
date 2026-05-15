@@ -4,6 +4,7 @@ mod eventstream;
 pub(crate) mod load_balancer;
 pub mod log_store;
 mod models;
+pub mod prompt_cache;
 mod proxy;
 pub mod response_cache;
 mod stream;
@@ -878,8 +879,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
 
     // 初始化响应缓存
     let cache_config = response_cache::CacheConfig::default();
-    let cache_dir = std::env::current_dir()
-        .ok()
+    let cache_dir = dirs::data_dir()
         .map(|p| p.join(".kiro-account-manager").join("cache"));
     let response_cache = Arc::new(AsyncMutex::new(response_cache::ResponseCache::new(
         cache_config,
