@@ -72,11 +72,11 @@ function GatewayConfig({
           </div>
 
           <div className="flex flex-col gap-6 pt-2">
-            {/* 网络配置 */}
+            {/* 网络与路由 */}
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
                 <div className="w-1 h-4 bg-primary rounded-full"></div>
-                网络配置
+                网络与路由
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -120,6 +120,73 @@ function GatewayConfig({
                   {fieldErrors.region && <div className="text-xs text-red-500">{fieldErrors.region}</div>}
                 </div>
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label>账号来源</Label>
+                  <Select value={config.accountMode} onValueChange={(v) => setField('accountMode', v || 'single')}>
+                    <SelectTrigger className={fieldErrors.accountMode ? 'border-red-500' : ''}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">指定单账号</SelectItem>
+                      <SelectItem value="group">按分组账号池</SelectItem>
+                      <SelectItem value="pool">账号管理池（推荐）</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {fieldErrors.accountMode && <div className="text-xs text-red-500">{fieldErrors.accountMode}</div>}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label>路由策略</Label>
+                  <Select value={config.strategy} onValueChange={(v) => setField('strategy', v || 'round_robin')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="round_robin"><div className="flex items-center gap-2"><RotateCw size={14} /><span>轮询</span></div></SelectItem>
+                      <SelectItem value="balanced"><div className="flex items-center gap-2"><Scale size={14} /><span>均衡使用</span></div></SelectItem>
+                      <SelectItem value="most_quota"><div className="flex items-center gap-2"><TrendingUp size={14} /><span>优先剩余额度</span></div></SelectItem>
+                      <SelectItem value="random"><div className="flex items-center gap-2"><Shuffle size={14} /><span>随机</span></div></SelectItem>
+                      <SelectItem value="weighted_random"><div className="flex items-center gap-2"><Zap size={14} /><span>加权随机</span></div></SelectItem>
+                      <SelectItem value="least_connections"><div className="flex items-center gap-2"><Activity size={14} /><span>最少连接</span></div></SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {config.accountMode === 'single' && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>指定账号</Label>
+                  <Select value={config.accountId} onValueChange={(v) => setField('accountId', v)}>
+                    <SelectTrigger className={fieldErrors.accountId ? 'border-red-500' : ''}>
+                      <SelectValue placeholder="选择一个账号" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accountOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldErrors.accountId && <div className="text-xs text-red-500">{fieldErrors.accountId}</div>}
+                </div>
+              )}
+
+              {config.accountMode === 'group' && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>账号分组</Label>
+                  <Select value={config.groupId} onValueChange={(v) => setField('groupId', v)}>
+                    <SelectTrigger className={fieldErrors.groupId ? 'border-red-500' : ''}>
+                      <SelectValue placeholder="选择一个分组" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groupOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldErrors.groupId && <div className="text-xs text-red-500">{fieldErrors.groupId}</div>}
+                </div>
+              )}
             </div>
 
             {/* 客户端认证 */}

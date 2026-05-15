@@ -606,134 +606,81 @@ function GatewayPage() {
             <div className={`h-full overflow-y-auto p-4 glass-main`}>
               <Stack gap="md">
                 <Card className={`glass-card border border-border rounded-xl p-4`}>
-                  <Stack gap="sm">
-                    <Group justify="space-between" align="flex-start">
-                      <Stack gap={6}>
-                        <Text fw={700} className={"text-foreground"}>Kiro API 反代</Text>
-                        <Text size="sm" className={"text-muted-foreground"}>
-                          把入口状态、客户端接入、安全边界和观测线索压到一屏里，优先处理保存/启动/重启这几类主动作。
-                        </Text>
-                      </Stack>
-                      <Group gap="xs">
-                        <Badge color="indigo">Gateway Console</Badge>
-                        <Badge color={status.running ? 'green' : 'gray'}>{status.running ? '流量入口已在线' : '等待启动'}</Badge>
-                      </Group>
-                    </Group>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {consoleHighlights.map((item) => (
-                <Card key={item.label} className="border rounded-xl p-4">
-                  <Text size="xs" className={"text-muted-foreground"}>{item.label}</Text>
-                  <Text fw={700} className={"text-foreground"} mt={4}>{item.value}</Text>
-                  <Text size="sm" className={"text-muted-foreground"} mt={4}>{item.detail}</Text>
-                </Card>
-              ))}
-            </div>
-          </Stack>
-        </Card>
-
-        <Card className={`glass-card border border-border rounded-xl p-4`}>
           <Stack gap="sm">
             <Group justify="space-between" align="flex-start">
               <Stack gap={4}>
                 <Group gap="xs">
-                  <Badge color={status.running ? 'green' : 'gray'}>{status.running ? '反代运行中' : '反代未启动'}</Badge>
-                  <Badge color={effectiveConfig.localOnly ? 'teal' : 'yellow'}>{effectiveConfig.localOnly ? '仅本机访问' : '允许远程访问'}</Badge>
-                  <Badge variant="light" color={hasUnsavedChanges ? 'yellow' : 'teal'}>
-                    {hasUnsavedChanges ? '存在未保存配置' : '配置已保存'}
-                  </Badge>
+                  <Text fw={700} className={"text-foreground"}>Kiro API 反代</Text>
+                  <Badge color={status.running ? 'green' : 'gray'}>{status.running ? '运行中' : '已停止'}</Badge>
+                  <Badge color={effectiveConfig.localOnly ? 'teal' : 'yellow'}>{effectiveConfig.localOnly ? '本机' : '远程'}</Badge>
+                  {hasUnsavedChanges && <Badge variant="light" color="yellow">未保存</Badge>}
                 </Group>
-                <Text fw={700} className={"text-foreground"}>当前入口 {effectiveBaseUrl}</Text>
                 <Text size="sm" className={"text-muted-foreground"}>
-                  {effectiveRoutingSummary.modeLabel} · {effectiveRoutingSummary.selectionValue} · {effectiveSecuritySummary.apiKeyState}
+                  {effectiveBaseUrl} · {effectiveRoutingSummary.modeLabel} · {effectiveSecuritySummary.apiKeyState}
                 </Text>
               </Stack>
 
               <Group gap="xs">
                 <Button
                   variant="default"
+                  size="sm"
                   onClick={handleSave}
                   disabled={!hasUnsavedChanges || hasFieldErrors || saving || loading}
                 >
-                  <Activity size={16} className="mr-1" />
-                  保存配置
+                  保存
                 </Button>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => setShowClientConfig(!showClientConfig)}
-                  title="一键配置 Claude Code / Codex 等客户端"
+                  title="一键配置客户端"
                 >
-                  <Zap size={16} className="mr-1" />
+                  <Zap size={14} className="mr-1" />
                   配置客户端
                 </Button>
-                {status.running ? (
-                  <Button
-                    variant="ghost"
-                    onClick={handleRestart}
-                    disabled={hasFieldErrors || saving || loading}
-                  >
-                    <RotateCcw size={16} className="mr-1" />
-                    重启反代
-                  </Button>
-                ) : null}
                 {!status.running ? (
                   <Button
+                    size="sm"
                     onClick={handleStart}
                     disabled={hasFieldErrors || saving || loading}
                     className="bg-green-500 hover:bg-green-600 text-white"
                   >
-                    <Play size={16} className="mr-1" />
-                    启动反代
+                    <Play size={14} className="mr-1" />
+                    启动
                   </Button>
                 ) : (
-                  <Button
-                    onClick={handleStop}
-                    disabled={saving || loading}
-                    className="bg-red-500 hover:bg-red-600 text-white"
-                  >
-                    <Square size={16} className="mr-1" />
-                    停止反代
-                  </Button>
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRestart}
+                      disabled={hasFieldErrors || saving || loading}
+                    >
+                      <RotateCcw size={14} className="mr-1" />
+                      重启
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleStop}
+                      disabled={saving || loading}
+                      className="bg-red-500 hover:bg-red-600 text-white"
+                    >
+                      <Square size={14} className="mr-1" />
+                      停止
+                    </Button>
+                  </>
                 )}
               </Group>
             </Group>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="border rounded-xl p-4">
-                <Text size="xs" className={"text-muted-foreground"}>运行快照</Text>
-                <Text fw={700} className={"text-foreground"}>{statusSummary.listen}</Text>
-                <Text size="sm" className={"text-muted-foreground"} mt={4}>
-                  {statusSummary.routing} · {statusSummary.region}
-                </Text>
-              </Card>
-              <Card className="border rounded-xl p-4">
-                <Text size="xs" className={"text-muted-foreground"}>接入与鉴权</Text>
-                <Text fw={700} className={"text-foreground"}>{integrationSummary.endpointLabel}</Text>
-                <Text size="sm" className={"text-muted-foreground"} mt={4}>
-                  {integrationSummary.authLabel}
-                </Text>
-              </Card>
-              <Card className="border rounded-xl p-4">
-                <Text size="xs" className={"text-muted-foreground"}>最新风险</Text>
-                <Text fw={700} className={"text-foreground"}>
-                  {latestErrorEntry ? '最近有错误请求' : '最近未发现错误'}
-                </Text>
-                <Text size="sm" className={"text-muted-foreground"} mt={4}>
-                  {latestErrorEntry?.lastSeenAt || lastStatusSyncAt}
-                </Text>
-              </Card>
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
+              {consoleHighlights.map((item) => (
+                <div key={item.label} className="border rounded-lg p-2.5">
+                  <Text size="xs" className={"text-muted-foreground"}>{item.label}</Text>
+                  <Text fw={700} size="sm" className={"text-foreground"}>{item.value}</Text>
+                </div>
+              ))}
             </div>
-
-            <ThemedAlert
-              color={actionSummary.tone}
-              variant="light"
-              title={actionSummary.title}
-            >
-              <Text size="sm" className={"text-muted-foreground"}>
-                {actionSummary.description}
-              </Text>
-            </ThemedAlert>
-
           </Stack>
         </Card>
 
