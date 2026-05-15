@@ -36,9 +36,11 @@ interface GatewayRequestStats {
 interface RequestLogsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  logLevel: string
+  onLogLevelChange: (level: string) => void
 }
 
-export function RequestLogsDialog({ open, onOpenChange }: RequestLogsDialogProps) {
+export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChange }: RequestLogsDialogProps) {
   const [requestLogs, setRequestLogs] = useState<ProcessedRequestLog[]>([])
   const [requestStats, setRequestStats] = useState<GatewayRequestStats | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -154,6 +156,17 @@ export function RequestLogsDialog({ open, onOpenChange }: RequestLogsDialogProps
               <Button variant="outline" size="sm" className="h-7 px-2" onClick={async () => { await invoke('clear_gateway_request_logs'); setRequestLogs([]); setRequestStats(null) }} disabled={requestLogs.length === 0}>
                 清空
               </Button>
+              <select
+                className="text-xs border rounded px-2 py-1"
+                value={logLevel}
+                onChange={(e) => onLogLevelChange(e.target.value)}
+                title="日志级别"
+              >
+                <option value="debug">debug</option>
+                <option value="info">info</option>
+                <option value="warn">warn</option>
+                <option value="error">error</option>
+              </select>
               <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => fetchRequestLogs()} disabled={isRefreshing}>
                 <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
               </Button>

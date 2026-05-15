@@ -228,19 +228,11 @@ function GatewayConfig({
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setField('threshold', Number(e.target.value) || 90)}
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>日志级别</Label>
-                  <Select value={config.logLevel} onValueChange={(v: string) => setField('logLevel', v || 'debug')}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="debug">debug</SelectItem>
-                      <SelectItem value="info">info</SelectItem>
-                      <SelectItem value="warn">warn</SelectItem>
-                      <SelectItem value="error">error</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+                  <div className="flex flex-col gap-0.5">
+                    <Label className="text-xs">自动启动</Label>
+                  </div>
+                  <Switch checked={!!config.enabled} onCheckedChange={handleAutoStartToggle} />
                 </div>
               </div>
 
