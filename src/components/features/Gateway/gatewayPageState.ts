@@ -16,6 +16,17 @@ export interface GatewayConfig {
   localOnly: boolean;
   allowedIpsText: string;
   logLevel: string;
+  modelMappings: ModelMappingRule[];
+}
+
+export interface ModelMappingRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  ruleType: string;
+  sourceModel: string;
+  targetModels: string[];
+  weights: number[];
 }
 
 export interface GatewayStatus {
@@ -41,7 +52,8 @@ export const DEFAULT_GATEWAY_CONFIG: GatewayConfig = {
   threshold: 90,
   localOnly: true,
   allowedIpsText: '',
-  logLevel: 'debug'
+  logLevel: 'debug',
+  modelMappings: []
 }
 
 export const DEFAULT_GATEWAY_STATUS: GatewayStatus = {
@@ -67,7 +79,8 @@ export const buildGatewayConfigSnapshot = (config: GatewayConfig) => JSON.string
   threshold: Number(config.threshold) || 90,
   localOnly: !!config.localOnly,
   allowedIpsText: config.allowedIpsText || '',
-  logLevel: config.logLevel || 'debug'
+  logLevel: config.logLevel || 'debug',
+  modelMappings: config.modelMappings || []
 })
 
 export const buildGatewayRuntimeSnapshot = (config: GatewayConfig) => JSON.stringify({
@@ -83,7 +96,8 @@ export const buildGatewayRuntimeSnapshot = (config: GatewayConfig) => JSON.strin
   threshold: Number(config.threshold) || 90,
   localOnly: !!config.localOnly,
   allowedIpsText: config.allowedIpsText || '',
-  logLevel: config.logLevel || 'debug'
+  logLevel: config.logLevel || 'debug',
+  modelMappings: config.modelMappings || []
 })
 
 export const hydrateGatewayConfig = (gatewayConfig: any): GatewayConfig => ({
@@ -111,7 +125,8 @@ export const hydrateGatewayConfig = (gatewayConfig: any): GatewayConfig => ({
   allowedIpsText: Array.isArray(gatewayConfig?.allowedIps)
     ? gatewayConfig.allowedIps.join('\n')
     : '',
-  logLevel: gatewayConfig?.logLevel || 'debug'
+  logLevel: gatewayConfig?.logLevel || 'debug',
+  modelMappings: Array.isArray(gatewayConfig?.modelMappings) ? gatewayConfig.modelMappings : []
 })
 
 export const buildGatewayStatusState = (gatewayStatus: any, gatewayConfig: any, fallbackConfig: GatewayConfig = DEFAULT_GATEWAY_CONFIG): GatewayStatus => ({
@@ -141,7 +156,8 @@ export const buildGatewayPayload = (config: GatewayConfig) => ({
   threshold: Number(config.threshold) || 90,
   localOnly: !!config.localOnly,
   allowedIps: parseAllowedIps(config.allowedIpsText),
-  logLevel: config.logLevel
+  logLevel: config.logLevel,
+  modelMappings: config.modelMappings || []
 })
 
 export const loadGatewayPageData = async () => {

@@ -1183,7 +1183,7 @@ pub async fn proxy_handler(
         .await;
     }
 
-    let request = match normalize_request(format, &payload) {
+    let mut request = match normalize_request(format, &payload) {
         Ok(request) => request,
         Err(message) => {
             let sanitized = sanitize_error(&message);
@@ -1201,6 +1201,13 @@ pub async fn proxy_handler(
             .await;
         }
     };
+
+    // 模型映射：根据规则替换请求的模型名
+    let original_model = request.model.clone();
+    request.model = super::resolve_model_mapping(&state.config, &request.model);
+    if request.model != original_model {
+        log::info!("[模型映射] {} → {}", original_model, request.model);
+    }
 
     // 添加详细的请求日志（参考 Kiro-account-manager 的日志设计）
     let messages_count = request.messages.len();

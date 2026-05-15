@@ -90,6 +90,76 @@ pub struct GatewayConfig {
     pub allowed_ips: Vec<String>,
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    #[serde(default)]
+    pub model_mappings: Vec<ModelMappingRule>,
+}
+
+/// 模型映射规则
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelMappingRule {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_true_val")]
+    pub enabled: bool,
+    /// replace | alias | loadbalance
+    #[serde(default = "default_mapping_type")]
+    pub rule_type: String,
+    pub source_model: String,
+    pub target_models: Vec<String>,
+    #[serde(default)]
+    pub weights: Vec<u32>,
+}
+
+fn default_true_val() -> bool { true }
+fn default_mapping_type() -> String { "replace".to_string() }
+
+/// 根据模型映射规则解析实际模型名
+pub fn resolve_model_mapping(config: &GatewayConfig, requested_model: &str) -> String {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static ROUND_ROBIN: AtomicUsize = AtomicUsize::new(0);
+
+    for rule in &config.model_mappings {
+        if !rule.enabled {
+            continue;
+        }
+        if rule.source_model != requested_model {
+            continue;
+        }
+        if rule.target_models.is_empty() {
+            continue;
+        }
+
+        match rule.rule_type.as_str() {
+            "replace" | "alias" => {
+                return rule.target_models[0].clone();
+            }
+            "loadbalance" => {
+                if rule.weights.is_empty() || rule.weights.len() != rule.target_models.len() {
+                    // 无权重或权重数量不匹配，简单轮询
+                    let idx = ROUND_ROBIN.fetch_add(1, Ordering::Relaxed) % rule.target_models.len();
+                    return rule.target_models[idx].clone();
+                }
+                // 加权轮询
+                let total_weight: u32 = rule.weights.iter().sum();
+                if total_weight == 0 {
+                    return rule.target_models[0].clone();
+                }
+                let tick = ROUND_ROBIN.fetch_add(1, Ordering::Relaxed) as u32 % total_weight;
+                let mut cumulative = 0u32;
+                for (i, &w) in rule.weights.iter().enumerate() {
+                    cumulative += w;
+                    if tick < cumulative {
+                        return rule.target_models[i].clone();
+                    }
+                }
+                return rule.target_models[0].clone();
+            }
+            _ => {}
+        }
+    }
+
+    requested_model.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -278,6 +348,7 @@ impl Default for GatewayConfig {
             local_only: default_local_only(),
             allowed_ips: Vec::new(),
             log_level: default_log_level(),
+            model_mappings: Vec::new(),
         }
     }
 }
