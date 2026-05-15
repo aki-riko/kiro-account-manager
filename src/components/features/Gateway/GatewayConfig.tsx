@@ -52,20 +52,16 @@ function GatewayConfig({
   handleAutoStartToggle}: GatewayConfigProps) {
   const [showModelMappingDialog, setShowModelMappingDialog] = useState(false)
 
-  // 常用模型列表（用于下拉选择）— 与后端 converter.rs 同步
+  // Claude 模型列表（用于映射规则下拉选择）
   const AVAILABLE_MODELS = [
     'claude-opus-4.7',
     'claude-opus-4.6',
     'claude-sonnet-4.6',
     'claude-opus-4.5',
     'claude-sonnet-4.5',
+    'claude-sonnet-4.5-thinking',
     'claude-haiku-4.5',
     'claude-sonnet-4',
-    'deepseek-3.2',
-    'minimax-m2.5',
-    'glm-5',
-    'qwen3-coder-next',
-    'auto',
   ]
 
   return (
