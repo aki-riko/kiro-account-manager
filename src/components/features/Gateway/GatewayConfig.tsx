@@ -394,135 +394,17 @@ function GatewayConfig({
               </div>
             </div>
 
-            {/* 账号路由 */}
+            {/* 安全与高级 */}
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
                 <div className="w-1 h-4 bg-primary rounded-full"></div>
-                账号路由
+                安全与高级
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label>账号来源</Label>
-                  <Select value={config.accountMode} onValueChange={(v) => setField('accountMode', v || 'single')}>
-                    <SelectTrigger className={fieldErrors.accountMode ? 'border-red-500' : ''}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="single">指定单账号</SelectItem>
-                      <SelectItem value="group">按分组账号池</SelectItem>
-                      <SelectItem value="pool">账号管理池（推荐）</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {fieldErrors.accountMode && <div className="text-xs text-red-500">{fieldErrors.accountMode}</div>}
-                  <div className="text-xs text-muted-foreground">
-                    {config.accountMode === 'single' && '固定使用一个账号'}
-                    {config.accountMode === 'group' && '使用指定分组的账号'}
-                    {config.accountMode === 'pool' && '使用所有可用账号，最大化资源利用'}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <Label>路由策略</Label>
-                  <Select value={config.strategy} onValueChange={(v) => setField('strategy', v || 'round_robin')}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="round_robin">
-                        <div className="flex items-center gap-2">
-                          <RotateCw size={14} />
-                          <span>轮询</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="balanced">
-                        <div className="flex items-center gap-2">
-                          <Scale size={14} />
-                          <span>均衡使用</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="most_quota">
-                        <div className="flex items-center gap-2">
-                          <TrendingUp size={14} />
-                          <span>优先剩余额度</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="random">
-                        <div className="flex items-center gap-2">
-                          <Shuffle size={14} />
-                          <span>随机</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="weighted_random">
-                        <div className="flex items-center gap-2">
-                          <Zap size={14} />
-                          <span>加权随机</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="least_connections">
-                        <div className="flex items-center gap-2">
-                          <Activity size={14} />
-                          <span>最少连接</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <div className="text-xs text-muted-foreground">
-                    {config.strategy === 'balanced' && '优先使用成功次数最少的账号'}
-                    {config.strategy === 'round_robin' && '按顺序轮流使用账号'}
-                    {config.strategy === 'most_quota' && '优先使用剩余配额最多的账号'}
-                    {config.strategy === 'random' && '随机选择账号'}
-                    {config.strategy === 'weighted_random' && '根据健康分数加权随机'}
-                    {config.strategy === 'least_connections' && '优先使用活跃连接最少的账号'}
-                  </div>
-                </div>
-              </div>
-
-              {config.accountMode === 'single' && (
-                <div className="flex flex-col gap-1.5">
-                  <Label>指定账号</Label>
-                  <Select value={config.accountId} onValueChange={(v) => setField('accountId', v)}>
-                    <SelectTrigger className={fieldErrors.accountId ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="选择一个账号" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accountOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {fieldErrors.accountId && <div className="text-xs text-red-500">{fieldErrors.accountId}</div>}
-                </div>
-              )}
-
-              {config.accountMode === 'group' && (
-                <div className="flex flex-col gap-1.5">
-                  <Label>账号分组</Label>
-                  <Select value={config.groupId} onValueChange={(v) => setField('groupId', v)}>
-                    <SelectTrigger className={fieldErrors.groupId ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="选择一个分组" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groupOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {fieldErrors.groupId && <div className="text-xs text-red-500">{fieldErrors.groupId}</div>}
-                </div>
-              )}
-            </div>
-
-            {/* 安全与访问 */}
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                <div className="w-1 h-4 bg-primary rounded-full"></div>
-                安全与访问
-              </div>
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
-                  <div className="flex flex-col gap-1">
-                    <Label>仅本机访问（推荐）</Label>
-                    <div className="text-xs text-muted-foreground">开启后只允许 127.0.0.1/::1 访问，拒绝局域网其他设备</div>
+                  <div className="flex flex-col gap-0.5">
+                    <Label className="text-xs">仅本机访问</Label>
+                    <div className="text-[10px] text-muted-foreground">只允许 127.0.0.1 访问</div>
                   </div>
                   <Switch
                     checked={!!config.localOnly}
@@ -531,31 +413,6 @@ function GatewayConfig({
                     }}
                   />
                 </div>
-
-                {!config.localOnly && (
-                  <div className="flex flex-col gap-1.5">
-                    <Label>IP 白名单（允许远程访问）</Label>
-                    <div className="text-xs text-muted-foreground">允许局域网其他设备访问，支持单个 IP 或 CIDR，每行或逗号分隔</div>
-                    <Textarea
-                      placeholder={'192.168.1.10\n10.0.0.0/24'}
-                      rows={2}
-                      value={config.allowedIpsText}
-                      onChange={(e) => setField('allowedIpsText', e.target.value)}
-                      className={fieldErrors.allowedIpsText ? 'border-red-500' : ''}
-                    />
-                    {fieldErrors.allowedIpsText && <div className="text-xs text-red-500">{fieldErrors.allowedIpsText}</div>}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 高级选项 */}
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                <div className="w-1 h-4 bg-primary rounded-full"></div>
-                高级选项
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <Label>切换阈值 (%)</Label>
                   <Input
@@ -565,9 +422,7 @@ function GatewayConfig({
                     max={100}
                     onChange={(e) => setField('threshold', Number(e.target.value) || 90)}
                   />
-                  <div className="text-xs text-muted-foreground">账号使用率达到该值时切换</div>
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <Label>日志级别</Label>
                   <Select value={config.logLevel} onValueChange={(v) => setField('logLevel', v || 'debug')}>
@@ -582,50 +437,50 @@ function GatewayConfig({
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
-                  <div className="flex flex-col gap-1">
-                    <Label>自动启动</Label>
-                    <div className="text-xs text-muted-foreground">应用启动时自动启动反代</div>
-                  </div>
-                  <Switch
-                    checked={!!config.enabled}
-                    onCheckedChange={handleAutoStartToggle}
-                  />
-                </div>
               </div>
 
-              {/* 提示词过滤 */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              {!config.localOnly && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>IP 白名单</Label>
+                  <Textarea
+                    placeholder={'192.168.1.10\n10.0.0.0/24'}
+                    rows={2}
+                    value={config.allowedIpsText}
+                    onChange={(e) => setField('allowedIpsText', e.target.value)}
+                    className={fieldErrors.allowedIpsText ? 'border-red-500' : ''}
+                  />
+                  {fieldErrors.allowedIpsText && <div className="text-xs text-red-500">{fieldErrors.allowedIpsText}</div>}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+                  <div className="flex flex-col gap-0.5">
+                    <Label className="text-xs">自动启动</Label>
+                    <div className="text-[10px] text-muted-foreground">应用启动时自动启动</div>
+                  </div>
+                  <Switch checked={!!config.enabled} onCheckedChange={handleAutoStartToggle} />
+                </div>
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                   <div className="flex flex-col gap-0.5">
                     <Label className="text-xs">Claude Code 精简</Label>
-                    <div className="text-[10px] text-muted-foreground">替换巨大系统提示为精简版</div>
+                    <div className="text-[10px] text-muted-foreground">替换巨大系统提示</div>
                   </div>
-                  <Switch
-                    checked={!!config.filterClaudeCode}
-                    onCheckedChange={(checked) => setField('filterClaudeCode', checked)}
-                  />
+                  <Switch checked={!!config.filterClaudeCode} onCheckedChange={(checked) => setField('filterClaudeCode', checked)} />
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                   <div className="flex flex-col gap-0.5">
                     <Label className="text-xs">去除边界标记</Label>
-                    <div className="text-[10px] text-muted-foreground">去掉 SYSTEM PROMPT 边界行</div>
+                    <div className="text-[10px] text-muted-foreground">去掉 SYSTEM PROMPT 行</div>
                   </div>
-                  <Switch
-                    checked={!!config.filterStripBoundaries}
-                    onCheckedChange={(checked) => setField('filterStripBoundaries', checked)}
-                  />
+                  <Switch checked={!!config.filterStripBoundaries} onCheckedChange={(checked) => setField('filterStripBoundaries', checked)} />
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                   <div className="flex flex-col gap-0.5">
                     <Label className="text-xs">去除环境噪音</Label>
-                    <div className="text-[10px] text-muted-foreground">去掉 git status 等噪音行</div>
+                    <div className="text-[10px] text-muted-foreground">去掉 git status 等</div>
                   </div>
-                  <Switch
-                    checked={!!config.filterEnvNoise}
-                    onCheckedChange={(checked) => setField('filterEnvNoise', checked)}
-                  />
+                  <Switch checked={!!config.filterEnvNoise} onCheckedChange={(checked) => setField('filterEnvNoise', checked)} />
                 </div>
               </div>
             </div>
