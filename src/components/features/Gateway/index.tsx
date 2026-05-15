@@ -530,6 +530,27 @@ function GatewayPage() {
           handleAutoStartToggle={handleAutoStartToggle}
         />
 
+        {/* API 端点说明 */}
+        <Card className="glass-card border border-border rounded-xl p-4">
+          <Text fw={600} size="sm" className="text-foreground mb-3">API 端点</Text>
+          <div className="space-y-1 text-xs font-mono">
+            {[
+              { method: 'POST', path: '/v1/messages', desc: 'Claude Messages API' },
+              { method: 'POST', path: '/v1/chat/completions', desc: 'OpenAI Chat API' },
+              { method: 'POST', path: '/v1/responses', desc: 'OpenAI Responses API' },
+              { method: 'POST', path: '/mcp', desc: 'MCP 工具调用' },
+              { method: 'GET', path: '/v1/models', desc: '模型列表' },
+              { method: 'GET', path: '/health', desc: '健康检查' },
+            ].map(ep => (
+              <div key={ep.path} className="flex items-center gap-2 py-0.5">
+                <span className={`w-10 text-center ${ep.method === 'GET' ? 'text-green-500' : 'text-orange-500'}`}>{ep.method}</span>
+                <code className="flex-1 text-muted-foreground">{ep.path}</code>
+                <span className="text-muted-foreground text-[10px] font-sans">{ep.desc}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
         <RequestLogsDialog open={showRequestLogs} onOpenChange={setShowRequestLogs} logLevel={config.logLevel} onLogLevelChange={(v) => setField('logLevel', v)} logRequests={config.logRequests} onLogRequestsChange={(v) => setField('logRequests', v)} />
 
         {/* 快速配置客户端弹窗 */}
