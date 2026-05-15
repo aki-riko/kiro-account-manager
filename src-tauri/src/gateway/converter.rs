@@ -477,84 +477,71 @@ fn string_array_from_values(values: &[Value]) -> Vec<String> {
 }
 
 pub fn get_internal_model_id(external_model: &str) -> Result<String, String> {
-    // 最后更新：2026-05-10
-    // 模型映射基于 Kiro ListAvailableModels API 实际返回
-    // OpenAI 模型列表参考：https://developers.openai.com/api/docs/models/all
-    let normalized_model = normalize_external_model_alias(external_model);
-    let model_id = match normalized_model.as_str() {
-        // ============================================================
-        // OpenAI GPT 模型映射到 Claude（仅当前可用模型）
-        // ============================================================
-        // GPT-5.5 系列（最新旗舰）-> Opus 4.7
-        "gpt-5.5" | "gpt-5.5-pro" => "claude-opus-4.7",
-        // GPT-5.4 系列 -> Opus/Sonnet 4.6
-        "gpt-5.4" | "gpt-5.4-pro" => "claude-opus-4.6",
-        "gpt-5.4-mini" => "claude-sonnet-4.6",
-        "gpt-5.4-nano" => "claude-sonnet-4.5",
-        // GPT-5 系列 -> Opus/Sonnet 4.5
-        "gpt-5" | "gpt-5-pro" => "claude-opus-4.5",
-        "gpt-5-mini" | "gpt-5-nano" => "claude-sonnet-4.5",
-        // ============================================================
-        // OpenAI Codex 模型映射
-        // ============================================================
-        "gpt-5.3-codex" => "claude-opus-4.6",
-        "gpt-5.2-codex" | "gpt-5.1-codex" | "gpt-5.1-codex-max" => "claude-opus-4.5",
-        "gpt-5.1-codex-mini" | "gpt-5-codex" => "claude-sonnet-4.5",
-        // ============================================================
-        // Claude 4.7 系列（目前仅 Opus 存在）
-        // ============================================================
-        "claude-opus-4-7" | "claude-opus-4.7" | "opus-4-7" | "opus" => "claude-opus-4.7",
-        "claude-opus-4-7-thinking" | "claude-opus-4.7-thinking" => "claude-opus-4.7",
+    let normalized = normalize_external_model_alias(external_model);
 
-        // Claude 4.6 系列（Opus 和 Sonnet）
-        // ============================================================
-        "claude-opus-4-6" | "claude-opus-4.6" | "opus-4-6" => "claude-opus-4.6",
-        "claude-opus-4-6-thinking" | "claude-opus-4.6-thinking" => "claude-opus-4.6",
-        "claude-sonnet-4-6" | "claude-sonnet-4.6" | "sonnet-4-6" | "sonnet" => "claude-sonnet-4.6",
-        "claude-sonnet-4-6-thinking" | "claude-sonnet-4.6-thinking" => "claude-sonnet-4.6",
-        // ============================================================
-        // Claude 4.5 系列
-        // ============================================================
-        "claude-opus-4-5" | "claude-opus-4.5" => "claude-opus-4.5",
-        "claude-opus-4-5-thinking" | "claude-opus-4.5-thinking" => "claude-opus-4.5",
-        "claude-sonnet-4-5" | "claude-sonnet-4.5" | "claude-sonnet-latest" => "claude-sonnet-4.5",
-        "claude-sonnet-4-5-thinking" | "claude-sonnet-4.5-thinking" => "claude-sonnet-4.5",
-        "claude-haiku-4-5" | "claude-haiku-4.5" | "haiku-4-5" | "haiku" => "claude-haiku-4.5",
-        "claude-haiku-4-5-thinking" | "claude-haiku-4.5-thinking" => "claude-haiku-4.5",
-        // ============================================================
-        // Claude 4 系列
-        // ============================================================
-        "claude-sonnet-4" => "claude-sonnet-4",
-        "claude-sonnet-4-thinking" => "claude-sonnet-4",
-        // ============================================================
-        // 开源模型
-        // ============================================================
-        "deepseek-3-2" | "deepseek-3.2" | "deepseek" => "deepseek-3.2",
-        "minimax-m2-5" | "minimax-m2.5" | "minimax" => "minimax-m2.5",
-        "minimax-m2-1" | "minimax-m2.1" => "minimax-m2.1",
-        "glm-5" | "glm5" => "glm-5",
-        "qwen3-coder-next" | "qwen3-coder" | "qwen3" | "qwen" => "qwen3-coder-next",
-        // ============================================================
-        // 特殊模式
-        // ============================================================
-        "auto" | "default" => "auto",
-        // ============================================================
-        // 前缀匹配（支持未来版本和带日期后缀的公开模型名）
-        // ============================================================
-        other if other.starts_with("gpt-5.5-") => "claude-opus-4.7",
-        other if other.starts_with("gpt-5.4-") => "claude-opus-4.6",
-        other if other.starts_with("gpt-5-") => "claude-opus-4.5",
-        // Anthropic 公开模型名带日期后缀的变体：claude-sonnet-4-5-20250929 等
-        other if other.starts_with("claude-opus-4-7-") => "claude-opus-4.7",
-        other if other.starts_with("claude-opus-4-6-") => "claude-opus-4.6",
-        other if other.starts_with("claude-opus-4-5-") => "claude-opus-4.5",
-        other if other.starts_with("claude-sonnet-4-6-") => "claude-sonnet-4.6",
-        other if other.starts_with("claude-sonnet-4-5-") => "claude-sonnet-4.5",
-        other if other.starts_with("claude-haiku-4-5-") => "claude-haiku-4.5",
-        other => other,
+    // 1. 特殊别名（简写 / latest / 特殊值）
+    let model_id = match normalized.as_str() {
+        "auto" | "default" => return Ok("auto".to_string()),
+        "opus" | "opus-4-7" => return Ok("claude-opus-4.7".to_string()),
+        "sonnet" | "sonnet-4-6" => return Ok("claude-sonnet-4.6".to_string()),
+        "haiku" | "haiku-4-5" => return Ok("claude-haiku-4.5".to_string()),
+        "claude-sonnet-latest" => return Ok("claude-sonnet-4.5".to_string()),
+        // 开源模型别名
+        "deepseek-3-2" | "deepseek-3.2" | "deepseek" => return Ok("deepseek-3.2".to_string()),
+        "minimax-m2-5" | "minimax-m2.5" | "minimax" => return Ok("minimax-m2.5".to_string()),
+        "minimax-m2-1" | "minimax-m2.1" => return Ok("minimax-m2.1".to_string()),
+        "glm-5" | "glm5" => return Ok("glm-5".to_string()),
+        "qwen3-coder-next" | "qwen3-coder" | "qwen3" | "qwen" => return Ok("qwen3-coder-next".to_string()),
+        _ => &normalized,
     };
 
-    Ok(model_id.to_string())
+    // 2. 正则归一化：Anthropic 公开格式 → Kiro 内部格式
+    //    claude-{family}-{major}-{minor}[-thinking][-日期] → claude-{family}-{major}.{minor}
+    Ok(normalize_claude_model_format(model_id))
+}
+
+/// 将 Anthropic 公开模型名归一化为 Kiro 内部格式
+///
+/// 规则：
+/// - 去掉 -thinking 后缀
+/// - 去掉日期后缀 -20xxxxxx（8位数字）
+/// - 版本号横杠转点号：claude-{family}-{major}-{minor} → claude-{family}-{major}.{minor}
+/// - 已经是点号格式的直接返回
+fn normalize_claude_model_format(model: &str) -> String {
+    let mut s = model.to_string();
+
+    // 去掉 -thinking 后缀
+    if let Some(stripped) = s.strip_suffix("-thinking") {
+        s = stripped.to_string();
+    }
+
+    // 去掉日期后缀（-20xxxxxx，8位数字）
+    if s.len() > 9 {
+        let tail = &s[s.len() - 9..];
+        if tail.starts_with('-') && tail[1..].chars().all(|c| c.is_ascii_digit()) && tail[1..].starts_with("20") {
+            s.truncate(s.len() - 9);
+        }
+    }
+
+    // 版本号横杠转点号：claude-{family}-{major}-{minor} → claude-{family}-{major}.{minor}
+    // 匹配模式：末尾是 -{digit}-{digit} 的情况
+    if let Some(last_dash) = s.rfind('-') {
+        let after_last = &s[last_dash + 1..];
+        if after_last.len() == 1 && after_last.chars().all(|c| c.is_ascii_digit()) {
+            // 检查倒数第二个 dash 后面是否也是单个数字
+            let prefix = &s[..last_dash];
+            if let Some(second_last_dash) = prefix.rfind('-') {
+                let between = &prefix[second_last_dash + 1..];
+                if between.len() == 1 && between.chars().all(|c| c.is_ascii_digit()) {
+                    // claude-opus-4-7 → claude-opus-4.7
+                    let base = &s[..second_last_dash + 1 + between.len()];
+                    return format!("{}.{}", base, after_last);
+                }
+            }
+        }
+    }
+
+    s
 }
 
 /// 带降级的模型映射函数
