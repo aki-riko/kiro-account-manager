@@ -159,6 +159,9 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
               <Button variant="outline" size="sm" className="h-7 px-2" onClick={async () => { await invoke('clear_gateway_request_logs'); setRequestLogs([]); setRequestStats(null) }} disabled={requestLogs.length === 0}>
                 清空
               </Button>
+              <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => invoke('open_gateway_log_dir')} title="打开日志目录">
+                📂
+              </Button>
               <div className="flex items-center gap-1.5">
                 <Switch size="sm" checked={logRequests} onCheckedChange={onLogRequestsChange} />
                 <span className="text-xs text-muted-foreground">记录</span>
