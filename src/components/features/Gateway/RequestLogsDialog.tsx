@@ -67,7 +67,6 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
   })
 
   const fetchRequestLogs = async (limit?: number) => {
-    if (!open) return
     setIsRefreshing(true)
     try {
       const [logs, stats] = await Promise.all([

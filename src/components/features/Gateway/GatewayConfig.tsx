@@ -84,11 +84,41 @@ function GatewayConfig({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="us-east-1">us-east-1</SelectItem>
-                      <SelectItem value="eu-central-1">eu-central-1</SelectItem>
+                      <SelectItem value="us-east-2">us-east-2</SelectItem>
+                      <SelectItem value="us-west-1">us-west-1</SelectItem>
                       <SelectItem value="us-west-2">us-west-2</SelectItem>
+                      <SelectItem value="eu-central-1">eu-central-1</SelectItem>
+                      <SelectItem value="eu-central-2">eu-central-2</SelectItem>
+                      <SelectItem value="eu-west-1">eu-west-1</SelectItem>
+                      <SelectItem value="eu-west-2">eu-west-2</SelectItem>
+                      <SelectItem value="eu-west-3">eu-west-3</SelectItem>
+                      <SelectItem value="eu-north-1">eu-north-1</SelectItem>
+                      <SelectItem value="eu-south-1">eu-south-1</SelectItem>
+                      <SelectItem value="eu-south-2">eu-south-2</SelectItem>
                       <SelectItem value="ap-northeast-1">ap-northeast-1</SelectItem>
+                      <SelectItem value="ap-northeast-2">ap-northeast-2</SelectItem>
+                      <SelectItem value="ap-northeast-3">ap-northeast-3</SelectItem>
                       <SelectItem value="ap-southeast-1">ap-southeast-1</SelectItem>
+                      <SelectItem value="ap-southeast-2">ap-southeast-2</SelectItem>
+                      <SelectItem value="ap-southeast-3">ap-southeast-3</SelectItem>
+                      <SelectItem value="ap-southeast-4">ap-southeast-4</SelectItem>
+                      <SelectItem value="ap-southeast-5">ap-southeast-5</SelectItem>
+                      <SelectItem value="ap-southeast-7">ap-southeast-7</SelectItem>
+                      <SelectItem value="ap-south-1">ap-south-1</SelectItem>
+                      <SelectItem value="ap-south-2">ap-south-2</SelectItem>
+                      <SelectItem value="ap-east-1">ap-east-1</SelectItem>
+                      <SelectItem value="af-south-1">af-south-1</SelectItem>
+                      <SelectItem value="ca-central-1">ca-central-1</SelectItem>
+                      <SelectItem value="ca-west-1">ca-west-1</SelectItem>
+                      <SelectItem value="sa-east-1">sa-east-1</SelectItem>
+                      <SelectItem value="me-south-1">me-south-1</SelectItem>
+                      <SelectItem value="me-central-1">me-central-1</SelectItem>
+                      <SelectItem value="il-central-1">il-central-1</SelectItem>
+                      <SelectItem value="mx-central-1">mx-central-1</SelectItem>
                       <SelectItem value="us-gov-west-1">us-gov-west-1</SelectItem>
+                      <SelectItem value="us-gov-east-1">us-gov-east-1</SelectItem>
+                      <SelectItem value="cn-north-1">cn-north-1</SelectItem>
+                      <SelectItem value="cn-northwest-1">cn-northwest-1</SelectItem>
                     </SelectContent>
                   </Select>
                   {fieldErrors.region && <div className="text-xs text-red-500">{fieldErrors.region}</div>}

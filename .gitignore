@@ -48,3 +48,6 @@ src-tauri/clippy_warnings.txt
 .tmp/
 
 .breezell/
+
+vite.config.js.timestamp-*
+src-tauri/debug_responses/
