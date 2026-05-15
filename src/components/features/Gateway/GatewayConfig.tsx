@@ -1,5 +1,5 @@
+import React, { useState } from 'react'
 import { Server, Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity, Copy } from 'lucide-react'
-import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { GatewaySurfaceCard } from './GatewayShared'
 import ModelMappingDialog from './ModelMappingDialog'
-import React from 'react'
+import ApiKeysDialog from './ApiKeysDialog'
 
 interface GatewayConfigProps {
   colors: any;
@@ -47,8 +47,10 @@ function GatewayConfig({
   applyGatewayLocalOnlyChange,
   createGeneratedApiKey,
   handleSaveConfig,
-  handleAutoStartToggle}: GatewayConfigProps) {
+  handleAutoStartToggle,
+}: GatewayConfigProps) {
   const [showModelMappingDialog, setShowModelMappingDialog] = useState(false)
+  const [showApiKeysDialog, setShowApiKeysDialog] = useState(false)
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -57,7 +59,7 @@ function GatewayConfig({
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Server size={16} />
-              <div className={`font-semibold text-foreground`}>网关配置</div>
+              <div className="font-semibold text-foreground">网关配置</div>
             </div>
             <div className="flex items-center gap-2">
               {hasFieldErrors ? <Badge variant="destructive">配置待修正</Badge> : null}
@@ -65,12 +67,12 @@ function GatewayConfig({
             </div>
           </div>
 
-          <div className={`text-sm text-muted-foreground`}>
+          <div className="text-sm text-muted-foreground">
             配置监听地址、账号路由、安全策略等核心参数
           </div>
 
           <div className="flex flex-col gap-6 pt-2">
-            {/* 网络与路由 */}
+            {/* Section 1: 网络与路由 */}
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
                 <div className="w-1 h-4 bg-primary rounded-full"></div>
@@ -81,12 +83,11 @@ function GatewayConfig({
                   <Label>监听地址</Label>
                   <Input
                     value={config.host}
-                    onChange={(e) => setField('host', e.target.value || '127.0.0.1')}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setField('host', e.target.value || '127.0.0.1')}
                     className={fieldErrors.host ? 'border-red-500' : ''}
                   />
                   {fieldErrors.host && <div className="text-xs text-red-500">{fieldErrors.host}</div>}
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <Label>端口</Label>
                   <Input
@@ -94,15 +95,14 @@ function GatewayConfig({
                     value={config.port}
                     min={1}
                     max={65535}
-                    onChange={(e) => setField('port', Number(e.target.value) || 8765)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setField('port', Number(e.target.value) || 8765)}
                     className={fieldErrors.port ? 'border-red-500' : ''}
                   />
                   {fieldErrors.port && <div className="text-xs text-red-500">{fieldErrors.port}</div>}
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <Label>Region</Label>
-                  <Select value={config.region} onValueChange={(v) => setField('region', v || 'us-east-1')}>
+                  <Select value={config.region} onValueChange={(v: string) => setField('region', v || 'us-east-1')}>
                     <SelectTrigger className={fieldErrors.region ? 'border-red-500' : ''}>
                       <SelectValue />
                     </SelectTrigger>
@@ -121,7 +121,7 @@ function GatewayConfig({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <Label>账号来源</Label>
-                  <Select value={config.accountMode} onValueChange={(v) => setField('accountMode', v || 'single')}>
+                  <Select value={config.accountMode} onValueChange={(v: string) => setField('accountMode', v || 'single')}>
                     <SelectTrigger className={fieldErrors.accountMode ? 'border-red-500' : ''}>
                       <SelectValue />
                     </SelectTrigger>
@@ -133,10 +133,9 @@ function GatewayConfig({
                   </Select>
                   {fieldErrors.accountMode && <div className="text-xs text-red-500">{fieldErrors.accountMode}</div>}
                 </div>
-
                 <div className="flex flex-col gap-1.5">
                   <Label>路由策略</Label>
-                  <Select value={config.strategy} onValueChange={(v) => setField('strategy', v || 'round_robin')}>
+                  <Select value={config.strategy} onValueChange={(v: string) => setField('strategy', v || 'round_robin')}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -155,12 +154,12 @@ function GatewayConfig({
               {config.accountMode === 'single' && (
                 <div className="flex flex-col gap-1.5">
                   <Label>指定账号</Label>
-                  <Select value={config.accountId} onValueChange={(v) => setField('accountId', v)}>
+                  <Select value={config.accountId} onValueChange={(v: string) => setField('accountId', v)}>
                     <SelectTrigger className={fieldErrors.accountId ? 'border-red-500' : ''}>
                       <SelectValue placeholder="选择一个账号" />
                     </SelectTrigger>
                     <SelectContent>
-                      {accountOptions.map(opt => (
+                      {accountOptions.map((opt: any) => (
                         <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                       ))}
                     </SelectContent>
@@ -172,12 +171,12 @@ function GatewayConfig({
               {config.accountMode === 'group' && (
                 <div className="flex flex-col gap-1.5">
                   <Label>账号分组</Label>
-                  <Select value={config.groupId} onValueChange={(v) => setField('groupId', v)}>
+                  <Select value={config.groupId} onValueChange={(v: string) => setField('groupId', v)}>
                     <SelectTrigger className={fieldErrors.groupId ? 'border-red-500' : ''}>
                       <SelectValue placeholder="选择一个分组" />
                     </SelectTrigger>
                     <SelectContent>
-                      {groupOptions.map(opt => (
+                      {groupOptions.map((opt: any) => (
                         <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                       ))}
                     </SelectContent>
@@ -187,212 +186,43 @@ function GatewayConfig({
               )}
             </div>
 
-            {/* 客户端认证 */}
+            {/* Section 2: 客户端认证与模型 */}
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
                 <div className="w-1 h-4 bg-primary rounded-full"></div>
-                客户端认证
+                客户端认证与模型
               </div>
-              
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <Label>客户端 API Keys</Label>
-                  <div className="flex gap-2">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={handleGenerateApiKey}
-                          className="h-8 gap-1"
-                        >
-                          <Dice6 className="h-3.5 w-3.5" />
-                          生成
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>随机生成并添加</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => {
-                            const newKey = `sk-${Date.now()}`
-                            setConfig((prev: any) => ({
-                              ...prev,
-                              clientApiKeysText: prev.clientApiKeysText ? `${prev.clientApiKeysText}\n${newKey}` : newKey
-                            }))
-                          }}
-                          className="h-8 gap-1"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          添加
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>添加新 Key</TooltipContent>
-                    </Tooltip>
-                  </div>
-                </div>
-
-                {/* API Keys 表格 */}
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-muted/50 border-b">
-                    <div className="flex text-sm">
-                      <div className="flex-shrink-0 w-[40px] p-2 font-semibold text-center">#</div>
-                      <div className="flex-shrink-0 w-[100px] p-2 font-semibold">名称</div>
-                      <div className="flex-1 p-2 font-semibold">API Key</div>
-                      <div className="flex-shrink-0 w-[60px] p-2 font-semibold text-center">启用</div>
-                      <div className="flex-shrink-0 w-[100px] p-2 font-semibold text-center">操作</div>
-                    </div>
-                  </div>
-                  
-                  <div className="max-h-[240px] overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+                  <div className="text-xs text-muted-foreground">
                     {(() => {
-                      const rawKeys = (config.clientApiKeysText || '')
-                        .split(/[\n,]+/)
-                        .map((k: string) => k.trim())
-                        .filter(Boolean)
-                      
-                      if (rawKeys.length === 0) {
-                        return (
-                          <div className="p-6 text-center text-sm text-muted-foreground">
-                            暂无 API Key，点击"生成"或"添加"按钮创建
-                          </div>
-                        )
-                      }
-
-                      // 解析 Key 格式: #disabled#name:key 或 name:key 或 key
-                      const keys = rawKeys.map((rawKey: string) => {
-                        const isDisabled = rawKey.startsWith('#disabled#')
-                        const rest = isDisabled ? rawKey.substring(10) : rawKey
-                        const colonIdx = rest.indexOf(':')
-                        // 如果有冒号且冒号前不像是key的一部分(不以sk-开头)
-                        const hasName = colonIdx > 0 && !rest.startsWith('sk-') && !rest.startsWith('PROXY_KEY:')
-                        const name = hasName ? rest.substring(0, colonIdx) : ''
-                        const key = hasName ? rest.substring(colonIdx + 1) : rest
-                        return { name, key, enabled: !isDisabled }
-                      })
-
-                      return keys.map((item: { name: string; key: string; enabled: boolean }, idx: number) => (
-                        <div key={idx} className={`flex text-sm border-b last:border-b-0 hover:bg-muted/30 transition-colors ${!item.enabled ? 'opacity-50' : ''}`}>
-                          <div className="flex-shrink-0 w-[40px] p-2 font-mono text-xs text-muted-foreground flex items-center justify-center">
-                            {idx + 1}
-                          </div>
-                          <div className="flex-shrink-0 w-[100px] p-2 flex items-center">
-                            <Input
-                              value={item.name}
-                              onChange={(e) => {
-                                const newKeys = [...keys]
-                                newKeys[idx] = { ...newKeys[idx], name: e.target.value }
-                                const newRawKeys = newKeys.map(k => {
-                                  const prefix = k.enabled ? '' : '#disabled#'
-                                  const namePrefix = k.name ? `${k.name}:` : ''
-                                  return `${prefix}${namePrefix}${k.key}`
-                                })
-                                setConfig((prev: any) => ({
-                                  ...prev,
-                                  clientApiKeysText: newRawKeys.join('\n'),
-                                  apiKey: newKeys.find(k => k.enabled)?.key || newKeys[0]?.key || ''
-                                }))
-                              }}
-                              className="h-7 text-xs"
-                              placeholder="名称"
-                            />
-                          </div>
-                          <div className="flex-1 p-2 flex items-center gap-1">
-                            <code className="flex-1 text-xs font-mono bg-muted/50 px-2 py-1 rounded truncate">
-                              {item.key.length > 20 ? `${item.key.substring(0, 8)}...${item.key.slice(-4)}` : item.key}
-                            </code>
-                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { navigator.clipboard.writeText(item.key) }}>
-                              <Copy size={12} className="text-muted-foreground" />
-                            </Button>
-                          </div>
-                          <div className="flex-shrink-0 w-[60px] p-2 flex items-center justify-center">
-                            <Switch
-                              size="sm"
-                              checked={item.enabled}
-                              onCheckedChange={(checked) => {
-                                const newKeys = [...keys]
-                                newKeys[idx] = { ...newKeys[idx], enabled: checked }
-                                const newRawKeys = newKeys.map(k => {
-                                  const prefix = k.enabled ? '' : '#disabled#'
-                                  const namePrefix = k.name ? `${k.name}:` : ''
-                                  return `${prefix}${namePrefix}${k.key}`
-                                })
-                                setConfig((prev: any) => ({
-                                  ...prev,
-                                  clientApiKeysText: newRawKeys.join('\n'),
-                                  apiKey: newKeys.find(k => k.enabled)?.key || newKeys[0]?.key || ''
-                                }))
-                              }}
-                            />
-                          </div>
-                          <div className="flex-shrink-0 w-[100px] p-2 flex items-center justify-center">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                const newKeys = keys.filter((_: any, i: number) => i !== idx)
-                                const newRawKeys = newKeys.map(k => {
-                                  const prefix = k.enabled ? '' : '#disabled#'
-                                  const namePrefix = k.name ? `${k.name}:` : ''
-                                  return `${prefix}${namePrefix}${k.key}`
-                                })
-                                setConfig((prev: any) => ({
-                                  ...prev,
-                                  clientApiKeysText: newRawKeys.join('\n'),
-                                  apiKey: newKeys.find(k => k.enabled)?.key || newKeys[0]?.key || ''
-                                }))
-                              }}
-                              className="h-6 text-[10px] text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
-                            >
-                              删除
-                            </Button>
-                          </div>
-                        </div>
-                      ))
+                      const rawKeys = (config.clientApiKeysText || '').split(/[\n,]+/).map((k: string) => k.trim()).filter(Boolean)
+                      const enabledCount = rawKeys.filter((k: string) => !k.startsWith('#disabled#')).length
+                      return rawKeys.length > 0
+                        ? `${rawKeys.length} 个 Key，${enabledCount} 个启用`
+                        : '暂无 API Key'
                     })()}
                   </div>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowApiKeysDialog(true)}>
+                    管理 Keys
+                  </Button>
                 </div>
-                
-                {fieldErrors.clientApiKeysText && (
-                  <div className="text-xs text-red-500">{fieldErrors.clientApiKeysText}</div>
-                )}
-                
-                <div className="text-xs text-muted-foreground">
-                  客户端可使用任意已启用的 Key 进行认证，禁用的 Key 不会被使用
+                <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+                  <div className="text-xs text-muted-foreground">
+                    {config.modelMappings?.length > 0
+                      ? `${config.modelMappings.length} 条映射规则，${config.modelMappings.filter((r: any) => r.enabled).length} 条启用`
+                      : '暂无映射规则'}
+                  </div>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowModelMappingDialog(true)}>
+                    <Shuffle size={12} className="mr-1" />
+                    映射规则
+                  </Button>
                 </div>
               </div>
+              {fieldErrors.clientApiKeysText && <div className="text-xs text-red-500">{fieldErrors.clientApiKeysText}</div>}
             </div>
 
-            {/* 模型映射 */}
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-foreground flex items-center gap-2">
-                <div className="w-1 h-4 bg-purple-500 rounded-full"></div>
-                模型映射
-                <Badge variant="secondary" className="text-[10px]">{config.modelMappings?.length || 0}</Badge>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
-                <div className="text-xs text-muted-foreground">
-                  {config.modelMappings?.length > 0
-                    ? `已配置 ${config.modelMappings.length} 条规则，${config.modelMappings.filter(r => r.enabled).length} 条启用`
-                    : '暂无映射规则，客户端请求的模型名将直接使用'}
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  onClick={() => setShowModelMappingDialog?.(true)}
-                >
-                  <Shuffle size={12} className="mr-1" />
-                  管理规则
-                </Button>
-              </div>
-            </div>
-
-            {/* 安全与高级 */}
+            {/* Section 3: 安全与高级 */}
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
                 <div className="w-1 h-4 bg-primary rounded-full"></div>
@@ -402,11 +232,10 @@ function GatewayConfig({
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                   <div className="flex flex-col gap-0.5">
                     <Label className="text-xs">仅本机访问</Label>
-                    <div className="text-[10px] text-muted-foreground">只允许 127.0.0.1 访问</div>
                   </div>
                   <Switch
                     checked={!!config.localOnly}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={(checked: boolean) => {
                       setConfig((prev: any) => applyGatewayLocalOnlyChange(prev, checked, createGeneratedApiKey))
                     }}
                   />
@@ -418,12 +247,12 @@ function GatewayConfig({
                     value={config.threshold}
                     min={1}
                     max={100}
-                    onChange={(e) => setField('threshold', Number(e.target.value) || 90)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setField('threshold', Number(e.target.value) || 90)}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>日志级别</Label>
-                  <Select value={config.logLevel} onValueChange={(v) => setField('logLevel', v || 'debug')}>
+                  <Select value={config.logLevel} onValueChange={(v: string) => setField('logLevel', v || 'debug')}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -444,7 +273,7 @@ function GatewayConfig({
                     placeholder={'192.168.1.10\n10.0.0.0/24'}
                     rows={2}
                     value={config.allowedIpsText}
-                    onChange={(e) => setField('allowedIpsText', e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setField('allowedIpsText', e.target.value)}
                     className={fieldErrors.allowedIpsText ? 'border-red-500' : ''}
                   />
                   {fieldErrors.allowedIpsText && <div className="text-xs text-red-500">{fieldErrors.allowedIpsText}</div>}
@@ -455,38 +284,35 @@ function GatewayConfig({
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                   <div className="flex flex-col gap-0.5">
                     <Label className="text-xs">自动启动</Label>
-                    <div className="text-[10px] text-muted-foreground">应用启动时自动启动</div>
                   </div>
                   <Switch checked={!!config.enabled} onCheckedChange={handleAutoStartToggle} />
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                   <div className="flex flex-col gap-0.5">
                     <Label className="text-xs">Claude Code 精简</Label>
-                    <div className="text-[10px] text-muted-foreground">替换巨大系统提示</div>
                   </div>
-                  <Switch checked={!!config.filterClaudeCode} onCheckedChange={(checked) => setField('filterClaudeCode', checked)} />
+                  <Switch checked={!!config.filterClaudeCode} onCheckedChange={(checked: boolean) => setField('filterClaudeCode', checked)} />
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                   <div className="flex flex-col gap-0.5">
                     <Label className="text-xs">去除边界标记</Label>
-                    <div className="text-[10px] text-muted-foreground">去掉 SYSTEM PROMPT 行</div>
                   </div>
-                  <Switch checked={!!config.filterStripBoundaries} onCheckedChange={(checked) => setField('filterStripBoundaries', checked)} />
+                  <Switch checked={!!config.filterStripBoundaries} onCheckedChange={(checked: boolean) => setField('filterStripBoundaries', checked)} />
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                   <div className="flex flex-col gap-0.5">
                     <Label className="text-xs">去除环境噪音</Label>
-                    <div className="text-[10px] text-muted-foreground">去掉 git status 等</div>
                   </div>
-                  <Switch checked={!!config.filterEnvNoise} onCheckedChange={(checked) => setField('filterEnvNoise', checked)} />
+                  <Switch checked={!!config.filterEnvNoise} onCheckedChange={(checked: boolean) => setField('filterEnvNoise', checked)} />
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Error/Success Alert */}
           {hasFieldErrors ? (
             <ThemedAlert color="red" variant="light" title="保存前需修正" colors={colors}>
-              <div className={`text-sm text-muted-foreground`}>
+              <div className="text-sm text-muted-foreground">
                 {Object.values(fieldErrors).join('；')}
               </div>
             </ThemedAlert>
@@ -497,7 +323,7 @@ function GatewayConfig({
               colors={colors}
               title={actionSummary.title}
             >
-              <div className={`text-sm text-muted-foreground`}>
+              <div className="text-sm text-muted-foreground">
                 {actionSummary.description}
               </div>
             </ThemedAlert>
@@ -505,12 +331,21 @@ function GatewayConfig({
         </div>
       </GatewaySurfaceCard>
 
-      {/* 模型映射规则管理 Dialog */}
+      {/* ModelMappingDialog */}
       <ModelMappingDialog
         open={showModelMappingDialog}
         onOpenChange={setShowModelMappingDialog}
         modelMappings={config.modelMappings}
         setField={setField}
+      />
+
+      {/* ApiKeysDialog */}
+      <ApiKeysDialog
+        open={showApiKeysDialog}
+        onOpenChange={setShowApiKeysDialog}
+        clientApiKeysText={config.clientApiKeysText}
+        setConfig={setConfig}
+        handleGenerateApiKey={handleGenerateApiKey}
       />
     </div>
   )

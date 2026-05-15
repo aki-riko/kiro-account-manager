@@ -1,0 +1,118 @@
+import { Plus, Dice6, Copy, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+
+interface ApiKeysDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  clientApiKeysText: string
+  setConfig: React.Dispatch<React.SetStateAction<any>>
+  handleGenerateApiKey: () => void
+}
+
+function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig, handleGenerateApiKey }: ApiKeysDialogProps) {
+  const rawKeys = (clientApiKeysText || '').split(/[\n,]+/).map(k => k.trim()).filter(Boolean)
+
+  const keys = rawKeys.map(rawKey => {
+    const isDisabled = rawKey.startsWith('#disabled#')
+    const rest = isDisabled ? rawKey.substring(10) : rawKey
+    const colonIdx = rest.indexOf(':')
+    const hasName = colonIdx > 0 && !rest.startsWith('sk-') && !rest.startsWith('PROXY_KEY:')
+    const name = hasName ? rest.substring(0, colonIdx) : ''
+    const key = hasName ? rest.substring(colonIdx + 1) : rest
+    return { name, key, enabled: !isDisabled }
+  })
+
+  const updateKeys = (newKeys: typeof keys) => {
+    const newRawKeys = newKeys.map(k => {
+      const prefix = k.enabled ? '' : '#disabled#'
+      const namePrefix = k.name ? `${k.name}:` : ''
+      return `${prefix}${namePrefix}${k.key}`
+    })
+    setConfig((prev: any) => ({
+      ...prev,
+      clientApiKeysText: newRawKeys.join('\n'),
+      apiKey: newKeys.find(k => k.enabled)?.key || newKeys[0]?.key || ''
+    }))
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[520px]">
+        <DialogHeader>
+          <DialogTitle>客户端 API Keys</DialogTitle>
+          <DialogDescription>管理客户端认证密钥，禁用的 Key 不会被使用</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-3 mt-2">
+          {/* 操作按钮 */}
+          <div className="flex gap-2 justify-end">
+            <Button size="sm" variant="outline" onClick={handleGenerateApiKey} className="h-7 text-xs gap-1">
+              <Dice6 size={12} /> 生成
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => {
+              const newKey = `sk-${Date.now()}`
+              setConfig((prev: any) => ({
+                ...prev,
+                clientApiKeysText: prev.clientApiKeysText ? `${prev.clientApiKeysText}\n${newKey}` : newKey
+              }))
+            }}>
+              <Plus size={12} /> 添加
+            </Button>
+          </div>
+
+          {/* Keys 列表 */}
+          <div className="border rounded-lg overflow-hidden max-h-[350px] overflow-y-auto">
+            {keys.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                暂无 API Key，点击"生成"创建
+              </div>
+            ) : (
+              keys.map((item, idx) => (
+                <div key={idx} className={`flex items-center gap-2 p-2.5 border-b last:border-b-0 hover:bg-muted/30 ${!item.enabled ? 'opacity-50' : ''}`}>
+                  <Switch
+                    size="sm"
+                    checked={item.enabled}
+                    onCheckedChange={(checked) => {
+                      const newKeys = [...keys]
+                      newKeys[idx] = { ...newKeys[idx], enabled: checked }
+                      updateKeys(newKeys)
+                    }}
+                  />
+                  <Input
+                    value={item.name}
+                    onChange={(e) => {
+                      const newKeys = [...keys]
+                      newKeys[idx] = { ...newKeys[idx], name: e.target.value }
+                      updateKeys(newKeys)
+                    }}
+                    className="h-7 text-xs w-[80px]"
+                    placeholder="名称"
+                  />
+                  <code className="flex-1 text-xs font-mono bg-muted/50 px-2 py-1 rounded truncate">
+                    {item.key.length > 24 ? `${item.key.substring(0, 10)}...${item.key.slice(-4)}` : item.key}
+                  </code>
+                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => navigator.clipboard.writeText(item.key)}>
+                    <Copy size={12} className="text-muted-foreground" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 text-red-500 hover:text-red-600"
+                    onClick={() => updateKeys(keys.filter((_, i) => i !== idx))}
+                  >
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export default ApiKeysDialog
