@@ -213,6 +213,7 @@ function Home({ onNavigate }: HomeProps) {
                   <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm flex-col gap-2">
                     <Terminal size={24} className="text-muted-foreground/50" />
                     <span>CLI 未安装</span>
+                    <span className="text-xs text-muted-foreground/70">请安装 Kiro CLI 后重启</span>
                   </div>
                 )}
               </div>

@@ -29,6 +29,7 @@ interface ListRowProps {
   onEditLabel: (account: Account) => void
   onDelete: (id: string) => void
   onDeleteRemote?: (account: Account) => void
+  onToggleEnabled?: (account: Account, enabled: boolean) => void
   onCopy: (text: string, id: string) => void
 }
 const ListRow = memo(function ListRow({
@@ -50,6 +51,7 @@ const ListRow = memo(function ListRow({
   onEditLabel,
   onDelete,
   onDeleteRemote,
+  onToggleEnabled,
   onCopy }: ListRowProps) {
   const [contextMenu, setContextMenu] = useState(null)
   const used = getUsed(account)
@@ -79,11 +81,12 @@ const ListRow = memo(function ListRow({
       ? { icon: LogOut, label: t('accountCard.LogOut'), onClick: () => onSwitch(account), disabled: isSwitching, danger: true }
       : { icon: LogIn, label: t('accountCard.LogIn'), onClick: () => onSwitch(account), disabled: isSwitching || isUnavailable },
     { divider: true },
+    { label: account.enabled === false ? '启用账号' : '禁用账号', onClick: () => onToggleEnabled?.(account, account.enabled === false) },
     { icon: Trash2, label: t('accountCard.delete'), onClick: () => onDelete(account.id), danger: true },
     ...(account.provider !== 'Enterprise' && !isBanned && onDeleteRemote ? [
       { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
     ] : []),
-  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onSwitch, onDelete, onDeleteRemote, isRefreshing, isRefreshingToken, isSwitching, isBanned, isUnavailable, isCurrent])
+  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onSwitch, onDelete, onDeleteRemote, onToggleEnabled, isRefreshing, isRefreshingToken, isSwitching, isBanned, isUnavailable, isCurrent])
   return (
     <div
       onContextMenu={handleContextMenu}
@@ -222,6 +225,7 @@ interface AccountListViewProps {
   onEditLabel: (account: Account) => void
   onDelete: (id: string) => void
   onDeleteRemote?: (account: Account) => void
+  onToggleEnabled?: (account: Account, enabled: boolean) => void
   onCopy: (text: string, id: string) => void
   onAdd: () => void
   accountRowStateById?: Record<string, { isRefreshing?: boolean; isRefreshingToken?: boolean; isSwitching?: boolean }>
@@ -247,6 +251,7 @@ function AccountListView({
   onEditLabel,
   onDelete,
   onDeleteRemote,
+  onToggleEnabled,
   onCopy,
   onAdd,
   accountRowStateById = {},
@@ -361,6 +366,7 @@ function AccountListView({
                   onEditLabel={onEditLabel}
                   onDelete={onDelete}
                   onDeleteRemote={onDeleteRemote}
+                  onToggleEnabled={onToggleEnabled}
                   onCopy={onCopy}
                 />
               </div>
