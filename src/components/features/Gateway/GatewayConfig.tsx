@@ -1,6 +1,8 @@
-import { Server, Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity, Copy } from 'lucide-react'
+import { Server, Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity, Copy, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -48,6 +50,19 @@ function GatewayConfig({
   createGeneratedApiKey,
   handleSaveConfig,
   handleAutoStartToggle}: GatewayConfigProps) {
+  const [showModelMappingDialog, setShowModelMappingDialog] = useState(false)
+
+  // 常用模型列表（用于下拉选择）
+  const AVAILABLE_MODELS = [
+    'claude-sonnet-4-20250514',
+    'claude-sonnet-4.5-thinking',
+    'claude-haiku-4.5',
+    'claude-opus-4',
+    'amazon.nova-pro-v1:0',
+    'amazon.nova-lite-v1:0',
+    'amazon.nova-micro-v1:0',
+  ]
+
   return (
     <div className="grid grid-cols-1 gap-4">
       <GatewaySurfaceCard colors={colors}>
@@ -305,101 +320,21 @@ function GatewayConfig({
                 <Badge variant="secondary" className="text-[10px]">{config.modelMappings?.length || 0}</Badge>
               </div>
               
-              <div className="border rounded-lg overflow-hidden">
-                {(!config.modelMappings || config.modelMappings.length === 0) ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground">
-                    暂无映射规则，客户端请求的模型名将直接使用
-                  </div>
-                ) : (
-                  <div className="max-h-[200px] overflow-y-auto">
-                    {config.modelMappings.map((rule, idx) => (
-                      <div key={rule.id} className={`flex items-center gap-2 p-2.5 border-b last:border-b-0 hover:bg-muted/30 ${!rule.enabled ? 'opacity-50' : ''}`}>
-                        <Switch
-                          size="sm"
-                          checked={rule.enabled}
-                          onCheckedChange={(checked) => {
-                            const newMappings = [...config.modelMappings]
-                            newMappings[idx] = { ...newMappings[idx], enabled: checked }
-                            setField('modelMappings', newMappings)
-                          }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-medium truncate">{rule.name || rule.sourceModel}</span>
-                            <Badge variant="outline" className="text-[9px] px-1 py-0">{rule.ruleType}</Badge>
-                          </div>
-                          <div className="text-[10px] text-muted-foreground font-mono truncate">
-                            {rule.sourceModel} → {rule.targetModels.join(', ')}
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 text-[10px] text-red-500 hover:text-red-600"
-                          onClick={() => {
-                            const newMappings = config.modelMappings.filter((_, i) => i !== idx)
-                            setField('modelMappings', newMappings)
-                          }}
-                        >
-                          删除
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {/* 添加规则 */}
-                <div className="border-t p-2.5 bg-muted/20">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="源模型 (如 claude-sonnet-4)"
-                      className="h-7 text-xs flex-1"
-                      id="mapping-source"
-                    />
-                    <Input
-                      placeholder="目标模型 (如 claude-sonnet-4.5-thinking)"
-                      className="h-7 text-xs flex-1"
-                      id="mapping-target"
-                    />
-                    <Select defaultValue="replace">
-                      <SelectTrigger className="h-7 text-xs w-[100px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="replace">替换</SelectItem>
-                        <SelectItem value="alias">别名</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        const sourceEl = document.getElementById('mapping-source') as HTMLInputElement
-                        const targetEl = document.getElementById('mapping-target') as HTMLInputElement
-                        if (!sourceEl?.value || !targetEl?.value) return
-                        const newRule = {
-                          id: crypto.randomUUID(),
-                          name: `${sourceEl.value} → ${targetEl.value}`,
-                          enabled: true,
-                          ruleType: 'replace',
-                          sourceModel: sourceEl.value.trim(),
-                          targetModels: [targetEl.value.trim()],
-                          weights: []
-                        }
-                        setField('modelMappings', [...(config.modelMappings || []), newRule])
-                        sourceEl.value = ''
-                        targetEl.value = ''
-                      }}
-                    >
-                      <Plus size={12} className="mr-0.5" />
-                      添加
-                    </Button>
-                  </div>
+              <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+                <div className="text-xs text-muted-foreground">
+                  {config.modelMappings?.length > 0
+                    ? `已配置 ${config.modelMappings.length} 条规则，${config.modelMappings.filter(r => r.enabled).length} 条启用`
+                    : '暂无映射规则，客户端请求的模型名将直接使用'}
                 </div>
-              </div>
-              
-              <div className="text-xs text-muted-foreground">
-                客户端请求的模型名会根据规则映射到实际模型，支持替换和别名
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={() => setShowModelMappingDialog?.(true)}
+                >
+                  <Shuffle size={12} className="mr-1" />
+                  管理规则
+                </Button>
               </div>
             </div>
 
@@ -626,6 +561,117 @@ function GatewayConfig({
           )}
         </div>
       </GatewaySurfaceCard>
+
+      {/* 模型映射规则管理 Dialog */}
+      <Dialog open={showModelMappingDialog} onOpenChange={setShowModelMappingDialog}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader className="">
+            <DialogTitle className="">模型映射规则</DialogTitle>
+            <DialogDescription className="">
+              客户端请求的模型名会根据规则映射到实际模型
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 mt-2">
+            {/* 规则列表 */}
+            <div className="border rounded-lg overflow-hidden max-h-[300px] overflow-y-auto">
+              {(!config.modelMappings || config.modelMappings.length === 0) ? (
+                <div className="p-6 text-center text-sm text-muted-foreground">
+                  暂无规则
+                </div>
+              ) : (
+                config.modelMappings.map((rule: any, idx: number) => (
+                  <div key={rule.id} className={`flex items-center gap-2 p-3 border-b last:border-b-0 hover:bg-muted/30 ${!rule.enabled ? 'opacity-50' : ''}`}>
+                    <Switch
+                      size="sm"
+                      checked={rule.enabled}
+                      onCheckedChange={(checked) => {
+                        const newMappings = [...config.modelMappings]
+                        newMappings[idx] = { ...newMappings[idx], enabled: checked }
+                        setField('modelMappings', newMappings)
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium truncate">{rule.name || rule.sourceModel}</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{rule.ruleType === 'replace' ? '替换' : rule.ruleType === 'alias' ? '别名' : '负载均衡'}</Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground font-mono truncate mt-0.5">
+                        {rule.sourceModel} → {rule.targetModels.join(', ')}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+                      onClick={() => {
+                        const newMappings = config.modelMappings.filter((_: any, i: number) => i !== idx)
+                        setField('modelMappings', newMappings)
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* 添加新规则 */}
+            <div className="space-y-2 p-3 border rounded-lg bg-muted/10">
+              <div className="text-xs font-medium text-muted-foreground">添加新规则</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <Input placeholder="源模型名" className="text-xs" id="dialog-mapping-source" list="model-list-source" />
+                  <datalist id="model-list-source">
+                    {AVAILABLE_MODELS.map(m => <option key={m} value={m} />)}
+                  </datalist>
+                </div>
+                <div className="relative">
+                  <Input placeholder="目标模型名" className="text-xs" id="dialog-mapping-target" list="model-list-target" />
+                  <datalist id="model-list-target">
+                    {AVAILABLE_MODELS.map(m => <option key={m} value={m} />)}
+                  </datalist>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Select defaultValue="replace">
+                  <SelectTrigger className="text-xs flex-1" id="dialog-mapping-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="replace">替换 (replace)</SelectItem>
+                    <SelectItem value="alias">别名 (alias)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => {
+                    const sourceEl = document.getElementById('dialog-mapping-source') as HTMLInputElement
+                    const targetEl = document.getElementById('dialog-mapping-target') as HTMLInputElement
+                    if (!sourceEl?.value?.trim() || !targetEl?.value?.trim()) return
+                    const newRule = {
+                      id: crypto.randomUUID(),
+                      name: `${sourceEl.value.trim()} → ${targetEl.value.trim()}`,
+                      enabled: true,
+                      ruleType: 'replace',
+                      sourceModel: sourceEl.value.trim(),
+                      targetModels: [targetEl.value.trim()],
+                      weights: []
+                    }
+                    setField('modelMappings', [...(config.modelMappings || []), newRule])
+                    sourceEl.value = ''
+                    targetEl.value = ''
+                  }}
+                >
+                  <Plus size={14} className="mr-1" />
+                  添加
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
