@@ -82,14 +82,23 @@ export function GatewayObservability({
   const [activeTab, setActiveTab] = useState<'all' | 'success' | 'error'>('all')
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
   const [displayLimit, setDisplayLimit] = useState(50)
+  const [searchText, setSearchText] = useState('')
 
   const isRunning = status?.running === true
 
-  // 根据activeTab过滤日志
+  // 根据activeTab和搜索过滤日志
   const filteredLogs = requestLogs.filter(log => {
     if (activeTab === 'success') return log.status < 400
     if (activeTab === 'error') return log.status >= 400
     return true
+  }).filter(log => {
+    if (!searchText) return true
+    const lower = searchText.toLowerCase()
+    return (log.model?.toLowerCase().includes(lower))
+      || log.path.toLowerCase().includes(lower)
+      || log.upstream?.toLowerCase().includes(lower)
+      || log.error?.toLowerCase().includes(lower)
+      || String(log.status).includes(lower)
   })
 
   const fetchRequestLogs = async (limit?: number) => {
@@ -377,7 +386,14 @@ export function GatewayObservability({
             )}
           </div>
           <div className="flex gap-2 items-center">
-            <span className="text-xs text-muted-foreground">显示条数:</span>
+            <input
+              type="text"
+              placeholder="搜索模型/路径/错误..."
+              className="text-xs border rounded px-2 py-1 w-40"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+            <span className="text-xs text-muted-foreground">显示:</span>
             <select
               className="text-xs border rounded px-2 py-1"
               value={displayLimit}

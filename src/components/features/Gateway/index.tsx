@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { Activity, Play, RotateCcw, Square, Activity as ActivityIcon, Settings, Zap } from 'lucide-react'
+import { Activity, Play, RotateCcw, Square, Activity as ActivityIcon, Settings, Zap, Save } from 'lucide-react'
 import { Alert as AlertPrimitive, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -464,6 +464,15 @@ function GatewayPage() {
     try {
       await saveGatewayConfig(config)
       setSavedConfigSnapshot(buildGatewayConfigSnapshot(config))
+      // 保存成功后，如果网关正在运行则自动重启使配置生效
+      if (status.running) {
+        await stopGateway()
+        const st = await startGateway(config)
+        const nextStatus = buildGatewayStatusState(st, st, config)
+        setStatus(nextStatus)
+        setAppliedRuntimeSnapshot(nextStatus.runtimeConfig ? buildGatewayRuntimeSnapshot(nextStatus.runtimeConfig) : buildGatewayRuntimeSnapshot(config))
+        setLastStatusSyncAt(formatGatewayTimestamp())
+      }
     } catch (e) {
       pushError(e)
     } finally {
@@ -612,7 +621,8 @@ function GatewayPage() {
                   onClick={handleSave}
                   disabled={!hasUnsavedChanges || hasFieldErrors || saving || loading}
                 >
-                  保存
+                  <Save size={14} className="mr-1" />
+                  {status.running ? '保存并重启' : '保存'}
                 </Button>
                 <Button
                   variant="outline"
