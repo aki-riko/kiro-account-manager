@@ -489,26 +489,15 @@ function GatewayPage() {
                     启动
                   </Button>
                 ) : (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleRestart}
-                      disabled={hasFieldErrors || saving || loading}
-                    >
-                      <RotateCcw size={14} className="mr-1" />
-                      重启
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleStop}
-                      disabled={saving || loading}
-                      className="bg-red-500 hover:bg-red-600 text-white"
-                    >
-                      <Square size={14} className="mr-1" />
-                      停止
-                    </Button>
-                  </>
+                  <Button
+                    size="sm"
+                    onClick={handleStop}
+                    disabled={saving || loading}
+                    className="bg-red-500 hover:bg-red-600 text-white"
+                  >
+                    <Square size={14} className="mr-1" />
+                    停止
+                  </Button>
                 )}
               </Group>
             </Group>
