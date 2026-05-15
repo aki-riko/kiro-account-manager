@@ -2283,8 +2283,8 @@ pub async fn mcp_proxy_handler(
     write_request_log(
         &upstream_log_context,
         status,
-        "success",
-        None,
+        if status.is_success() { "success" } else { "error" },
+        if status.is_success() { None } else { Some(logged_response_body.as_str()) },
         None, // error_type
         Some(logged_response_body.as_str()),
         None, // input_tokens
