@@ -1,19 +1,16 @@
 import { useState, useRef, useEffect, memo, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { invoke } from '@tauri-apps/api/core'
-import { Copy, Check, RefreshCw, User, CreditCard, Shield, Cpu, Loader2, FileText, Image as ImageIcon, Zap, Hash } from 'lucide-react'
+import { Copy, Check, RefreshCw, User, CreditCard, Shield, Cpu, Loader2, FileText, Image as ImageIcon, Zap, Hash, ChevronDown, X } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
 import { getAccountStatusMeta, isBannedStatus } from '../../../utils/accountStatus'
 import { getProviderDisplayName, isGitHubProvider } from '../../../utils/accountProvider'
-import { TokenJsonView } from './TokenJsonView'
 import {
   DialogRoot,
   DialogContent,
-  DialogBody,
-  DialogFooter} from '../../shared/dialog'
-import { Button } from '../../shared/button'
+  DialogBody} from '../../shared/dialog'
 import { Switch } from '../../ui/switch'
 import { Account } from '../../../types/account'
 import React from 'react'
@@ -121,6 +118,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
   const [models, setModels] = useState<any[]>([])
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState<string | null>(null)
+  const [modelsExpanded, setModelsExpanded] = useState(false)
 
   // 获取可用模型
   const fetchModels = async (forceRefresh = false) => {
@@ -240,12 +238,12 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
 
   return createPortal(
     <DialogRoot open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent maxWidth="800px">
+      <DialogContent maxWidth="800px" showClose={false}>
         {/* 顶部渐变背景 */}
         <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-br from-blue-500/5 via-purple-500/3 to-transparent pointer-events-none rounded-t-2xl" />
         
-        {/* Header - Sticky 头部 */}
         <div className={`sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border px-6 py-4 rounded-t-2xl`}>
+          <div className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">账号详情</div>
           <div className="flex items-start gap-3">
             {/* 头像图标 */}
             <div className={`
@@ -312,6 +310,13 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 </div>
               )}
             </div>
+            {/* 关闭按钮 */}
+            <button
+              onClick={onClose}
+              className="p-2 rounded-full hover:bg-muted transition-colors flex-shrink-0"
+            >
+              <X size={18} className="text-muted-foreground" />
+            </button>
           </div>
         </div>
         
@@ -504,11 +509,15 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                           setOverageToggleLoading(true)
                           try {
                             await invoke('set_overage_status', { id: currentAccount.id, enabled: checked })
-                            // 刷新账号信息
-                            await invoke('sync_account', { id: currentAccount.id })
+                            // 刷新账号信息并更新本地状态
+                            const result = await invoke<{ account: Account; warning?: string }>('sync_account', { id: currentAccount.id })
+                            if (result?.account) {
+                              setCurrentAccount(result.account)
+                            }
                             onRefresh?.()
                           } catch (e) {
                             console.error('Failed to toggle overage:', e)
+                            showError('超额开关切换失败', String(e))
                           } finally {
                             setOverageToggleLoading(false)
                           }
@@ -552,48 +561,85 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
             </div>
           </div>
 
-          {/* 基本信息 */}
-          <div className={`border-b border-border px-6 py-4`}>
-            <div className="flex items-center gap-2 mb-4">
-              <div className={`p-1.5 rounded-lg bg-muted/30`}>
-                <User size={18} className={"text-muted-foreground"} />
-              </div>
-              <span className={`text-sm font-semibold text-foreground`}>{t('detail.basicInfo')}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={`block text-sm font-medium text-muted-foreground mb-2`}>
-                  {t('detail.emailAddress')}
-                </label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  required
-                  className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2`}
-                />
-              </div>
-              <div>
-                <label className={`block text-sm font-medium text-muted-foreground mb-2`}>
-                  {t('detail.remarkLabel')}
-                </label>
-                <input
-                  type="text"
-                  value={form.label}
-                  readOnly
-                  placeholder={t('common.none')}
-                  className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input opacity-60`}
-                />
-              </div>
+          {/* 基本信息 & 订阅详情 - 并排布局 */}
+          <div className="px-6 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* 基本信息 */}
+              <section className="space-y-3">
+                <h3 className="flex items-center gap-2 font-bold text-sm text-foreground">
+                  <User size={16} className="text-primary" />
+                  {t('detail.basicInfo')}
+                </h3>
+                <div className="bg-muted/30 border rounded-xl p-4 space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">{t('detail.emailAddress')}</label>
+                    <div className="text-sm font-mono break-all select-all">{currentAccount.email || getAccountDisplayName(currentAccount)}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1 min-w-0">
+                      <label className="text-xs font-medium text-muted-foreground">{t('detail.remarkLabel')}</label>
+                      <div className="text-sm font-medium truncate">{currentAccount.label || '-'}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Provider</label>
+                      <div className="text-sm font-medium">{getProviderDisplayName(currentAccount.provider) || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">User ID</label>
+                    <div className="text-xs font-mono break-all bg-background p-2 rounded border select-all">
+                      {currentAccount.usageData?.userInfo?.userId || '-'}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 订阅详情 */}
+              <section className="space-y-3">
+                <h3 className="flex items-center gap-2 font-bold text-sm text-foreground">
+                  <Shield size={16} className="text-primary" />
+                  订阅详情
+                </h3>
+                <div className="bg-muted/30 border rounded-xl p-4 text-sm space-y-3">
+                  <div className="flex justify-between items-center py-1 border-b border-border/50">
+                    <span className="text-muted-foreground text-xs">Region</span>
+                    <span className="font-mono text-xs px-1.5 py-0.5 bg-muted rounded-md">us-east-1</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-border/50">
+                    <span className="text-muted-foreground text-xs">Token 到期</span>
+                    <span className="font-medium text-xs">{currentAccount.expiresAt || '-'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-border/50">
+                    <span className="text-muted-foreground text-xs">订阅类型</span>
+                    <span className="font-mono text-xs">{currentAccount.usageData?.subscriptionInfo?.type || '-'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-border/50">
+                    <span className="text-muted-foreground text-xs">超额费率</span>
+                    <span className="font-mono text-xs">
+                      {breakdown?.overageRate ? `$${breakdown.overageRate}/${breakdown.unit === 'INVOCATIONS' ? 'Credit' : breakdown.unit}` : '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-border/50">
+                    <span className="text-muted-foreground text-xs">资源类型</span>
+                    <span className="font-mono text-xs">{breakdown?.resourceType || '-'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-muted-foreground text-xs">可升级</span>
+                    <span className={`text-xs font-bold ${currentAccount.usageData?.subscriptionInfo?.upgradeCapability === 'UPGRADE_CAPABLE' ? 'text-green-600' : 'text-muted-foreground'}`}>
+                      {currentAccount.usageData?.subscriptionInfo?.upgradeCapability === 'UPGRADE_CAPABLE' ? 'YES' : 'NO'}
+                    </span>
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
 
-          {/* Token 凭证 JSON 视图 */}
-          <TokenJsonView account={account} />
-
           {/* 账户可用模型 */}
-          <div className={`border-b border-border px-6 py-4`}>
-            <div className="flex items-center gap-2 mb-4">
+          <div className={`px-6 py-4`}>
+            <div 
+              className="flex items-center gap-2 cursor-pointer select-none"
+              onClick={() => setModelsExpanded(!modelsExpanded)}
+            >
               <div className={`p-1.5 rounded-lg bg-muted/30`}>
                 <Cpu size={18} className={"text-muted-foreground"} />
               </div>
@@ -602,15 +648,17 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 {models.length}
               </span>
               <button
-                onClick={() => fetchModels(true)}
+                onClick={(e) => { e.stopPropagation(); fetchModels(true) }}
                 disabled={modelsLoading}
                 className="p-1.5 rounded-lg hover:bg-muted/50 transition-colors disabled:opacity-50"
                 title="强制刷新模型列表"
               >
                 <RefreshCw size={14} className={modelsLoading ? "animate-spin text-muted-foreground" : "text-muted-foreground"} />
               </button>
+              <ChevronDown size={16} className={`text-muted-foreground transition-transform duration-200 ${modelsExpanded ? '' : '-rotate-90'}`} />
             </div>
-            <div className="bg-gradient-to-br from-muted/20 to-muted/40 border rounded-xl p-4">
+            {modelsExpanded && (
+            <div className="bg-gradient-to-br from-muted/20 to-muted/40 border rounded-xl p-4 mt-4">
               {modelsLoading ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground">
                   <Loader2 size={20} className="animate-spin mr-2" />
@@ -685,22 +733,18 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 </div>
               )}
             </div>
+            )}
           </div>
         </DialogBody>
 
-        {/* Footer */}
-        <DialogFooter>
-          <div className={`text-sm text-muted-foreground flex items-center gap-2`}>
-            {statusMeta.tone === 'success'
-              ? <><Shield size={15} className="text-green-500" /><span className="text-green-500 font-medium">{statusMeta.label}</span></>
-              : statusMeta.tone === 'danger'
-                ? <><Shield size={15} className="text-red-500" /><span className="text-red-500 font-medium">{statusMeta.label}</span></>
-                : <><Shield size={15} className="text-orange-500" /><span className="text-orange-500 font-medium">{statusMeta.label}</span></>}
-          </div>
-          <Button onClick={onClose}>
-            {t('common.close')}
-          </Button>
-        </DialogFooter>
+        {/* 状态栏（底部简洁显示） */}
+        <div className="px-6 py-3 border-t border-border flex items-center gap-2">
+          {statusMeta.tone === 'success'
+            ? <><Shield size={14} className="text-green-500" /><span className="text-xs text-green-500 font-medium">{statusMeta.label}</span></>
+            : statusMeta.tone === 'danger'
+              ? <><Shield size={14} className="text-red-500" /><span className="text-xs text-red-500 font-medium">{statusMeta.label}</span></>
+              : <><Shield size={14} className="text-orange-500" /><span className="text-xs text-orange-500 font-medium">{statusMeta.label}</span></>}
+        </div>
       </DialogContent>
     </DialogRoot>,
     document.body

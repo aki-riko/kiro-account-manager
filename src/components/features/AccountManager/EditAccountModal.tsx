@@ -7,7 +7,6 @@ import { useDialog } from '../../../contexts/DialogContext'
 import { setAccountTags, setAccountGroup, getGroups, addGroup } from '../../../api/groupTag'
 import { getAccountDisplayName } from '../../../utils/accountStats'
 import { TagSelector } from './GroupTagManager'
-import { TokenJsonView } from './TokenJsonView'
 import {
   DialogRoot,
   DialogContent,
@@ -164,15 +163,24 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
       const usageData = account.usageData
       const userInfo = usageData.userInfo || {}
       const subscriptionInfo = usageData.subscriptionInfo
+      const breakdown = usageData.usageBreakdownList?.[0]
+      const nextReset = usageData.nextDateReset
+      
+      // 计算剩余天数
+      let daysRemaining: number | undefined
+      if (nextReset) {
+        const resetDate = new Date(typeof nextReset === 'string' ? nextReset : (nextReset < 1e12 ? nextReset * 1000 : nextReset))
+        daysRemaining = Math.max(0, Math.ceil((resetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+      }
       
       setAccountInfo({
         email: account.email || userInfo.email || '',
         subscriptionType: subscriptionInfo?.subscriptionTitle || subscriptionInfo?.type || 'Free',
         usage: {
-          current: usageData.totalUsage || 0,
-          limit: usageData.limits?.[0] || 0
+          current: breakdown?.currentUsage ?? 0,
+          limit: breakdown?.usageLimit ?? 0
         },
-        daysRemaining: usageData.daysUntilReset
+        daysRemaining
       })
     }
   }, [account])
@@ -221,15 +229,23 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
       const usageData = result.usageData
       const userInfo = usageData.userInfo || {}
       const subscriptionInfo = usageData.subscriptionInfo
+      const verifyBreakdown = usageData.usageBreakdownList?.[0]
+      const verifyNextReset = usageData.nextDateReset
+      
+      let verifyDaysRemaining: number | undefined
+      if (verifyNextReset) {
+        const resetDate = new Date(typeof verifyNextReset === 'string' ? verifyNextReset : (verifyNextReset < 1e12 ? verifyNextReset * 1000 : verifyNextReset))
+        verifyDaysRemaining = Math.max(0, Math.ceil((resetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+      }
       
       setAccountInfo({
         email: userInfo.email || '',
         subscriptionType: subscriptionInfo?.subscriptionTitle || subscriptionInfo?.type || 'Free',
         usage: {
-          current: usageData.totalUsage || 0,
-          limit: usageData.limits?.[0] || 0
+          current: verifyBreakdown?.currentUsage ?? 0,
+          limit: verifyBreakdown?.usageLimit ?? 0
         },
-        daysRemaining: usageData.daysUntilReset
+        daysRemaining: verifyDaysRemaining
       })
     } catch (e) {
       await showError(t('editAccount.verifyFailed'), String(e))
@@ -334,36 +350,6 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
               className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
             />
           </div>
-
-          {/* Access Token（只读，可复制） */}
-          {form.accessToken && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className={`text-sm font-medium text-foreground`}>
-                  Access Token
-                </label>
-                <button
-                  onClick={() => handleCopy(form.accessToken, 'accessToken')}
-                  className={`text-xs px-2 py-1 rounded-lg hover:bg-muted/50 cursor-pointer flex items-center gap-1`}
-                >
-                  {copiedField === 'accessToken' ? (
-                    <>
-                      <Check size={12} className="text-green-500" />
-                      <span className="text-green-500">已复制</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={12} className="text-muted-foreground" />
-                      <span className="text-muted-foreground">复制</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              <div className="w-full px-4 py-3 border rounded-xl text-sm bg-muted/50 font-mono text-muted-foreground truncate border-input">
-                {form.accessToken.slice(0, 50)}...
-              </div>
-            </div>
-          )}
 
           {/* Refresh Token */}
           <div>
@@ -498,11 +484,6 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
               selectedTagIds={selectedTagIds} 
               onChange={setSelectedTagIds} 
             />
-          </div>
-
-          {/* Token JSON */}
-          <div>
-            <TokenJsonView account={account} defaultExpanded={false} />
           </div>
         </div>
 

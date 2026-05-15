@@ -108,7 +108,7 @@ export function getAccountStatusMeta(statusOrAccount: string | Account | any, t?
     case 'banned':
       return { key: 'banned', label: t?.('accounts.banned') ?? '封禁', tone: 'danger' }
     case 'invalid':
-      return { key: 'invalid', label: t?.('accounts.invalid') ?? '失效', tone: 'warning' }
+      return { key: 'invalid', label: t?.('accounts.invalid') ?? '失效', tone: 'danger' }
     case 'expired':
       return { key: 'expired', label: t?.('accounts.expired') ?? '过期', tone: 'warning' }
     default:

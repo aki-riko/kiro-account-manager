@@ -102,67 +102,31 @@ export function TokenJsonView({ account, defaultExpanded = false }) {
   return (
     <div className={`border-b border-border`} style={{ margin: 0 }}>
       <div 
-        className={`flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-all duration-200`}
-        style={{ padding: '1.75rem 3rem' }}
+        className={`flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-all duration-200 px-6 py-3`}
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg bg-muted/30`}>
-            <Key size={18} className={"text-muted-foreground"} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className={`font-semibold text-foreground`}>{t('detail.tokenCredentials') || 'Token 凭证'}</span>
-              <span className={`text-xs px-2 py-0.5 rounded-md info-badge font-medium`}>JSON</span>
-            </div>
-            {account.expiresAt && (
-              <span className={`text-xs text-muted-foreground flex items-center gap-1 mt-1`}>
-                <Clock size={11} />
-                {t('detail.expiresAt') || '过期时间'}: {account.expiresAt}
-              </span>
-            )}
-          </div>
+        <div className="flex items-center gap-2">
+          <Key size={16} className={"text-muted-foreground"} />
+          <span className={`text-sm font-medium text-foreground`}>{t('detail.tokenCredentials') || 'Token 凭证'}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground font-mono`}>
+            {Object.keys(credentialsJson).length} 字段
+          </span>
         </div>
-        <div className={`p-2 rounded-lg bg-muted/30 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>
-          <ChevronDown size={16} className={"text-muted-foreground"} />
+        <div className="flex items-center gap-2">
+          <button 
+            type="button" 
+            onClick={(e) => { e.stopPropagation(); handleCopy() }}
+            className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/50 transition-colors"
+          >
+            {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+          </button>
+          <ChevronDown size={14} className={`text-muted-foreground transition-transform duration-200 ${expanded ? '' : '-rotate-90'}`} />
         </div>
       </div>
       
       {expanded && (
-        <div className={`animate-in fade-in slide-in-from-top-2 duration-200`} style={{ margin: 0, padding: '1.25rem 3rem 2rem 3rem' }}>
-          {/* Token JSON */}
-          <div className="flex items-center justify-between mb-3">
-            <span className={`text-xs font-medium text-muted-foreground`}>
-              {Object.keys(credentialsJson).length} {t('detail.fields') || '个字段'}
-            </span>
-              <button 
-                type="button" 
-                onClick={handleCopy}
-                className={`
-                text-xs text-muted-foreground ${accent.textHover} 
-                flex items-center gap-1.5 px-3 py-1.5 rounded-lg 
-                bg-muted/30 hover:bg-muted/50
-                transition-all duration-200 font-medium
-              `}
-            >
-              {copied ? (
-                <>
-                  <Check size={13} className="text-green-500" />
-                  <span className="text-green-500">{t('common.copied')}</span>
-                </>
-              ) : (
-                <>
-                  <Copy size={13} />
-                  {t('common.copyAll')}
-                </>
-              )}
-            </button>
-          </div>
-          <div className={`
-            p-5 rounded-xl bg-muted/30 border border-border 
-            max-h-96 overflow-auto
-            scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent
-          `}>
+        <div className="px-6 pb-4">
+          <div className="p-3 rounded-lg bg-muted/20 border border-border max-h-64 overflow-auto font-mono text-xs leading-relaxed">
             <JsonRenderer json={credentialsJson} colors={colors} accent={accent} />
           </div>
         </div>
