@@ -518,14 +518,11 @@ function GatewayPage() {
           colors={colors}
           config={config}
           hasFieldErrors={hasFieldErrors}
-          hasUnsavedChanges={hasUnsavedChanges}
           fieldErrors={fieldErrors}
           setField={setField}
           handleGenerateApiKey={handleGenerateApiKey}
           accountOptions={accountOptions}
           groupOptions={groupOptions}
-          actionSummary={actionSummary}
-          ThemedAlert={ThemedAlert}
           setConfig={setConfig}
           applyGatewayLocalOnlyChange={applyGatewayLocalOnlyChange}
           createGeneratedApiKey={createGeneratedApiKey}

@@ -15,14 +15,11 @@ interface GatewayConfigProps {
   colors: any;
   config: any;
   hasFieldErrors: boolean;
-  hasUnsavedChanges: boolean;
   fieldErrors: Record<string, string>;
   setField: (key: string, value: any) => void;
   handleGenerateApiKey: () => void;
   accountOptions: any[];
   groupOptions: any[];
-  actionSummary: any;
-  ThemedAlert: React.ComponentType<any>;
   setConfig: React.Dispatch<React.SetStateAction<any>>;
   applyGatewayLocalOnlyChange: (config: any, checked: boolean, generator: () => string) => any;
   createGeneratedApiKey: () => string;
@@ -34,14 +31,11 @@ function GatewayConfig({
   colors,
   config,
   hasFieldErrors,
-  hasUnsavedChanges,
   fieldErrors,
   setField,
   handleGenerateApiKey,
   accountOptions,
   groupOptions,
-  actionSummary,
-  ThemedAlert,
   setConfig,
   applyGatewayLocalOnlyChange,
   createGeneratedApiKey,
@@ -292,26 +286,6 @@ function GatewayConfig({
               </div>
             </div>
           </div>
-
-          {/* Error/Success Alert */}
-          {hasFieldErrors ? (
-            <ThemedAlert color="red" variant="light" title="保存前需修正" colors={colors}>
-              <div className="text-sm text-muted-foreground">
-                {Object.values(fieldErrors).join('；')}
-              </div>
-            </ThemedAlert>
-          ) : (
-            <ThemedAlert
-              color={actionSummary.tone}
-              variant="light"
-              colors={colors}
-              title={actionSummary.title}
-            >
-              <div className="text-sm text-muted-foreground">
-                {actionSummary.description}
-              </div>
-            </ThemedAlert>
-          )}
         </div>
       </GatewaySurfaceCard>
 
