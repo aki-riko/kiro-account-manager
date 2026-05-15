@@ -78,20 +78,28 @@ function Home({ onNavigate }: HomeProps) {
   const [cliSnapshot, setCliSnapshot] = useState<any>(null)
   const [cliLoading, setCliLoading] = useState(false)
   const [cliPath, setCliPath] = useState('')
+  const [cliInstalled, setCliInstalled] = useState(false)
 
   // 加载 CLI 账号
   useEffect(() => {
     const loadCliData = async () => {
       setCliLoading(true)
       try {
+        const info = await invoke<any>('check_cli_installation')
+        setCliInstalled(info?.cli_installed || info?.db_exists || false)
+        
         const path = await invoke<string>('get_kiro_cli_default_path')
         if (path) {
           setCliPath(path)
-          const snapshot = await invoke<any>('read_cli_db_snapshot', { dbPath: path })
-          setCliSnapshot(snapshot)
+          try {
+            const snapshot = await invoke<any>('read_cli_db_snapshot', { dbPath: path })
+            setCliSnapshot(snapshot)
+          } catch {
+            // 数据库存在但读取失败，或未登录
+          }
         }
       } catch (e) {
-        // CLI 未安装或读取失败，静默处理
+        // CLI 未安装
       } finally {
         setCliLoading(false)
       }
@@ -209,6 +217,12 @@ function Home({ onNavigate }: HomeProps) {
                   </div>
                 ) : cliSnapshot ? (
                   <CliAccountDetail snapshot={cliSnapshot} cliPath={cliPath} />
+                ) : cliInstalled ? (
+                  <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm flex-col gap-2">
+                    <Terminal size={24} className="text-muted-foreground/50" />
+                    <span>CLI 已安装，未登录</span>
+                    <span className="text-xs text-muted-foreground/70">请运行 kiro-cli login 登录</span>
+                  </div>
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm flex-col gap-2">
                     <Terminal size={24} className="text-muted-foreground/50" />
