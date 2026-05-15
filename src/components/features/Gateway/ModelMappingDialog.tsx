@@ -102,9 +102,10 @@ interface ModelMappingDialogProps {
   onOpenChange: (open: boolean) => void
   modelMappings: any[]
   setField: (key: string, value: any) => void
+  onSave?: () => void
 }
 
-function ModelMappingDialog({ open, onOpenChange, modelMappings, setField }: ModelMappingDialogProps) {
+function ModelMappingDialog({ open, onOpenChange, modelMappings, setField, onSave }: ModelMappingDialogProps) {
   const rules = modelMappings || []
 
   const handleToggle = (idx: number, checked: boolean) => {
@@ -155,7 +156,7 @@ function ModelMappingDialog({ open, onOpenChange, modelMappings, setField }: Mod
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v && onSave) onSave() }}>
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle>模型映射规则</DialogTitle>

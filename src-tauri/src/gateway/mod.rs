@@ -105,6 +105,9 @@ pub struct GatewayConfig {
     /// 自定义提示过滤规则
     #[serde(default)]
     pub prompt_filter_rules: Vec<PromptFilterRule>,
+    /// 是否记录请求日志
+    #[serde(default = "default_true_val")]
+    pub log_requests: bool,
 }
 
 /// 自定义提示过滤规则
@@ -383,6 +386,7 @@ impl Default for GatewayConfig {
             filter_strip_boundaries: false,
             filter_env_noise: false,
             prompt_filter_rules: Vec::new(),
+            log_requests: true,
         }
     }
 }

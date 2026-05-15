@@ -20,6 +20,7 @@ export interface GatewayConfig {
   filterClaudeCode: boolean;
   filterStripBoundaries: boolean;
   filterEnvNoise: boolean;
+  logRequests: boolean;
 }
 
 export interface ModelMappingRule {
@@ -59,7 +60,8 @@ export const DEFAULT_GATEWAY_CONFIG: GatewayConfig = {
   modelMappings: [],
   filterClaudeCode: false,
   filterStripBoundaries: false,
-  filterEnvNoise: false
+  filterEnvNoise: false,
+  logRequests: true
 }
 
 export const DEFAULT_GATEWAY_STATUS: GatewayStatus = {
@@ -141,7 +143,8 @@ export const hydrateGatewayConfig = (gatewayConfig: any): GatewayConfig => ({
   modelMappings: Array.isArray(gatewayConfig?.modelMappings) ? gatewayConfig.modelMappings : [],
   filterClaudeCode: gatewayConfig?.filterClaudeCode ?? false,
   filterStripBoundaries: gatewayConfig?.filterStripBoundaries ?? false,
-  filterEnvNoise: gatewayConfig?.filterEnvNoise ?? false
+  filterEnvNoise: gatewayConfig?.filterEnvNoise ?? false,
+  logRequests: gatewayConfig?.logRequests ?? true
 })
 
 export const buildGatewayStatusState = (gatewayStatus: any, gatewayConfig: any, fallbackConfig: GatewayConfig = DEFAULT_GATEWAY_CONFIG): GatewayStatus => ({
@@ -175,7 +178,8 @@ export const buildGatewayPayload = (config: GatewayConfig) => ({
   modelMappings: config.modelMappings || [],
   filterClaudeCode: !!config.filterClaudeCode,
   filterStripBoundaries: !!config.filterStripBoundaries,
-  filterEnvNoise: !!config.filterEnvNoise
+  filterEnvNoise: !!config.filterEnvNoise,
+  logRequests: config.logRequests !== false
 })
 
 export const loadGatewayPageData = async () => {

@@ -10,9 +10,10 @@ interface ApiKeysDialogProps {
   clientApiKeysText: string
   setConfig: React.Dispatch<React.SetStateAction<any>>
   handleGenerateApiKey: () => void
+  onSave?: () => void
 }
 
-function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig, handleGenerateApiKey }: ApiKeysDialogProps) {
+function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig, handleGenerateApiKey, onSave }: ApiKeysDialogProps) {
   const rawKeys = (clientApiKeysText || '').split(/[\n,]+/).map(k => k.trim()).filter(Boolean)
 
   const keys = rawKeys.map(rawKey => {
@@ -39,7 +40,7 @@ function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig, handl
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v && onSave) onSave() }}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>客户端 API Keys</DialogTitle>

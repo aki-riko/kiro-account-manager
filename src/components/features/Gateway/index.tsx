@@ -530,7 +530,7 @@ function GatewayPage() {
           handleAutoStartToggle={handleAutoStartToggle}
         />
 
-        <RequestLogsDialog open={showRequestLogs} onOpenChange={setShowRequestLogs} logLevel={config.logLevel} onLogLevelChange={(v) => setField('logLevel', v)} />
+        <RequestLogsDialog open={showRequestLogs} onOpenChange={setShowRequestLogs} logLevel={config.logLevel} onLogLevelChange={(v) => setField('logLevel', v)} logRequests={config.logRequests} onLogRequestsChange={(v) => setField('logRequests', v)} />
 
         {/* 快速配置客户端弹窗 */}
         <Dialog open={showClientConfig} onOpenChange={(open) => { setShowClientConfig(open); if (!open) setClientConfigResults([]) }}>

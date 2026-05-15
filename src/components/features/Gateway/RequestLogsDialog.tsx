@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Switch } from '@/components/ui/switch'
 import { Activity, RefreshCw, XCircle } from 'lucide-react'
 
 interface ProcessedRequestLog {
@@ -38,9 +39,11 @@ interface RequestLogsDialogProps {
   onOpenChange: (open: boolean) => void
   logLevel: string
   onLogLevelChange: (level: string) => void
+  logRequests: boolean
+  onLogRequestsChange: (enabled: boolean) => void
 }
 
-export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChange }: RequestLogsDialogProps) {
+export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChange, logRequests, onLogRequestsChange }: RequestLogsDialogProps) {
   const [requestLogs, setRequestLogs] = useState<ProcessedRequestLog[]>([])
   const [requestStats, setRequestStats] = useState<GatewayRequestStats | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -156,6 +159,10 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
               <Button variant="outline" size="sm" className="h-7 px-2" onClick={async () => { await invoke('clear_gateway_request_logs'); setRequestLogs([]); setRequestStats(null) }} disabled={requestLogs.length === 0}>
                 清空
               </Button>
+              <div className="flex items-center gap-1.5">
+                <Switch size="sm" checked={logRequests} onCheckedChange={onLogRequestsChange} />
+                <span className="text-xs text-muted-foreground">记录</span>
+              </div>
               <select
                 className="text-xs border rounded px-2 py-1"
                 value={logLevel}

@@ -287,6 +287,7 @@ function GatewayConfig({
         onOpenChange={setShowModelMappingDialog}
         modelMappings={config.modelMappings}
         setField={setField}
+        onSave={handleSaveConfig}
       />
 
       {/* ApiKeysDialog */}
@@ -296,6 +297,7 @@ function GatewayConfig({
         clientApiKeysText={config.clientApiKeysText}
         setConfig={setConfig}
         handleGenerateApiKey={handleGenerateApiKey}
+        onSave={handleSaveConfig}
       />
     </div>
   )
