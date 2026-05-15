@@ -520,7 +520,6 @@ function GatewayPage() {
           hasFieldErrors={hasFieldErrors}
           fieldErrors={fieldErrors}
           setField={setField}
-          handleGenerateApiKey={handleGenerateApiKey}
           accountOptions={accountOptions}
           groupOptions={groupOptions}
           setConfig={setConfig}

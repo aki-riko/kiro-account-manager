@@ -17,7 +17,6 @@ interface GatewayConfigProps {
   hasFieldErrors: boolean;
   fieldErrors: Record<string, string>;
   setField: (key: string, value: any) => void;
-  handleGenerateApiKey: () => void;
   accountOptions: any[];
   groupOptions: any[];
   setConfig: React.Dispatch<React.SetStateAction<any>>;
@@ -33,7 +32,6 @@ function GatewayConfig({
   hasFieldErrors,
   fieldErrors,
   setField,
-  handleGenerateApiKey,
   accountOptions,
   groupOptions,
   setConfig,
@@ -296,7 +294,6 @@ function GatewayConfig({
         onOpenChange={setShowApiKeysDialog}
         clientApiKeysText={config.clientApiKeysText}
         setConfig={setConfig}
-        handleGenerateApiKey={handleGenerateApiKey}
         onSave={handleSaveConfig}
       />
     </div>
