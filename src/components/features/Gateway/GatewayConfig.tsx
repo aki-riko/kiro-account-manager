@@ -1,8 +1,7 @@
-import { Server, Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity, Copy, Trash2 } from 'lucide-react'
+import { Server, Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity, Copy } from 'lucide-react'
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -10,6 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { GatewaySurfaceCard } from './GatewayShared'
+import ModelMappingDialog from './ModelMappingDialog'
 import React from 'react'
 
 interface GatewayConfigProps {
@@ -51,18 +51,6 @@ function GatewayConfig({
   handleSaveConfig,
   handleAutoStartToggle}: GatewayConfigProps) {
   const [showModelMappingDialog, setShowModelMappingDialog] = useState(false)
-
-  // Claude 模型列表（用于映射规则下拉选择）
-  const AVAILABLE_MODELS = [
-    'claude-opus-4.7',
-    'claude-opus-4.6',
-    'claude-sonnet-4.6',
-    'claude-opus-4.5',
-    'claude-sonnet-4.5',
-    'claude-sonnet-4.5-thinking',
-    'claude-haiku-4.5',
-    'claude-sonnet-4',
-  ]
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -564,115 +552,12 @@ function GatewayConfig({
       </GatewaySurfaceCard>
 
       {/* 模型映射规则管理 Dialog */}
-      <Dialog open={showModelMappingDialog} onOpenChange={setShowModelMappingDialog}>
-        <DialogContent className="sm:max-w-[560px]">
-          <DialogHeader className="">
-            <DialogTitle className="">模型映射规则</DialogTitle>
-            <DialogDescription className="">
-              客户端请求的模型名会根据规则映射到实际模型
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-4 mt-2">
-            {/* 规则列表 */}
-            <div className="border rounded-lg overflow-hidden max-h-[300px] overflow-y-auto">
-              {(!config.modelMappings || config.modelMappings.length === 0) ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">
-                  暂无规则
-                </div>
-              ) : (
-                config.modelMappings.map((rule: any, idx: number) => (
-                  <div key={rule.id} className={`flex items-center gap-2 p-3 border-b last:border-b-0 hover:bg-muted/30 ${!rule.enabled ? 'opacity-50' : ''}`}>
-                    <Switch
-                      size="sm"
-                      checked={rule.enabled}
-                      onCheckedChange={(checked) => {
-                        const newMappings = [...config.modelMappings]
-                        newMappings[idx] = { ...newMappings[idx], enabled: checked }
-                        setField('modelMappings', newMappings)
-                      }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-medium truncate">{rule.name || rule.sourceModel}</span>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{rule.ruleType === 'replace' ? '替换' : rule.ruleType === 'alias' ? '别名' : '负载均衡'}</Badge>
-                      </div>
-                      <div className="text-xs text-muted-foreground font-mono truncate mt-0.5">
-                        {rule.sourceModel} → {rule.targetModels.join(', ')}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
-                      onClick={() => {
-                        const newMappings = config.modelMappings.filter((_: any, i: number) => i !== idx)
-                        setField('modelMappings', newMappings)
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* 添加新规则 */}
-            <div className="space-y-2 p-3 border rounded-lg bg-muted/10">
-              <div className="text-xs font-medium text-muted-foreground">添加新规则</div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="relative">
-                  <Input placeholder="源模型名" className="text-xs" id="dialog-mapping-source" list="model-list-source" />
-                  <datalist id="model-list-source">
-                    {AVAILABLE_MODELS.map(m => <option key={m} value={m} />)}
-                  </datalist>
-                </div>
-                <div className="relative">
-                  <Input placeholder="目标模型名" className="text-xs" id="dialog-mapping-target" list="model-list-target" />
-                  <datalist id="model-list-target">
-                    {AVAILABLE_MODELS.map(m => <option key={m} value={m} />)}
-                  </datalist>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Select defaultValue="replace">
-                  <SelectTrigger className="text-xs flex-1" id="dialog-mapping-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="replace">替换 (replace)</SelectItem>
-                    <SelectItem value="alias">别名 (alias)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => {
-                    const sourceEl = document.getElementById('dialog-mapping-source') as HTMLInputElement
-                    const targetEl = document.getElementById('dialog-mapping-target') as HTMLInputElement
-                    if (!sourceEl?.value?.trim() || !targetEl?.value?.trim()) return
-                    const newRule = {
-                      id: crypto.randomUUID(),
-                      name: `${sourceEl.value.trim()} → ${targetEl.value.trim()}`,
-                      enabled: true,
-                      ruleType: 'replace',
-                      sourceModel: sourceEl.value.trim(),
-                      targetModels: [targetEl.value.trim()],
-                      weights: []
-                    }
-                    setField('modelMappings', [...(config.modelMappings || []), newRule])
-                    sourceEl.value = ''
-                    targetEl.value = ''
-                  }}
-                >
-                  <Plus size={14} className="mr-1" />
-                  添加
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ModelMappingDialog
+        open={showModelMappingDialog}
+        onOpenChange={setShowModelMappingDialog}
+        modelMappings={config.modelMappings}
+        setField={setField}
+      />
     </div>
   )
 }
