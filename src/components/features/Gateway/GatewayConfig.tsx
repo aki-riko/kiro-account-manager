@@ -1,4 +1,4 @@
-import { Server, Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity } from 'lucide-react'
+import { Server, Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity, Copy } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -170,10 +170,11 @@ function GatewayConfig({
                 <div className="border rounded-lg overflow-hidden">
                   <div className="bg-muted/50 border-b">
                     <div className="flex text-sm">
-                      <div className="flex-shrink-0 w-[60px] p-3 font-semibold">#</div>
-                      <div className="flex-1 p-3 font-semibold">API Key</div>
-                      <div className="flex-shrink-0 w-[100px] p-3 font-semibold text-center">启用</div>
-                      <div className="flex-shrink-0 w-[80px] p-3 font-semibold">操作</div>
+                      <div className="flex-shrink-0 w-[40px] p-2 font-semibold text-center">#</div>
+                      <div className="flex-shrink-0 w-[100px] p-2 font-semibold">名称</div>
+                      <div className="flex-1 p-2 font-semibold">API Key</div>
+                      <div className="flex-shrink-0 w-[60px] p-2 font-semibold text-center">启用</div>
+                      <div className="flex-shrink-0 w-[100px] p-2 font-semibold text-center">操作</div>
                     </div>
                   </div>
                   
@@ -192,43 +193,64 @@ function GatewayConfig({
                         )
                       }
 
-                      // 解析 Key 的启用状态（使用 #disabled# 前缀标记禁用的 Key）
+                      // 解析 Key 格式: #disabled#name:key 或 name:key 或 key
                       const keys = rawKeys.map((rawKey: string) => {
                         const isDisabled = rawKey.startsWith('#disabled#')
-                        const key = isDisabled ? rawKey.substring(10) : rawKey
-                        return { key, enabled: !isDisabled }
+                        const rest = isDisabled ? rawKey.substring(10) : rawKey
+                        const colonIdx = rest.indexOf(':')
+                        // 如果有冒号且冒号前不像是key的一部分(不以sk-开头)
+                        const hasName = colonIdx > 0 && !rest.startsWith('sk-') && !rest.startsWith('PROXY_KEY:')
+                        const name = hasName ? rest.substring(0, colonIdx) : ''
+                        const key = hasName ? rest.substring(colonIdx + 1) : rest
+                        return { name, key, enabled: !isDisabled }
                       })
 
-                      return keys.map((item: { key: string; enabled: boolean }, idx: number) => (
-                        <div key={idx} className="flex text-sm border-b last:border-b-0 hover:bg-muted/30 transition-colors">
-                          <div className="flex-shrink-0 w-[60px] p-3 font-mono text-xs text-muted-foreground flex items-center">
+                      return keys.map((item: { name: string; key: string; enabled: boolean }, idx: number) => (
+                        <div key={idx} className={`flex text-sm border-b last:border-b-0 hover:bg-muted/30 transition-colors ${!item.enabled ? 'opacity-50' : ''}`}>
+                          <div className="flex-shrink-0 w-[40px] p-2 font-mono text-xs text-muted-foreground flex items-center justify-center">
                             {idx + 1}
                           </div>
-                          <div className="flex-1 p-3">
+                          <div className="flex-shrink-0 w-[100px] p-2 flex items-center">
                             <Input
-                              value={item.key}
+                              value={item.name}
                               onChange={(e) => {
                                 const newKeys = [...keys]
-                                newKeys[idx] = { ...newKeys[idx], key: e.target.value }
-                                const newRawKeys = newKeys.map(k => k.enabled ? k.key : `#disabled#${k.key}`)
+                                newKeys[idx] = { ...newKeys[idx], name: e.target.value }
+                                const newRawKeys = newKeys.map(k => {
+                                  const prefix = k.enabled ? '' : '#disabled#'
+                                  const namePrefix = k.name ? `${k.name}:` : ''
+                                  return `${prefix}${namePrefix}${k.key}`
+                                })
                                 setConfig((prev: any) => ({
                                   ...prev,
                                   clientApiKeysText: newRawKeys.join('\n'),
                                   apiKey: newKeys.find(k => k.enabled)?.key || newKeys[0]?.key || ''
                                 }))
                               }}
-                              className="h-8 font-mono text-xs"
-                              placeholder="sk-..."
-                              disabled={!item.enabled}
+                              className="h-7 text-xs"
+                              placeholder="名称"
                             />
                           </div>
-                          <div className="flex-shrink-0 w-[100px] p-3 flex items-center justify-center">
+                          <div className="flex-1 p-2 flex items-center gap-1">
+                            <code className="flex-1 text-xs font-mono bg-muted/50 px-2 py-1 rounded truncate">
+                              {item.key.length > 20 ? `${item.key.substring(0, 8)}...${item.key.slice(-4)}` : item.key}
+                            </code>
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { navigator.clipboard.writeText(item.key) }}>
+                              <Copy size={12} className="text-muted-foreground" />
+                            </Button>
+                          </div>
+                          <div className="flex-shrink-0 w-[60px] p-2 flex items-center justify-center">
                             <Switch
+                              size="sm"
                               checked={item.enabled}
                               onCheckedChange={(checked) => {
                                 const newKeys = [...keys]
                                 newKeys[idx] = { ...newKeys[idx], enabled: checked }
-                                const newRawKeys = newKeys.map(k => k.enabled ? k.key : `#disabled#${k.key}`)
+                                const newRawKeys = newKeys.map(k => {
+                                  const prefix = k.enabled ? '' : '#disabled#'
+                                  const namePrefix = k.name ? `${k.name}:` : ''
+                                  return `${prefix}${namePrefix}${k.key}`
+                                })
                                 setConfig((prev: any) => ({
                                   ...prev,
                                   clientApiKeysText: newRawKeys.join('\n'),
@@ -237,20 +259,24 @@ function GatewayConfig({
                               }}
                             />
                           </div>
-                          <div className="flex-shrink-0 w-[80px] p-3 flex items-center">
+                          <div className="flex-shrink-0 w-[100px] p-2 flex items-center justify-center">
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => {
                                 const newKeys = keys.filter((_: any, i: number) => i !== idx)
-                                const newRawKeys = newKeys.map(k => k.enabled ? k.key : `#disabled#${k.key}`)
+                                const newRawKeys = newKeys.map(k => {
+                                  const prefix = k.enabled ? '' : '#disabled#'
+                                  const namePrefix = k.name ? `${k.name}:` : ''
+                                  return `${prefix}${namePrefix}${k.key}`
+                                })
                                 setConfig((prev: any) => ({
                                   ...prev,
                                   clientApiKeysText: newRawKeys.join('\n'),
                                   apiKey: newKeys.find(k => k.enabled)?.key || newKeys[0]?.key || ''
                                 }))
                               }}
-                              className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+                              className="h-6 text-[10px] text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
                             >
                               删除
                             </Button>
