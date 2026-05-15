@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
-import { Server, Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity, Copy } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Dice6, Plus, RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -55,23 +54,8 @@ function GatewayConfig({
   return (
     <div className="grid grid-cols-1 gap-4">
       <GatewaySurfaceCard colors={colors}>
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Server size={16} />
-              <div className="font-semibold text-foreground">网关配置</div>
-            </div>
-            <div className="flex items-center gap-2">
-              {hasFieldErrors ? <Badge variant="destructive">配置待修正</Badge> : null}
-              {hasUnsavedChanges ? <Badge variant="secondary">未保存变更</Badge> : <Badge variant="default">已同步</Badge>}
-            </div>
-          </div>
-
-          <div className="text-sm text-muted-foreground">
-            配置监听地址、账号路由、安全策略等核心参数
-          </div>
-
-          <div className="flex flex-col gap-6 pt-2">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
             {/* Section 1: 网络与路由 */}
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
