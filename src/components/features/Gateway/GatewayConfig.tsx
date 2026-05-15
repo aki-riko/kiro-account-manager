@@ -44,10 +44,10 @@ function GatewayConfig({
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false)
 
   return (
-    <div className="grid grid-cols-1 gap-4">
+    <div className="grid grid-cols-1 gap-3">
       <GatewaySurfaceCard colors={colors}>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {/* Section 1: 网络与路由 */}
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">

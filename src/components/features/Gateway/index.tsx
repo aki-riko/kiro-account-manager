@@ -462,9 +462,9 @@ function GatewayPage() {
     <GatewayConfigProvider>
       <GatewayStatusProvider>
         <GatewayDataProvider>
-            <div className={`h-full overflow-y-auto p-4 glass-main`}>
-              <Stack gap="md">
-                <Card className={`glass-card border border-border rounded-xl p-4`}>
+            <div className={`h-full overflow-y-auto p-3 glass-main`}>
+              <Stack gap="sm">
+                <Card className={`glass-card border border-border rounded-xl p-3`}>
           <Stack gap="sm">
             <Group justify="space-between" align="flex-start">
               <Stack gap={4}>
@@ -523,9 +523,9 @@ function GatewayPage() {
               </Group>
             </Group>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-2">
               {consoleHighlights.map((item) => (
-                <div key={item.label} className="border rounded-lg p-2.5">
+                <div key={item.label} className="border rounded-lg p-2">
                   <Text size="xs" className={"text-muted-foreground"}>{item.label}</Text>
                   <Text fw={700} size="sm" className={"text-foreground"}>{item.value}</Text>
                 </div>
