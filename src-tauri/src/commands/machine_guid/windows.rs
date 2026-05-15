@@ -1,12 +1,11 @@
 // Windows 平台机器码实现
 
-use chrono::Local;
 use uuid::Uuid;
 use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_SET_VALUE};
 use winreg::RegKey;
 
-use super::types::{MachineGuidBackup, SystemMachineInfo};
-use super::utils::{is_valid_machine_id, load_backup, read_backup_info, save_backup};
+use super::types::SystemMachineInfo;
+use super::utils::is_valid_machine_id;
 
 fn read_registry() -> Result<String, String> {
     RegKey::predef(HKEY_LOCAL_MACHINE)
@@ -25,32 +24,12 @@ fn write_registry(value: &str) -> Result<(), String> {
 }
 
 pub fn get_system_machine_guid_inner() -> Result<SystemMachineInfo, String> {
-    let (backup_exists, backup_time) = read_backup_info();
     Ok(SystemMachineInfo {
         machine_guid: Some(read_registry()?),
-        backup_exists,
-        backup_time,
         os_type: "windows".to_string(),
         can_modify: true,
         requires_admin: true,
     })
-}
-
-pub fn backup_machine_guid_inner() -> Result<MachineGuidBackup, String> {
-    let backup = MachineGuidBackup {
-        machine_guid: read_registry()?,
-        backup_time: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-        computer_name: std::env::var("COMPUTERNAME").ok(),
-        os_type: Some("windows".to_string()),
-    };
-    save_backup(&backup)?;
-    Ok(backup)
-}
-
-pub fn restore_machine_guid_inner() -> Result<String, String> {
-    let backup = load_backup()?;
-    write_registry(&backup.machine_guid)?;
-    Ok(backup.machine_guid)
 }
 
 pub fn reset_machine_guid_inner() -> Result<String, String> {

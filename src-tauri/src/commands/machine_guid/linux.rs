@@ -1,11 +1,10 @@
 // Linux 平台机器码实现
 
-use chrono::Local;
 use std::io::Write;
 use std::process::{Command, Stdio};
 use uuid::Uuid;
 
-use super::types::{MachineGuidBackup, SystemMachineInfo};
+use super::types::SystemMachineInfo;
 use super::utils::*;
 
 const MACHINE_ID_PATHS: [&str; 2] = ["/etc/machine-id", "/var/lib/dbus/machine-id"];
@@ -46,34 +45,12 @@ fn write_with_pkexec(raw_id: &str) -> Result<(), String> {
 }
 
 pub fn get_system_machine_guid_inner() -> Result<SystemMachineInfo, String> {
-    let (backup_exists, backup_time) = read_backup_info();
     Ok(SystemMachineInfo {
         machine_guid: Some(format_as_uuid(&read_machine_id()?)),
-        backup_exists,
-        backup_time,
         os_type: "linux".to_string(),
         can_modify: true,
         requires_admin: true,
     })
-}
-
-pub fn backup_machine_guid_inner() -> Result<MachineGuidBackup, String> {
-    let backup = MachineGuidBackup {
-        machine_guid: format_as_uuid(&read_machine_id()?),
-        backup_time: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-        computer_name: std::env::var("HOSTNAME")
-            .ok()
-            .or_else(|| std::env::var("USER").ok()),
-        os_type: Some("linux".to_string()),
-    };
-    save_backup(&backup)?;
-    Ok(backup)
-}
-
-pub fn restore_machine_guid_inner() -> Result<String, String> {
-    let backup = load_backup()?;
-    write_with_pkexec(&backup.machine_guid.replace("-", "").to_lowercase())?;
-    Ok(backup.machine_guid)
 }
 
 pub fn reset_machine_guid_inner() -> Result<String, String> {

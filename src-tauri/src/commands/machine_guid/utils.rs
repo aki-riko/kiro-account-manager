@@ -1,8 +1,6 @@
 // 机器码工具函数
 
-use super::types::MachineGuidBackup;
 use regex::Regex;
-use std::path::PathBuf;
 use std::sync::LazyLock;
 use uuid::Uuid;
 
@@ -14,16 +12,9 @@ static UUID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 static HEX32_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[0-9a-f]{32}$").expect("Failed to compile HEX32 regex"));
 
-pub fn get_backup_path() -> PathBuf {
-    dirs::data_dir()
-        .unwrap_or_default()
-        .join(".kiro-account-manager")
-        .join("machine-guid-backup.json")
-}
-
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
-pub fn get_macos_override_path() -> PathBuf {
+pub fn get_macos_override_path() -> std::path::PathBuf {
     dirs::data_dir()
         .unwrap_or_default()
         .join(".kiro-account-manager")
@@ -69,41 +60,4 @@ pub fn format_as_uuid(hex: &str) -> String {
     )
 }
 
-pub fn read_backup_info() -> (bool, Option<String>) {
-    std::fs::read_to_string(get_backup_path())
-        .ok()
-        .and_then(|c| serde_json::from_str::<MachineGuidBackup>(&c).ok())
-        .map_or((false, None), |b| (true, Some(b.backup_time)))
-}
 
-pub fn get_machine_guid_backup_inner() -> Result<Option<MachineGuidBackup>, String> {
-    let path = get_backup_path();
-    if !path.exists() {
-        return Ok(None);
-    }
-    load_backup().map(Some)
-}
-
-pub fn save_backup(backup: &MachineGuidBackup) -> Result<(), String> {
-    write_file_with_dir(
-        &get_backup_path(),
-        &serde_json::to_string_pretty(backup).map_err(|e| format!("序列化失败: {e}"))?,
-    )
-    .map_err(|e| format!("写入备份失败: {e}"))
-}
-
-pub fn write_file_with_dir(path: &std::path::Path, content: &str) -> std::io::Result<()> {
-    if let Some(p) = path.parent() {
-        std::fs::create_dir_all(p)?;
-    }
-    std::fs::write(path, content)
-}
-
-pub fn load_backup() -> Result<MachineGuidBackup, String> {
-    let path = get_backup_path();
-    if !path.exists() {
-        return Err("没有找到备份文件".to_string());
-    }
-    let content = std::fs::read_to_string(&path).map_err(|e| format!("读取备份失败: {e}"))?;
-    serde_json::from_str(&content).map_err(|e| format!("解析备份失败: {e}"))
-}

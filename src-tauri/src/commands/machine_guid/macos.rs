@@ -3,14 +3,13 @@
 // 1. ~/Library/Application Support/Kiro/machineid - 主要机器码文件
 // 2. ~/Library/Application Support/Kiro/User/globalStorage/storage.json - 遥测相关 ID
 
-use chrono::Local;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use uuid::Uuid;
 
-use super::types::{MachineGuidBackup, SystemMachineInfo};
+use super::types::SystemMachineInfo;
 use super::utils::*;
 
 /// 获取 Kiro IDE 数据目录
@@ -111,8 +110,6 @@ fn update_storage_json(path: &PathBuf, machine_id: &str) -> Result<(), String> {
 }
 
 pub fn get_system_machine_guid_inner() -> Result<SystemMachineInfo, String> {
-    let (backup_exists, backup_time) = read_backup_info();
-
     // 优先读取 Kiro IDE 的 machineid 文件
     let machine_guid = if let Some(path) = get_kiro_machineid_path() {
         if path.exists() {
@@ -130,46 +127,10 @@ pub fn get_system_machine_guid_inner() -> Result<SystemMachineInfo, String> {
 
     Ok(SystemMachineInfo {
         machine_guid: Some(machine_guid),
-        backup_exists,
-        backup_time,
         os_type: "macos".to_string(),
         can_modify: true,
         requires_admin: false,
     })
-}
-
-pub fn backup_machine_guid_inner() -> Result<MachineGuidBackup, String> {
-    // 备份当前使用的机器码（优先 machineid 文件，否则硬件 UUID）
-    let current_id = if let Some(path) = get_kiro_machineid_path() {
-        if path.exists() {
-            fs::read_to_string(&path)
-                .ok()
-                .map(|s| s.trim().to_string())
-                .filter(|s| is_valid_machine_id(s))
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-    .map_or_else(|| read_hardware_uuid(), Ok)?;
-
-    let backup = MachineGuidBackup {
-        machine_guid: current_id,
-        backup_time: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-        computer_name: std::env::var("HOSTNAME")
-            .ok()
-            .or_else(|| std::env::var("USER").ok()),
-        os_type: Some("macos".to_string()),
-    };
-    save_backup(&backup)?;
-    Ok(backup)
-}
-
-pub fn restore_machine_guid_inner() -> Result<String, String> {
-    let backup = load_backup()?;
-    write_all_machine_ids(&backup.machine_guid)?;
-    Ok(backup.machine_guid)
 }
 
 pub fn reset_machine_guid_inner() -> Result<String, String> {

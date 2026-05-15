@@ -12,7 +12,7 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
-pub use types::*;
+pub use types::SystemMachineInfo;
 pub use utils::{generate_random_machine_id, get_machine_id};
 
 #[cfg(target_os = "linux")]
@@ -24,15 +24,9 @@ use windows as platform;
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 mod platform {
-    use super::types::*;
+    use super::types::SystemMachineInfo;
     const ERR: &str = "此功能仅支持 Windows、macOS 和 Linux 系统";
     pub fn get_system_machine_guid_inner() -> Result<SystemMachineInfo, String> {
-        Err(ERR.into())
-    }
-    pub fn backup_machine_guid_inner() -> Result<MachineGuidBackup, String> {
-        Err(ERR.into())
-    }
-    pub fn restore_machine_guid_inner() -> Result<String, String> {
         Err(ERR.into())
     }
     pub fn reset_machine_guid_inner() -> Result<String, String> {
@@ -58,23 +52,8 @@ pub async fn get_system_machine_guid() -> Result<SystemMachineInfo, String> {
 }
 
 #[tauri::command]
-pub async fn backup_machine_guid() -> Result<MachineGuidBackup, String> {
-    run(platform::backup_machine_guid_inner).await?
-}
-
-#[tauri::command]
-pub async fn restore_machine_guid() -> Result<String, String> {
-    run(platform::restore_machine_guid_inner).await?
-}
-
-#[tauri::command]
 pub async fn reset_system_machine_guid() -> Result<String, String> {
     run(platform::reset_machine_guid_inner).await?
-}
-
-#[tauri::command]
-pub async fn get_machine_guid_backup() -> Result<Option<MachineGuidBackup>, String> {
-    run(utils::get_machine_guid_backup_inner).await?
 }
 
 #[tauri::command]
