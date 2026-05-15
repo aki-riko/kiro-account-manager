@@ -159,6 +159,18 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
               <Button variant="outline" size="sm" className="h-7 px-2" onClick={async () => { await invoke('clear_gateway_request_logs'); setRequestLogs([]); setRequestStats(null) }} disabled={requestLogs.length === 0}>
                 清空
               </Button>
+              <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => {
+                const content = filteredLogs.map(log => `[${log.timestamp}] ${log.status} ${log.path} ${log.model || '-'} ${log.duration}ms in:${log.inputTokens || 0} out:${log.outputTokens || 0}${log.error ? ' ERR:' + log.error : ''}`).join('\n')
+                const blob = new Blob([content], { type: 'text/plain' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `gateway-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.log`
+                a.click()
+                URL.revokeObjectURL(url)
+              }} disabled={filteredLogs.length === 0} title="导出日志">
+                导出
+              </Button>
               <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => invoke('open_gateway_log_dir')} title="打开日志目录">
                 📂
               </Button>
