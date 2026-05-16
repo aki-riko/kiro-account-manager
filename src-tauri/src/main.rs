@@ -156,6 +156,20 @@ fn setup_log_plugin() -> tauri_plugin_log::Builder {
             let target = metadata.target();
             target.starts_with("kiro_account_manager")
         })
+        // 紧凑格式器：HH:MM:SS LEVEL [短模块] msg
+        // 默认格式 [date][time][full_target][LEVEL] msg 在终端太长不利于阅读
+        .format(|out, message, record| {
+            let target = record.target();
+            // 取最后一段模块名
+            let short_target = target.rsplit("::").next().unwrap_or(target);
+            out.finish(format_args!(
+                "{} {} [{}] {}",
+                chrono::Local::now().format("%H:%M:%S"),
+                record.level(),
+                short_target,
+                message
+            ))
+        })
         // 输出到日志文件 + 终端 stdout（dev 模式可见）
         // 文件名：app.log（所有模块通用应用日志，含 [MITM]/[Gateway]/[Account] 等前缀区分）
         // MITM 业务事件还会单独写 mitm.log，Gateway 业务请求单独写 gateway-*.log

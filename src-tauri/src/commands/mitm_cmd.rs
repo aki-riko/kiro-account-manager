@@ -61,6 +61,7 @@ pub async fn start_mitm_proxy(
     port: u16,
     target_device_id: Option<String>,
     mitm_domains: Vec<String>,
+    upstream_proxy: Option<String>,
 ) -> Result<(), String> {
     // 检查是否已在运行
     {
@@ -86,6 +87,7 @@ pub async fn start_mitm_proxy(
         },
         target_device_id,
         log_requests: true,
+        upstream_proxy: upstream_proxy.filter(|s| !s.trim().is_empty()),
     };
 
     let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();

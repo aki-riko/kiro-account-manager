@@ -30,6 +30,9 @@ pub struct MitmProxyConfig {
     pub target_device_id: Option<String>,
     /// 是否记录请求日志
     pub log_requests: bool,
+    /// 上游代理（http://host:port 或 socks5://host:port），用于 MITM 转发出网时走代理
+    /// 解决与 Kiro 原本的 HTTPS_PROXY 冲突的问题
+    pub upstream_proxy: Option<String>,
 }
 
 impl Default for MitmProxyConfig {
@@ -52,6 +55,7 @@ impl Default for MitmProxyConfig {
             ],
             target_device_id: None,
             log_requests: true,
+            upstream_proxy: None,
         }
     }
 }
@@ -151,7 +155,7 @@ async fn handle_connection(
         handle_mitm_connect(&mut stream, &hostname, port, config, cert_manager).await
     } else {
         // 直连模式：透明转发
-        handle_direct_connect(&mut stream, &hostname, port).await
+        handle_direct_connect(&mut stream, &hostname, port, config).await
     }
 }
 
@@ -216,9 +220,8 @@ async fn handle_mitm_connect(
     // 提示词过滤（检测 Kiro IDE 系统提示并替换）
     let modified_request = filter_kiro_prompt(&modified_request);
 
-    // 连接到真实服务器
-    let server_addr = format!("{}:{}", hostname, port);
-    let server_stream = TcpStream::connect(&server_addr)
+    // 连接到真实服务器（如果配置了上游代理则经代理）
+    let server_stream = connect_target(hostname, port, config.upstream_proxy.as_deref())
         .await
         .map_err(|e| format!("连接目标服务器失败: {e}"))?;
 
@@ -271,6 +274,7 @@ async fn handle_direct_connect(
     client_stream: &mut TcpStream,
     hostname: &str,
     port: u16,
+    config: &MitmProxyConfig,
 ) -> Result<(), String> {
     // 回复 200
     client_stream
@@ -278,9 +282,8 @@ async fn handle_direct_connect(
         .await
         .map_err(|e| format!("回复 CONNECT 失败: {e}"))?;
 
-    // 连接目标服务器
-    let server_addr = format!("{}:{}", hostname, port);
-    let mut server_stream = TcpStream::connect(&server_addr)
+    // 连接目标服务器（如果配置了上游代理则经代理）
+    let mut server_stream = connect_target(hostname, port, config.upstream_proxy.as_deref())
         .await
         .map_err(|e| format!("连接目标失败: {e}"))?;
 
@@ -302,6 +305,83 @@ fn parse_host_port(target: &str) -> Result<(String, u16), String> {
     } else {
         Ok((target.to_string(), 443))
     }
+}
+
+/// 连接目标服务器
+///
+/// 如果配置了 upstream_proxy（http://host:port），则通过该代理建立 CONNECT 隧道；
+/// 否则直接 TCP 连接。
+/// 用于解决与 Kiro 原本设置的 HTTPS_PROXY 冲突的问题：
+/// 用户可以让 Kiro 走我们的 MITM，再让 MITM 走原本的代理出网。
+async fn connect_target(
+    hostname: &str,
+    port: u16,
+    upstream_proxy: Option<&str>,
+) -> Result<TcpStream, String> {
+    let Some(proxy_url) = upstream_proxy.and_then(|s| {
+        let trimmed = s.trim();
+        (!trimmed.is_empty()).then_some(trimmed)
+    }) else {
+        // 直连
+        return TcpStream::connect(format!("{hostname}:{port}"))
+            .await
+            .map_err(|e| format!("TCP 连接失败 {hostname}:{port}: {e}"));
+    };
+
+    // 解析上游代理 URL（仅支持 http://）
+    let proxy_addr = proxy_url
+        .strip_prefix("http://")
+        .or_else(|| proxy_url.strip_prefix("HTTP://"))
+        .unwrap_or(proxy_url)
+        .trim_end_matches('/');
+
+    if proxy_addr.starts_with("socks") {
+        return Err(format!("暂不支持 SOCKS 代理: {proxy_url}（请用 http://）"));
+    }
+
+    let mut stream = TcpStream::connect(proxy_addr)
+        .await
+        .map_err(|e| format!("连接上游代理 {proxy_addr} 失败: {e}"))?;
+
+    // 发送 CONNECT 隧道请求
+    let connect_req = format!(
+        "CONNECT {hostname}:{port} HTTP/1.1\r\n\
+         Host: {hostname}:{port}\r\n\
+         Proxy-Connection: Keep-Alive\r\n\
+         \r\n"
+    );
+    stream
+        .write_all(connect_req.as_bytes())
+        .await
+        .map_err(|e| format!("发送 CONNECT 失败: {e}"))?;
+
+    // 读取代理响应（直到 \r\n\r\n）
+    let mut buf = Vec::with_capacity(512);
+    let mut tmp = [0u8; 256];
+    loop {
+        let n = stream
+            .read(&mut tmp)
+            .await
+            .map_err(|e| format!("读取代理响应失败: {e}"))?;
+        if n == 0 {
+            return Err("上游代理连接被关闭".to_string());
+        }
+        buf.extend_from_slice(&tmp[..n]);
+        if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+            break;
+        }
+        if buf.len() > 8192 {
+            return Err("上游代理响应过大".to_string());
+        }
+    }
+
+    let resp = String::from_utf8_lossy(&buf);
+    let first_line = resp.lines().next().unwrap_or_default();
+    if !first_line.contains(" 200 ") {
+        return Err(format!("上游代理拒绝 CONNECT: {first_line}"));
+    }
+
+    Ok(stream)
 }
 
 /// 64位十六进制机器码正则

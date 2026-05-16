@@ -23,6 +23,8 @@ pub struct MitmConfig {
     #[serde(default)]
     pub custom_prompt_replacement: Option<String>,
     #[serde(default)]
+    pub upstream_proxy: Option<String>,
+    #[serde(default)]
     pub enabled: bool,
 }
 
@@ -53,6 +55,7 @@ impl Default for MitmConfig {
             log_requests: true,
             filter_kiro_prompt: false,
             custom_prompt_replacement: None,
+            upstream_proxy: None,
             enabled: false,
         }
     }

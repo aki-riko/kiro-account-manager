@@ -30,6 +30,7 @@ function MitmProxy() {
   const [logRequests, setLogRequests] = useState(true)
   const [filterKiroPrompt, setFilterKiroPrompt] = useState(false)
   const [customPromptReplacement, setCustomPromptReplacement] = useState('')
+  const [upstreamProxy, setUpstreamProxy] = useState('')
   const [logLines, setLogLines] = useState<string[]>([])
   const [logExpanded, setLogExpanded] = useState(false)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -46,6 +47,7 @@ function MitmProxy() {
           logRequests?: boolean
           filterKiroPrompt?: boolean
           customPromptReplacement?: string | null
+          upstreamProxy?: string | null
         }>('get_mitm_config'),
       ])
       setStatus(s)
@@ -55,6 +57,7 @@ function MitmProxy() {
       setLogRequests(cfg.logRequests ?? true)
       setFilterKiroPrompt(cfg.filterKiroPrompt ?? false)
       setCustomPromptReplacement(cfg.customPromptReplacement || '')
+      setUpstreamProxy(cfg.upstreamProxy || '')
     } catch (e) {
       console.error('Failed to get MITM status:', e)
     }
@@ -93,6 +96,7 @@ function MitmProxy() {
           logRequests,
           filterKiroPrompt,
           customPromptReplacement: customPromptReplacement || null,
+          upstreamProxy: upstreamProxy || null,
           enabled: status?.running ?? false,
         },
       })
@@ -106,7 +110,7 @@ function MitmProxy() {
     const timer = setTimeout(saveConfig, 1500)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [port, targetDeviceId, mitmDomains, logRequests, filterKiroPrompt, customPromptReplacement])
+  }, [port, targetDeviceId, mitmDomains, logRequests, filterKiroPrompt, customPromptReplacement, upstreamProxy])
 
   const handleGenerateCa = async () => {
     setLoading(true)
@@ -154,6 +158,7 @@ function MitmProxy() {
         port,
         targetDeviceId: targetDeviceId || null,
         mitmDomains: mitmDomains.split('\n').map(s => s.trim()).filter(Boolean),
+        upstreamProxy: upstreamProxy.trim() || null,
       })
       await fetchStatus()
     } catch (e) {
@@ -293,6 +298,37 @@ function MitmProxy() {
                       <Switch checked={logRequests} onCheckedChange={setLogRequests} />
                     </div>
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                    <span>上游代理（可选 · 用于解决与系统代理冲突）</span>
+                    <button
+                      type="button"
+                      className="text-[10px] text-primary hover:underline disabled:opacity-50"
+                      disabled={!!status?.running}
+                      onClick={async () => {
+                        try {
+                          const info = await invoke<{ enabled: boolean; httpProxy: string | null }>('detect_system_proxy')
+                          if (info.enabled && info.httpProxy) setUpstreamProxy(info.httpProxy)
+                          else alert('未检测到系统代理')
+                        } catch (e) { alert(`检测失败：${e}`) }
+                      }}
+                    >
+                      检测系统代理
+                    </button>
+                  </Label>
+                  <Input
+                    type="text"
+                    value={upstreamProxy}
+                    onChange={(e) => setUpstreamProxy(e.target.value)}
+                    placeholder="留空 = 直连，例如 http://127.0.0.1:7890"
+                    className="h-8 font-mono text-xs"
+                    disabled={status?.running}
+                  />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    防止覆盖你的翻墙代理：MITM 拦下流量后再走此代理出网（HTTP CONNECT，仅支持 http://）。
+                  </p>
                 </div>
 
                 {!status?.caGenerated && (
