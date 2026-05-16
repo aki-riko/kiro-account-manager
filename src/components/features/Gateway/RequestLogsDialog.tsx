@@ -41,9 +41,10 @@ interface RequestLogsDialogProps {
   onLogLevelChange: (level: string) => void
   logRequests: boolean
   onLogRequestsChange: (enabled: boolean) => void
+  onSave?: () => void
 }
 
-export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChange, logRequests, onLogRequestsChange }: RequestLogsDialogProps) {
+export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChange, logRequests, onLogRequestsChange, onSave }: RequestLogsDialogProps) {
   const [requestLogs, setRequestLogs] = useState<ProcessedRequestLog[]>([])
   const [requestStats, setRequestStats] = useState<GatewayRequestStats | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -104,7 +105,7 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
   }, [open])
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v && onSave) onSave() }}>
       <DialogContent className="sm:max-w-[900px]">
         <DialogHeader>
           <DialogTitle>请求日志</DialogTitle>
