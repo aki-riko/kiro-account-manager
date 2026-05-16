@@ -202,6 +202,9 @@ async fn handle_mitm_connect(
         request_data.to_vec()
     };
 
+    // 提示词过滤（检测 Kiro IDE 系统提示并替换）
+    let modified_request = filter_kiro_prompt(&modified_request);
+
     // 连接到真实服务器
     let server_addr = format!("{}:{}", hostname, port);
     let server_stream = TcpStream::connect(&server_addr)
@@ -320,4 +323,87 @@ fn replace_machine_id(request_data: &[u8], target_id: &str) -> Vec<u8> {
     } else {
         request_data.to_vec()
     }
+}
+
+/// Kiro IDE 系统提示特征标记
+const KIRO_PROMPT_MARKERS: &[&str] = &[
+    "You are Kiro",
+    "<goal>",
+    "<subagents>",
+    "<progress_reporting>",
+    "<response_requirement>",
+];
+
+/// Kiro IDE 提示词精简替换
+const KIRO_MINIMAL_PROMPT: &str = "You are a helpful AI assistant. Follow the user's instructions carefully. Be concise and actionable.";
+
+/// 过滤 Kiro IDE 系统提示词
+/// 检测请求体中的 Kiro 系统提示特征，替换为精简版
+fn filter_kiro_prompt(request_data: &[u8]) -> Vec<u8> {
+    // 尝试解析为 UTF-8
+    let Ok(request_str) = std::str::from_utf8(request_data) else {
+        return request_data.to_vec();
+    };
+
+    // 快速检查：是否包含 Kiro 提示特征
+    let marker_count = KIRO_PROMPT_MARKERS.iter()
+        .filter(|marker| request_str.contains(*marker))
+        .count();
+
+    if marker_count < 2 {
+        return request_data.to_vec();
+    }
+
+    // 找到 Kiro 系统提示并替换
+    // Kiro 的提示在 history 第一条 user 消息的 content 字段里
+    let Ok(mut json) = serde_json::from_str::<serde_json::Value>(request_str) else {
+        return request_data.to_vec();
+    };
+
+    let replaced = replace_kiro_prompt_in_payload(&mut json);
+    if !replaced {
+        return request_data.to_vec();
+    }
+
+    log::info!("[MITM] 已过滤 Kiro IDE 系统提示词");
+
+    match serde_json::to_vec(&json) {
+        Ok(new_body) => new_body,
+        Err(_) => request_data.to_vec(),
+    }
+}
+
+/// 在 Kiro API payload 中替换系统提示
+fn replace_kiro_prompt_in_payload(json: &mut serde_json::Value) -> bool {
+    // 路径: conversationState.history[0].userInputMessage.content
+    let history = json
+        .pointer_mut("/conversationState/history")
+        .and_then(|v| v.as_array_mut());
+
+    let Some(history) = history else { return false };
+    if history.is_empty() { return false }
+
+    let first_item = &mut history[0];
+    let content = first_item
+        .pointer_mut("/userInputMessage/content")
+        .and_then(|v| v.as_str().map(|s| s.to_string()));
+
+    let Some(content) = content else { return false };
+
+    // 检查是否是 Kiro 系统提示
+    let marker_count = KIRO_PROMPT_MARKERS.iter()
+        .filter(|marker| content.contains(*marker))
+        .count();
+
+    if marker_count < 2 {
+        return false;
+    }
+
+    // 替换为精简提示
+    if let Some(user_msg) = first_item.pointer_mut("/userInputMessage/content") {
+        *user_msg = serde_json::Value::String(KIRO_MINIMAL_PROMPT.to_string());
+        return true;
+    }
+
+    false
 }
