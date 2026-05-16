@@ -284,9 +284,6 @@ function MitmProxy() {
                     <span>需要 Kiro IDE 走代理？查看环境变量配置</span>
                   </summary>
                   <div className="mt-3 pt-3 border-t space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      Kiro 基于 VS Code，请求走 AWS SDK 默认 HTTP 客户端，会读取 <code className="bg-muted px-1 rounded">HTTPS_PROXY</code> 环境变量。设置后 <strong>必须重启 Kiro</strong> 才生效。
-                    </p>
                     <Tabs defaultValue="windows" className="w-full">
                       <TabsList className="h-7">
                         <TabsTrigger value="windows" className="text-xs h-5">Windows</TabsTrigger>
@@ -320,6 +317,7 @@ function MitmProxy() {
                         />
                       </TabsContent>
                     </Tabs>
+                    <p className="text-[11px] text-muted-foreground">设置后必须重启 Kiro 才生效。</p>
                   </div>
                 </details>
               </div>
