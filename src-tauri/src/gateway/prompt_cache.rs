@@ -220,18 +220,19 @@ impl PromptCacheTracker {
         tools: Option<&[serde_json::Value]>,
     ) -> Vec<CacheableBlock> {
         let mut blocks = Vec::new();
+        let default_ttl = Duration::from_secs(5 * 60); // 5 分钟默认 TTL
 
-        // 工具定义
+        // 工具定义（自动可缓存）
         if let Some(tools) = tools {
             for tool in tools {
                 let value = self.canonicalize(tool);
                 let tokens = estimate_tokens(&value);
                 let ttl = self.extract_ttl(tool);
-                blocks.push(CacheableBlock { value, tokens, ttl, is_message_end: false });
+                blocks.push(CacheableBlock { value, tokens, ttl: if ttl > Duration::ZERO { ttl } else { default_ttl }, is_message_end: false });
             }
         }
 
-        // System prompt
+        // System prompt（自动可缓存）
         if let Some(system) = system {
             match system {
                 serde_json::Value::String(s) => {
@@ -239,7 +240,7 @@ impl PromptCacheTracker {
                     blocks.push(CacheableBlock {
                         value: self.canonicalize(system),
                         tokens,
-                        ttl: Duration::ZERO,
+                        ttl: default_ttl,
                         is_message_end: false,
                     });
                 }
@@ -248,14 +249,14 @@ impl PromptCacheTracker {
                         let value = self.canonicalize(block);
                         let tokens = estimate_tokens(&value);
                         let ttl = self.extract_ttl(block);
-                        blocks.push(CacheableBlock { value, tokens, ttl, is_message_end: false });
+                        blocks.push(CacheableBlock { value, tokens, ttl: if ttl > Duration::ZERO { ttl } else { default_ttl }, is_message_end: false });
                     }
                 }
                 _ => {}
             }
         }
 
-        // Messages
+        // Messages（只有显式标记 cache_control 的才可缓存）
         for (i, msg) in messages.iter().enumerate() {
             let content = msg.get("content");
             let _is_last_msg = i == messages.len() - 1;
