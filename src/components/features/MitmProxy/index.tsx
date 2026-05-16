@@ -29,17 +29,45 @@ function MitmProxy() {
 
   const fetchStatus = async () => {
     try {
-      const s = await invoke<MitmStatus>('get_mitm_status')
+      const [s, cfg] = await Promise.all([
+        invoke<MitmStatus>('get_mitm_status'),
+        invoke<any>('get_mitm_config')
+      ])
       setStatus(s)
-      setPort(s.port)
-      if (s.targetDeviceId) setTargetDeviceId(s.targetDeviceId)
-      setMitmDomains(s.mitmDomains.join('\n'))
+      setPort(cfg.port || 8766)
+      setTargetDeviceId(cfg.targetDeviceId || '')
+      setMitmDomains((cfg.mitmDomains || s.mitmDomains || []).join('\n'))
+      setLogRequests(cfg.logRequests ?? true)
+      setFilterKiroPrompt(cfg.filterKiroPrompt ?? false)
+      setCustomPromptReplacement(cfg.customPromptReplacement || '')
     } catch (e) {
       console.error('Failed to get MITM status:', e)
     }
   }
 
   useEffect(() => { fetchStatus() }, [])
+
+  const saveConfig = async () => {
+    try {
+      await invoke('save_mitm_config', { configData: {
+        port,
+        targetDeviceId: targetDeviceId || null,
+        mitmDomains: mitmDomains.split('\n').map(s => s.trim()).filter(Boolean),
+        logRequests,
+        filterKiroPrompt,
+        customPromptReplacement: customPromptReplacement || null,
+        enabled: status?.running ?? false,
+      }})
+    } catch (e) {
+      console.error('Save config failed:', e)
+    }
+  }
+
+  // 配置变更时自动保存（1.5s debounce）
+  useEffect(() => {
+    const timer = setTimeout(saveConfig, 1500)
+    return () => clearTimeout(timer)
+  }, [port, targetDeviceId, mitmDomains, logRequests, filterKiroPrompt, customPromptReplacement])
 
   const handleGenerateCa = async () => {
     setLoading(true)

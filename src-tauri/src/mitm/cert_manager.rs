@@ -161,24 +161,30 @@ impl CertManager {
     #[cfg(target_os = "windows")]
     pub fn install_ca_to_system(&self) -> Result<(), String> {
         let cert_path = self.ca_cert_path();
-        // 使用 runas 提权执行 certutil
-        let output = std::process::Command::new("powershell")
+        let ps_script = format!(
+            "Import-Certificate -FilePath '{}' -CertStoreLocation Cert:\\LocalMachine\\Root",
+            cert_path.to_string_lossy()
+        );
+
+        std::process::Command::new("powershell")
             .args([
-                "-Command",
+                "-NoProfile", "-Command",
                 &format!(
-                    "Start-Process certutil -ArgumentList '-addstore','-f','ROOT','\"{}\"' -Verb RunAs -Wait",
-                    cert_path.to_string_lossy()
+                    "Start-Process powershell -ArgumentList '-NoProfile','-Command','{}' -Verb RunAs -Wait",
+                    ps_script
                 ),
             ])
             .output()
             .map_err(|e| format!("执行提权安装失败: {e}"))?;
 
-        if output.status.success() {
+        // 等待一小会让系统刷新证书存储
+        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        if Self::check_ca_installed_in_system(&self.certs_dir) {
             log::info!("[MITM] CA 证书已安装到 Windows 信任存储");
             Ok(())
         } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("安装 CA 失败: {stderr}"))
+            Err("安装未完成，请在 UAC 弹窗中点击「是」".to_string())
         }
     }
 
@@ -243,19 +249,18 @@ impl CertManager {
 
     /// 静态方法：检查 CA 是否已安装到系统信任存储
     #[cfg(target_os = "windows")]
-    pub fn check_ca_installed_in_system(certs_dir: &std::path::Path) -> bool {
-        // 用 PowerShell 检查 ROOT 存储中是否有我们的 CA
+    pub fn check_ca_installed_in_system(_certs_dir: &std::path::Path) -> bool {
         let output = std::process::Command::new("powershell")
             .args([
                 "-NoProfile", "-Command",
                 &format!(
-                    "Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object {{ $_.Subject -like '*{}*' }} | Select-Object -First 1",
+                    "if (Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object {{ $_.Subject -like '*{}*' }}) {{ 'found' }}",
                     CA_COMMON_NAME
                 ),
             ])
             .output();
         match output {
-            Ok(o) => !o.stdout.is_empty() && o.status.success(),
+            Ok(o) => String::from_utf8_lossy(&o.stdout).contains("found"),
             Err(_) => false,
         }
     }

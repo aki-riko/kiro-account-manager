@@ -68,7 +68,7 @@ use commands::cache_cmd::{
 //MITM 代理
 use commands::mitm_cmd::{
     get_mitm_status, generate_mitm_ca, install_mitm_ca, get_mitm_ca_pem,
-    start_mitm_proxy, stop_mitm_proxy,
+    start_mitm_proxy, stop_mitm_proxy, get_mitm_config, save_mitm_config,
 };
 //分组
 use commands::group_tag_cmd::{
@@ -505,6 +505,8 @@ fn main() {
             get_mitm_ca_pem,
             start_mitm_proxy,
             stop_mitm_proxy,
+            get_mitm_config,
+            save_mitm_config,
             // 代理检测命令
             detect_system_proxy,
             // 更新检查命令

@@ -1,6 +1,7 @@
 /// MITM 代理管理命令
 
 use crate::mitm::cert_manager::CertManager;
+use crate::mitm::config::{self, MitmConfig};
 use crate::mitm::proxy_server::{MitmProxyConfig, MitmProxyServer};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
@@ -150,4 +151,17 @@ pub async fn get_mitm_ca_pem() -> Result<String, String> {
     let certs_dir = crate::mitm::cert_manager::default_certs_dir();
     let manager = CertManager::new(certs_dir)?;
     Ok(manager.ca_cert_pem().to_string())
+}
+
+
+/// 获取 MITM 配置
+#[tauri::command]
+pub async fn get_mitm_config() -> Result<MitmConfig, String> {
+    Ok(config::load_mitm_config())
+}
+
+/// 保存 MITM 配置
+#[tauri::command]
+pub async fn save_mitm_config(config_data: MitmConfig) -> Result<(), String> {
+    config::save_mitm_config(&config_data)
 }
