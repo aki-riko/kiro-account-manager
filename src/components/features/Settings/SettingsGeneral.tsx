@@ -391,10 +391,10 @@ function SettingsGeneral({
           <button
             onClick={handleOpenAppDataDir}
             disabled={!appDataDir}
-            className="h-8 px-3 rounded-md flex items-center gap-1.5 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 transition-colors"
+            className="h-8 w-8 rounded-md flex items-center justify-center bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 transition-colors flex-shrink-0"
+            title={t('settings.openInExplorer')}
           >
-            <ExternalLink size={12} />
-            {t('settings.openInExplorer')}
+            <ExternalLink size={13} />
           </button>
         </div>
       </SectionCard>
