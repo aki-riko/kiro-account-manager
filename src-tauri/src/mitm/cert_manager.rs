@@ -157,89 +157,96 @@ impl CertManager {
         self.certs_dir.join(CA_CERT_FILE)
     }
 
-    /// 安装 CA 到系统信任存储
+    /// 安装 CA 到系统信任存储 —— Windows
+    /// 标准做法：PowerShell `Start-Process -Verb RunAs` 触发 UAC 提权调用 certutil
     #[cfg(target_os = "windows")]
     pub fn install_ca_to_system(&self) -> Result<(), String> {
         let cert_path = self.ca_cert_path();
-        let ps_script = format!(
-            "Import-Certificate -FilePath '{}' -CertStoreLocation Cert:\\LocalMachine\\Root",
-            cert_path.to_string_lossy()
+        let cert_path_str = cert_path.to_string_lossy();
+
+        // 用 ArgumentList 数组传参，避免嵌套引号转义问题
+        let ps_command = format!(
+            "$p = Start-Process -FilePath 'certutil.exe' \
+             -ArgumentList @('-addstore','-f','ROOT','\"{}\"') \
+             -Verb RunAs -Wait -PassThru; exit $p.ExitCode",
+            cert_path_str
         );
 
-        std::process::Command::new("powershell")
+        let output = std::process::Command::new("powershell")
             .args([
-                "-NoProfile", "-Command",
-                &format!(
-                    "Start-Process powershell -ArgumentList '-NoProfile','-Command','{}' -Verb RunAs -Wait",
-                    ps_script
-                ),
+                "-NoProfile",
+                "-NonInteractive",
+                "-WindowStyle", "Hidden",
+                "-Command", &ps_command,
             ])
             .output()
-            .map_err(|e| format!("执行提权安装失败: {e}"))?;
+            .map_err(|e| format!("执行 PowerShell 失败: {e}"))?;
 
-        // 等待一小会让系统刷新证书存储
-        std::thread::sleep(std::time::Duration::from_millis(500));
-
-        if Self::check_ca_installed_in_system(&self.certs_dir) {
-            log::info!("[MITM] CA 证书已安装到 Windows 信任存储");
-            Ok(())
-        } else {
-            Err("安装未完成，请在 UAC 弹窗中点击「是」".to_string())
+        if !output.status.success() {
+            let code = output.status.code().unwrap_or(-1);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("安装 CA 失败 (退出码 {code}): {}", stderr.trim()));
         }
+
+        log::info!("[MITM] CA 证书已安装到 Windows 信任存储");
+        Ok(())
     }
 
+    /// 安装 CA 到系统信任存储 —— macOS
+    /// 标准做法：osascript `do shell script ... with administrator privileges` 弹出系统授权对话框
     #[cfg(target_os = "macos")]
     pub fn install_ca_to_system(&self) -> Result<(), String> {
         let cert_path = self.ca_cert_path();
-        let output = std::process::Command::new("security")
-            .args([
-                "add-trusted-cert", "-d", "-r", "trustRoot",
-                "-k", "/Library/Keychains/System.keychain",
-                &cert_path.to_string_lossy(),
-            ])
-            .output()
-            .map_err(|e| format!("执行 security 失败: {e}"))?;
+        let cert_path_str = cert_path.to_string_lossy();
 
-        if output.status.success() {
-            log::info!("[MITM] CA 证书已安装到 macOS 信任存储");
-            Ok(())
-        } else {
+        let script = format!(
+            "do shell script \"security add-trusted-cert -d -r trustRoot \
+             -k /Library/Keychains/System.keychain '{}'\" \
+             with administrator privileges",
+            cert_path_str
+        );
+
+        let output = std::process::Command::new("osascript")
+            .args(["-e", &script])
+            .output()
+            .map_err(|e| format!("执行 osascript 失败: {e}"))?;
+
+        if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("安装 CA 失败（需要 sudo）: {stderr}"))
+            return Err(format!("安装 CA 失败: {}", stderr.trim()));
         }
+
+        log::info!("[MITM] CA 证书已安装到 macOS 信任存储");
+        Ok(())
     }
 
+    /// 安装 CA 到系统信任存储 —— Linux
+    /// 标准做法：pkexec 触发 polkit 授权对话框，复制证书并刷新 CA 列表
     #[cfg(target_os = "linux")]
     pub fn install_ca_to_system(&self) -> Result<(), String> {
         let cert_path = self.ca_cert_path();
+        let cert_path_str = cert_path.to_string_lossy();
 
-        // 尝试 Ubuntu/Debian 方式
-        let dest = PathBuf::from("/usr/local/share/ca-certificates/kiro-account-manager-ca.crt");
-        if let Ok(_) = fs::copy(&cert_path, &dest) {
-            let output = std::process::Command::new("update-ca-certificates")
-                .output();
-            if let Ok(out) = output {
-                if out.status.success() {
-                    log::info!("[MITM] CA 证书已安装到 Linux 信任存储 (Debian)");
-                    return Ok(());
-                }
-            }
+        // 根据发行版选择目标目录与刷新命令
+        let (dest, update_cmd) = if std::path::Path::new("/etc/debian_version").exists() {
+            ("/usr/local/share/ca-certificates/kiro-account-manager-ca.crt", "update-ca-certificates")
+        } else {
+            ("/etc/pki/ca-trust/source/anchors/kiro-account-manager-ca.crt", "update-ca-trust")
+        };
+
+        let shell_cmd = format!("cp '{cert_path_str}' '{dest}' && {update_cmd}");
+        let output = std::process::Command::new("pkexec")
+            .args(["sh", "-c", &shell_cmd])
+            .output()
+            .map_err(|e| format!("执行 pkexec 失败（请确保已安装 polkit）: {e}"))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("安装 CA 失败: {}", stderr.trim()));
         }
 
-        // 尝试 RHEL/Fedora 方式
-        let dest = PathBuf::from("/etc/pki/ca-trust/source/anchors/kiro-account-manager-ca.crt");
-        if let Ok(_) = fs::copy(&cert_path, &dest) {
-            let output = std::process::Command::new("update-ca-trust")
-                .output();
-            if let Ok(out) = output {
-                if out.status.success() {
-                    log::info!("[MITM] CA 证书已安装到 Linux 信任存储 (RHEL)");
-                    return Ok(());
-                }
-            }
-        }
-
-        Err("安装 CA 失败（需要 root 权限，请手动安装）".to_string())
+        log::info!("[MITM] CA 证书已安装到 Linux 信任存储");
+        Ok(())
     }
 
     /// 检查 CA 是否已安装到系统
@@ -247,39 +254,31 @@ impl CertManager {
         Self::check_ca_installed_in_system(&self.certs_dir)
     }
 
-    /// 静态方法：检查 CA 是否已安装到系统信任存储
+    /// 检查 CA 是否已安装到系统信任存储 —— Windows
+    /// 通过 `certutil -store ROOT <CN>` 在存在时返回 0 且 stdout 包含 CN
     #[cfg(target_os = "windows")]
     pub fn check_ca_installed_in_system(_certs_dir: &std::path::Path) -> bool {
-        let output = std::process::Command::new("powershell")
-            .args([
-                "-NoProfile", "-Command",
-                &format!(
-                    "if (Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object {{ $_.Subject -like '*{}*' }}) {{ 'found' }}",
-                    CA_COMMON_NAME
-                ),
-            ])
-            .output();
-        match output {
-            Ok(o) => String::from_utf8_lossy(&o.stdout).contains("found"),
-            Err(_) => false,
-        }
+        std::process::Command::new("certutil")
+            .args(["-store", "ROOT", CA_COMMON_NAME])
+            .output()
+            .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains(CA_COMMON_NAME))
+            .unwrap_or(false)
     }
 
+    /// 检查 CA 是否已安装到系统信任存储 —— macOS
     #[cfg(target_os = "macos")]
-    pub fn check_ca_installed_in_system(certs_dir: &std::path::Path) -> bool {
-        let cert_path = certs_dir.join(CA_CERT_FILE);
-        if !cert_path.exists() { return false; }
-        let output = std::process::Command::new("security")
+    pub fn check_ca_installed_in_system(_certs_dir: &std::path::Path) -> bool {
+        std::process::Command::new("security")
             .args(["find-certificate", "-c", CA_COMMON_NAME, "/Library/Keychains/System.keychain"])
-            .output();
-        matches!(output, Ok(o) if o.status.success())
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
     }
 
+    /// 检查 CA 是否已安装到系统信任存储 —— Linux
+    /// 检查证书是否已被复制到系统 CA 锚点目录
     #[cfg(target_os = "linux")]
-    pub fn check_ca_installed_in_system(certs_dir: &std::path::Path) -> bool {
-        let cert_path = certs_dir.join(CA_CERT_FILE);
-        if !cert_path.exists() { return false; }
-        // 检查是否在系统 CA 目录中
+    pub fn check_ca_installed_in_system(_certs_dir: &std::path::Path) -> bool {
         std::path::Path::new("/usr/local/share/ca-certificates/kiro-account-manager-ca.crt").exists()
             || std::path::Path::new("/etc/pki/ca-trust/source/anchors/kiro-account-manager-ca.crt").exists()
     }
