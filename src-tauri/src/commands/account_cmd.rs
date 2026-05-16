@@ -262,6 +262,7 @@ pub async fn sync_account(
                         } else {
                             "invalid".to_string()
                         };
+                        a.enabled = false;
                         save_store(&store)?;
                     }
                 }
@@ -389,6 +390,7 @@ pub async fn refresh_account_token(
                     } else {
                         "invalid".to_string()
                     };
+                    a.enabled = false;
                     save_store(&store)?;
                 }
             }
