@@ -977,7 +977,16 @@ pub async fn build_kiro_payload(
         if all_sanitized.len() <= 1 {
             (None, all_sanitized.into_iter().last())
         } else {
-            let history_part: Vec<HistoryItem> = all_sanitized[..all_sanitized.len() - 1].to_vec();
+            let mut history_part: Vec<HistoryItem> = all_sanitized[..all_sanitized.len() - 1].to_vec();
+            // 如果当前请求未启用 thinking，剥掉 history 中的 reasoningContent
+            // Kiro API 不允许 history 包含 reasoningContent 但请求未启用 thinking mode
+            if request.thinking.is_none() {
+                for item in &mut history_part {
+                    if let HistoryItem::Assistant { assistant_response_message } = item {
+                        assistant_response_message.reasoning_content = None;
+                    }
+                }
+            }
             let current_part = all_sanitized.into_iter().last();
             (Some(history_part), current_part)
         }
@@ -1826,7 +1835,18 @@ fn build_history_assistant_message(message: &NormalizedMessage) -> HistoryAssist
         tool_uses,
         reasoning_content: assistant_metadata_value(message, "reasoningContent")
             .or_else(|| extract_reasoning_content(message.content.as_ref()))
-            .and_then(|value| meaningful_optional_value(Some(value))),
+            .and_then(|value| meaningful_optional_value(Some(value)))
+            .map(|mut rc| {
+                // 清理空 signature（Kiro API 不接受空字符串的 signature）
+                if let Some(rt) = rc.get_mut("reasoningText") {
+                    if let Some(sig) = rt.get("signature") {
+                        if sig.as_str().map(|s| s.is_empty()).unwrap_or(false) {
+                            rt.as_object_mut().map(|m| m.remove("signature"));
+                        }
+                    }
+                }
+                rc
+            }),
         references: assistant_metadata_value(message, "references")
             .and_then(|value| meaningful_optional_value(Some(value))),
         supplementary_web_links: assistant_metadata_value(message, "supplementaryWebLinks")
