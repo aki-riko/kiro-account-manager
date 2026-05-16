@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
-import { Activity, RefreshCw, XCircle } from 'lucide-react'
+import { Activity, RefreshCw, XCircle, Trash2, Database } from 'lucide-react'
 
 interface ProcessedRequestLog {
   id: string
@@ -16,8 +16,11 @@ interface ProcessedRequestLog {
   inputTokens?: number
   outputTokens?: number
   cacheReadTokens?: number
+  cacheCreationTokens?: number
   upstream?: string
   errorType?: string
+  outcome?: string
+  stream?: boolean
 }
 
 interface GatewayRequestStats {
@@ -34,6 +37,12 @@ interface GatewayRequestStats {
   avgDurationMs: number
 }
 
+interface CacheStats {
+  delta_cache_size: number
+  lru_cache_size: number
+  persistent_cache_enabled: boolean
+}
+
 interface RequestLogsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -47,6 +56,7 @@ interface RequestLogsDialogProps {
 export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChange, logRequests, onLogRequestsChange, onSave }: RequestLogsDialogProps) {
   const [requestLogs, setRequestLogs] = useState<ProcessedRequestLog[]>([])
   const [requestStats, setRequestStats] = useState<GatewayRequestStats | null>(null)
+  const [cacheStats, setCacheStats] = useState<CacheStats | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [activeFilter, setActiveFilter] = useState<'all' | 'success' | 'error'>('all')
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
@@ -70,9 +80,10 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
   const fetchRequestLogs = async (limit?: number) => {
     setIsRefreshing(true)
     try {
-      const [logs, stats] = await Promise.all([
+      const [logs, stats, cache] = await Promise.all([
         invoke<any[]>('get_gateway_request_logs', { limit: limit || displayLimit }),
-        invoke<GatewayRequestStats>('get_gateway_request_stats')
+        invoke<GatewayRequestStats>('get_gateway_request_stats'),
+        invoke<CacheStats>('get_cache_stats').catch(() => null)
       ])
 
       setRequestLogs(logs.map(log => ({
@@ -86,15 +97,26 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
         inputTokens: log.inputTokens,
         outputTokens: log.outputTokens,
         cacheReadTokens: log.cacheReadInputTokens,
+        cacheCreationTokens: log.cacheCreationInputTokens,
         upstream: log.upstreamSource,
-        errorType: log.errorType
+        errorType: log.errorType,
+        outcome: log.outcome,
+        stream: log.stream
       })))
       setRequestStats(stats)
+      if (cache) setCacheStats(cache)
     } catch (error) {
       console.error('Failed to fetch request logs:', error)
     } finally {
       setIsRefreshing(false)
     }
+  }
+
+  const handleClearCache = async () => {
+    try {
+      await invoke('clear_all_cache')
+      setCacheStats(prev => prev ? { ...prev, delta_cache_size: 0, lru_cache_size: 0 } : null)
+    } catch { /* ignore */ }
   }
 
   useEffect(() => {
@@ -106,15 +128,15 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v && onSave) onSave() }}>
-      <DialogContent className="sm:max-w-[900px]">
+      <DialogContent className="sm:max-w-[950px]">
         <DialogHeader>
           <DialogTitle>请求日志</DialogTitle>
-          <DialogDescription>实时查看网关请求记录与统计</DialogDescription>
+          <DialogDescription>实时查看网关请求记录、缓存与统计</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          {/* 顶部：统计 + 操作 */}
-          <div className="flex items-center justify-between">
+          {/* 顶部：统计 + 缓存 + 操作 */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-3">
               <Activity size={16} />
               {requestStats && (
@@ -124,17 +146,27 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
                   <span className="text-red-600">错误 <strong>{requestStats.error}</strong></span>
                   {requestStats.totalInputTokens > 0 && (
                     <span className="text-muted-foreground">
-                      {(requestStats.totalInputTokens / 1000).toFixed(1)}K入 / {(requestStats.totalOutputTokens / 1000).toFixed(1)}K出
+                      {(requestStats.totalInputTokens / 1000).toFixed(1)}K入/{(requestStats.totalOutputTokens / 1000).toFixed(1)}K出
                     </span>
                   )}
                 </div>
               )}
+              {/* 响应缓存状态 */}
+              {cacheStats && (
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground border-l pl-3">
+                  <Database size={13} />
+                  <span>缓存 <strong>{cacheStats.delta_cache_size + cacheStats.lru_cache_size}</strong> 条</span>
+                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleClearCache} title="清除缓存">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
             </div>
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-1.5 items-center flex-wrap">
               <input
                 type="text"
                 placeholder="搜索..."
-                className="text-sm border rounded px-2 py-1 w-32"
+                className="text-sm border rounded px-2 py-1 w-28"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
               />
@@ -160,7 +192,7 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
                 清空
               </Button>
               <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => {
-                const content = filteredLogs.map(log => `[${log.timestamp}] ${log.status} ${log.path} ${log.model || '-'} ${log.duration}ms in:${log.inputTokens || 0} out:${log.outputTokens || 0}${log.error ? ' ERR:' + log.error : ''}`).join('\n')
+                const content = filteredLogs.map(log => `[${log.timestamp}] ${log.status} ${log.path} ${log.model || '-'} ${log.duration}ms in:${log.inputTokens || 0} out:${log.outputTokens || 0} cR:${log.cacheReadTokens || 0} cW:${log.cacheCreationTokens || 0}${log.error ? ' ERR:' + log.error : ''}`).join('\n')
                 const blob = new Blob([content], { type: 'text/plain' })
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')
@@ -201,20 +233,19 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
               <table className="w-full text-xs font-mono">
                 <thead className="sticky top-0 bg-muted/80 backdrop-blur z-10">
                   <tr className="border-b">
-                    <th className="px-2 py-1.5 text-left w-[140px]">时间</th>
+                    <th className="px-2 py-1.5 text-left w-[130px]">时间</th>
                     <th className="px-2 py-1.5 text-left">路径</th>
                     <th className="px-2 py-1.5 text-left">模型</th>
                     <th className="px-2 py-1.5 text-center w-[50px]">状态</th>
-                    <th className="px-2 py-1.5 text-right w-[60px]">输入</th>
-                    <th className="px-2 py-1.5 text-right w-[60px]">输出</th>
-                    <th className="px-2 py-1.5 text-right w-[60px]">缓存</th>
+                    <th className="px-2 py-1.5 text-right w-[55px]">输入</th>
+                    <th className="px-2 py-1.5 text-right w-[55px]">输出</th>
                     <th className="px-2 py-1.5 text-right w-[55px]">耗时</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-16 text-muted-foreground font-sans text-sm">
+                      <td colSpan={7} className="text-center py-16 text-muted-foreground font-sans text-sm">
                         {requestLogs.length === 0 ? '等待第一个请求...' : '无匹配结果'}
                       </td>
                     </tr>
@@ -226,21 +257,26 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
                           onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
                         >
                           <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{log.timestamp}</td>
-                          <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[160px]" title={log.path}>{log.path}</td>
+                          <td className="px-2 py-1.5 text-muted-foreground truncate max-w-[140px]" title={log.path}>
+                            {log.outcome === 'success (cached)' ? <span className="text-blue-500">⚡</span> : null}
+                            {log.path}
+                          </td>
                           <td className="px-2 py-1.5 truncate max-w-[120px]" title={log.model}>{log.model || '-'}</td>
                           <td className="px-2 py-1.5 text-center">
-                            <span className={log.status >= 400 ? 'text-red-500 font-semibold' : 'text-green-600'}>{log.status}</span>
+                            <span className={log.status >= 400 ? 'text-red-500 font-semibold' : 'text-green-600'}>
+                              {log.status}
+                            </span>
+                            {log.stream && <span className="ml-0.5 text-blue-400" title="流式">⇣</span>}
                           </td>
                           <td className="px-2 py-1.5 text-right text-muted-foreground">{log.inputTokens?.toLocaleString() || '-'}</td>
                           <td className="px-2 py-1.5 text-right text-muted-foreground">{log.outputTokens?.toLocaleString() || '-'}</td>
-                          <td className="px-2 py-1.5 text-right text-green-600">{log.cacheReadTokens?.toLocaleString() || '-'}</td>
                           <td className="px-2 py-1.5 text-right">
                             <span className={log.duration > 3000 ? 'text-orange-500' : 'text-muted-foreground'}>{log.duration}ms</span>
                           </td>
                         </tr>
                         {expandedLogId === log.id && log.error && (
                           <tr className="bg-red-50/50 dark:bg-red-950/10">
-                            <td colSpan={8} className="px-3 py-2">
+                            <td colSpan={7} className="px-3 py-2">
                               <div className="flex items-start gap-2">
                                 <XCircle size={12} className="text-red-500 mt-0.5 shrink-0" />
                                 <pre className="text-xs text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">{log.error}</pre>

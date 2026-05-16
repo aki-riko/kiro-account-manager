@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { RotateCw, Scale, TrendingUp, Shuffle, Zap, Activity } from 'lucide-react'
+import { RotateCw, TrendingUp, Shuffle, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -214,15 +214,37 @@ function GatewayConfig({
               {fieldErrors.clientApiKeysText && <div className="text-xs text-red-500">{fieldErrors.clientApiKeysText}</div>}
             </div>
 
-            {/* Section 3: 安全与高级 */}
+            {/* Section 3: 提示词过滤 */}
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-foreground flex items-center gap-2">
+                <div className="w-1 h-4 bg-primary rounded-full"></div>
+                提示词过滤
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/30">
+                  <Label className="text-sm">精简CC提示</Label>
+                  <Switch checked={!!config.filterClaudeCode} onCheckedChange={(checked: boolean) => setField('filterClaudeCode', checked)} />
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/30">
+                  <Label className="text-sm">去边界标记</Label>
+                  <Switch checked={!!config.filterStripBoundaries} onCheckedChange={(checked: boolean) => setField('filterStripBoundaries', checked)} />
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/30">
+                  <Label className="text-sm">去环境噪音</Label>
+                  <Switch checked={!!config.filterEnvNoise} onCheckedChange={(checked: boolean) => setField('filterEnvNoise', checked)} />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: 安全与高级 */}
             <div className="space-y-3">
               <div className="text-sm font-medium text-foreground flex items-center gap-2">
                 <div className="w-1 h-4 bg-primary rounded-full"></div>
                 安全与高级
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
-                  <Label className="text-sm">仅本机访问</Label>
+              <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                <div className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/30">
+                  <Label className="text-sm">仅本机</Label>
                   <Switch
                     checked={!!config.localOnly}
                     onCheckedChange={(checked: boolean) => {
@@ -230,30 +252,18 @@ function GatewayConfig({
                     }}
                   />
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+                <div className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/30">
                   <Label className="text-sm">自动启动</Label>
                   <Switch checked={!!config.enabled} onCheckedChange={handleAutoStartToggle} />
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
-                  <Label className="text-sm">Claude Code 精简</Label>
-                  <Switch checked={!!config.filterClaudeCode} onCheckedChange={(checked: boolean) => setField('filterClaudeCode', checked)} />
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
-                  <Label className="text-sm">去除边界标记</Label>
-                  <Switch checked={!!config.filterStripBoundaries} onCheckedChange={(checked: boolean) => setField('filterStripBoundaries', checked)} />
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
-                  <Label className="text-sm">去除环境噪音</Label>
-                  <Switch checked={!!config.filterEnvNoise} onCheckedChange={(checked: boolean) => setField('filterEnvNoise', checked)} />
-                </div>
-                <div className="flex flex-col gap-1 p-3 rounded-lg border border-border bg-muted/30">
-                  <Label className="text-sm">切换阈值 (%)</Label>
+                <div className="flex flex-col gap-0.5 p-2.5 rounded-lg border border-border bg-muted/30">
+                  <Label className="text-xs text-muted-foreground">阈值%</Label>
                   <Input
                     type="number"
                     value={config.threshold}
                     min={1}
                     max={100}
-                    className="h-7 text-sm"
+                    className="h-6 text-sm px-1.5"
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setField('threshold', Number(e.target.value) || 90)}
                   />
                 </div>

@@ -473,9 +473,9 @@ function GatewayPage() {
                 <Badge color={status.running ? 'green' : 'gray'}>{status.running ? '运行中' : '已停止'}</Badge>
               </Group>
               <Group gap="xs">
-                <Button variant="outline" size="sm" className="h-7" onClick={() => setShowRequestLogs(true)} disabled={!status.running}>
-                  <ScrollText size={12} className="mr-1" />
-                  日志
+                <Button variant="outline" size="default" className="h-9 px-4 text-sm" onClick={() => setShowRequestLogs(true)} disabled={!status.running}>
+                  <ScrollText size={16} className="mr-1.5" />
+                  请求日志
                 </Button>
               </Group>
             </Group>
