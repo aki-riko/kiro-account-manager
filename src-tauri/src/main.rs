@@ -69,7 +69,7 @@ use commands::cache_cmd::{
 use commands::mitm_cmd::{
     get_mitm_status, generate_mitm_ca, install_mitm_ca, get_mitm_ca_pem,
     start_mitm_proxy, stop_mitm_proxy, get_mitm_config, save_mitm_config,
-    get_mitm_log_path, open_mitm_log_dir,
+    get_mitm_log_path, open_mitm_log_dir, read_mitm_log, clear_mitm_log,
 };
 //分组
 use commands::group_tag_cmd::{
@@ -513,6 +513,8 @@ fn main() {
             save_mitm_config,
             get_mitm_log_path,
             open_mitm_log_dir,
+            read_mitm_log,
+            clear_mitm_log,
             // 代理检测命令
             detect_system_proxy,
             // 更新检查命令

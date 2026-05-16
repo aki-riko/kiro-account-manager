@@ -36,3 +36,29 @@ pub fn append(line: &str) {
         let _ = f.write_all(entry.as_bytes());
     }
 }
+
+/// 读取最近 N 行日志（用于前端实时滚动面板）
+pub fn read_tail(max_lines: usize) -> Vec<String> {
+    let path = mitm_log_path();
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    content
+        .lines()
+        .rev()
+        .take(max_lines)
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect()
+}
+
+/// 清空 MITM 日志文件
+pub fn clear() -> Result<(), String> {
+    let path = mitm_log_path();
+    if !path.exists() {
+        return Ok(());
+    }
+    std::fs::write(&path, b"").map_err(|e| format!("清空日志失败: {e}"))
+}

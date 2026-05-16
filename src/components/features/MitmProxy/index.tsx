@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import {
   Shield, CheckCircle2, XCircle, AlertCircle, Download, Play, Square,
-  RefreshCw, Check, FolderOpen, Globe, Cpu, Filter, Dices,
+  RefreshCw, Check, FolderOpen, Globe, Cpu, Filter, Dices, Trash2, ScrollText,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +30,10 @@ function MitmProxy() {
   const [logRequests, setLogRequests] = useState(true)
   const [filterKiroPrompt, setFilterKiroPrompt] = useState(false)
   const [customPromptReplacement, setCustomPromptReplacement] = useState('')
+  const [logLines, setLogLines] = useState<string[]>([])
+  const [logExpanded, setLogExpanded] = useState(false)
+  const [autoScroll, setAutoScroll] = useState(true)
+  const logScrollRef = useRef<HTMLDivElement>(null)
 
   const fetchStatus = async () => {
     try {
@@ -57,6 +61,27 @@ function MitmProxy() {
   }
 
   useEffect(() => { fetchStatus() }, [])
+
+  // 日志轮询：运行中或日志面板展开时每 1s 拉一次
+  useEffect(() => {
+    if (!status?.running && !logExpanded) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const lines = await invoke<string[]>('read_mitm_log', { maxLines: 200 })
+        if (!cancelled) setLogLines(lines)
+      } catch {/* 忽略 */ }
+    }
+    tick()
+    const timer = setInterval(tick, 1000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [status?.running, logExpanded])
+
+  // 自动滚到底部
+  useEffect(() => {
+    if (!autoScroll || !logScrollRef.current) return
+    logScrollRef.current.scrollTop = logScrollRef.current.scrollHeight
+  }, [logLines, autoScroll])
 
   const saveConfig = async () => {
     try {
@@ -264,19 +289,8 @@ function MitmProxy() {
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">记录请求日志</Label>
-                    <div className="h-8 flex items-center justify-between gap-2">
+                    <div className="h-8 flex items-center">
                       <Switch checked={logRequests} onCheckedChange={setLogRequests} />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        onClick={async () => {
-                          try { await invoke('open_mitm_log_dir') }
-                          catch (e) { alert(`打开失败：${e}`) }
-                        }}
-                      >
-                        <FolderOpen size={12} className="mr-1" />打开日志
-                      </Button>
                     </div>
                   </div>
                 </div>
@@ -287,6 +301,82 @@ function MitmProxy() {
                     <span>请先完成 Step 1 生成 CA 证书，否则启动后 TLS 握手会失败。</span>
                   </div>
                 )}
+
+                {/* 实时日志滚动面板 */}
+                <div className="border rounded-md overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
+                    <button
+                      type="button"
+                      onClick={() => setLogExpanded(!logExpanded)}
+                      className="flex items-center gap-1.5 text-xs font-medium hover:text-primary"
+                    >
+                      <ScrollText size={13} />
+                      <span>实时日志</span>
+                      <span className="text-muted-foreground">({logLines.length})</span>
+                      <span className="text-muted-foreground text-[10px]">{logExpanded ? '▾' : '▸'}</span>
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {status?.running && (
+                        <span className="flex items-center gap-1 text-[10px] text-green-600">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                          实时
+                        </span>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1.5 text-[10px]"
+                        onClick={() => setAutoScroll(!autoScroll)}
+                        title="自动滚到底部"
+                      >
+                        {autoScroll ? '🔒' : '🔓'} 跟随
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1.5"
+                        onClick={async () => {
+                          try {
+                            await invoke('clear_mitm_log')
+                            setLogLines([])
+                          } catch (e) { console.error(e) }
+                        }}
+                        title="清空日志"
+                      >
+                        <Trash2 size={11} />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1.5"
+                        onClick={async () => {
+                          try { await invoke('open_mitm_log_dir') }
+                          catch (e) { alert(`打开失败：${e}`) }
+                        }}
+                        title="打开日志目录"
+                      >
+                        <FolderOpen size={11} />
+                      </Button>
+                    </div>
+                  </div>
+                  {logExpanded && (
+                    <div
+                      ref={logScrollRef}
+                      className="bg-zinc-950 text-zinc-100 font-mono text-[11px] leading-relaxed overflow-y-auto"
+                      style={{ height: 240 }}
+                    >
+                      {logLines.length === 0 ? (
+                        <div className="p-3 text-zinc-500">暂无日志，启动代理后会实时显示</div>
+                      ) : (
+                        <div className="p-2.5 space-y-0.5">
+                          {logLines.map((line, i) => (
+                            <LogLine key={i} line={line} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </StepCard>
           </div>
@@ -461,3 +551,22 @@ function StepCard({
 }
 
 export default MitmProxy
+
+// 实时日志行（按事件类型上色）
+function LogLine({ line }: { line: string }) {
+  const m = line.match(/^\[([^\]]+)\] (.+)$/)
+  const time = m?.[1] ?? ''
+  const body = m?.[2] ?? line
+  let bodyClass = 'text-zinc-200'
+  if (body.startsWith('CONNECT')) bodyClass = 'text-sky-300'
+  else if (body.startsWith('已替换机器码')) bodyClass = 'text-emerald-300'
+  else if (body.startsWith('已过滤')) bodyClass = 'text-amber-300'
+  else if (body.startsWith('代理服务器已启动')) bodyClass = 'text-violet-300'
+  else if (body.includes('失败') || body.includes('错误')) bodyClass = 'text-red-400'
+  return (
+    <div className="flex gap-2">
+      <span className="text-zinc-500 shrink-0">{time}</span>
+      <span className={bodyClass}>{body}</span>
+    </div>
+  )
+}

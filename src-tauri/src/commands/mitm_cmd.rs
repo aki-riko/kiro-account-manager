@@ -183,3 +183,15 @@ pub fn open_mitm_log_dir() -> Result<String, String> {
     open::that(dir).map_err(|e| format!("打开日志目录失败: {e}"))?;
     Ok(dir.to_string_lossy().to_string())
 }
+
+/// 读取 MITM 日志末尾 N 行（前端实时滚动用）
+#[tauri::command]
+pub fn read_mitm_log(max_lines: Option<usize>) -> Vec<String> {
+    crate::mitm::mitm_log::read_tail(max_lines.unwrap_or(200))
+}
+
+/// 清空 MITM 日志
+#[tauri::command]
+pub fn clear_mitm_log() -> Result<(), String> {
+    crate::mitm::mitm_log::clear()
+}
