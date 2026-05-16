@@ -155,11 +155,12 @@ fn setup_log_plugin() -> tauri_plugin_log::Builder {
             let target = metadata.target();
             target.starts_with("kiro_account_manager")
         })
-        // 只写入日志文件，不输出到控制台/Webview
+        // 输出到日志文件 + 终端 stdout（dev 模式可见）
         .targets([
             tauri_plugin_log::Target::new(
                 tauri_plugin_log::TargetKind::LogDir { file_name: Some("gateway".to_string()) }
             ),
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
         ])
         // 日志轮转：每个文件最大 10MB，保留最近 5 个文件
         .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
