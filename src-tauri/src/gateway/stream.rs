@@ -3,6 +3,7 @@
 pub enum KiroEvent {
     Text(String),
     Thinking(String),
+    ThinkingSignature(String),
     ToolUseStart {
         id: String,
         name: String,
@@ -46,6 +47,7 @@ pub struct AggregatedCitation {
 pub struct AggregatedKiroResponse {
     pub text: String,
     pub thinking: String,
+    pub thinking_signature: Option<String>,
     pub tool_calls: Vec<(String, String, String)>,
     pub input_tokens: i32,
     pub output_tokens: i32,
@@ -219,6 +221,12 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
             return Some(KiroEvent::Thinking(text));
         }
     }
+    // 提取 reasoning signature（可能在单独的事件中，也可能和 text 一起）
+    if let Some(sig) = parse_reasoning_signature(&value) {
+        if !sig.is_empty() {
+            return Some(KiroEvent::ThinkingSignature(sig));
+        }
+    }
 
     // 解析 codeReferenceEvent
     if let Some(code_ref) = value.get("codeReferenceEvent") {
@@ -372,6 +380,7 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
             let event_type = match &event {
                 KiroEvent::Text(_) => "Text",
                 KiroEvent::Thinking(_) => "Thinking",
+                KiroEvent::ThinkingSignature(_) => "ThinkingSignature",
                 KiroEvent::ToolUseStart { .. } => "ToolUseStart",
                 KiroEvent::ToolUseInputDelta { .. } => "ToolUseInputDelta",
                 KiroEvent::ToolUseStop { .. } => "ToolUseStop",
@@ -390,6 +399,10 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
                 KiroEvent::Thinking(text) => {
                     log::debug!("[聚合] 思考事件: {} 字符", text.len());
                     aggregated.thinking.push_str(&text);
+                }
+                KiroEvent::ThinkingSignature(sig) => {
+                    log::debug!("[聚合] 思考签名: {} 字符", sig.len());
+                    aggregated.thinking_signature = Some(sig);
                 }
                 KiroEvent::ToolUseStart { id, name } => {
                     log::debug!("[聚合] 工具使用开始: id={}, name={}", id, name);
@@ -546,6 +559,16 @@ fn parse_reasoning_text(value: &serde_json::Value) -> Option<String> {
     }
 
     None
+}
+
+/// 从 reasoningContentEvent 中提取 signature
+fn parse_reasoning_signature(value: &serde_json::Value) -> Option<String> {
+    value
+        .get("reasoningContentEvent")
+        .and_then(|item| item.get("signature"))
+        .and_then(|item| item.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
 }
 
 /// 解析 codeReferenceEvent

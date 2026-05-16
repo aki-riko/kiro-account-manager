@@ -143,12 +143,16 @@ impl ThinkingParser {
         if close_pos.is_none() {
             let safe_len = self.buffer.len().saturating_sub(Self::CLOSE_TAG.len() - 1);
             if safe_len > 0 {
-                let thinking_content = self.buffer[..safe_len].to_string();
-                self.buffer = self.buffer[safe_len..].to_string();
-                return Some(TextSegment {
-                    segment_type: SegmentType::Thinking,
-                    content: thinking_content,
-                });
+                // 确保 safe_len 在字符边界上
+                let safe_len = self.buffer.floor_char_boundary(safe_len);
+                if safe_len > 0 {
+                    let thinking_content = self.buffer[..safe_len].to_string();
+                    self.buffer = self.buffer[safe_len..].to_string();
+                    return Some(TextSegment {
+                        segment_type: SegmentType::Thinking,
+                        content: thinking_content,
+                    });
+                }
             }
             return None;
         }
