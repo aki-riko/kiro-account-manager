@@ -306,28 +306,44 @@ fn parse_host_port(target: &str) -> Result<(String, u16), String> {
 const MACHINE_ID_PATTERN: &str = r"[a-f0-9]{64}";
 
 /// 替换请求中的机器码
-/// 匹配所有 64 位十六进制字符串并替换为目标值
+///
+/// 替换范围：整个 HTTP 报文（headers + body），覆盖所有出现位置：
+/// - User-Agent / X-Amz-User-Agent 头里的 KiroIDE/0.x.x/{64hex} 或 KiroIDE-0.x.x-{64hex}
+/// - x-kiro-machineid 头（OTLP 遥测）
+/// - body 里 Kiro 系统提示词模板渲染后的 `Machine ID: {64hex}`
+/// - body 里 telemetry-meta 的 machineId 字段
+///
+/// 要求 target_id 也是 64 位小写 hex（与 IDE 内部 sha256 hash 输出格式一致），
+/// 否则替换会改变报文长度导致 Content-Length 失配。
 fn replace_machine_id(request_data: &[u8], target_id: &str) -> Vec<u8> {
+    // 目标 ID 必须是 64 位小写 hex，否则不替换（避免长度失配）
+    if target_id.len() != 64 || !target_id.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) {
+        log::warn!(
+            "[MITM] 目标机器码格式不合法（应为 64 位小写十六进制），跳过替换: {}",
+            target_id
+        );
+        return request_data.to_vec();
+    }
+
     let request_str = String::from_utf8_lossy(request_data);
     let re = regex::Regex::new(MACHINE_ID_PATTERN).unwrap();
 
-    let mut replaced = false;
+    let mut replaced = 0usize;
     let result = re.replace_all(&request_str, |caps: &regex::Captures| {
         let matched = caps.get(0).unwrap().as_str();
-        // 不替换已经是目标 ID 的
         if matched == target_id {
             return matched.to_string();
         }
-        replaced = true;
-        log::info!(
-            "[MITM] 替换机器码: {}... → {}...",
-            &matched[..16],
-            &target_id[..16.min(target_id.len())]
-        );
+        replaced += 1;
         target_id.to_string()
     });
 
-    if replaced {
+    if replaced > 0 {
+        log::info!(
+            "[MITM] 已替换机器码 {} 处 → {}...",
+            replaced,
+            &target_id[..16]
+        );
         result.as_bytes().to_vec()
     } else {
         request_data.to_vec()
