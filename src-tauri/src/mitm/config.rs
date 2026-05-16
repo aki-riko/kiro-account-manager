@@ -30,8 +30,17 @@ fn default_port() -> u16 { 8766 }
 fn default_true() -> bool { true }
 fn default_mitm_domains() -> Vec<String> {
     vec![
+        // 主业务（chat/streaming/MCP）
         "q.us-east-1.amazonaws.com".to_string(),
         "q.eu-central-1.amazonaws.com".to_string(),
+        // AWS SSO OIDC（refresh token，AWS SDK 会带 KiroIDE UA）
+        "oidc.us-east-1.amazonaws.com".to_string(),
+        "oidc.eu-central-1.amazonaws.com".to_string(),
+        // Kiro AuthService（POST /oauth/token、/refreshToken、/logout、DELETE /account）
+        "prod.us-east-1.auth.desktop.kiro.dev".to_string(),
+        // OTLP 遥测（x-kiro-machineid header）
+        "prod.us-east-1.telemetry.desktop.kiro.dev".to_string(),
+        "gamma.us-east-1.telemetry.desktop.kiro.dev".to_string(),
     ]
 }
 

@@ -38,8 +38,17 @@ impl Default for MitmProxyConfig {
             host: "127.0.0.1".to_string(),
             port: 8766,
             mitm_domains: vec![
+                // 主业务（chat/streaming/MCP）
                 "q.us-east-1.amazonaws.com".to_string(),
                 "q.eu-central-1.amazonaws.com".to_string(),
+                // AWS SSO OIDC（refresh token）
+                "oidc.us-east-1.amazonaws.com".to_string(),
+                "oidc.eu-central-1.amazonaws.com".to_string(),
+                // Kiro AuthService（POST /oauth/token、/refreshToken、/logout、DELETE /account）
+                "prod.us-east-1.auth.desktop.kiro.dev".to_string(),
+                // OTLP 遥测（x-kiro-machineid header）
+                "prod.us-east-1.telemetry.desktop.kiro.dev".to_string(),
+                "gamma.us-east-1.telemetry.desktop.kiro.dev".to_string(),
             ],
             target_device_id: None,
             log_requests: true,
