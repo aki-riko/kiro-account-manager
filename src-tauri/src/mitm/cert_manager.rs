@@ -161,17 +161,24 @@ impl CertManager {
     #[cfg(target_os = "windows")]
     pub fn install_ca_to_system(&self) -> Result<(), String> {
         let cert_path = self.ca_cert_path();
-        let output = std::process::Command::new("certutil")
-            .args(["-addstore", "-f", "ROOT", &cert_path.to_string_lossy()])
+        // 使用 runas 提权执行 certutil
+        let output = std::process::Command::new("powershell")
+            .args([
+                "-Command",
+                &format!(
+                    "Start-Process certutil -ArgumentList '-addstore','-f','ROOT','\"{}\"' -Verb RunAs -Wait",
+                    cert_path.to_string_lossy()
+                ),
+            ])
             .output()
-            .map_err(|e| format!("执行 certutil 失败: {e}"))?;
+            .map_err(|e| format!("执行提权安装失败: {e}"))?;
 
         if output.status.success() {
             log::info!("[MITM] CA 证书已安装到 Windows 信任存储");
             Ok(())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("安装 CA 失败（需要管理员权限）: {stderr}"))
+            Err(format!("安装 CA 失败: {stderr}"))
         }
     }
 
@@ -237,13 +244,20 @@ impl CertManager {
     /// 静态方法：检查 CA 是否已安装到系统信任存储
     #[cfg(target_os = "windows")]
     pub fn check_ca_installed_in_system(certs_dir: &std::path::Path) -> bool {
-        let cert_path = certs_dir.join(CA_CERT_FILE);
-        if !cert_path.exists() { return false; }
-        // 用 certutil 验证是否在 ROOT 存储中
-        let output = std::process::Command::new("certutil")
-            .args(["-verifystore", "ROOT", &cert_path.to_string_lossy()])
+        // 用 PowerShell 检查 ROOT 存储中是否有我们的 CA
+        let output = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile", "-Command",
+                &format!(
+                    "Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object {{ $_.Subject -like '*{}*' }} | Select-Object -First 1",
+                    CA_COMMON_NAME
+                ),
+            ])
             .output();
-        matches!(output, Ok(o) if o.status.success())
+        match output {
+            Ok(o) => !o.stdout.is_empty() && o.status.success(),
+            Err(_) => false,
+        }
     }
 
     #[cfg(target_os = "macos")]
