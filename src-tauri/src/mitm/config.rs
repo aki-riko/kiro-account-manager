@@ -70,10 +70,27 @@ pub fn load_mitm_config() -> MitmConfig {
     if !path.exists() {
         return MitmConfig::default();
     }
-    fs::read_to_string(&path)
+    let mut config: MitmConfig = fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+    // 迁移：旧版本默认只有 2 个 q. 域名，自动升级到完整官方域名列表
+    if is_legacy_default_domains(&config.mitm_domains) {
+        config.mitm_domains = default_mitm_domains();
+        let _ = save_mitm_config(&config);
+        log::info!("[MITM] 已自动升级拦截域名列表（2 → {}）", config.mitm_domains.len());
+    }
+
+    config
+}
+
+/// 判断 mitm_domains 是否为旧版本默认值（仅 2 个 q. 域名）
+/// 用于一次性迁移到新默认列表
+fn is_legacy_default_domains(domains: &[String]) -> bool {
+    domains.len() == 2
+        && domains.iter().any(|d| d == "q.us-east-1.amazonaws.com")
+        && domains.iter().any(|d| d == "q.eu-central-1.amazonaws.com")
 }
 
 pub fn save_mitm_config(config: &MitmConfig) -> Result<(), String> {
