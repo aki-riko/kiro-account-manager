@@ -999,6 +999,11 @@ fn write_request_log(
         error_type: error_type.map(str::to_string),
     };
 
+    // 如果关闭了日志记录，跳过
+    if !state.config.log_requests {
+        return;
+    }
+
     // 写入文件日志
     let _ = append_gateway_request_log(&entry);
 
