@@ -319,14 +319,6 @@ pub fn calc_status(is_banned: bool, is_auth_error: bool) -> String {
     }
 }
 
-/// 设置账号状态，如果是不可用状态则自动禁用
-pub fn apply_account_status(account: &mut crate::core::account::Account, is_banned: bool, is_auth_error: bool) {
-    account.status = calc_status(is_banned, is_auth_error);
-    if is_banned || is_auth_error {
-        account.enabled = false;
-    }
-}
-
 fn read_non_empty_string_field(
     value: &serde_json::Value,
     primary_path: &[&str],
