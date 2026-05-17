@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
-import { Palette, Settings as SettingsIcon, Network, LayoutDashboard, Cpu, Bell } from 'lucide-react'
+import { Palette, Settings as SettingsIcon, LayoutDashboard, Cpu, Bell } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
@@ -14,7 +14,6 @@ import SettingsAppearance from './SettingsAppearance'
 import SettingsGeneral from './SettingsGeneral'
 import SettingsKiro from './SettingsKiro'
 import SettingsNotifications from './SettingsNotifications'
-import React from 'react'
 
 function Settings() {
     const { t, theme, setTheme } = useApp()
@@ -74,7 +73,7 @@ function Settings() {
     const [closeToTray, setCloseToTray] = useState(true)
 
     // Kiro IDE 状态
-    const [loading, setLoading] = useState(false)
+    const [, setLoading] = useState(false)
 
     // 系统机器码
     const [systemMachineInfo, setSystemMachineInfo] = useState<any>(null)

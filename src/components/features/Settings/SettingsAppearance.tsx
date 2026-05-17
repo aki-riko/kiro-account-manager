@@ -1,7 +1,6 @@
 import { Sun, Moon, Palette, Check } from 'lucide-react'
 import { Card, CardContent } from '../../ui/card'
 import { buildThemeOptions } from './settingsConstants'
-import React from 'react'
 
 interface SettingsAppearanceProps {
   theme: string;

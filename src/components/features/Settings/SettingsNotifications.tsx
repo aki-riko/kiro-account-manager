@@ -1,27 +1,26 @@
-import { Switch } from '../../ui/switch'
 import { Card, CardContent } from '../../ui/card'
-import React from 'react'
+import ToggleRow from './ToggleRow'
 
 interface SettingsNotificationsProps {
-  notifyActionRequired: boolean;
-  setNotifyActionRequired: (v: boolean) => void;
-  notifyFailure: boolean;
-  setNotifyFailure: (v: boolean) => void;
-  notifySuccess: boolean;
-  setNotifySuccess: (v: boolean) => void;
-  notifyBilling: boolean;
-  setNotifyBilling: (v: boolean) => void;
-  telemetryContentCollection: boolean;
-  setTelemetryContentCollection: (v: boolean) => void;
-  telemetryUsageAnalytics: boolean;
-  setTelemetryUsageAnalytics: (v: boolean) => void;
-  telemetryEditStats: boolean;
-  setTelemetryEditStats: (v: boolean) => void;
-  telemetryFeedback: boolean;
-  setTelemetryFeedback: (v: boolean) => void;
-  handleNotificationChange: (key: string, checked: boolean, setter: (v: boolean) => void) => Promise<void>;
-  handleTelemetryChange: (ideKey: string, checked: boolean, setter: (v: boolean) => void, appField: string) => Promise<void>;
-  t: (key: string) => string;
+  notifyActionRequired: boolean
+  setNotifyActionRequired: (v: boolean) => void
+  notifyFailure: boolean
+  setNotifyFailure: (v: boolean) => void
+  notifySuccess: boolean
+  setNotifySuccess: (v: boolean) => void
+  notifyBilling: boolean
+  setNotifyBilling: (v: boolean) => void
+  telemetryContentCollection: boolean
+  setTelemetryContentCollection: (v: boolean) => void
+  telemetryUsageAnalytics: boolean
+  setTelemetryUsageAnalytics: (v: boolean) => void
+  telemetryEditStats: boolean
+  setTelemetryEditStats: (v: boolean) => void
+  telemetryFeedback: boolean
+  setTelemetryFeedback: (v: boolean) => void
+  handleNotificationChange: (key: string, checked: boolean, setter: (v: boolean) => void) => Promise<void>
+  handleTelemetryChange: (ideKey: string, checked: boolean, setter: (v: boolean) => void, appField: string) => Promise<void>
+  t: (key: string) => string
 }
 
 function SettingsNotifications({
@@ -43,64 +42,68 @@ function SettingsNotifications({
   setTelemetryFeedback,
   handleNotificationChange,
   handleTelemetryChange,
-  t
+  t,
 }: SettingsNotificationsProps) {
+  const notificationRows = [
+    { key: 'kiroAgent.notifications.agent.actionRequired', label: 'settings.notifyActionRequired', value: notifyActionRequired, setter: setNotifyActionRequired },
+    { key: 'kiroAgent.notifications.agent.failure', label: 'settings.notifyFailure', value: notifyFailure, setter: setNotifyFailure },
+    { key: 'kiroAgent.notifications.agent.success', label: 'settings.notifySuccess', value: notifySuccess, setter: setNotifySuccess },
+    { key: 'kiroAgent.notifications.billing', label: 'settings.notifyBilling', value: notifyBilling, setter: setNotifyBilling },
+  ]
+
+  const telemetryRows = [
+    { ideKey: 'telemetry.dataSharingAndPromptLogging.contentCollectionForServiceImprovement', appField: 'telemetryContentCollection', label: 'settings.telemetryContentCollection', value: telemetryContentCollection, setter: setTelemetryContentCollection },
+    { ideKey: 'telemetry.dataSharingAndPromptLogging.usageAnalyticsAndPerformanceMetrics', appField: 'telemetryUsageAnalytics', label: 'settings.telemetryUsageAnalytics', value: telemetryUsageAnalytics, setter: setTelemetryUsageAnalytics },
+    { ideKey: 'telemetry.editStats.enabled', appField: 'telemetryEditStats', label: 'settings.telemetryEditStats', value: telemetryEditStats, setter: setTelemetryEditStats },
+    { ideKey: 'telemetry.feedback.enabled', appField: 'telemetryFeedback', label: 'settings.telemetryFeedback', value: telemetryFeedback, setter: setTelemetryFeedback },
+  ]
+
   return (
-    <>
+    <div className="space-y-3">
       {/* 通知设置 */}
-      <Card className="card-glow animate-slide-in-left delay-200 mb-6">
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-1">{t('settings.notifications')}</h2>
-          <p className="text-sm text-muted-foreground mb-4">{t('settings.notificationsDesc')}</p>
+      <Card className="card-glow animate-slide-in-left delay-150">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 bg-primary rounded-full" />
+            <h2 className="text-sm font-semibold text-foreground">{t('settings.notifications')}</h2>
+            <span className="text-xs text-muted-foreground">{t('settings.notificationsDesc')}</span>
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
-              <Switch checked={notifyActionRequired} onCheckedChange={(checked) => handleNotificationChange('kiroAgent.notifications.agent.actionRequired', checked, setNotifyActionRequired)} />
-              <span className="text-xs text-foreground">{t('settings.notifyActionRequired')}</span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
-              <Switch checked={notifyFailure} onCheckedChange={(checked) => handleNotificationChange('kiroAgent.notifications.agent.failure', checked, setNotifyFailure)} />
-              <span className="text-xs text-foreground">{t('settings.notifyFailure')}</span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
-              <Switch checked={notifySuccess} onCheckedChange={(checked) => handleNotificationChange('kiroAgent.notifications.agent.success', checked, setNotifySuccess)} />
-              <span className="text-xs text-foreground">{t('settings.notifySuccess')}</span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
-              <Switch checked={notifyBilling} onCheckedChange={(checked) => handleNotificationChange('kiroAgent.notifications.billing', checked, setNotifyBilling)} />
-              <span className="text-xs text-foreground">{t('settings.notifyBilling')}</span>
-            </div>
+            {notificationRows.map(row => (
+              <ToggleRow
+                key={row.key}
+                checked={row.value}
+                onChange={checked => handleNotificationChange(row.key, checked, row.setter)}
+                label={t(row.label)}
+              />
+            ))}
           </div>
         </CardContent>
       </Card>
 
       {/* 遥测与隐私 */}
-      <Card className="card-glow animate-slide-in-left delay-250 mb-6">
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-1">{t('settings.telemetry')}</h2>
-          <p className="text-sm text-muted-foreground mb-4">{t('settings.telemetryDesc')}</p>
+      <Card className="card-glow animate-slide-in-left delay-200">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 bg-primary rounded-full" />
+            <h2 className="text-sm font-semibold text-foreground">{t('settings.telemetry')}</h2>
+            <span className="text-xs text-muted-foreground">{t('settings.telemetryDesc')}</span>
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
-              <Switch checked={telemetryContentCollection} onCheckedChange={(checked) => handleTelemetryChange('telemetry.dataSharingAndPromptLogging.contentCollectionForServiceImprovement', checked, setTelemetryContentCollection, 'telemetryContentCollection')} />
-              <span className="text-xs text-foreground">{t('settings.telemetryContentCollection')}</span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
-              <Switch checked={telemetryUsageAnalytics} onCheckedChange={(checked) => handleTelemetryChange('telemetry.dataSharingAndPromptLogging.usageAnalyticsAndPerformanceMetrics', checked, setTelemetryUsageAnalytics, 'telemetryUsageAnalytics')} />
-              <span className="text-xs text-foreground">{t('settings.telemetryUsageAnalytics')}</span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
-              <Switch checked={telemetryEditStats} onCheckedChange={(checked) => handleTelemetryChange('telemetry.editStats.enabled', checked, setTelemetryEditStats, 'telemetryEditStats')} />
-              <span className="text-xs text-foreground">{t('settings.telemetryEditStats')}</span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50">
-              <Switch checked={telemetryFeedback} onCheckedChange={(checked) => handleTelemetryChange('telemetry.feedback.enabled', checked, setTelemetryFeedback, 'telemetryFeedback')} />
-              <span className="text-xs text-foreground">{t('settings.telemetryFeedback')}</span>
-            </div>
+            {telemetryRows.map(row => (
+              <ToggleRow
+                key={row.ideKey}
+                checked={row.value}
+                onChange={checked => handleTelemetryChange(row.ideKey, checked, row.setter, row.appField)}
+                label={t(row.label)}
+              />
+            ))}
           </div>
         </CardContent>
       </Card>
-    </>
+    </div>
   )
 }
 

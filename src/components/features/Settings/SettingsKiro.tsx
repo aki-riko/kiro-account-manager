@@ -1,3 +1,4 @@
+import type React from 'react'
 import { Lock, Search, RefreshCw, Check } from 'lucide-react'
 import { Card, CardContent } from '../../ui/card'
 import { Input } from '../../ui/input'
@@ -6,6 +7,7 @@ import { Switch } from '../../ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { Label } from '../../ui/label'
 import { AI_MODELS } from './settingsConstants'
+import ToggleRow from './ToggleRow'
 
 interface SettingsKiroProps {
   // 模型/工具
@@ -152,7 +154,7 @@ function SettingsKiro({
             <div>
               <Textarea
                 value={customTrustedCommands}
-                onChange={e => handleCustomTrustedCommandsChange(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleCustomTrustedCommandsChange(e.target.value)}
                 placeholder="npm *&#10;git *&#10;cargo *"
                 className="font-mono text-xs"
                 rows={3}
@@ -262,23 +264,6 @@ function SettingsKiro({
         </CardContent>
       </Card>
     </div>
-  )
-}
-
-function ToggleRow({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean
-  onChange: (v: boolean) => Promise<void> | void
-  label: string
-}) {
-  return (
-    <label className="flex items-center gap-2 cursor-pointer px-2.5 py-1.5 rounded-md border border-border bg-card hover:bg-muted/40 transition-colors">
-      <Switch checked={checked} onCheckedChange={onChange} />
-      <span className="text-xs text-foreground">{label}</span>
-    </label>
   )
 }
 
