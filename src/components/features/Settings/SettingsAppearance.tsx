@@ -14,8 +14,13 @@ function SettingsAppearance({ theme, setTheme, t }: SettingsAppearanceProps) {
 
   return (
     <div className="space-y-3">
-      <SectionCard title={t('settings.theme')} desc={t('settings.themeDesc')}>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+      <SectionCard
+        title={t('settings.theme')}
+        accent="violet"
+        icon={<Palette size={14} className="text-violet-500" />}
+        desc={t('settings.themeDesc')}
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
           {themeOptions.map((opt: any) => {
             const Icon = themeIconMap[opt.iconName]
             const isActive = theme === opt.key
@@ -23,20 +28,25 @@ function SettingsAppearance({ theme, setTheme, t }: SettingsAppearanceProps) {
               <button
                 key={opt.key}
                 onClick={() => setTheme(opt.key)}
-                className={`relative flex items-center gap-2 px-2.5 py-2 rounded-lg border transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 ${isActive
-                  ? 'border-primary bg-primary/5 shadow-sm'
-                  : 'border-border hover:bg-muted/40 bg-card'
-                  }`}
+                className={`group relative overflow-hidden rounded-xl border transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                  isActive
+                    ? 'border-primary ring-1 ring-primary/30 shadow-md'
+                    : 'border-border hover:border-primary/50 hover:shadow-sm'
+                }`}
               >
-                <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${opt.color} flex items-center justify-center flex-shrink-0`}>
-                  <Icon size={12} className="text-white" />
+                {/* 主题色预览条 */}
+                <div className={`h-10 bg-gradient-to-br ${opt.color} flex items-center justify-center`}>
+                  <Icon size={16} className="text-white drop-shadow" />
                 </div>
-                <span className="text-xs font-medium text-foreground truncate">{opt.name}</span>
-                {isActive && (
-                  <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center bg-primary ring-2 ring-background">
-                    <Check size={8} className="text-white" />
-                  </div>
-                )}
+                {/* 名称 */}
+                <div className="px-2.5 py-1.5 bg-card flex items-center justify-between">
+                  <span className="text-xs font-medium text-foreground truncate">{opt.name}</span>
+                  {isActive && (
+                    <div className="w-4 h-4 rounded-full flex items-center justify-center bg-primary flex-shrink-0">
+                      <Check size={10} className="text-white" />
+                    </div>
+                  )}
+                </div>
               </button>
             )
           })}

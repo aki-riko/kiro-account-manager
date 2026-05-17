@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { Bell, ShieldQuestion } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { useAppSettings } from '../../../contexts/AppSettingsContext'
@@ -109,9 +110,11 @@ function SettingsNotifications() {
       {/* 通知设置 */}
       <SectionCard
         title={t('settings.notifications')}
-        badge={<span className="text-xs text-muted-foreground">{t('settings.notificationsDesc')}</span>}
+        accent="blue"
+        icon={<Bell size={14} className="text-blue-500" />}
+        desc={t('settings.notificationsDesc')}
       >
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {notificationRows.map(row => (
             <ToggleRow
               key={row.key}
@@ -126,9 +129,11 @@ function SettingsNotifications() {
       {/* 遥测与隐私 */}
       <SectionCard
         title={t('settings.telemetry')}
-        badge={<span className="text-xs text-muted-foreground">{t('settings.telemetryDesc')}</span>}
+        accent="orange"
+        icon={<ShieldQuestion size={14} className="text-orange-500" />}
+        desc={t('settings.telemetryDesc')}
       >
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {telemetryRows.map(row => (
             <ToggleRow
               key={row.ideKey}

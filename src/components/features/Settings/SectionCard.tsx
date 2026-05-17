@@ -1,25 +1,26 @@
 import type React from 'react'
 import { Card, CardContent } from '../../ui/card'
 
-type Accent = 'primary' | 'orange' | 'blue' | 'green' | 'violet' | 'amber'
+export type SectionAccent = 'primary' | 'orange' | 'violet' | 'blue' | 'green' | 'red' | 'amber'
+
+const ACCENT_CLASS: Record<SectionAccent, string> = {
+  primary: 'bg-primary',
+  orange: 'bg-orange-500',
+  violet: 'bg-violet-500',
+  blue: 'bg-blue-500',
+  green: 'bg-emerald-500',
+  red: 'bg-red-500',
+  amber: 'bg-amber-500',
+}
 
 interface SectionCardProps {
   title: string
   icon?: React.ReactNode
   badge?: React.ReactNode
   desc?: string
-  accent?: Accent
+  accent?: SectionAccent
   className?: string
   children: React.ReactNode
-}
-
-const ACCENT_BAR: Record<Accent, string> = {
-  primary: 'bg-primary',
-  orange: 'bg-orange-500',
-  blue: 'bg-blue-500',
-  green: 'bg-emerald-500',
-  violet: 'bg-violet-500',
-  amber: 'bg-amber-500',
 }
 
 /**
@@ -39,7 +40,7 @@ function SectionCard({
     <Card className={`card-glow ${className}`}>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <div className={`w-1 h-4 ${ACCENT_BAR[accent]} rounded-full`} />
+          <div className={`w-1 h-4 ${ACCENT_CLASS[accent]} rounded-full`} />
           {icon}
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           {badge}

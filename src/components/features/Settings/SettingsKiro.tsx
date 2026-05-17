@@ -1,12 +1,12 @@
 import type React from 'react'
-import { Lock, Search, RefreshCw, Check, Sparkles, Bot, Network, Wrench } from 'lucide-react'
+import { Search, RefreshCw, Check, Sparkles, Bot, Network, Wrench, Lock } from 'lucide-react'
 import { Input } from '../../ui/input'
 import { Textarea } from '../../ui/textarea'
-import { Switch } from '../../ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { Label } from '../../ui/label'
 import { AI_MODELS } from './settingsConstants'
 import SectionCard from './SectionCard'
+import SwitchRow from './SwitchRow'
 import ToggleRow from './ToggleRow'
 
 interface SettingsKiroProps {
@@ -108,12 +108,13 @@ function SettingsKiro({
           </SelectContent>
         </Select>
 
-        <label className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 border border-border bg-card hover:bg-muted/40 transition-colors">
-          <Switch checked={lockModel} onCheckedChange={handleLockModelChange} />
-          <Lock size={13} className="text-muted-foreground" />
-          <span className="text-sm text-foreground">{t('settings.lockModel')}</span>
-          <span className="text-xs text-muted-foreground ml-1">{t('settings.lockModelDesc')}</span>
-        </label>
+        <SwitchRow
+          checked={lockModel}
+          onCheckedChange={handleLockModelChange}
+          icon={<Lock size={13} />}
+          label={t('settings.lockModel')}
+          hint={t('settings.lockModelDesc')}
+        />
       </SectionCard>
 
       {/* === 2. Agent 行为 === */}
@@ -210,15 +211,17 @@ function SettingsKiro({
 
       {/* === 4. 网络与 MCP === */}
       <SectionCard
-        title={t('settings.httpProxy')}
+        title={t('settings.proxy')}
         accent="green"
         icon={<Network size={14} className="text-emerald-500" />}
+        desc={t('settings.proxyTip')}
       >
-        <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-3 md:items-end">
-          <div>
-            <Label className="block text-[11px] text-muted-foreground mb-1">{t('settings.configureMCP')}</Label>
+        <div className="space-y-3">
+          {/* MCP（独占一行的开关行风格）*/}
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-card">
+            <span className="text-sm font-medium text-foreground whitespace-nowrap">{t('settings.configureMCP')}</span>
             <Select value={configureMcp} onValueChange={handleConfigureMcpChange}>
-              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 text-xs ml-auto w-[160px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Enabled">{t('settings.configureMCPEnabled')}</SelectItem>
                 <SelectItem value="Disabled">{t('settings.configureMCPDisabled')}</SelectItem>
@@ -226,6 +229,7 @@ function SettingsKiro({
             </Select>
           </div>
 
+          {/* HTTP 代理输入 + 操作按钮 */}
           <div>
             <Label className="block text-[11px] text-muted-foreground mb-1">{t('settings.httpProxy')}</Label>
             <div className="flex gap-1.5">
@@ -233,12 +237,12 @@ function SettingsKiro({
                 value={httpProxy}
                 onChange={e => setHttpProxy(e.target.value)}
                 placeholder="http://127.0.0.1:7897"
-                className="h-8 text-xs flex-1"
+                className="h-8 text-xs flex-1 font-mono"
               />
               <button
                 onClick={handleDetectProxy}
                 disabled={detectingProxy}
-                className="px-2.5 h-8 border rounded-md bg-card hover:bg-muted/50 border-border text-foreground transition-colors disabled:opacity-50"
+                className="px-2.5 h-8 border rounded-md bg-card hover:bg-muted/50 border-border text-foreground transition-colors disabled:opacity-50 inline-flex items-center justify-center"
                 title={t('settings.detectProxyTitle')}
               >
                 {detectingProxy ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
@@ -246,7 +250,7 @@ function SettingsKiro({
               <button
                 onClick={handleApplyProxy}
                 disabled={savingProxy || !proxyChanged}
-                className={`px-3 h-8 rounded-md flex items-center gap-1 text-xs font-medium border transition-colors disabled:opacity-50 ${
+                className={`px-3 h-8 rounded-md inline-flex items-center gap-1 text-xs font-medium border transition-colors disabled:opacity-50 ${
                   proxyChanged
                     ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
                     : 'bg-muted text-muted-foreground border-border'
@@ -258,7 +262,6 @@ function SettingsKiro({
             </div>
           </div>
         </div>
-        <p className="text-[11px] text-muted-foreground">{t('settings.proxyTip')}</p>
       </SectionCard>
     </div>
   )

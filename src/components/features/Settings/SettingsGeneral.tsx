@@ -1,10 +1,10 @@
-import { Clock, Globe, Search, Shield, Shuffle, AlertTriangle, Eye, EyeOff, Repeat, RefreshCw, Check, Copy, Cpu, X, FolderOpen, ExternalLink } from 'lucide-react'
+import { Clock, Globe, Search, Shield, Shuffle, AlertTriangle, Eye, EyeOff, Repeat, RefreshCw, Check, Copy, Cpu, X, FolderOpen, ExternalLink, Users, User } from 'lucide-react'
 import { Input } from '../../ui/input'
-import { Switch } from '../../ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import React from 'react'
 import { TFunction } from 'i18next'
 import SectionCard from './SectionCard'
+import SwitchRow from './SwitchRow'
 
 interface BrowserInfo {
   name: string;
@@ -58,34 +58,7 @@ interface SettingsGeneralProps {
   t: TFunction;
 }
 
-/// 紧凑开关行：左侧 switch+图标+标签，右侧可选附加控件
-function SwitchRow({
-  checked,
-  onCheckedChange,
-  icon,
-  label,
-  hint,
-  trailing,
-  title,
-}: {
-  checked: boolean
-  onCheckedChange: (v: boolean) => void
-  icon?: React.ReactNode
-  label: string
-  hint?: string
-  trailing?: React.ReactNode
-  title?: string
-}) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted/40 transition-colors" title={title}>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
-      {icon && <span className="text-muted-foreground">{icon}</span>}
-      <span className="text-sm font-medium text-foreground">{label}</span>
-      {hint && <span className="text-xs text-muted-foreground ml-1">{hint}</span>}
-      {trailing && <div className="ml-auto flex items-center gap-2">{trailing}</div>}
-    </div>
-  )
-}
+/// 紧凑开关行已抽到 ./SwitchRow
 
 function SettingsGeneral({
   autoRefresh,
@@ -161,7 +134,10 @@ function SettingsGeneral({
   return (
     <div className="space-y-3">
       {/* 账号管理 */}
-      <SectionCard title={t('settings.account')}>
+      <SectionCard
+        title={t('settings.account')}
+        icon={<Users size={14} className="text-primary" />}
+      >
         <div className="space-y-2">
           {/* 自动刷新 Token */}
           <SwitchRow
@@ -257,7 +233,11 @@ function SettingsGeneral({
 
       {/* 浏览器 + Kiro IDE 路径（双栏并列）*/}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <SectionCard title={t('settings.browser')} icon={<Globe size={14} className="text-primary" />}>
+        <SectionCard
+          title={t('settings.browser')}
+          accent="green"
+          icon={<Globe size={14} className="text-emerald-500" />}
+        >
           <div className="flex gap-1.5">
             <Input
               value={browserPath}
@@ -311,7 +291,11 @@ function SettingsGeneral({
           <p className="text-[11px] text-muted-foreground">{t('settings.browserTip')}</p>
         </SectionCard>
 
-        <SectionCard title={t('settings.kiroIdePath')} icon={<Cpu size={14} className="text-primary" />}>
+        <SectionCard
+          title={t('settings.kiroIdePath')}
+          accent="violet"
+          icon={<Cpu size={14} className="text-violet-500" />}
+        >
           <div className="flex gap-1.5">
             <Input
               value={customKiroPath || ''}
@@ -340,84 +324,90 @@ function SettingsGeneral({
         </SectionCard>
       </div>
 
-      {/* 应用数据目录 */}
-      <SectionCard title={t('settings.appDataDir')} icon={<FolderOpen size={14} className="text-primary" />}>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 text-xs px-2 py-1.5 rounded font-mono text-foreground border border-border bg-muted/30 break-all">
-            {appDataDir || t('common.loading')}
-          </code>
-          {appDataDir && (
+      {/* 应用数据目录 + 系统机器码（双栏并列）*/}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <SectionCard
+          title={t('settings.appDataDir')}
+          accent="blue"
+          icon={<FolderOpen size={14} className="text-blue-500" />}
+        >
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs px-2 py-1.5 rounded font-mono text-foreground border border-border bg-muted/30 break-all">
+              {appDataDir || t('common.loading')}
+            </code>
+            {appDataDir && (
+              <button
+                onClick={() => copyToClipboard(appDataDir, 'appDataDir')}
+                className="p-1.5 rounded border border-border hover:bg-muted/50 transition-colors flex-shrink-0"
+                title="复制路径"
+              >
+                {copiedField === 'appDataDir' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-muted-foreground" />}
+              </button>
+            )}
             <button
-              onClick={() => copyToClipboard(appDataDir, 'appDataDir')}
-              className="p-1.5 rounded border border-border hover:bg-muted/50 transition-colors flex-shrink-0"
-              title="复制路径"
+              onClick={handleOpenAppDataDir}
+              disabled={!appDataDir}
+              className="h-8 w-8 rounded-md flex items-center justify-center bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 transition-colors flex-shrink-0"
+              title={t('settings.openInExplorer')}
             >
-              {copiedField === 'appDataDir' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-muted-foreground" />}
+              <ExternalLink size={13} />
             </button>
-          )}
-          <button
-            onClick={handleOpenAppDataDir}
-            disabled={!appDataDir}
-            className="h-8 w-8 rounded-md flex items-center justify-center bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 transition-colors flex-shrink-0"
-            title={t('settings.openInExplorer')}
-          >
-            <ExternalLink size={13} />
-          </button>
-        </div>
-      </SectionCard>
+          </div>
+        </SectionCard>
 
-      {/* 系统机器码 */}
-      <SectionCard
-        title={t('settings.systemMachineGuid')}
-        accent="orange"
-        icon={<Shield size={14} className="text-orange-500" />}
-        badge={
-          systemMachineInfo?.osType ? (
-            <span className="text-[10px] px-1.5 py-0.5 rounded text-muted-foreground border border-border bg-muted/30">
-              {resolveOsLabel(systemMachineInfo.osType, t('common.unknown'))}
-            </span>
-          ) : null
-        }
-      >
-        <div className="flex items-center gap-2">
-          <code className="flex-1 text-xs px-2 py-1.5 rounded font-mono text-foreground border border-border bg-muted/30 break-all">
-            {systemMachineInfo?.machineGuid || t('common.loading')}
-          </code>
-          {systemMachineInfo?.machineGuid && (
-            <button
-              onClick={() => copyToClipboard(systemMachineInfo.machineGuid, 'sysMachineGuid')}
-              className="p-1.5 rounded border border-border hover:bg-muted/50 transition-colors flex-shrink-0"
-              title="复制"
-            >
-              {copiedField === 'sysMachineGuid' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-muted-foreground" />}
-            </button>
-          )}
-          {systemMachineInfo?.canModify && (
-            <button
-              onClick={handleResetSystemMachineGuid}
-              disabled={machineGuidAction !== null}
-              className="h-8 px-3 rounded-md flex items-center gap-1.5 text-xs font-medium bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 transition-colors"
-            >
-              {machineGuidAction === 'reset' ? <RefreshCw size={12} className="animate-spin" /> : <Shuffle size={12} />}
-              {t('common.reset')}
-            </button>
-          )}
-        </div>
+        {/* 系统机器码 */}
+        <SectionCard
+          title={t('settings.systemMachineGuid')}
+          accent="orange"
+          icon={<Shield size={14} className="text-orange-500" />}
+          badge={
+            systemMachineInfo?.osType ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded text-muted-foreground border border-border bg-muted/30">
+                {resolveOsLabel(systemMachineInfo.osType, t('common.unknown'))}
+              </span>
+            ) : null
+          }
+        >
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs px-2 py-1.5 rounded font-mono text-foreground border border-border bg-muted/30 break-all">
+              {systemMachineInfo?.machineGuid || t('common.loading')}
+            </code>
+            {systemMachineInfo?.machineGuid && (
+              <button
+                onClick={() => copyToClipboard(systemMachineInfo.machineGuid, 'sysMachineGuid')}
+                className="p-1.5 rounded border border-border hover:bg-muted/50 transition-colors flex-shrink-0"
+                title="复制"
+              >
+                {copiedField === 'sysMachineGuid' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-muted-foreground" />}
+              </button>
+            )}
+            {systemMachineInfo?.canModify && (
+              <button
+                onClick={handleResetSystemMachineGuid}
+                disabled={machineGuidAction !== null}
+                className="h-8 px-3 rounded-md flex items-center gap-1.5 text-xs font-medium bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 transition-colors flex-shrink-0"
+              >
+                {machineGuidAction === 'reset' ? <RefreshCw size={12} className="animate-spin" /> : <Shuffle size={12} />}
+                {t('common.reset')}
+              </button>
+            )}
+          </div>
 
-        {systemMachineInfo?.requiresAdmin && (
-          <details className="text-xs">
-            <summary className="cursor-pointer text-orange-500 hover:underline flex items-center gap-1.5 select-none">
-              <AlertTriangle size={12} />
-              {t('settings.adminWarningTitle')}
-            </summary>
-            <ul className="list-disc list-inside space-y-0.5 mt-1.5 ml-4 text-[11px] text-muted-foreground">
-              <li>{t('settings.adminWarning1')}</li>
-              <li>{t('settings.adminWarning2')}</li>
-              <li>{t('settings.adminWarning3')}</li>
-            </ul>
-          </details>
-        )}
-      </SectionCard>
+          {systemMachineInfo?.requiresAdmin && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-orange-500 hover:underline flex items-center gap-1.5 select-none">
+                <AlertTriangle size={12} />
+                {t('settings.adminWarningTitle')}
+              </summary>
+              <ul className="list-disc list-inside space-y-0.5 mt-1.5 ml-4 text-[11px] text-muted-foreground">
+                <li>{t('settings.adminWarning1')}</li>
+                <li>{t('settings.adminWarning2')}</li>
+                <li>{t('settings.adminWarning3')}</li>
+              </ul>
+            </details>
+          )}
+        </SectionCard>
+      </div>
     </div>
   )
 }
