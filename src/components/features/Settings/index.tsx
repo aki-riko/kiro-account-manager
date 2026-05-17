@@ -7,7 +7,7 @@ import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { useAppSettings } from '../../../contexts/AppSettingsContext'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
-import { persistAppSettings, runKiroCommandWithAppSettings } from './settingsActions'
+import { persistAppSettings, runKiroCommandWithAppSettings, makeAppBoolToggle, makeKiroBoolToggle } from './settingsActions'
 import { NOTIFICATION_SETTINGS_FIELD_MAP } from './settingsConstants'
 import { isValidBrowserPath, isValidProxy } from './settingsValidators'
 import SettingsAppearance from './SettingsAppearance'
@@ -212,10 +212,7 @@ function Settings() {
         await saveAppSettings({ lockModel: checked, lockedModel: checked ? aiModel : null })
     }
 
-    const handleAutoRefreshChange = async (checked: boolean) => {
-        setAutoRefresh(checked)
-        await saveAppSettings({ autoRefresh: checked }, true)
-    }
+    const handleAutoRefreshChange = makeAppBoolToggle(setAutoRefresh, 'autoRefresh', saveAppSettings, true)
 
     const handleAutoRefreshIntervalChange = async (value: string) => {
         const interval = parseInt(value) || 50
@@ -223,20 +220,14 @@ function Settings() {
         await saveAppSettings({ autoRefreshInterval: interval }, true)
     }
 
-    const handleAutoChangeMachineIdChange = async (checked: boolean) => {
-        setAutoChangeMachineId(checked)
-        await saveAppSettings({ autoChangeMachineId: checked })
-    }
+    const handleAutoChangeMachineIdChange = makeAppBoolToggle(setAutoChangeMachineId, 'autoChangeMachineId', saveAppSettings)
 
     const handleMachineIdModeChange = async (mode: 'bind' | 'random') => {
         setMachineIdMode(mode)
         await saveAppSettings({ bindMachineIdToAccount: mode === 'bind' })
     }
 
-    const handleAutoSwitchEnabledChange = async (checked: boolean) => {
-        setAutoSwitchEnabled(checked)
-        await saveAppSettings({ autoSwitchEnabled: checked }, true)
-    }
+    const handleAutoSwitchEnabledChange = makeAppBoolToggle(setAutoSwitchEnabled, 'autoSwitchEnabled', saveAppSettings, true)
 
     const handleAutoSwitchThresholdChange = async (value: any) => {
         const parsedValue = typeof value === 'number' ? value : parseFloat(value)
@@ -251,10 +242,7 @@ function Settings() {
         await saveAppSettings({ autoSwitchInterval: interval }, true)
     }
 
-    const handleCloseToTrayChange = async (checked: boolean) => {
-        setCloseToTray(checked)
-        await saveAppSettings({ closeToTray: checked })
-    }
+    const handleCloseToTrayChange = makeAppBoolToggle(setCloseToTray, 'closeToTray', saveAppSettings)
 
     const handleBrowseKiroPath = async () => {
         try {
@@ -288,10 +276,7 @@ function Settings() {
         }
     }
 
-    const handleCodebaseIndexingChange = async (checked: boolean) => {
-        setEnableCodebaseIndexing(checked)
-        await runKiroCommand('set_kiro_codebase_indexing', { enabled: checked }, { enableCodebaseIndexing: checked })
-    }
+    const handleCodebaseIndexingChange = makeKiroBoolToggle(setEnableCodebaseIndexing, runKiroCommand, 'set_kiro_codebase_indexing', 'enableCodebaseIndexing')
 
     const handleTrustedCommandsModeChange = async (mode: string) => {
         if (!mode) return
@@ -327,20 +312,11 @@ function Settings() {
         await runKiroCommand('set_kiro_agent_autonomy', { autonomy: mode })
     }
 
-    const handleTabAutocompleteChange = async (checked: boolean) => {
-        setEnableTabAutocomplete(checked)
-        await runKiroCommand('set_kiro_tab_autocomplete', { enabled: checked }, { enableTabAutocomplete: checked })
-    }
+    const handleTabAutocompleteChange = makeKiroBoolToggle(setEnableTabAutocomplete, runKiroCommand, 'set_kiro_tab_autocomplete', 'enableTabAutocomplete')
 
-    const handleUsageSummaryChange = async (checked: boolean) => {
-        setUsageSummary(checked)
-        await runKiroCommand('set_kiro_usage_summary', { enabled: checked }, { usageSummary: checked })
-    }
+    const handleUsageSummaryChange = makeKiroBoolToggle(setUsageSummary, runKiroCommand, 'set_kiro_usage_summary', 'usageSummary')
 
-    const handleDebugLogsChange = async (checked: boolean) => {
-        setEnableDebugLogs(checked)
-        await runKiroCommand('set_kiro_debug_logs', { enabled: checked }, { enableDebugLogs: checked })
-    }
+    const handleDebugLogsChange = makeKiroBoolToggle(setEnableDebugLogs, runKiroCommand, 'set_kiro_debug_logs', 'enableDebugLogs')
 
     const handleNotificationChange = async (key: string, checked: boolean, setter: (v: boolean) => void) => {
         setter(checked)
@@ -354,10 +330,7 @@ function Settings() {
         await runKiroCommand('set_kiro_trusted_tools', { tools }, { trustedTools: tools })
     }
 
-    const handleReferenceTrackerChange = async (checked: boolean) => {
-        setReferenceTracker(checked)
-        await runKiroCommand('set_kiro_reference_tracker', { enabled: checked }, { referenceTracker: checked })
-    }
+    const handleReferenceTrackerChange = makeKiroBoolToggle(setReferenceTracker, runKiroCommand, 'set_kiro_reference_tracker', 'referenceTracker')
 
     const handleConfigureMcpChange = async (mode: string) => {
         setConfigureMcp(mode)
