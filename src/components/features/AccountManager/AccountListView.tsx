@@ -83,6 +83,9 @@ const ListRow = memo(function ListRow({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const used = getUsed(account)
   const limit = getQuota(account)
+  const breakdown = account.usageData?.usageBreakdownList?.[0]
+  const currentOverages = breakdown?.currentOverages ?? 0
+  const isOverage = currentOverages > 0
   const usagePercent = limit > 0 ? Math.min((used / limit) * 100, 100) : 0
   const isBanned = isBannedStatus(account)
   const isUnavailable = isUnavailableStatus(account)
@@ -170,15 +173,23 @@ const ListRow = memo(function ListRow({
       {/* 配额 */}
       <div className="w-24 shrink-0">
         <div className="flex items-center justify-between">
-          <span className={`text-[11px] font-bold ${used >= limit && limit > 0 ? 'text-red-500' : 'text-foreground'}`}>{formatUsage(used)}</span>
+          <span className={`text-[11px] font-bold ${isOverage ? 'text-purple-500' : used >= limit && limit > 0 ? 'text-red-500' : 'text-foreground'}`}>{formatUsage(used)}</span>
           <span className="text-[10px] text-muted-foreground">/{formatUsage(limit)}</span>
         </div>
         <div className="h-1 rounded-full bg-muted mt-0.5 overflow-hidden">
           <div
-            className={`h-full rounded-full ${usagePercent > 80 ? 'bg-red-500' : usagePercent > 50 ? 'bg-orange-500' : 'bg-green-500'}`}
+            className={`h-full rounded-full ${isOverage ? 'bg-purple-500' : usagePercent > 80 ? 'bg-red-500' : usagePercent > 50 ? 'bg-orange-500' : 'bg-green-500'}`}
             style={{ width: `${usagePercent}%` }}
           />
         </div>
+        {isOverage && (
+          <div className="flex items-center justify-between mt-0.5">
+            <span className="text-[9px] text-purple-500 font-bold">⚡+{formatUsage(currentOverages)}</span>
+            {breakdown?.overageCharges != null && breakdown.overageCharges > 0 && (
+              <span className="text-[9px] text-purple-500">${breakdown.overageCharges.toFixed(2)}</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 状态 */}
