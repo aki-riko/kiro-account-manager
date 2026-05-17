@@ -184,7 +184,7 @@ const ListRow = memo(function ListRow({
         </div>
         {isOverage && (
           <div className="flex items-center justify-between mt-0.5">
-            <span className="text-[9px] text-purple-500 font-bold">⚡+{formatUsage(currentOverages)}</span>
+            <span className="text-[9px] text-purple-500 font-bold">⚡{formatUsage(currentOverages)}{breakdown?.overageCap ? `/${formatUsage(breakdown.overageCap)}` : ''}</span>
             {breakdown?.overageCharges != null && breakdown.overageCharges > 0 && (
               <span className="text-[9px] text-purple-500">${breakdown.overageCharges.toFixed(2)}</span>
             )}
