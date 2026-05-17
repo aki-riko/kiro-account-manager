@@ -79,7 +79,7 @@ function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
   return (
     <div
       className={cn("flex flex-col relative transition-[width] duration-200 ease-in-out glass-sidebar z-10 overflow-hidden")}
-      style={{ width: collapsed ? 64 : 192 }}
+      style={{ width: collapsed ? 64 : 176 }}
     >
       <TooltipProvider>
         <Tooltip>
@@ -115,7 +115,7 @@ function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
         </Tooltip>
       </TooltipProvider>
 
-      <div className={cn("flex flex-col gap-1 flex-1 overflow-auto no-scrollbar", collapsed ? "px-2" : "px-3")}>
+      <div className={cn("flex flex-col gap-0.5 flex-1 overflow-auto no-scrollbar", collapsed ? "px-2" : "px-2")}>
         {menuItems.map((item, idx) => {
           const Icon = item.icon
           const isActive = activeMenu === item.id
@@ -126,9 +126,9 @@ function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
                   <button
                     onClick={() => onMenuChange(item.id)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all animate-slide-in-left",
+                      "flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all animate-slide-in-left",
                       !isActive && "sidebar-foreground sidebar-hover",
-                      isActive && "sidebar-active font-bold",
+                      isActive && "sidebar-active font-semibold",
                       !isActive && "font-normal"
                     )}
                     style={{
@@ -136,17 +136,13 @@ function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
                       animationFillMode: 'both'
                     }}
                   >
-                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
+                    {isActive && <div className="w-0.5 h-4 rounded-full bg-current opacity-80 -ml-0.5 mr-0.5 shrink-0" />}
+                    <Icon size={16} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
                     {!collapsed && (
-                      <>
-                        <div className="flex-1 text-left whitespace-nowrap overflow-hidden">
-                          <div className="text-sm">{item.label}</div>
-                          {item.desc && <div className="text-xs sidebar-muted">{item.desc}</div>}
-                        </div>
-                        {isActive && (
-                          <div className="w-1.5 h-1.5 rounded-full animate-pulse bg-current opacity-80" />
-                        )}
-                      </>
+                      <div className="flex-1 text-left whitespace-nowrap overflow-hidden">
+                        <div className="text-xs">{item.label}</div>
+                        {item.desc && <div className="text-[10px] sidebar-muted leading-tight">{item.desc}</div>}
+                      </div>
                     )}
                   </button>
                 </TooltipTrigger>
