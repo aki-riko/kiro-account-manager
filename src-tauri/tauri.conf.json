@@ -75,7 +75,7 @@
     "windows": {
       "allowDowngrades": false,
       "webviewInstallMode": {
-        "type": "embedBootstrapper",
+        "type": "downloadBootstrapper",
         "silent": true
       },
       "wix": {
