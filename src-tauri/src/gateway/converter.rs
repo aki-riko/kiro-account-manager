@@ -486,6 +486,16 @@ pub fn get_internal_model_id(external_model: &str) -> Result<String, String> {
         "sonnet" | "sonnet-4-6" => return Ok("claude-sonnet-4.6".to_string()),
         "haiku" | "haiku-4-5" => return Ok("claude-haiku-4.5".to_string()),
         "claude-sonnet-latest" => return Ok("claude-sonnet-4.5".to_string()),
+        // Claude 3.x 旧版兜底到 Claude 4.x
+        "claude-3-5-sonnet" | "claude-3-5-sonnet-latest" | "claude-3-opus" | "claude-3-opus-latest" => {
+            return Ok("claude-sonnet-4.5".to_string());
+        }
+        "claude-3-sonnet" => return Ok("claude-sonnet-4".to_string()),
+        "claude-3-haiku" | "claude-3-5-haiku" => return Ok("claude-haiku-4.5".to_string()),
+        // OpenAI GPT 兼容映射（默认全部映射到 sonnet-4.5；用户可以在前端「模型映射」配置里覆盖）
+        "gpt-4" | "gpt-4o" | "gpt-4-turbo" | "gpt-3.5-turbo" | "gpt-4o-mini" => {
+            return Ok("claude-sonnet-4.5".to_string());
+        }
         // 开源模型别名
         "deepseek-3-2" | "deepseek-3.2" | "deepseek" => return Ok("deepseek-3.2".to_string()),
         "minimax-m2-5" | "minimax-m2.5" | "minimax" => return Ok("minimax-m2.5".to_string()),
@@ -497,7 +507,39 @@ pub fn get_internal_model_id(external_model: &str) -> Result<String, String> {
 
     // 2. 正则归一化：Anthropic 公开格式 → Kiro 内部格式
     //    claude-{family}-{major}-{minor}[-thinking][-日期] → claude-{family}-{major}.{minor}
-    Ok(normalize_claude_model_format(model_id))
+    let normalized_model = normalize_claude_model_format(model_id);
+
+    // 3. 兜底：如果归一化后仍然不像 Kiro 支持的格式，映射到默认 sonnet-4.5 避免直接 400
+    //    向前兼容：claude-{sonnet|haiku|opus}-* 格式透传，假定 Kiro 后续新发布的版本格式不变
+    if is_kiro_supported_model_format(&normalized_model) {
+        Ok(normalized_model)
+    } else {
+        log::warn!(
+            "[模型映射] 未知模型 \"{}\" → 兜底到 claude-sonnet-4.5",
+            external_model
+        );
+        Ok("claude-sonnet-4.5".to_string())
+    }
+}
+
+/// 判断模型 ID 是否符合 Kiro API 接受的格式
+/// - claude-{sonnet|haiku|opus}-{version} （包括 4.5 / 4.6 / 4.7 + 未来新版本）
+/// - 开源模型：deepseek-3.2 / minimax-m2.5 / minimax-m2.1 / glm-5 / qwen3-coder-next
+/// - 特殊值：auto
+fn is_kiro_supported_model_format(model: &str) -> bool {
+    if model == "auto" {
+        return true;
+    }
+    if model.starts_with("claude-sonnet-")
+        || model.starts_with("claude-haiku-")
+        || model.starts_with("claude-opus-")
+    {
+        return true;
+    }
+    matches!(
+        model,
+        "deepseek-3.2" | "minimax-m2.5" | "minimax-m2.1" | "glm-5" | "qwen3-coder-next"
+    )
 }
 
 /// 将 Anthropic 公开模型名归一化为 Kiro 内部格式

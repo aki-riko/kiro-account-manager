@@ -408,16 +408,9 @@ fn parse_summary_from_eventstream(body: &[u8]) -> Result<(String, Option<i32>, O
                                 .get("uncachedInputTokens")
                                 .and_then(|v| v.as_i64())
                                 .unwrap_or(0) as i32;
-                            let cache_read = token_usage
-                                .get("cacheReadInputTokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0) as i32;
-                            let cache_write = token_usage
-                                .get("cacheWriteInputTokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0) as i32;
 
-                            input_tokens = Some(uncached + cache_read + cache_write);
+                            // input_tokens 仅为未缓存的输入（Anthropic 规范，避免双重计费）
+                            input_tokens = Some(uncached);
                             output_tokens = token_usage
                                 .get("outputTokens")
                                 .and_then(|v| v.as_i64())

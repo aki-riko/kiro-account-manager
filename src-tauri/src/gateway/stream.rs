@@ -108,10 +108,11 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
                 .and_then(|item| item.as_i64())
                 .unwrap_or(0) as i32;
 
-            // 计算总输入 tokens = 未缓存输入 + 缓存读取 + 缓存写入
-            let input_tokens = uncached_input_tokens
-                + cache_read_input_tokens.unwrap_or(0)
-                + cache_creation_input_tokens.unwrap_or(0);
+            // input_tokens 仅为未缓存的输入（符合 Anthropic 官方规范）
+            // 客户端会单独看到 cache_read_input_tokens 和 cache_creation_input_tokens 字段
+            // 三者相加才是真实总输入量。如果这里包含 cache_*，客户端账单会双重计费虚高
+            // 参考：chaogei/Kiro-account-manager v1.6.6 修复
+            let input_tokens = uncached_input_tokens;
 
             // 添加调试日志：记录原始 tokenUsage JSON
             log::info!(
