@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
-import { Loader, ArrowRight } from 'lucide-react'
+import { Loader } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { Button } from '../../shared/button'
 import { Input } from '../../ui/input'
@@ -216,7 +216,7 @@ function Login({ onLogin }: LoginProps) {
 
   return (
     <div className="h-full flex flex-col items-center justify-center glass-main relative overflow-hidden p-6">
-      <div className="relative z-10 w-full max-w-sm flex flex-col items-center">
+      <div className="relative z-10 w-full max-w-xs flex flex-col items-center">
         {/* Logo + 标题 */}
         <div className="flex items-center gap-2.5 mb-6">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center shadow-md ring-1 ring-primary/20">
@@ -237,8 +237,8 @@ function Login({ onLogin }: LoginProps) {
           </div>
         )}
 
-        {/* 登录按钮列表 */}
-        <div className="flex flex-col gap-2 w-full">
+        {/* 登录按钮列表（居中独立按钮，不贴满容器）*/}
+        <div className="flex flex-col items-center gap-2.5">
           {providers.map((provider) => {
             const isLoading = loadingProvider === provider.id
             const isDisabled = loadingProvider !== null && !isLoading
@@ -247,24 +247,16 @@ function Login({ onLogin }: LoginProps) {
                 key={provider.id}
                 onClick={() => handleLogin(provider.id)}
                 disabled={loginPending}
-                className={`group relative w-full h-11 px-4 rounded-lg glass-card border border-border flex items-center gap-3 transition-all duration-200 ${
+                className={`group relative h-11 px-6 min-w-[220px] rounded-xl glass-card border border-border flex items-center justify-center gap-2.5 transition-all duration-200 ${
                   isLoading
                     ? 'opacity-60 cursor-not-allowed'
                     : 'hover:bg-muted/50 hover:border-primary/40 hover:shadow-sm'
                 } ${isDisabled ? 'opacity-30' : ''}`}
               >
-                <div className="w-8 h-8 rounded-md flex items-center justify-center bg-muted/40">
-                  {isLoading ? <Loader size={18} className="text-primary animate-spin" /> : provider.icon}
-                </div>
-                <span className="text-sm font-medium text-foreground">{provider.name}</span>
-                {isLoading ? (
-                  <span className="ml-auto text-xs text-muted-foreground">{t('login.logging')}</span>
-                ) : (
-                  <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span>{t('login.signIn')}</span>
-                    <ArrowRight size={12} />
-                  </div>
-                )}
+                {isLoading ? <Loader size={18} className="text-primary animate-spin" /> : provider.icon}
+                <span className="text-sm font-medium text-foreground">
+                  {isLoading ? t('login.logging') : provider.name}
+                </span>
               </button>
             )
           })}
@@ -334,7 +326,7 @@ function Login({ onLogin }: LoginProps) {
       </Dialog>
 
       {/* 等待授权弹窗 */}
-      <Dialog open={showWaitingModal} onOpenChange={(open) => !open && handleCancelLogin()}>
+      <Dialog open={showWaitingModal} onOpenChange={(open: boolean) => !open && handleCancelLogin()}>
         <DialogContent className="max-w-[400px]">
           <DialogHeader>
             <div className="flex items-center gap-3">
