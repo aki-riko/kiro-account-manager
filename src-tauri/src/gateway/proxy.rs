@@ -3185,26 +3185,17 @@ async fn resolve_managed_account_credentials(
     if !need_refresh {
         if let Some(access_token) = &account.access_token {
             if !access_token.is_empty() {
-                let profile_arn = account.profile_arn.clone().or_else(|| {
-                    Some(resolve_default_profile_arn(account.provider.as_deref()).to_string())
-                });
-                let machine_id = account
-                    .machine_id
-                    .clone()
-                    .filter(|value| !value.trim().is_empty())
-                    .unwrap_or_else(get_machine_id);
-                let region = resolve_kiro_upstream_region(
-                    profile_arn.as_deref(),
-                    account.region.as_deref(),
+                let ctx = crate::commands::common::resolve_kiro_call_context(
+                    &account,
                     &state.config.region,
                 );
                 return Ok(UpstreamCredentials {
                     access_token: access_token.clone(),
-                    profile_arn,
+                    profile_arn: Some(ctx.profile_arn),
                     provider: account.provider.clone(),
-                    region,
+                    region: ctx.region,
                     source_label: format_managed_upstream_source(&state.config, &account),
-                    user_agent: build_kiro_custom_user_agent(&machine_id),
+                    user_agent: build_kiro_custom_user_agent(&ctx.machine_id),
                     auth_method: account.auth_method.clone(),
                     send_opt_out: should_send_codewhisperer_optout(),
                 });

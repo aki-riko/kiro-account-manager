@@ -13,7 +13,7 @@ use crate::commands::common::{
     calc_expires_at, calc_status, extract_user_info, find_account_by_id,
     find_existing_account_idx, get_enterprise_usage_with_region_probe, get_usage_by_account,
     get_usage_by_provider, is_auth_error_message, is_token_expired, is_token_expiring_soon,
-    lock_store, refresh_token_by_provider, resolve_default_profile_arn, RefreshResult,
+    lock_store, refresh_token_by_provider, save_store, token_needs_refresh, RefreshResult,
 };
 use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata};
 use crate::state::AppState;
@@ -85,10 +85,6 @@ fn resolve_builder_client_id_hash(
     client_id_hash.unwrap_or_else(|| {
         calculate_client_id_hash(start_url.unwrap_or("https://view.awsapps.com/start"))
     })
-}
-
-fn save_store(store: &crate::core::account::AccountStore) -> Result<(), String> {
-    store.try_save_to_file()
 }
 
 // ===== 数据结构 =====
@@ -1685,9 +1681,7 @@ pub async fn set_overage_status(
     id: String,
     enabled: bool,
 ) -> Result<(), String> {
-    use crate::clients::http_client::resolve_kiro_upstream_region;
     use crate::clients::kiro_q_client::KiroQClient;
-    use crate::commands::machine_guid::get_machine_id;
     use crate::core::usage::OverageCapability;
 
     // 1. 从 state 获取账号
@@ -1708,7 +1702,7 @@ pub async fn set_overage_status(
 
     // 2. 检查 token 是否过期，如果过期则刷新
     let final_access_token = if let Some(expires_at) = &account.expires_at {
-        if is_token_expired(expires_at) || is_token_expiring_soon(expires_at) {
+        if token_needs_refresh(expires_at) {
             let refresh_result = refresh_token_by_provider(&account).await?;
             // 更新 store 中的 token
             let mut store = lock_store(&state.store, "store")?;
@@ -1724,33 +1718,20 @@ pub async fn set_overage_status(
         access_token
     };
 
-    // 3. 确定 region 和 profile_arn
-    let machine_id = account
-        .machine_id
-        .as_deref()
-        .map(|s| s.to_string())
-        .unwrap_or_else(get_machine_id);
-
-    let provider = account.provider.as_deref().unwrap_or("Google");
-
-    // 确定 profile_arn
-    let profile_arn = account
-        .profile_arn
-        .clone()
-        .unwrap_or_else(|| resolve_default_profile_arn(Some(provider)).to_string());
-
-    // 确定 region
-    let region = resolve_kiro_upstream_region(
-        Some(&profile_arn),
-        account.region.as_deref(),
-        "us-east-1",
-    );
+    // 3. 解析 Kiro 调用上下文
+    let ctx = crate::commands::common::resolve_kiro_call_context(&account, "us-east-1");
 
     // 4. 调用 API
     let overage_status = if enabled { "ENABLED" } else { "DISABLED" };
     let client = KiroQClient::new()?;
     client
-        .set_user_preference(&final_access_token, &machine_id, &region, &profile_arn, overage_status)
+        .set_user_preference(
+            &final_access_token,
+            &ctx.machine_id,
+            &ctx.region,
+            &ctx.profile_arn,
+            overage_status,
+        )
         .await?;
 
     // 5. 更新本地 usage_data 中的 overageConfiguration.overageStatus

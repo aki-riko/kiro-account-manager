@@ -54,6 +54,45 @@ pub fn find_account_by_id(
         .ok_or_else(|| format!("账号未找到 (id={id})"))
 }
 
+// ===== 调用 Kiro Q API 时的上下文解析 =====
+
+/// 调用 Kiro Q API 需要的三件套：machine_id / region / profile_arn
+///
+/// 解析规则：
+/// - machine_id：账号自带（非空）→ 否则系统 machine_guid
+/// - profile_arn：账号自带 → 否则 provider 默认 ARN
+/// - region：profile_arn 解析出来的 region 优先 → 账号 region → fallback
+pub struct KiroCallContext {
+    pub machine_id: String,
+    pub region: String,
+    pub profile_arn: String,
+}
+
+pub fn resolve_kiro_call_context(account: &Account, fallback_region: &str) -> KiroCallContext {
+    use crate::clients::http_client::resolve_kiro_upstream_region;
+    use crate::commands::machine_guid::get_machine_id;
+
+    let machine_id = account
+        .machine_id
+        .clone()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(get_machine_id);
+
+    let profile_arn = account
+        .profile_arn
+        .clone()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| resolve_default_profile_arn(account.provider.as_deref()).to_string());
+
+    let region = resolve_kiro_upstream_region(
+        Some(&profile_arn),
+        account.region.as_deref(),
+        fallback_region,
+    );
+
+    KiroCallContext { machine_id, region, profile_arn }
+}
+
 // ===== 时间常量（参考 Kiro IDE 源码）=====
 
 /// Token 提前刷新时间（10分钟）
@@ -90,6 +129,14 @@ pub fn is_token_expiring_soon(expires_at: &str) -> bool {
 /// 在 token 过期前 3 分钟返回 true，用于判断 token 是否真正不可用
 pub fn is_token_expired(expires_at: &str) -> bool {
     is_token_expired_within_seconds(expires_at, AUTH_TOKEN_INVALIDATION_OFFSET_SECONDS)
+}
+
+/// 检查 token 是否需要刷新（即将过期或已过期）
+///
+/// 等价于 `is_token_expiring_soon(expires_at)`，因为 10 分钟阈值已经包含了 3 分钟的"已过期"判定。
+/// 单独提供这个函数是为了让调用点的语义更清晰。
+pub fn token_needs_refresh(expires_at: &str) -> bool {
+    is_token_expiring_soon(expires_at)
 }
 
 /// 检查 token 是否在指定秒数内过期
@@ -136,6 +183,13 @@ pub struct RefreshResult {
     pub profile_arn: Option<String>,
     pub id_token: Option<String>,
     pub sso_session_id: Option<String>,
+}
+
+/// 保存账号 store 到文件，统一错误信息
+///
+/// 始终走 `try_save_to_file` 这个新版 API（带详细错误），不要再用旧 `save_to_file`（只返回 bool）
+pub fn save_store(store: &crate::core::account::AccountStore) -> Result<(), String> {
+    store.try_save_to_file()
 }
 
 /// 把 token refresh 结果应用到 Account 上

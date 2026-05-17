@@ -8,6 +8,7 @@ use crate::auth::User;
 use crate::auth::auth_social;
 use crate::commands::common::{
     calc_status, extract_user_info, find_existing_account_idx, get_usage_by_provider, lock_store,
+    save_store,
 };
 use crate::commands::machine_guid::get_machine_id;
 use crate::clients::kiro_auth_client::KiroAuthServiceClient;
@@ -16,14 +17,6 @@ use crate::auth::providers::{
 };
 use crate::state::AppState;
 use tauri::{Emitter, State};
-
-fn save_store(store: &crate::core::account::AccountStore) -> Result<(), String> {
-    if store.save_to_file() {
-        Ok(())
-    } else {
-        Err("保存账号数据失败".to_string())
-    }
-}
 
 fn require_login_email(email: Option<String>) -> Result<String, String> {
     email.ok_or("获取邮箱失败，请检查账号状态".to_string())

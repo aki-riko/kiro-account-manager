@@ -2,15 +2,11 @@
 
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令的 String 参数需要按值传递（框架序列化要求）
 
-use crate::commands::common::lock_store;
+use crate::commands::common::{lock_store, save_store};
 use crate::core::account::{Account, AccountGroup, AccountTag, AccountTagLink};
 use crate::state::AppState;
 use std::collections::HashMap;
 use tauri::State;
-
-fn save_account_store(store: &crate::core::account::AccountStore) -> Result<(), String> {
-    store.try_save_to_file()
-}
 
 fn clear_group_references(accounts: &mut [Account], id: &str) {
     for account in accounts {
@@ -111,7 +107,7 @@ pub fn delete_group(state: State<AppState>, id: &str) -> bool {
         }
     };
     clear_group_references(&mut store.accounts, id);
-    if let Err(err) = save_account_store(&store) {
+    if let Err(err) = save_store(&store) {
         eprintln!("[group_tag_cmd] {err}");
         return false;
     }
@@ -189,7 +185,7 @@ pub fn delete_tag(state: State<AppState>, id: &str) -> bool {
         }
     };
     remove_tag_references(&mut store.accounts, id);
-    if let Err(err) = save_account_store(&store) {
+    if let Err(err) = save_store(&store) {
         eprintln!("[group_tag_cmd] {err}");
         return false;
     }
@@ -222,7 +218,7 @@ pub fn set_account_group(
     let mut store = lock_store(&state.store, "store")?;
     if let Some(account) = store.accounts.iter_mut().find(|a| a.id == account_id) {
         account.group_id = group_id;
-        save_account_store(&store)?;
+        save_store(&store)?;
         Ok(())
     } else {
         Err("账号不存在".to_string())
@@ -248,7 +244,7 @@ pub fn add_tag_to_account(
     let mut store = lock_store(&state.store, "store")?;
     if let Some(account) = store.accounts.iter_mut().find(|a| a.id == account_id) {
         if add_tag_link_if_missing(account, tag_id, tag_name) {
-            save_account_store(&store)?;
+            save_store(&store)?;
         }
         Ok(())
     } else {
@@ -265,7 +261,7 @@ pub fn remove_tag_from_account(
     let mut store = lock_store(&state.store, "store")?;
     if let Some(account) = store.accounts.iter_mut().find(|a| a.id == account_id) {
         remove_tag_links(account, &[tag_id.to_string()]);
-        save_account_store(&store)?;
+        save_store(&store)?;
         Ok(())
     } else {
         Err("账号不存在".to_string())
@@ -291,7 +287,7 @@ pub fn set_account_tags(
     let mut store = lock_store(&state.store, "store")?;
     if let Some(account) = store.accounts.iter_mut().find(|a| a.id == account_id) {
         replace_account_tag_links(account, &tag_ids, &tag_names);
-        save_account_store(&store)?;
+        save_store(&store)?;
         Ok(())
     } else {
         Err("账号不存在".to_string())
@@ -307,7 +303,7 @@ pub fn remove_account_tags(
     let mut store = lock_store(&state.store, "store")?;
     if let Some(account) = store.accounts.iter_mut().find(|a| a.id == account_id) {
         remove_tag_links(account, &tag_ids);
-        save_account_store(&store)?;
+        save_store(&store)?;
         Ok(())
     } else {
         Err("账号不存在".to_string())

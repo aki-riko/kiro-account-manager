@@ -114,6 +114,105 @@ impl UsageBreakdown {
     }
 }
 
+/// 完整的配额视图：主配额 + 免费试用 + 奖励 + 超额
+///
+/// 用于自动切号判断"剩余可用配额"等场景。
+#[derive(Debug, Clone, Copy)]
+pub struct UsageDetails {
+    pub main_limit: f64,
+    pub main_usage: f64,
+    pub trial_limit: f64,
+    pub trial_usage: f64,
+    pub bonus_limit: f64,
+    pub bonus_usage: f64,
+    pub overage_cap: f64,
+}
+
+impl UsageDetails {
+    pub fn from_usage_data(usage_data: Option<&Value>) -> Option<Self> {
+        let item = usage_data?
+            .get("usageBreakdownList")?
+            .as_array()?
+            .first()?;
+
+        let main_limit = item.get("usageLimit").and_then(Value::as_f64).unwrap_or(0.0);
+        let main_usage = item
+            .get("currentUsage")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+
+        // 免费试用（仅 ACTIVE 时计入）
+        let trial_info = item.get("freeTrialInfo");
+        let trial_active = trial_info
+            .and_then(|t| t.get("freeTrialStatus"))
+            .and_then(Value::as_str)
+            == Some("ACTIVE");
+        let (trial_limit, trial_usage) = if trial_active {
+            let l = trial_info
+                .and_then(|t| t.get("usageLimit"))
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
+            let u = trial_info
+                .and_then(|t| t.get("currentUsage"))
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
+            (l, u)
+        } else {
+            (0.0, 0.0)
+        };
+
+        // 奖励（仅未过期 + ACTIVE 计入）
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        let (bonus_limit, bonus_usage) = item
+            .get("bonuses")
+            .and_then(Value::as_array)
+            .map(|bonuses| {
+                bonuses.iter().fold((0.0, 0.0), |(l, u), b| {
+                    let expiry_ms = b
+                        .get("expiresAt")
+                        .and_then(Value::as_i64)
+                        .map(|t| t * 1000)
+                        .unwrap_or(i64::MAX);
+                    let active = b.get("status").and_then(Value::as_str) == Some("ACTIVE");
+                    if expiry_ms > now_ms && active {
+                        let bl = b.get("usageLimit").and_then(Value::as_f64).unwrap_or(0.0);
+                        let bu = b.get("currentUsage").and_then(Value::as_f64).unwrap_or(0.0);
+                        (l + bl, u + bu)
+                    } else {
+                        (l, u)
+                    }
+                })
+            })
+            .unwrap_or((0.0, 0.0));
+
+        let overage_cap = if OverageStatus::from_usage_data(usage_data).is_enabled() {
+            item.get("overageCap").and_then(Value::as_f64).unwrap_or(0.0)
+        } else {
+            0.0
+        };
+
+        Some(Self {
+            main_limit,
+            main_usage,
+            trial_limit,
+            trial_usage,
+            bonus_limit,
+            bonus_usage,
+            overage_cap,
+        })
+    }
+
+    /// 剩余可用配额（含主配额 + 试用 + 奖励 + 已开启的超额，减去全部已用）
+    pub fn remaining(&self) -> f64 {
+        let total_limit = self.main_limit + self.trial_limit + self.bonus_limit + self.overage_cap;
+        let total_usage = self.main_usage + self.trial_usage + self.bonus_usage;
+        total_limit - total_usage
+    }
+}
+
 /// 账号是否已封顶不可用
 ///
 /// 真正封顶的两种情况：
@@ -203,5 +302,53 @@ mod tests {
             .usage_percentage(OverageStatus::Enabled) - 75.0).abs() < 0.01);
         assert!(!usage_exceeds_threshold(Some(&enabled), 80.0));
         assert!(usage_exceeds_threshold(Some(&enabled), 70.0));
+    }
+
+    #[test]
+    fn details_remaining_includes_trial_and_bonus() {
+        let d = json!({
+            "overageConfiguration": { "overageStatus": "ENABLED" },
+            "usageBreakdownList": [{
+                "usageLimit": 100.0,
+                "currentUsage": 30.0,
+                "overageCap": 50.0,
+                "freeTrialInfo": {
+                    "freeTrialStatus": "ACTIVE",
+                    "usageLimit": 20.0,
+                    "currentUsage": 5.0
+                },
+                "bonuses": [
+                    // 已过期的 bonus 应被忽略
+                    { "status": "ACTIVE", "expiresAt": 0, "usageLimit": 50.0, "currentUsage": 0.0 },
+                    // 状态非 ACTIVE 也应忽略
+                    { "status": "EXPIRED", "expiresAt": i64::MAX / 1000, "usageLimit": 50.0, "currentUsage": 0.0 },
+                    // 有效 bonus
+                    { "status": "ACTIVE", "expiresAt": i64::MAX / 1000, "usageLimit": 30.0, "currentUsage": 10.0 }
+                ]
+            }]
+        });
+        let details = UsageDetails::from_usage_data(Some(&d)).unwrap();
+        // total_limit = 100 (main) + 20 (trial) + 30 (bonus) + 50 (overage) = 200
+        // total_usage = 30 + 5 + 10 = 45
+        // remaining = 155
+        assert!((details.remaining() - 155.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn details_ignores_inactive_trial() {
+        let d = json!({
+            "overageConfiguration": { "overageStatus": "DISABLED" },
+            "usageBreakdownList": [{
+                "usageLimit": 100.0,
+                "currentUsage": 50.0,
+                "freeTrialInfo": {
+                    "freeTrialStatus": "EXPIRED",
+                    "usageLimit": 100.0,
+                    "currentUsage": 0.0
+                }
+            }]
+        });
+        let details = UsageDetails::from_usage_data(Some(&d)).unwrap();
+        assert!((details.remaining() - 50.0).abs() < 0.01);
     }
 }

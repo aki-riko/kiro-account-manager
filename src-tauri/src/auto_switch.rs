@@ -243,109 +243,11 @@ async fn get_current_account(accounts: &[Account]) -> Option<Account> {
         .cloned()
 }
 
-/// 计算剩余额度
+/// 计算剩余额度（主配额 + 试用 + 奖励 + 已开启的超额，减去全部已用）
 fn calculate_remaining(account: &Account) -> f64 {
-    // 从 usage_data 中提取 quota 和 used
-    let breakdown = account
-        .usage_data
-        .as_ref()
-        .and_then(|data| data.get("usageBreakdownList"))
-        .and_then(|list| list.as_array())
-        .and_then(|arr| arr.first());
-
-    if let Some(breakdown) = breakdown {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as i64;
-
-        // 主配额
-        let main_limit = breakdown
-            .get("usageLimit")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
-        let main_usage = breakdown
-            .get("currentUsage")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0);
-
-        // 试用配额
-        let trial_info = breakdown.get("freeTrialInfo");
-        let trial_active = trial_info
-            .and_then(|t| t.get("freeTrialStatus"))
-            .and_then(|s| s.as_str())
-            == Some("ACTIVE");
-        let trial_limit = if trial_active {
-            trial_info
-                .and_then(|t| t.get("usageLimit"))
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0)
-        } else {
-            0.0
-        };
-        let trial_usage = if trial_active {
-            trial_info
-                .and_then(|t| t.get("currentUsage"))
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0)
-        } else {
-            0.0
-        };
-
-        // 奖励配额
-        let bonuses = breakdown
-            .get("bonuses")
-            .and_then(|b| b.as_array());
-        let (bonus_limit, bonus_usage) = if let Some(bonuses) = bonuses {
-            bonuses.iter().fold((0.0, 0.0), |(limit, usage), b| {
-                let expiry = b
-                    .get("expiresAt")
-                    .and_then(|v| v.as_i64())
-                    .map(|t| t * 1000)
-                    .unwrap_or(i64::MAX);
-                let status = b.get("status").and_then(|s| s.as_str());
-
-                if expiry > now && status == Some("ACTIVE") {
-                    let b_limit = b.get("usageLimit").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    let b_usage = b
-                        .get("currentUsage")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(0.0);
-                    (limit + b_limit, usage + b_usage)
-                } else {
-                    (limit, usage)
-                }
-            })
-        } else {
-            (0.0, 0.0)
-        };
-
-        let total_limit = main_limit + trial_limit + bonus_limit;
-        let total_usage = main_usage + trial_usage + bonus_usage;
-
-        // 如果超额已开启，加上超额上限
-        let overage_enabled = account
-            .usage_data
-            .as_ref()
-            .and_then(|data| data.get("overageConfiguration"))
-            .and_then(|cfg| cfg.get("overageStatus"))
-            .and_then(|s| s.as_str())
-            == Some("ENABLED");
-
-        let overage_cap = if overage_enabled {
-            breakdown
-                .get("overageCap")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0)
-        } else {
-            0.0
-        };
-
-        (total_limit + overage_cap) - total_usage
-    } else {
-        // 如果没有 usage_data，返回 0
-        0.0
-    }
+    crate::core::usage::UsageDetails::from_usage_data(account.usage_data.as_ref())
+        .map(|d| d.remaining())
+        .unwrap_or(0.0)
 }
 
 /// 查找可用账号

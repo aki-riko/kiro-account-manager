@@ -3,7 +3,7 @@
 
 use crate::commands::common::{
     apply_refreshed_account_tokens, is_auth_error_message, is_token_expired,
-    is_token_expiring_soon, refresh_token_by_provider, REFRESH_LOOP_INTERVAL_SECONDS,
+    refresh_token_by_provider, token_needs_refresh, REFRESH_LOOP_INTERVAL_SECONDS,
 };
 use crate::state::AppState;
 use tauri::{AppHandle, Emitter, Manager};
@@ -59,7 +59,7 @@ impl TokenRefreshService {
 
             // 检查是否需要刷新（即将过期或已过期）
             if let Some(ref expires_at) = account.expires_at {
-                if is_token_expiring_soon(expires_at) || is_token_expired(expires_at) {
+                if token_needs_refresh(expires_at) {
                     let email_display = account
                         .email
                         .as_deref()
