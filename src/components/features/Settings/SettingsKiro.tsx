@@ -1,12 +1,12 @@
 import type React from 'react'
 import { Lock, Search, RefreshCw, Check } from 'lucide-react'
-import { Card, CardContent } from '../../ui/card'
 import { Input } from '../../ui/input'
 import { Textarea } from '../../ui/textarea'
 import { Switch } from '../../ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { Label } from '../../ui/label'
 import { AI_MODELS } from './settingsConstants'
+import SectionCard from './SectionCard'
 import ToggleRow from './ToggleRow'
 
 interface SettingsKiroProps {
@@ -91,13 +91,7 @@ function SettingsKiro({
   return (
     <div className="space-y-3">
       {/* === Kiro IDE 配置 === */}
-      <Card className="card-glow animate-slide-in-left delay-150">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 bg-primary rounded-full" />
-            <h2 className="text-sm font-semibold text-foreground">{t('settings.kiroSettings')}</h2>
-          </div>
-
+      <SectionCard title={t('settings.kiroSettings')}>
           {/* AI 模型 */}
           <div>
             <Label className="block text-xs text-muted-foreground mb-1">
@@ -222,18 +216,13 @@ function SettingsKiro({
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground -mt-1">{t('settings.proxyTip')}</p>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
       {/* === Agent 行为开关（原 Agent tab 合并过来）=== */}
-      <Card className="card-glow animate-slide-in-left delay-200">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 bg-primary rounded-full" />
-            <h2 className="text-sm font-semibold text-foreground">{t('settings.agentSettings')}</h2>
-            <span className="text-xs text-muted-foreground">{t('settings.agentSettingsDesc')}</span>
-          </div>
-
+      <SectionCard
+        title={t('settings.agentSettings')}
+        badge={<span className="text-xs text-muted-foreground">{t('settings.agentSettingsDesc')}</span>}
+      >
           <div className="grid grid-cols-2 gap-2">
             <ToggleRow
               checked={enableCodebaseIndexing}
@@ -261,8 +250,7 @@ function SettingsKiro({
               label={t('settings.enableDebugLogs')}
             />
           </div>
-        </CardContent>
-      </Card>
+      </SectionCard>
     </div>
   )
 }

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { Card, CardContent } from '../../ui/card'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { useAppSettings } from '../../../contexts/AppSettingsContext'
 import { NOTIFICATION_SETTINGS_FIELD_MAP } from './settingsConstants'
+import SectionCard from './SectionCard'
 import ToggleRow from './ToggleRow'
 
 interface NotificationState {
@@ -107,48 +107,38 @@ function SettingsNotifications() {
   return (
     <div className="space-y-3">
       {/* 通知设置 */}
-      <Card className="card-glow animate-slide-in-left delay-150">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 bg-primary rounded-full" />
-            <h2 className="text-sm font-semibold text-foreground">{t('settings.notifications')}</h2>
-            <span className="text-xs text-muted-foreground">{t('settings.notificationsDesc')}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            {notificationRows.map(row => (
-              <ToggleRow
-                key={row.key}
-                checked={notifications[row.field]}
-                onChange={checked => handleNotificationChange(row.key, checked, row.field)}
-                label={t(row.label)}
-              />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <SectionCard
+        title={t('settings.notifications')}
+        badge={<span className="text-xs text-muted-foreground">{t('settings.notificationsDesc')}</span>}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          {notificationRows.map(row => (
+            <ToggleRow
+              key={row.key}
+              checked={notifications[row.field]}
+              onChange={checked => handleNotificationChange(row.key, checked, row.field)}
+              label={t(row.label)}
+            />
+          ))}
+        </div>
+      </SectionCard>
 
       {/* 遥测与隐私 */}
-      <Card className="card-glow animate-slide-in-left delay-200">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 bg-primary rounded-full" />
-            <h2 className="text-sm font-semibold text-foreground">{t('settings.telemetry')}</h2>
-            <span className="text-xs text-muted-foreground">{t('settings.telemetryDesc')}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            {telemetryRows.map(row => (
-              <ToggleRow
-                key={row.ideKey}
-                checked={telemetry[row.field]}
-                onChange={checked => handleTelemetryChange(row.ideKey, checked, row.field)}
-                label={t(row.label)}
-              />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <SectionCard
+        title={t('settings.telemetry')}
+        badge={<span className="text-xs text-muted-foreground">{t('settings.telemetryDesc')}</span>}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          {telemetryRows.map(row => (
+            <ToggleRow
+              key={row.ideKey}
+              checked={telemetry[row.field]}
+              onChange={checked => handleTelemetryChange(row.ideKey, checked, row.field)}
+              label={t(row.label)}
+            />
+          ))}
+        </div>
+      </SectionCard>
     </div>
   )
 }

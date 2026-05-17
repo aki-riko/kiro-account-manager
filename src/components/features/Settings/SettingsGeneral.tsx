@@ -1,10 +1,10 @@
 import { Clock, Globe, Search, Shield, Shuffle, AlertTriangle, Eye, EyeOff, Repeat, RefreshCw, Check, Copy, Cpu, X, FolderOpen, ExternalLink } from 'lucide-react'
-import { Card, CardContent } from '../../ui/card'
 import { Input } from '../../ui/input'
 import { Switch } from '../../ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import React from 'react'
 import { TFunction } from 'i18next'
+import SectionCard from './SectionCard'
 
 interface BrowserInfo {
   name: string;
@@ -56,39 +56,6 @@ interface SettingsGeneralProps {
   handleAutoSwitchIntervalChange: (value: string) => void;
   handleCloseToTrayChange: (checked: boolean) => void;
   t: TFunction;
-}
-
-/// 紧凑分组卡片：标题 + 可选图标，比原版的 p-6 + text-lg 节省一半空间
-function SectionCard({
-  title,
-  icon,
-  badge,
-  desc,
-  accent = 'primary',
-  children,
-}: {
-  title: string
-  icon?: React.ReactNode
-  badge?: React.ReactNode
-  desc?: string
-  accent?: 'primary' | 'orange'
-  children: React.ReactNode
-}) {
-  const accentClass = accent === 'orange' ? 'bg-orange-500' : 'bg-primary'
-  return (
-    <Card className="card-glow">
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <div className={`w-1 h-4 ${accentClass} rounded-full`} />
-          {icon}
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          {badge}
-        </div>
-        {desc && <p className="text-xs text-muted-foreground -mt-1">{desc}</p>}
-        {children}
-      </CardContent>
-    </Card>
-  )
 }
 
 /// 紧凑开关行：左侧 switch+图标+标签，右侧可选附加控件

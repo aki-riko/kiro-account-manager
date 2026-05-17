@@ -384,41 +384,35 @@ function Settings() {
     }
 
     return (
-        <div className="h-full glass-main p-8 overflow-auto flex justify-center">
-            {/* 背景装饰 */}
-            <div className="bg-glow bg-glow-1" />
-            <div className="bg-glow bg-glow-2" />
-
+        <div className="h-full glass-main p-5 overflow-auto flex justify-center">
             <div className="max-w-5xl w-full relative">
-                {/* Header */}
-                <div className="mb-8 animate-slide-in-left">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-700 rounded-2xl flex items-center justify-center shadow-lg animate-float">
-                            <SettingsIcon size={24} className="text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold text-foreground">{t('settings.title')}</h1>
-                            <p className="text-muted-foreground">{t('settings.subtitle')}</p>
-                        </div>
+                {/* Header（紧凑）*/}
+                <div className="mb-4 flex items-center gap-2.5 animate-slide-in-left">
+                    <div className="w-9 h-9 bg-gradient-to-br from-gray-500 to-gray-700 rounded-xl flex items-center justify-center shadow-md">
+                        <SettingsIcon size={18} className="text-white" />
+                    </div>
+                    <div>
+                        <h1 className="text-base font-semibold text-foreground leading-tight">{t('settings.title')}</h1>
+                        <p className="text-xs text-muted-foreground">{t('settings.subtitle')}</p>
                     </div>
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList className="glass-card mb-6 flex h-11 w-full justify-start overflow-x-auto rounded-xl border-none p-1 no-scrollbar lg:w-fit">
-                        <TabsTrigger value="general" className="gap-2 px-5 shrink-0 text-sm font-medium">
-                            <LayoutDashboard size={16} />
+                    <TabsList className="glass-card mb-4 flex h-9 w-full justify-start overflow-x-auto rounded-lg border-none p-0.5 no-scrollbar lg:w-fit">
+                        <TabsTrigger value="general" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium">
+                            <LayoutDashboard size={14} />
                             {t('settings.general')}
                         </TabsTrigger>
-                        <TabsTrigger value="appearance" className="gap-2 px-5 shrink-0 text-sm font-medium">
-                            <Palette size={16} />
+                        <TabsTrigger value="appearance" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium">
+                            <Palette size={14} />
                             {t('settings.appearance')}
                         </TabsTrigger>
-                        <TabsTrigger value="kiro" className="gap-2 px-5 shrink-0 text-sm font-medium">
-                            <Cpu size={16} />
+                        <TabsTrigger value="kiro" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium">
+                            <Cpu size={14} />
                             {t('settings.kiro')}
                         </TabsTrigger>
-                        <TabsTrigger value="notifications" className="gap-2 px-5 shrink-0 text-sm font-medium">
-                            <Bell size={16} />
+                        <TabsTrigger value="notifications" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium">
+                            <Bell size={14} />
                             {t('settings.notifications')}
                         </TabsTrigger>
                     </TabsList>
