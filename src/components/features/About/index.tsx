@@ -145,7 +145,7 @@ function About() {
   }, [showUpdate, showInfo, t])
 
   return (
-    <div className="h-full glass-main overflow-auto p-5">
+    <div className="h-full glass-main overflow-auto p-6">
       <div className="space-y-3">
         {/* === 1. 应用介绍卡（横向布局：logo 左，标题/版本/技术栈右）=== */}
         <Card className="card-glow">

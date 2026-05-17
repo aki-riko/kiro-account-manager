@@ -149,8 +149,8 @@ function AccountHeader({
       <div className="flex items-center justify-between gap-3">
         {/* 左侧：标题 / 选中提示 */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} flex items-center justify-center shadow-md ring-1 ring-primary/20 flex-shrink-0`}>
-            <Sparkles size={16} className="text-primary-foreground" />
+          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} flex items-center justify-center shadow-md ring-1 ring-primary/20 flex-shrink-0`}>
+            <Sparkles size={20} className="text-primary-foreground" />
           </div>
           <div className="flex flex-col min-w-0">
             {isBatchMode ? (

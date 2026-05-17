@@ -126,16 +126,16 @@ function Home({ onNavigate }: HomeProps) {
   }
 
   return (
-    <div className="h-full overflow-auto glass-main p-5">
+    <div className="h-full overflow-auto glass-main p-6">
       <div className="w-full">
         {/* Header（紧凑）*/}
         <div className="mb-4 flex items-center gap-2.5 animate-slide-in-left">
           <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} flex items-center justify-center shadow-md ring-1 ring-primary/20`}>
-            <Sparkles size={18} className="text-white" />
+            <Sparkles size={20} className="text-white" />
           </div>
           <div className="flex flex-col">
-            <h1 className="text-base font-semibold text-foreground leading-tight">{t('home.title')}</h1>
-            <p className="text-xs text-muted-foreground leading-tight">{t('home.subtitle')}</p>
+            <h1 className="text-lg font-semibold text-foreground leading-tight">{t('home.title')}</h1>
+            <p className="text-sm text-muted-foreground leading-tight">{t('home.subtitle')}</p>
           </div>
         </div>
 

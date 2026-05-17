@@ -305,12 +305,12 @@ export default function SessionManager() {
     <div className="flex flex-col h-full glass-main">
       {/* Header（紧凑）*/}
       <div className="px-5 py-3 border-b border-border flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center shadow-md ring-1 ring-primary/20">
-          <MessageSquare size={16} className="text-primary-foreground" />
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center shadow-md ring-1 ring-primary/20">
+          <MessageSquare size={20} className="text-primary-foreground" />
         </div>
         <div className="flex flex-col">
-          <h1 className="text-base font-semibold text-foreground leading-tight">会话管理</h1>
-          <p className="text-xs text-muted-foreground leading-tight">管理 Kiro IDE 的 chat sessions</p>
+          <h1 className="text-lg font-semibold text-foreground leading-tight">会话管理</h1>
+          <p className="text-sm text-muted-foreground leading-tight">管理 Kiro IDE 的 chat sessions</p>
         </div>
       </div>
 

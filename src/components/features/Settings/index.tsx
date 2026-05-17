@@ -384,34 +384,34 @@ function Settings() {
     }
 
     return (
-        <div className="h-full glass-main p-5 overflow-auto">
+        <div className="h-full glass-main p-6 overflow-auto">
             <div className="w-full relative">
                 {/* Header（紧凑 + 装饰 ring）*/}
                 <div className="mb-4 flex items-center gap-3 animate-slide-in-left">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center shadow-md ring-1 ring-primary/20">
-                        <SettingsIcon size={18} className="text-primary-foreground" />
+                        <SettingsIcon size={20} className="text-primary-foreground" />
                     </div>
                     <div className="flex flex-col">
-                        <h1 className="text-base font-semibold text-foreground leading-tight">{t('settings.title')}</h1>
-                        <p className="text-xs text-muted-foreground leading-tight">{t('settings.subtitle')}</p>
+                        <h1 className="text-lg font-semibold text-foreground leading-tight">{t('settings.title')}</h1>
+                        <p className="text-sm text-muted-foreground leading-tight">{t('settings.subtitle')}</p>
                     </div>
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList className="glass-card mb-4 flex h-9 w-full justify-start overflow-x-auto rounded-lg border-none p-0.5 no-scrollbar lg:w-fit">
-                        <TabsTrigger value="general" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium data-[state=active]:shadow-sm">
+                    <TabsList className="glass-card mb-4 flex h-10 w-full justify-start overflow-x-auto rounded-lg border-none p-0.5 no-scrollbar lg:w-fit">
+                        <TabsTrigger value="general" className="gap-1.5 px-3 h-9 shrink-0 text-sm font-medium data-[state=active]:shadow-sm">
                             <LayoutDashboard size={14} />
                             {t('settings.general')}
                         </TabsTrigger>
-                        <TabsTrigger value="appearance" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium data-[state=active]:shadow-sm">
+                        <TabsTrigger value="appearance" className="gap-1.5 px-3 h-9 shrink-0 text-sm font-medium data-[state=active]:shadow-sm">
                             <Palette size={14} />
                             {t('settings.appearance')}
                         </TabsTrigger>
-                        <TabsTrigger value="kiro" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium data-[state=active]:shadow-sm">
+                        <TabsTrigger value="kiro" className="gap-1.5 px-3 h-9 shrink-0 text-sm font-medium data-[state=active]:shadow-sm">
                             <Cpu size={14} />
                             {t('settings.kiro')}
                         </TabsTrigger>
-                        <TabsTrigger value="notifications" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium data-[state=active]:shadow-sm">
+                        <TabsTrigger value="notifications" className="gap-1.5 px-3 h-9 shrink-0 text-sm font-medium data-[state=active]:shadow-sm">
                             <Bell size={14} />
                             {t('settings.notifications')}
                         </TabsTrigger>

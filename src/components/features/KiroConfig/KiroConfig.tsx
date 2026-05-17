@@ -72,12 +72,12 @@ function KiroConfig() {
     <div className="h-full flex flex-col max-w-full overflow-x-hidden glass-main">
       {/* Header（紧凑）*/}
       <div className="px-5 py-3 border-b border-border flex items-center gap-3">
-        <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} flex items-center justify-center shadow-md ring-1 ring-primary/20 flex-shrink-0`}>
-          <Settings2 size={16} className="text-primary-foreground" />
+        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} flex items-center justify-center shadow-md ring-1 ring-primary/20 flex-shrink-0`}>
+          <Settings2 size={20} className="text-primary-foreground" />
         </div>
         <div className="flex flex-col min-w-0 flex-1">
-          <h1 className="text-base font-semibold text-foreground leading-tight">{t('kiroConfig.title')}</h1>
-          <p className="text-xs text-muted-foreground leading-tight truncate">{t('kiroConfig.subtitle')}</p>
+          <h1 className="text-lg font-semibold text-foreground leading-tight">{t('kiroConfig.title')}</h1>
+          <p className="text-sm text-muted-foreground leading-tight truncate">{t('kiroConfig.subtitle')}</p>
         </div>
 
         {/* 项目目录选择器 */}
@@ -109,7 +109,7 @@ function KiroConfig() {
       {/* Tabs + Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
         <div className="px-5 pt-3 pb-2">
-          <TabsList className="glass-card flex h-9 w-full justify-start overflow-x-auto rounded-lg border-none p-0.5 no-scrollbar lg:w-fit">
+          <TabsList className="glass-card flex h-10 w-full justify-start overflow-x-auto rounded-lg border-none p-0.5 no-scrollbar lg:w-fit">
             {TABS.map(tab => {
               const Icon = tab.icon
               const isDisabled = !!tab.disabled
@@ -119,7 +119,7 @@ function KiroConfig() {
                   value={tab.id}
                   disabled={isDisabled}
                   title={isDisabled ? t('kiroConfig.selectProjectDir') : ''}
-                  className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium data-[state=active]:shadow-sm"
+                  className="gap-1.5 px-3 h-9 shrink-0 text-sm font-medium data-[state=active]:shadow-sm"
                 >
                   <Icon size={14} />
                   {tab.label}

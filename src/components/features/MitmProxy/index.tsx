@@ -186,7 +186,7 @@ function MitmProxy() {
 
   return (
     <div className="h-full overflow-auto glass-main">
-      <div className="p-5 space-y-3">
+      <div className="p-6 space-y-3">
         {/* 顶部：状态总览条 */}
         <div className="border rounded-lg bg-card overflow-hidden">
           <div className="flex items-center gap-4 p-4">

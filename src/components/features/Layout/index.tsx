@@ -79,7 +79,7 @@ function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
   return (
     <div
       className={cn("flex flex-col relative transition-[width] duration-200 ease-in-out glass-sidebar z-10 overflow-hidden")}
-      style={{ width: collapsed ? 64 : 176 }}
+      style={{ width: collapsed ? 64 : 192 }}
     >
       <TooltipProvider>
         <Tooltip>
@@ -126,7 +126,7 @@ function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
                   <button
                     onClick={() => onMenuChange(item.id)}
                     className={cn(
-                      "flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all animate-slide-in-left",
+                      "flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg transition-all animate-slide-in-left",
                       !isActive && "sidebar-foreground sidebar-hover",
                       isActive && "sidebar-active font-semibold",
                       !isActive && "font-normal"
@@ -137,10 +137,10 @@ function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
                     }}
                   >
                     {isActive && <div className="w-0.5 h-4 rounded-full bg-current opacity-80 -ml-0.5 mr-0.5 shrink-0" />}
-                    <Icon size={16} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
+                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
                     {!collapsed && (
                       <div className="flex-1 text-left whitespace-nowrap overflow-hidden">
-                        <div className="text-xs">{item.label}</div>
+                        <div className="text-sm">{item.label}</div>
                         {item.desc && <div className="text-[10px] sidebar-muted leading-tight">{item.desc}</div>}
                       </div>
                     )}
