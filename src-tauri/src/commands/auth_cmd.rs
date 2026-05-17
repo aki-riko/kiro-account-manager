@@ -7,7 +7,7 @@ use crate::core::protocol_registry;
 use crate::auth::User;
 use crate::auth::auth_social;
 use crate::commands::common::{
-    calc_status, extract_user_info, find_existing_account_idx, get_usage_by_provider,
+    calc_status, extract_user_info, find_existing_account_idx, get_usage_by_provider, lock_store,
 };
 use crate::commands::machine_guid::get_machine_id;
 use crate::clients::kiro_auth_client::KiroAuthServiceClient;
@@ -15,14 +15,7 @@ use crate::auth::providers::{
     cancel_pending_idc_login, create_idc_provider, get_provider_config, AuthMethod, AuthProvider,
 };
 use crate::state::AppState;
-use std::sync::{Mutex, MutexGuard};
 use tauri::{Emitter, State};
-
-fn lock_state<'a, T>(mutex: &'a Mutex<T>, label: &str) -> Result<MutexGuard<'a, T>, String> {
-    mutex
-        .lock()
-        .map_err(|_| format!("Failed to acquire {label} lock"))
-}
 
 fn save_store(store: &crate::core::account::AccountStore) -> Result<(), String> {
     if store.save_to_file() {
@@ -68,7 +61,7 @@ fn prepare_pending_social_login(provider: &str, machineid: String) -> crate::sta
 
 #[tauri::command]
 pub fn get_current_user(state: State<AppState>) -> Option<User> {
-    match lock_state(&state.auth.user, "auth user") {
+    match lock_store(&state.auth.user, "auth user") {
         Ok(user) => user.clone(),
         Err(err) => {
             eprintln!("[auth_cmd] {err}");
@@ -83,13 +76,13 @@ pub fn logout(state: State<AppState>) {
 }
 
 fn clear_auth_state(auth: &crate::auth::AuthState) {
-    if let Ok(mut user) = lock_state(&auth.user, "auth user") {
+    if let Ok(mut user) = lock_store(&auth.user, "auth user") {
         *user = None;
     }
-    if let Ok(mut access_token) = lock_state(&auth.access_token, "auth access_token") {
+    if let Ok(mut access_token) = lock_store(&auth.access_token, "auth access_token") {
         *access_token = None;
     }
-    if let Ok(mut refresh_token) = lock_state(&auth.refresh_token, "auth refresh_token") {
+    if let Ok(mut refresh_token) = lock_store(&auth.refresh_token, "auth refresh_token") {
         *refresh_token = None;
     }
 }
@@ -98,7 +91,7 @@ fn clear_auth_state(auth: &crate::auth::AuthState) {
 pub fn cancel_kiro_login(state: State<'_, AppState>) -> bool {
     let cancelled_social = crate::core::deep_link_handler::cancel_waiter();
     let cancelled_idc = cancel_pending_idc_login();
-    match lock_state(&state.pending_login, "pending_login") {
+    match lock_store(&state.pending_login, "pending_login") {
         Ok(mut pending_login) => {
             *pending_login = None;
         }
@@ -149,7 +142,7 @@ async fn login_social(
     let code_challenge = auth_social::generate_code_challenge_social(&pending.code_verifier);
     let client = KiroAuthServiceClient::new(&pending.machineid)?;
 
-    *lock_state(&state.pending_login, "pending_login")? = Some(pending.clone());
+    *lock_store(&state.pending_login, "pending_login")? = Some(pending.clone());
 
     // 1. 注册 deep link 回调等待器
     let waiter = crate::core::deep_link_handler::register_waiter(&pending.state);
@@ -159,7 +152,7 @@ async fn login_social(
         .login(&provider_id, &redirect_uri, &code_challenge, &pending.state)
         .await
     {
-        *lock_state(&state.pending_login, "pending_login")? = None;
+        *lock_store(&state.pending_login, "pending_login")? = None;
         return Err(err);
     }
 
@@ -183,7 +176,7 @@ async fn login_social(
 
     // 封禁账号直接报错
     if usage_result.is_banned {
-        *lock_state(&state.pending_login, "pending_login")? = None;
+        *lock_store(&state.pending_login, "pending_login")? = None;
         return Err("BANNED: 账号已被封禁".to_string());
     }
 
@@ -193,7 +186,7 @@ async fn login_social(
         .unwrap_or_else(|| format!("{}_{}", provider_id.to_lowercase(), &token_result.refresh_token[..8]));
 
     // 6. 保存账号
-    let mut store = lock_state(&state.store, "store")?;
+    let mut store = lock_store(&state.store, "store")?;
     let existing_idx = find_existing_account_idx(
         &store.accounts,
         Some(&final_email),
@@ -242,10 +235,10 @@ async fn login_social(
         avatar: None,
         provider: provider_id.clone(),
     };
-    let _ = lock_state(&state.auth.user, "auth user").map(|mut u| *u = Some(user));
-    let _ = lock_state(&state.auth.access_token, "auth access_token").map(|mut t| *t = Some(token_result.access_token));
+    let _ = lock_store(&state.auth.user, "auth user").map(|mut u| *u = Some(user));
+    let _ = lock_store(&state.auth.access_token, "auth access_token").map(|mut t| *t = Some(token_result.access_token));
 
-    *lock_state(&state.pending_login, "pending_login")? = None;
+    *lock_store(&state.pending_login, "pending_login")? = None;
 
     Ok(format!("Successfully logged in with {provider_id}"))
 }
@@ -273,7 +266,7 @@ async fn login_idc(
     // Enterprise 账号允许没有 email,使用 userId 作为标识
     let final_email = resolve_idc_login_email(&provider_id, new_email.clone(), user_id.clone())?;
 
-    let mut store = lock_state(&state.store, "store")?;
+    let mut store = lock_store(&state.store, "store")?;
     let existing_idx = find_existing_account_idx(
         &store.accounts,
         new_email.as_ref(),
@@ -363,10 +356,10 @@ fn update_auth_state(
         avatar: None,
         provider: provider.to_string(),
     };
-    *lock_state(&state.auth.user, "auth user")? = Some(user);
-    *lock_state(&state.auth.access_token, "auth access_token")? = Some(access_token.to_string());
-    *lock_state(&state.auth.refresh_token, "auth refresh_token")? = Some(refresh_token.to_string());
-    *lock_state(&state.pending_login, "pending_login")? = None;
+    *lock_store(&state.auth.user, "auth user")? = Some(user);
+    *lock_store(&state.auth.access_token, "auth access_token")? = Some(access_token.to_string());
+    *lock_store(&state.auth.refresh_token, "auth refresh_token")? = Some(refresh_token.to_string());
+    *lock_store(&state.pending_login, "pending_login")? = None;
     Ok(())
 }
 
@@ -378,7 +371,7 @@ pub async fn handle_kiro_social_callback(
     callback_state: String,
 ) -> Result<(), String> {
     let pending = {
-        let lock = lock_state(&state.pending_login, "pending_login")?;
+        let lock = lock_store(&state.pending_login, "pending_login")?;
         lock.clone().ok_or("No pending login found")?
     };
 
@@ -405,7 +398,7 @@ pub async fn handle_kiro_social_callback(
     let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
     let final_email = require_login_email(new_email.clone())?;
 
-    let mut store = lock_state(&state.store, "store")?;
+    let mut store = lock_store(&state.store, "store")?;
     let existing_idx = find_existing_account_idx(
         &store.accounts,
         new_email.as_ref(),

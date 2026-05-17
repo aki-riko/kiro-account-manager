@@ -173,10 +173,6 @@ fn extract_usage_totals(usage_data: Option<&Value>) -> Option<(i64, i64)> {
     Some((current, limit))
 }
 
-fn is_usage_capped(usage_data: Option<&Value>) -> bool {
-    crate::core::usage::is_usage_capped(usage_data)
-}
-
 /// 换号结果
 #[derive(Debug, Clone)]
 pub struct SwitchResult {
@@ -217,8 +213,9 @@ impl SwitchResult {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_unavailable_status, is_usage_capped, AccountSwitcher, SwitchStrategy};
+    use super::{is_unavailable_status, AccountSwitcher, SwitchStrategy};
     use crate::core::account::Account;
+    use crate::core::usage::is_usage_capped;
 
     #[test]
     fn capped_status_allows_switching() {

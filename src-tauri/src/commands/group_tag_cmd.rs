@@ -2,17 +2,11 @@
 
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令的 String 参数需要按值传递（框架序列化要求）
 
+use crate::commands::common::lock_store;
 use crate::core::account::{Account, AccountGroup, AccountTag, AccountTagLink};
 use crate::state::AppState;
 use std::collections::HashMap;
-use std::sync::{Mutex, MutexGuard};
 use tauri::State;
-
-fn lock_store<'a, T>(mutex: &'a Mutex<T>, label: &str) -> Result<MutexGuard<'a, T>, String> {
-    mutex
-        .lock()
-        .map_err(|_| format!("Failed to acquire {label} lock"))
-}
 
 fn save_account_store(store: &crate::core::account::AccountStore) -> Result<(), String> {
     store.try_save_to_file()

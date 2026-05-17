@@ -10,16 +10,15 @@ use crate::commands::account_models::{
     write_available_models_cache, ListAvailableModelsResponse,
 };
 use crate::commands::common::{
-    calc_expires_at, calc_status, extract_user_info, find_existing_account_idx,
-    get_enterprise_usage_with_region_probe, get_usage_by_account, get_usage_by_provider,
-    is_auth_error_message, is_token_expired, is_token_expiring_soon, refresh_token_by_provider,
-    RefreshResult,
+    calc_expires_at, calc_status, extract_user_info, find_account_by_id,
+    find_existing_account_idx, get_enterprise_usage_with_region_probe, get_usage_by_account,
+    get_usage_by_provider, is_auth_error_message, is_token_expired, is_token_expiring_soon,
+    lock_store, refresh_token_by_provider, resolve_default_profile_arn, RefreshResult,
 };
 use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
-use std::sync::{Mutex, MutexGuard};
 use tauri::State;
 
 #[derive(Serialize)]
@@ -86,12 +85,6 @@ fn resolve_builder_client_id_hash(
     client_id_hash.unwrap_or_else(|| {
         calculate_client_id_hash(start_url.unwrap_or("https://view.awsapps.com/start"))
     })
-}
-
-fn lock_store<'a, T>(mutex: &'a Mutex<T>, label: &str) -> Result<MutexGuard<'a, T>, String> {
-    mutex
-        .lock()
-        .map_err(|_| format!("Failed to acquire {label} lock"))
 }
 
 fn save_store(store: &crate::core::account::AccountStore) -> Result<(), String> {
@@ -192,11 +185,7 @@ pub async fn sync_account(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<SyncAccountResult, String> {
-    let account = {
-        let store = lock_store(&state.store, "store")?;
-        store.accounts.iter().find(|a| a.id == id).cloned()
-    }
-    .ok_or("Account not found")?;
+    let account = find_account_by_id(&state, &id)?;
 
     let provider_str = account.provider.as_deref().unwrap_or("Google");
     let access_token = account.access_token.as_ref().ok_or("No access token")?;
@@ -362,11 +351,7 @@ pub async fn refresh_account_token(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<Account, String> {
-    let account = {
-        let store = lock_store(&state.store, "store")?;
-        store.accounts.iter().find(|a| a.id == id).cloned()
-    }
-    .ok_or("Account not found")?;
+    let account = find_account_by_id(&state, &id)?;
 
     // 检查 token 是否还有 5 分钟以上有效期
     if let Some(expires_at) = &account.expires_at {
@@ -1220,11 +1205,7 @@ pub async fn delete_account_remote(
     use crate::commands::machine_guid::get_machine_id;
 
     // 获取账号信息
-    let account = {
-        let store = lock_store(&state.store, "store")?;
-        store.accounts.iter().find(|a| a.id == id).cloned()
-    }
-    .ok_or("账号不存在")?;
+    let account = find_account_by_id(&state, &id)?;
 
     // 检查 provider
     let provider = account.provider.as_deref().unwrap_or("Google");
@@ -1327,11 +1308,7 @@ pub async fn list_available_models(
     model_provider: Option<String>,
     force_refresh: Option<bool>,
 ) -> Result<ListAvailableModelsResponse, String> {
-    let mut account = {
-        let store = lock_store(&state.store, "store")?;
-        store.accounts.iter().find(|item| item.id == id).cloned()
-    }
-    .ok_or("账号不存在")?;
+    let mut account = find_account_by_id(&state, &id)?;
 
     if let Some(cached_response) = read_available_models_cache(
         &account,
@@ -1720,11 +1697,7 @@ pub async fn set_overage_status(
     use crate::core::usage::OverageCapability;
 
     // 1. 从 state 获取账号
-    let account = {
-        let store = lock_store(&state.store, "store")?;
-        store.accounts.iter().find(|a| a.id == id).cloned()
-    }
-    .ok_or("Account not found")?;
+    let account = find_account_by_id(&state, &id)?;
 
     // 资格预检：必须是 OVERAGE_CAPABLE 才能开关超额
     match OverageCapability::from_usage_data(account.usage_data.as_ref()) {
@@ -1767,13 +1740,10 @@ pub async fn set_overage_status(
     let provider = account.provider.as_deref().unwrap_or("Google");
 
     // 确定 profile_arn
-    let profile_arn = account.profile_arn.clone().unwrap_or_else(|| {
-        if provider == "BuilderId" || provider == "Enterprise" {
-            "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX".to_string()
-        } else {
-            "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK".to_string()
-        }
-    });
+    let profile_arn = account
+        .profile_arn
+        .clone()
+        .unwrap_or_else(|| resolve_default_profile_arn(Some(provider)).to_string());
 
     // 确定 region
     let region = resolve_kiro_upstream_region(

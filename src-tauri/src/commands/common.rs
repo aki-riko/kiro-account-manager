@@ -4,6 +4,55 @@ use crate::core::account::Account;
 use crate::auth::providers::{
     AuthProvider, IdcProvider, RefreshMetadata, SocialProvider,
 };
+use std::sync::{Mutex, MutexGuard};
+
+// ===== Profile ARN 常量与 provider 映射 =====
+
+/// BuilderId / Enterprise（IdC）账号的默认 profileArn
+pub const KIRO_BUILDER_ID_PROFILE_ARN: &str =
+    "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX";
+
+/// Social（Github / Google）账号的默认 profileArn
+pub const KIRO_SOCIAL_PROFILE_ARN: &str =
+    "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK";
+
+/// 根据 provider 决定默认 profileArn（账号自身没设置时用）
+///
+/// 与参考项目 chaogei `resolveProfileArn` 行为一致：
+/// - Github / Google（Social 登录）→ Social ARN
+/// - 其他（包括 BuilderId、Enterprise、Internal、None）→ BuilderId ARN
+pub fn resolve_default_profile_arn(provider: Option<&str>) -> &'static str {
+    match provider {
+        Some("Github") | Some("Google") => KIRO_SOCIAL_PROFILE_ARN,
+        _ => KIRO_BUILDER_ID_PROFILE_ARN,
+    }
+}
+
+// ===== Mutex 锁辅助 =====
+
+/// 锁定 AppState 中任意 `Mutex<T>`，统一错误信息
+pub fn lock_store<'a, T>(
+    mutex: &'a Mutex<T>,
+    ctx: &str,
+) -> Result<MutexGuard<'a, T>, String> {
+    mutex
+        .lock()
+        .map_err(|_| format!("Failed to acquire {ctx} lock"))
+}
+
+/// 按 id 从 store 查账号副本，找不到时返回友好错误
+pub fn find_account_by_id(
+    state: &tauri::State<'_, crate::state::AppState>,
+    id: &str,
+) -> Result<crate::core::account::Account, String> {
+    let store = lock_store(&state.store, "store")?;
+    store
+        .accounts
+        .iter()
+        .find(|a| a.id == id)
+        .cloned()
+        .ok_or_else(|| format!("账号未找到 (id={id})"))
+}
 
 // ===== 时间常量（参考 Kiro IDE 源码）=====
 
@@ -172,15 +221,17 @@ pub async fn get_usage_by_account(
     let profile_arn = match provider {
         "BuilderId" => {
             // BuilderId 优先使用账号自带的，否则使用默认值
-            account.profile_arn.as_deref().or(Some(
-                "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX",
-            ))
+            account
+                .profile_arn
+                .as_deref()
+                .or(Some(KIRO_BUILDER_ID_PROFILE_ARN))
         }
         "Github" | "Google" => {
             // Social 账号优先使用账号自带的，否则使用默认值
-            account.profile_arn.as_deref().or(Some(
-                "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK",
-            ))
+            account
+                .profile_arn
+                .as_deref()
+                .or(Some(KIRO_SOCIAL_PROFILE_ARN))
         }
         "Enterprise" => {
             // Enterprise 账号不使用 profile_arn

@@ -2,6 +2,7 @@ use crate::gateway::converter::build_kiro_payload;
 use crate::gateway::eventstream::decode_message;
 use crate::gateway::models::NormalizedMessage;
 use crate::gateway::response_cache::ResponseCache;
+use crate::clients::http_client::build_q_service_url;
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -290,8 +291,8 @@ async fn generate_summary(
 
     // 发送请求
     let upstream_url = format!(
-        "https://q.{}.amazonaws.com/generateAssistantResponse",
-        region
+        "{}/generateAssistantResponse",
+        build_q_service_url(region)
     );
 
     let response = http

@@ -257,7 +257,7 @@ impl Account {
     /// 判断账号是否可用（可正常参与切换/同步）
     pub fn is_available(&self) -> bool {
         !is_unavailable_status(self.status.as_str())
-            && !is_usage_capped(self.usage_data.as_ref())
+            && !crate::core::usage::is_usage_capped(self.usage_data.as_ref())
             && self.disabled_reason.is_none()
     }
 }
@@ -433,10 +433,6 @@ fn is_unavailable_status(status: &str) -> bool {
             | "已失效"
             | "Token已失效"
     )
-}
-
-fn is_usage_capped(usage_data: Option<&serde_json::Value>) -> bool {
-    crate::core::usage::is_usage_capped(usage_data)
 }
 
 pub struct AccountStore {
@@ -807,9 +803,11 @@ impl GroupTagStore {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
-    use super::{is_usage_capped, normalize_accounts, Account};
+    use super::{normalize_accounts, Account};
+    use crate::core::usage::is_usage_capped;
 
     #[test]
     fn account_is_not_available_when_monthly_usage_is_capped() {

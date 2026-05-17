@@ -24,12 +24,12 @@ use crate::{
     core::account::{Account, AccountStore},
     commands::common::{
         calc_expires_at, calc_status, get_usage_by_provider, is_token_expiring_soon,
-        refresh_token_by_provider, RefreshResult,
+        refresh_token_by_provider, resolve_default_profile_arn, RefreshResult,
     },
     commands::machine_guid::get_machine_id,
     clients::{
         http_client::{
-            build_kiro_custom_user_agent,
+            build_kiro_custom_user_agent, build_q_service_url,
             resolve_kiro_upstream_region, should_add_redirect_for_internal,
             should_send_codewhisperer_optout,
         },
@@ -2284,7 +2284,7 @@ pub async fn mcp_proxy_handler(
         ..base_log_context.clone()
     };
 
-    let upstream_url = format!("https://q.{}.amazonaws.com/mcp", upstream.region);
+    let upstream_url = format!("{}/mcp", build_q_service_url(&upstream.region));
 
     let upstream_resp = match with_kiro_upstream_headers(
         state.http.post(upstream_url),
@@ -2618,8 +2618,8 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
     upstream_payload: &T,
 ) -> Result<reqwest::Response, UpstreamRequestError> {
     let upstream_url = format!(
-        "https://q.{}.amazonaws.com/generateAssistantResponse",
-        upstream.region
+        "{}/generateAssistantResponse",
+        build_q_service_url(&upstream.region)
     );
 
     // 追加最新请求到日志文件
@@ -2768,7 +2768,7 @@ async fn call_mcp_tool(
     tool_name: &str,
     arguments: Value,
 ) -> Result<Value, (StatusCode, &'static str, String)> {
-    let upstream_url = format!("https://q.{}.amazonaws.com/mcp", upstream.region);
+    let upstream_url = format!("{}/mcp", build_q_service_url(&upstream.region));
     let payload = json!({
         "jsonrpc": "2.0",
         "id": short_uuid(),
@@ -3185,8 +3185,9 @@ async fn resolve_managed_account_credentials(
     if !need_refresh {
         if let Some(access_token) = &account.access_token {
             if !access_token.is_empty() {
-                let profile_arn = account.profile_arn.clone()
-                    .or_else(|| Some(resolve_default_profile_arn(account.provider.as_deref())));
+                let profile_arn = account.profile_arn.clone().or_else(|| {
+                    Some(resolve_default_profile_arn(account.provider.as_deref()).to_string())
+                });
                 let machine_id = account
                     .machine_id
                     .clone()
@@ -3268,7 +3269,7 @@ async fn resolve_managed_account_credentials(
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(get_machine_id);
             let profile_arn = refresh.profile_arn.or_else(|| account.profile_arn.clone())
-                .or_else(|| Some(resolve_default_profile_arn(account.provider.as_deref())));
+                .or_else(|| Some(resolve_default_profile_arn(account.provider.as_deref()).to_string()));
             let region = resolve_kiro_upstream_region(
                 profile_arn.as_deref(),
                 account.region.as_deref(),
@@ -3302,15 +3303,6 @@ async fn resolve_managed_account_credentials(
 }
 /// 根据账号 provider 返回默认的 profileArn
 /// BuilderId 账号和 Social 账号（Github/Google）使用不同的 profileArn
-fn resolve_default_profile_arn(provider: Option<&str>) -> String {
-    const BUILDER_ID_PROFILE_ARN: &str = "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX";
-    const SOCIAL_PROFILE_ARN: &str = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK";
-
-    match provider {
-        Some("Github") | Some("Google") => SOCIAL_PROFILE_ARN.to_string(),
-        _ => BUILDER_ID_PROFILE_ARN.to_string(),
-    }
-}
 
 fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> String {
     // 只使用 email 或 user_id，都没有则返回 "unknown"

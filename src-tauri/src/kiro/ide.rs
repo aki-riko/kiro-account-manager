@@ -300,9 +300,8 @@ pub async fn switch_kiro_account(
                 "region": region.ok_or("IdC 账号必须提供 region")?,
             })
         } else {
-            let arn = profile_arn.unwrap_or_else(|| {
-                "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK".to_string()
-            });
+            let arn = profile_arn
+                .unwrap_or_else(|| crate::commands::common::KIRO_SOCIAL_PROFILE_ARN.to_string());
             serde_json::json!({
                 "accessToken": access_token,
                 "refreshToken": refresh_token,
