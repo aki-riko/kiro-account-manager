@@ -856,14 +856,8 @@ pub async fn build_kiro_payload(
         if message.role == "system" {
             let mut text = extract_text_content(message.content.as_ref());
             if !text.is_empty() {
-                // 清洗 system prompt：移除边界标记和已有的 thinking_mode 标签
-                text = text
-                    .replace("--- SYSTEM PROMPT ---", "")
-                    .replace("--- END SYSTEM PROMPT ---", "")
-                    .replace("<thinking_mode>enabled</thinking_mode>", "")
-                    .replace("<max_thinking_length>200000</max_thinking_length>", "")
-                    .trim()
-                    .to_string();
+                // 清洗 system prompt：移除 Claude Code 和 Kiro IDE 注入的内容
+                text = clean_system_prompt(&text);
 
                 if !text.is_empty() {
                     if !system_prompt.is_empty() {
@@ -2655,6 +2649,50 @@ fn process_tools_with_long_descriptions(
     };
 
     (Some(processed), docs)
+}
+
+/// Clean system prompt: remove Claude Code and Kiro IDE injected content
+fn clean_system_prompt(text: &str) -> String {
+    let mut result = text.to_string();
+
+    // Remove boundary markers
+    result = result
+        .replace("--- SYSTEM PROMPT ---", "")
+        .replace("--- END SYSTEM PROMPT ---", "");
+
+    // Remove thinking_mode tags (will be re-injected by converter)
+    result = result
+        .replace("<thinking_mode>enabled</thinking_mode>", "")
+        .replace("<max_thinking_length>200000</max_thinking_length>", "");
+
+    // Remove Kiro IDE injected content
+    // 1. Timestamp: [Context: Current time is ...]
+    if let Some(start) = result.find("[Context: Current time is ") {
+        if let Some(end) = result[start..].find(']') {
+            result.replace_range(start..start + end + 1, "");
+        }
+    }
+
+    // 2. Execution discipline block
+    if let Some(start) = result.find("<execution_discipline>") {
+        if let Some(end) = result.find("</execution_discipline>") {
+            result.replace_range(start..end + "</execution_discipline>".len(), "");
+        }
+    }
+
+    // 3. Agentic mode prompt (CHUNKED WRITE PROTOCOL)
+    if let Some(start) = result.find("# CRITICAL: CHUNKED WRITE PROTOCOL") {
+        if let Some(end) = result[start..].find("\n\n") {
+            result.replace_range(start..start + end, "");
+        }
+    }
+
+    // Collapse multiple blank lines
+    while result.contains("\n\n\n") {
+        result = result.replace("\n\n\n", "\n\n");
+    }
+
+    result.trim().to_string()
 }
 
 fn join_with_newline(left: &str, right: &str) -> String {
