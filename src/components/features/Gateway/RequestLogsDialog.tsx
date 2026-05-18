@@ -147,18 +147,13 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
                   {requestStats.totalInputTokens > 0 && (
                     <span className="text-muted-foreground">
                       {(requestStats.totalInputTokens / 1000).toFixed(1)}K入/{(requestStats.totalOutputTokens / 1000).toFixed(1)}K出
+                      {requestStats.totalCacheReadTokens > 0 && (
+                        <span className="text-blue-600">
+                          /{(requestStats.totalCacheReadTokens / 1000).toFixed(1)}K缓存读
+                        </span>
+                      )}
                     </span>
                   )}
-                </div>
-              )}
-              {/* 响应缓存状态 */}
-              {cacheStats && (
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground border-l pl-3">
-                  <Database size={13} />
-                  <span>缓存 <strong>{cacheStats.delta_cache_size + cacheStats.lru_cache_size}</strong> 条</span>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleClearCache} title="清除缓存">
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
                 </div>
               )}
             </div>
@@ -239,13 +234,15 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
                     <th className="px-2 py-1.5 text-center w-[50px]">状态</th>
                     <th className="px-2 py-1.5 text-right w-[55px]">输入</th>
                     <th className="px-2 py-1.5 text-right w-[55px]">输出</th>
+                    <th className="px-2 py-1.5 text-right w-[65px]" title="缓存读取">缓存读</th>
+                    <th className="px-2 py-1.5 text-right w-[65px]" title="缓存写入">缓存写</th>
                     <th className="px-2 py-1.5 text-right w-[55px]">耗时</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-16 text-muted-foreground font-sans text-sm">
+                      <td colSpan={9} className="text-center py-16 text-muted-foreground font-sans text-sm">
                         {requestLogs.length === 0 ? '等待第一个请求...' : '无匹配结果'}
                       </td>
                     </tr>
@@ -270,13 +267,15 @@ export function RequestLogsDialog({ open, onOpenChange, logLevel, onLogLevelChan
                           </td>
                           <td className="px-2 py-1.5 text-right text-muted-foreground">{log.inputTokens?.toLocaleString() || '-'}</td>
                           <td className="px-2 py-1.5 text-right text-muted-foreground">{log.outputTokens?.toLocaleString() || '-'}</td>
+                          <td className="px-2 py-1.5 text-right text-blue-600" title="缓存读取 tokens">{log.cacheReadTokens?.toLocaleString() || '-'}</td>
+                          <td className="px-2 py-1.5 text-right text-purple-600" title="缓存写入 tokens">{log.cacheCreationTokens?.toLocaleString() || '-'}</td>
                           <td className="px-2 py-1.5 text-right">
                             <span className={log.duration > 3000 ? 'text-orange-500' : 'text-muted-foreground'}>{log.duration}ms</span>
                           </td>
                         </tr>
                         {expandedLogId === log.id && log.error && (
                           <tr className="bg-red-50/50 dark:bg-red-950/10">
-                            <td colSpan={7} className="px-3 py-2">
+                            <td colSpan={9} className="px-3 py-2">
                               <div className="flex items-start gap-2">
                                 <XCircle size={12} className="text-red-500 mt-0.5 shrink-0" />
                                 <pre className="text-xs text-red-600 dark:text-red-400 whitespace-pre-wrap break-words">{log.error}</pre>

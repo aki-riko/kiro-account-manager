@@ -1085,8 +1085,13 @@ pub async fn build_kiro_payload(
         _ => false,
     } || current_message.tool_call_id.is_some();
 
+    // ✅ 修复：Kiro API 不接受空 content，即使有 toolResults
+    // 如果有 toolResults 但 content 不为空，保留 content
+    // 如果有 toolResults 且 content 为空，设置占位符
     if !current_tool_results.is_empty() || original_has_tool_results {
-        current_content = String::new();
+        if current_content.trim().is_empty() {
+            current_content = "[Tool results]".to_string();
+        }
     }
     let current_images = extract_images(client, current_message.content.as_ref()).await;
 

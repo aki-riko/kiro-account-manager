@@ -1553,7 +1553,7 @@ pub async fn proxy_handler(
     };
 
     if has_server_web_search_tool(&request) {
-        let outcome = match execute_request_with_server_tools(&state, &upstream, &request).await {
+        let outcome = match execute_request_with_server_tools(&state, &upstream, &request, upstream_log_context.request_index as usize).await {
             Ok(outcome) => outcome,
             Err((status, error_type, message)) => {
                 return gateway_error_with_log(
@@ -1880,7 +1880,7 @@ pub async fn proxy_handler(
         };
         
         // 发送请求
-        match send_generate_request(&state.http, &current_upstream, &payload_value).await {
+        match send_generate_request(&state.http, &current_upstream, &payload_value, upstream_payload_log_context.request_index as usize).await {
             Ok(resp) => break resp,
             Err((status, error_type, message, upstream_response_body)) => {
                 // 检查是否是 429 错误
@@ -2401,6 +2401,7 @@ async fn execute_request_with_server_tools(
     state: &RouterState,
     upstream: &UpstreamCredentials,
     request: &NormalizedRequest,
+    request_index: usize,
 ) -> Result<ProxyExecutionOutcome, (StatusCode, &'static str, String)> {
     let mut working_request = request.clone();
     let web_search_options = request
@@ -2454,7 +2455,7 @@ async fn execute_request_with_server_tools(
                         sanitize_error(&message),
                     )
                 })?;
-        let upstream_resp = send_generate_request(&state.http, upstream, &upstream_payload)
+        let upstream_resp = send_generate_request(&state.http, upstream, &upstream_payload, request_index)
             .await
             .map_err(|(status, error_type, message, _)| (status, error_type, message))?;
 
@@ -2616,6 +2617,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
     http: &Client,
     upstream: &UpstreamCredentials,
     upstream_payload: &T,
+    request_index: usize,
 ) -> Result<reqwest::Response, UpstreamRequestError> {
     let upstream_url = format!(
         "{}/generateAssistantResponse",
@@ -2629,7 +2631,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
             .join(".kiro-account-manager")
             .join("logs");
         let _ = std::fs::create_dir_all(&log_dir);
-        let entry = format!("[{}] REQUEST: {}\n", chrono::Local::now().format("%H:%M:%S"), payload_json);
+        let entry = format!("[{}] REQUEST #{}: {}\n", chrono::Local::now().format("%H:%M:%S"), request_index, &payload_json[..safe_truncate(&payload_json, 50000)]);
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -2677,7 +2679,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
                 .unwrap_or_default()
                 .join(".kiro-account-manager")
                 .join("logs");
-            let entry = format!("[{}] RESPONSE {}: {}\n", chrono::Local::now().format("%H:%M:%S"), status.as_u16(), body);
+            let entry = format!("[{}] RESPONSE #{} {}: {}\n", chrono::Local::now().format("%H:%M:%S"), request_index, status.as_u16(), &body[..safe_truncate(&body, 50000)]);
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -4969,17 +4971,40 @@ fn stream_proxy_response(
                 .unwrap_or_default()
                 .join(".kiro-account-manager")
                 .join("logs");
-            let tool_calls_summary: Vec<String> = aggregated.tool_calls.iter()
-                .map(|(id, name, _)| format!("{}({})", name, id))
-                .collect();
-            let entry = format!("[{}] CLIENT RESPONSE #{}: text_len={}, thinking_len={}, tool_calls=[{}], input={}, output={}\n",
+
+            // 构建完整的响应体（根据格式）
+            let response_body = match format {
+                ResponseFormat::Anthropic => {
+                    serde_json::to_string(&build_anthropic_response(
+                        &model,
+                        &aggregated,
+                        &server_tool_calls,
+                    )).unwrap_or_default()
+                }
+                ResponseFormat::Responses => {
+                    serde_json::to_string(&build_responses_response_with_ids(
+                        &model,
+                        &aggregated,
+                        &server_tool_calls,
+                        &response_id,
+                        &message_id,
+                        created_at,
+                        previous_response_id.as_deref(),
+                    )).unwrap_or_default()
+                }
+                ResponseFormat::OpenAI => {
+                    serde_json::to_string(&stream::build_openai_response(
+                        &model,
+                        &aggregated,
+                    )).unwrap_or_default()
+                }
+            };
+
+            let entry = format!("[{}] CLIENT RESPONSE #{} ({}): {}\n",
                 chrono::Local::now().format("%H:%M:%S"),
                 log_context.request_index,
-                aggregated.text.len(),
-                aggregated.thinking.len(),
-                tool_calls_summary.join(", "),
-                aggregated.input_tokens,
-                aggregated.output_tokens,
+                log_context.endpoint,
+                &response_body[..safe_truncate(&response_body, 50000)]
             );
             let _ = std::fs::OpenOptions::new()
                 .create(true)
@@ -4988,8 +5013,9 @@ fn stream_proxy_response(
                 .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
 
             // 也写入 upstream 成功响应
-            let upstream_entry = format!("[{}] RESPONSE 200: text_len={}, thinking_len={}, tool_calls={:?}, input={}, output={}\n",
+            let upstream_entry = format!("[{}] RESPONSE #{} 200: text_len={}, thinking_len={}, tool_calls={:?}, input={}, output={}\n",
                 chrono::Local::now().format("%H:%M:%S"),
+                log_context.request_index,
                 aggregated.text.len(),
                 aggregated.thinking.len(),
                 aggregated.tool_calls.iter().map(|(id, name, args)| format!("{}({})={}", name, id, &args[..args.len().min(100)])).collect::<Vec<_>>(),
