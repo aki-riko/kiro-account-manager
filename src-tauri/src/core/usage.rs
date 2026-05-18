@@ -216,7 +216,7 @@ impl UsageDetails {
 /// 账号是否处于超额状态
 ///
 /// 超额状态：开启了超额功能，且当前用量已超过基础配额但未达到封顶
-/// 条件：overageStatus=ENABLED && current > limit && current < limit + overageCap
+/// 条件：overageStatus=ENABLED && current > limit && current < (limit + overageCap)
 pub fn is_in_overage(usage_data: Option<&Value>) -> bool {
     let Some(breakdown) = UsageBreakdown::from_usage_data(usage_data) else {
         return false;
@@ -228,7 +228,8 @@ pub fn is_in_overage(usage_data: Option<&Value>) -> bool {
     if !status.is_enabled() {
         return false;
     }
-    breakdown.current > breakdown.limit && breakdown.current < breakdown.limit + breakdown.overage_cap
+    // 超过基础配额但未封顶
+    breakdown.current > breakdown.limit && !is_usage_capped(usage_data)
 }
 
 /// 账号是否已封顶不可用

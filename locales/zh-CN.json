@@ -292,6 +292,8 @@
   "accounts.banned": "封禁",
   "accounts.invalid": "失效",
   "accounts.expired": "过期",
+  "accounts.capped": "已封顶",
+  "accounts.overage": "超额中",
   "accounts.noAccounts": "暂无账号",
   "accounts.addFirst": "点击上方「添加账号」开始",
   "accounts.confirmDelete": "确定要删除这个账号吗？",
