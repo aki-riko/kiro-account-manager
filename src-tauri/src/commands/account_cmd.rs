@@ -299,7 +299,7 @@ pub async fn sync_account(
         if let Some(usage_data) = usage {
             // 直接移动所有权，避免 clone
             a.usage_data = Some(usage_data.usage_data);
-            a.status = calc_status(usage_data.is_banned, usage_data.is_auth_error);
+            a.status = calc_status(usage_data.is_banned, usage_data.is_auth_error, a.usage_data.as_ref());
 
             // 封顶账号自动禁用，未封顶账号自动启用
             if crate::core::usage::is_usage_capped(a.usage_data.as_ref()) {
@@ -584,7 +584,7 @@ pub async fn add_account_by_social(
         existing.profile_arn = Some(final_profile_arn.clone()); // ✅ 保存 profile_arn
         existing.user_id = user_id;
         existing.usage_data = Some(usage_result.usage_data);
-        existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
+        existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, existing.usage_data.as_ref());
         existing.clone() // ✅ 必须 clone，因为要返回给前端
     } else {
         let mut account = Account::new(final_email.clone(), format!("Kiro {idp} 账号"));
@@ -595,7 +595,7 @@ pub async fn add_account_by_social(
         account.auth_method = Some("social".to_string());
         account.user_id = user_id;
         account.usage_data = Some(usage_result.usage_data);
-        account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
+        account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, account.usage_data.as_ref());
         // 使用传入的 machine_id，没有则自动生成
         account.machine_id =
             machine_id.or_else(|| Some(uuid::Uuid::new_v4().to_string().to_lowercase())); // ✅ 避免 clone
@@ -1025,7 +1025,7 @@ async fn add_account_by_idc_internal(
                 existing.sso_session_id = sso_session_id;
             }
             existing.usage_data = Some(usage_result.usage_data);
-            existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
+            existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, existing.usage_data.as_ref());
             existing.clone()
         } else {
             // 创建新的 Enterprise 账号
@@ -1045,7 +1045,7 @@ async fn add_account_by_idc_internal(
             account.id_token = id_token;
             account.sso_session_id = sso_session_id;
             account.usage_data = Some(usage_result.usage_data);
-            account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
+            account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, account.usage_data.as_ref());
             account.machine_id = Some(
                 params
                     .machine_id
@@ -1101,7 +1101,7 @@ async fn add_account_by_idc_internal(
                 existing.sso_session_id = sso_session_id;
             }
             existing.usage_data = Some(usage_result.usage_data);
-            existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
+            existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, existing.usage_data.as_ref());
             existing.clone()
         } else {
             // 创建新的 BuilderId 账号
@@ -1128,7 +1128,7 @@ async fn add_account_by_idc_internal(
             account.id_token = id_token;
             account.sso_session_id = sso_session_id;
             account.usage_data = Some(usage_result.usage_data);
-            account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error);
+            account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, account.usage_data.as_ref());
             account.machine_id = Some(
                 params
                     .machine_id

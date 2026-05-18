@@ -438,11 +438,15 @@ pub fn calc_expires_at(expires_in: i64) -> String {
 }
 
 /// 根据 `usage_result` 计算账号状态
-pub fn calc_status(is_banned: bool, is_auth_error: bool) -> String {
+pub fn calc_status(is_banned: bool, is_auth_error: bool, usage_data: Option<&serde_json::Value>) -> String {
     if is_banned {
         "banned".to_string()
     } else if is_auth_error {
         "invalid".to_string()
+    } else if crate::core::usage::is_usage_capped(usage_data) {
+        "capped".to_string()
+    } else if crate::core::usage::is_in_overage(usage_data) {
+        "overage".to_string()
     } else {
         "active".to_string()
     }

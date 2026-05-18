@@ -213,6 +213,24 @@ impl UsageDetails {
     }
 }
 
+/// 账号是否处于超额状态
+///
+/// 超额状态：开启了超额功能，且当前用量已超过基础配额但未达到封顶
+/// 条件：overageStatus=ENABLED && current > limit && current < limit + overageCap
+pub fn is_in_overage(usage_data: Option<&Value>) -> bool {
+    let Some(breakdown) = UsageBreakdown::from_usage_data(usage_data) else {
+        return false;
+    };
+    if breakdown.limit <= 0.0 {
+        return false;
+    }
+    let status = OverageStatus::from_usage_data(usage_data);
+    if !status.is_enabled() {
+        return false;
+    }
+    breakdown.current > breakdown.limit && breakdown.current < breakdown.limit + breakdown.overage_cap
+}
+
 /// 账号是否已封顶不可用
 ///
 /// 真正封顶的两种情况：
@@ -302,6 +320,34 @@ mod tests {
             .usage_percentage(OverageStatus::Enabled) - 75.0).abs() < 0.01);
         assert!(!usage_exceeds_threshold(Some(&enabled), 80.0));
         assert!(usage_exceeds_threshold(Some(&enabled), 70.0));
+    }
+
+    #[test]
+    fn in_overage_when_between_limit_and_cap() {
+        // 已用 150，base 100，overage 100 → 在超额区间
+        let d = data("ENABLED", 150.0, 100.0, 100.0, "OVERAGE_CAPABLE");
+        assert!(is_in_overage(Some(&d)));
+    }
+
+    #[test]
+    fn not_in_overage_when_disabled() {
+        // 超额未开启，即使超过 limit 也不算超额状态
+        let d = data("DISABLED", 150.0, 100.0, 100.0, "OVERAGE_CAPABLE");
+        assert!(!is_in_overage(Some(&d)));
+    }
+
+    #[test]
+    fn not_in_overage_when_under_limit() {
+        // 还没超过基础配额
+        let d = data("ENABLED", 50.0, 100.0, 100.0, "OVERAGE_CAPABLE");
+        assert!(!is_in_overage(Some(&d)));
+    }
+
+    #[test]
+    fn not_in_overage_when_capped() {
+        // 已经封顶了
+        let d = data("ENABLED", 250.0, 100.0, 100.0, "OVERAGE_CAPABLE");
+        assert!(!is_in_overage(Some(&d)));
     }
 
     #[test]

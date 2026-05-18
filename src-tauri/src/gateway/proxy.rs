@@ -3356,7 +3356,7 @@ fn persist_account_refresh(
         if let Some(data) = usage_data {
             target.usage_data = Some(data);
         }
-        target.status = calc_status(is_banned, is_auth_error);
+        target.status = calc_status(is_banned, is_auth_error, target.usage_data.as_ref());
         if is_banned || is_auth_error {
             target.enabled = false;
         }
