@@ -1,7 +1,8 @@
 import { Account, AccountUsageData } from '../types/account';
 
 const ACTIVE_STATUSES = new Set(['active', '正常', '有效'])
-const CAPPED_STATUSES = new Set(['capped', '封顶'])
+const CAPPED_STATUSES = new Set(['capped', '封顶', '已封顶'])
+const OVERAGE_STATUSES = new Set(['overage', '超额', '超额中'])
 const BANNED_STATUSES = new Set(['banned', '封禁', '已封禁'])
 const INVALID_STATUSES = new Set(['invalid', '失效', '已失效', 'Token已失效', 'token已失效'])
 const EXPIRED_STATUSES = new Set(['expired', '过期', '已过期'])
@@ -51,6 +52,7 @@ export function normalizeAccountStatus(statusOrAccount: string | Account | any, 
   let normalized = status
   if (ACTIVE_STATUSES.has(status)) normalized = 'active'
   else if (CAPPED_STATUSES.has(status)) normalized = 'capped'
+  else if (OVERAGE_STATUSES.has(status)) normalized = 'overage'
   else if (BANNED_STATUSES.has(status)) normalized = 'banned'
   else if (INVALID_STATUSES.has(status)) normalized = 'invalid'
   else if (EXPIRED_STATUSES.has(status)) normalized = 'expired'
@@ -104,7 +106,9 @@ export function getAccountStatusMeta(statusOrAccount: string | Account | any, t?
     case 'active':
       return { key: 'active', label: t?.('accounts.active') ?? '正常', tone: 'success' }
     case 'capped':
-      return { key: 'capped', label: '封顶', tone: 'warning' }
+      return { key: 'capped', label: t?.('accounts.capped') ?? '已封顶', tone: 'danger' }
+    case 'overage':
+      return { key: 'overage', label: t?.('accounts.overage') ?? '超额中', tone: 'warning' }
     case 'banned':
       return { key: 'banned', label: t?.('accounts.banned') ?? '封禁', tone: 'danger' }
     case 'invalid':
