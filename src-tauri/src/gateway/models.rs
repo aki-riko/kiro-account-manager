@@ -78,8 +78,6 @@ pub struct Tool {
     pub tool_type: String,
     pub function: ToolFunction,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub web_search: Option<WebSearchToolOptions>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<serde_json::Value>,
 }
 
@@ -88,14 +86,6 @@ pub struct ToolFunction {
     pub name: String,
     pub description: Option<String>,
     pub parameters: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct WebSearchToolOptions {
-    pub max_uses: Option<i32>,
-    pub allowed_domains: Option<Vec<String>>,
-    pub blocked_domains: Option<Vec<String>>,
-    pub user_location: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -718,6 +708,4 @@ pub struct AnthropicUsage {
     pub cache_creation_input_tokens: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_read_input_tokens: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub server_tool_use: Option<serde_json::Value>,
 }

@@ -974,7 +974,6 @@ fn router(state: RouterState) -> Router {
         .route("/v1/messages/count_tokens", post(count_tokens_handler))
         .route("/v1/responses", post(responses_handler))
         .route("/v1/chat/completions", post(openai_chat_handler))
-        .route("/mcp", post(mcp_handler))
         .with_state(state)
 }
 
@@ -1154,15 +1153,6 @@ async fn openai_chat_handler(
     proxy::proxy_handler(state, addr, headers, payload, ResponseFormat::OpenAI).await
 }
 
-async fn mcp_handler(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(state): State<RouterState>,
-    headers: HeaderMap,
-    Json(payload): Json<Value>,
-) -> Response {
-    proxy::mcp_proxy_handler(state, addr, headers, payload).await
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1340,31 +1330,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mcp_route_is_reachable() {
-        let app = router(test_router_state());
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method(Method::POST)
-                    .uri("/mcp")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        json!({
-                            "jsonrpc": "2.0",
-                            "id": 1,
-                            "method": "tools/list",
-                            "params": {}
-                        })
-                        .to_string(),
-                    ))
-                    .expect("request should build"),
-            )
-            .await
-            .expect("router should respond");
-
-        assert_ne!(response.status(), StatusCode::NOT_FOUND);
-    }
-
     #[tokio::test(flavor = "current_thread")]
     async fn lightweight_routes_increment_request_count_and_write_logs() {
         let fixture = RequestLogTestFixture::new();
@@ -1411,50 +1376,6 @@ mod tests {
         assert!(
             logs[0].response_body.is_none(),
             "response body should not be logged by default"
-        );
-    }
-
-    #[tokio::test(flavor = "current_thread")]
-    async fn mcp_route_increments_request_count_and_writes_error_log() {
-        let fixture = RequestLogTestFixture::new();
-        let state = gateway_runtime_test_state();
-        let client_addr: SocketAddr = "127.0.0.1:4318".parse().expect("socket addr should parse");
-
-        let response = proxy::mcp_proxy_handler(
-            state.clone(),
-            client_addr,
-            auth_headers(),
-            json!({
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/list",
-                "params": {}
-            }),
-        )
-        .await;
-
-        assert_eq!(state.request_count.load(Ordering::Relaxed), 1);
-        assert!(response.status().is_client_error() || response.status().is_server_error());
-
-        let logs = get_gateway_request_logs_from_path(fixture.path.as_path(), Some(10))
-            .expect("request logs should read");
-        assert_eq!(logs.len(), 1);
-        assert_eq!(logs[0].endpoint, "mcp");
-        assert_eq!(logs[0].client_ip, "127.0.0.1");
-        assert_eq!(logs[0].request_index, 0);
-        assert_eq!(logs[0].outcome, "error");
-        assert_eq!(logs[0].status_code, response.status().as_u16());
-        assert!(
-            logs[0].request_body.is_none(),
-            "request body should not be logged by default"
-        );
-        assert!(
-            logs[0].response_body.is_none(),
-            "response body should not be logged by default"
-        );
-        assert!(
-            state.last_error.lock().await.is_some(),
-            "mcp error should update last_error"
         );
     }
 
@@ -1827,38 +1748,6 @@ mod tests {
             .send()
             .await
             .expect("messages request should succeed");
-
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        stop_runtime(&mut runtime).await;
-    }
-
-    #[tokio::test]
-    async fn runtime_rejects_unauthenticated_mcp_requests_over_real_http() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener should bind");
-        let port = listener
-            .local_addr()
-            .expect("local addr should resolve")
-            .port();
-        drop(listener);
-
-        let config = runtime_test_gateway_config(port);
-        let mut runtime = spawn_runtime(config).await.expect("runtime should start");
-
-        let response = reqwest::Client::new()
-            .post(format!("http://127.0.0.1:{port}/mcp"))
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "tools/list",
-                    "params": {}
-                })
-                .to_string(),
-            )
-            .send()
-            .await
-            .expect("mcp request should succeed");
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         stop_runtime(&mut runtime).await;

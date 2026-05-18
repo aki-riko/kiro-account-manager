@@ -4,7 +4,7 @@ use crate::gateway::models::{
     KiroPayload, KiroTool, KiroToolResult, KiroToolResultContent, KiroToolSpec, KiroToolUse,
     ModelInfo, NormalizedMessage, NormalizedRequest, OpenAIChatRequest,
     Tool, ToolCall, ToolCallFunction, ToolFunction, UserInputMessage,
-    UserInputMessageContext, WebSearchToolOptions,
+    UserInputMessageContext,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use reqwest::Client;
@@ -17,9 +17,6 @@ use tokio::net::lookup_host;
 use uuid::Uuid;
 
 pub const TOOL_DESCRIPTION_MAX_LENGTH: usize = 10237;
-const WEB_SEARCH_TOOL_NAME: &str = "web_search";
-const WEB_SEARCH_TOOL_DESCRIPTION: &str =
-    "Search the web for current information and return relevant results.";
 const MAX_IMAGE_SOURCE_BYTES: usize = 5 * 1024 * 1024;
 const MAX_IMAGE_REDIRECTS: usize = 3;
 const IMAGE_FETCH_TIMEOUT_SECONDS: u64 = 15;
@@ -223,7 +220,6 @@ pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> NormalizedR
             .map(|t| Tool {
                 tool_type: t.tool_type.clone(),
                 function: t.function.clone(),
-                web_search: None,
                 cache_control: None,
             })
             .collect()
@@ -396,20 +392,6 @@ fn convert_openai_chat_tools(tools: Option<&Value>) -> Option<Vec<Tool>> {
 }
 
 fn convert_anthropic_tool(tool: &crate::gateway::models::AnthropicTool) -> Tool {
-    let tool_type = tool.r#type.as_deref().unwrap_or("function");
-    if is_web_search_tool_type(tool_type) {
-        return convert_web_search_tool(
-            tool_type,
-            &tool.name,
-            tool.description.clone(),
-            tool.max_uses,
-            tool.allowed_domains.clone(),
-            tool.blocked_domains.clone(),
-            tool.user_location.clone(),
-            tool.cache_control.clone(),
-        );
-    }
-
     Tool {
         tool_type: "function".to_string(),
         function: ToolFunction {
@@ -417,63 +399,8 @@ fn convert_anthropic_tool(tool: &crate::gateway::models::AnthropicTool) -> Tool 
             description: tool.description.clone(),
             parameters: Some(normalize_json_schema(tool.input_schema.clone())),
         },
-        web_search: None,
         cache_control: tool.cache_control.clone(),
     }
-}
-
-fn convert_web_search_tool(
-    tool_type: &str,
-    _name: &str,
-    description: Option<String>,
-    max_uses: Option<i32>,
-    allowed_domains: Option<Vec<String>>,
-    blocked_domains: Option<Vec<String>>,
-    user_location: Option<Value>,
-    cache_control: Option<Value>,
-) -> Tool {
-    Tool {
-        tool_type: tool_type.to_string(),
-        function: ToolFunction {
-            name: WEB_SEARCH_TOOL_NAME.to_string(),
-            description: Some(
-                description.unwrap_or_else(|| WEB_SEARCH_TOOL_DESCRIPTION.to_string()),
-            ),
-            parameters: Some(web_search_input_schema()),
-        },
-        web_search: Some(WebSearchToolOptions {
-            max_uses,
-            allowed_domains,
-            blocked_domains,
-            user_location,
-        }),
-        cache_control,
-    }
-}
-
-fn is_web_search_tool_type(tool_type: &str) -> bool {
-    tool_type.starts_with("web_search_") || tool_type == "remote_web_search"
-}
-
-fn web_search_input_schema() -> Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Search query"
-            }
-        },
-        "required": ["query"]
-    })
-}
-
-fn string_array_from_values(values: &[Value]) -> Vec<String> {
-    values
-        .iter()
-        .filter_map(Value::as_str)
-        .map(str::to_string)
-        .collect()
 }
 
 pub fn get_internal_model_id(external_model: &str) -> Result<String, String> {
@@ -1443,33 +1370,8 @@ fn convert_responses_tools(tools: Option<&Value>) -> Option<Vec<Tool>> {
 fn convert_responses_tool(item: &Value) -> Option<Tool> {
     let item_type = item.get("type").and_then(Value::as_str).unwrap_or_default();
 
-    if is_web_search_tool_type(item_type) {
-        return Some(convert_web_search_tool(
-            item_type,
-            item.get("name")
-                .and_then(Value::as_str)
-                .unwrap_or(WEB_SEARCH_TOOL_NAME),
-            item.get("description")
-                .and_then(Value::as_str)
-                .map(str::to_string),
-            item.get("max_uses")
-                .and_then(Value::as_i64)
-                .map(|value| value as i32),
-            item.get("allowed_domains")
-                .and_then(Value::as_array)
-                .map(|values| string_array_from_values(values)),
-            item.get("blocked_domains")
-                .and_then(Value::as_array)
-                .map(|values| string_array_from_values(values)),
-            item.get("user_location").cloned(),
-            None,
-        ));
-    }
-
     if item.get("function").is_some() {
-        let mut tool = serde_json::from_value::<Tool>(item.clone()).ok()?;
-        tool.web_search = None;
-        return Some(tool);
+        return serde_json::from_value::<Tool>(item.clone()).ok();
     }
 
     // 修复：MCP 工具缺少 type 字段导致之前被跳过
@@ -1481,7 +1383,7 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
             .get("description")
             .and_then(Value::as_str)
             .map(str::to_string);
-        
+
         // 从 inputSchema 或 parameters 中提取参数定义
         // MCP 工具的 inputSchema 本身就是 JSON Schema，不需要访问 .json 字段
         let parameters = item
@@ -1496,7 +1398,6 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
                 description,
                 parameters,
             },
-            web_search: None,
             cache_control: None,
         });
     }
@@ -1515,7 +1416,6 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
                 .map(str::to_string),
             parameters: item.get("parameters").cloned(),
         },
-        web_search: None,
         cache_control: None,
     })
 }
@@ -1529,7 +1429,7 @@ fn extract_anthropic_tool_calls(content: &Value) -> Option<Vec<ToolCall>> {
         .iter()
         .filter_map(|item| {
             let item_type = item.get("type").and_then(Value::as_str).unwrap_or_default();
-            if item_type != "tool_use" && item_type != "server_tool_use" {
+            if item_type != "tool_use" {
                 return None;
             }
 
@@ -1569,7 +1469,7 @@ fn extract_anthropic_tool_result_id(content: &Value) -> Option<String> {
 
     items.iter().find_map(|item| {
         let item_type = item.get("type").and_then(Value::as_str).unwrap_or_default();
-        if item_type == "tool_result" || item_type == "web_search_tool_result" {
+        if item_type == "tool_result" {
             item.get("tool_use_id")
                 .and_then(Value::as_str)
                 .map(str::to_string)
@@ -2157,7 +2057,7 @@ fn extract_tool_results(content: Option<&Value>) -> Vec<KiroToolResult> {
         .iter()
         .filter_map(|item| {
             let item_type = item.get("type").and_then(Value::as_str).unwrap_or_default();
-            if item_type != "tool_result" && item_type != "web_search_tool_result" {
+            if item_type != "tool_result" {
                 return None;
             }
 
@@ -2168,9 +2068,6 @@ fn extract_tool_results(content: Option<&Value>) -> Vec<KiroToolResult> {
                 .to_string();
             let content_text = match item.get("content") {
                 Some(Value::String(text)) => text.clone(),
-                Some(Value::Array(array)) if item_type == "web_search_tool_result" => {
-                    Value::Array(array.clone()).to_string()
-                }
                 Some(Value::Array(array)) => {
                     extract_text_blocks(&Value::Array(array.clone()), &["text", "output_text"])
                 }
@@ -2544,39 +2441,10 @@ fn convert_tools(tools: &Option<Vec<Tool>>) -> Option<Vec<KiroTool>> {
 }
 
 fn tool_description(tool: &Tool) -> String {
-    if is_web_search_tool_type(&tool.tool_type) {
-        let mut parts = vec![tool
-            .function
-            .description
-            .clone()
-            .unwrap_or_else(|| WEB_SEARCH_TOOL_DESCRIPTION.to_string())];
-        if let Some(options) = &tool.web_search {
-            if let Some(domains) = options
-                .allowed_domains
-                .as_ref()
-                .filter(|items| !items.is_empty())
-            {
-                parts.push(format!("Only return results from: {}", domains.join(", ")));
-            }
-            if let Some(domains) = options
-                .blocked_domains
-                .as_ref()
-                .filter(|items| !items.is_empty())
-            {
-                parts.push(format!("Exclude results from: {}", domains.join(", ")));
-            }
-        }
-        return parts.join(" ");
-    }
-
     tool.function.description.clone().unwrap_or_default()
 }
 
 fn tool_input_schema(tool: &Tool) -> Value {
-    if is_web_search_tool_type(&tool.tool_type) {
-        return web_search_input_schema();
-    }
-
     normalize_json_schema(
         tool.function
             .parameters
@@ -2631,7 +2499,6 @@ fn process_tools_with_long_descriptions(
                     )),
                     parameters: tool.function.parameters.clone(),
                 },
-                web_search: tool.web_search.clone(),
                 cache_control: tool.cache_control.clone(),
             });
         } else {
@@ -2788,127 +2655,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn normalize_anthropic_request_supports_versioned_web_search_tools() {
-        let request = AnthropicMessagesRequest {
-            model: "claude-sonnet-4-5".to_string(),
-            messages: vec![crate::gateway::models::AnthropicMessage {
-                role: "user".to_string(),
-                content: json!([{ "type": "text", "text": "查一下今天的 Rust 发布" }]),
-            }],
-            max_tokens: 2048,
-            system: None,
-            stream: false,
-            temperature: None,
-            top_p: None,
-            stop_sequences: None,
-            tools: Some(vec![AnthropicTool {
-                // Use a documented versioned name as a compatibility sample. This test only
-                // proves `web_search_*` matching, not that Kiro emits this exact version.
-                r#type: Some("web_search_20260209".to_string()),
-                name: "web_search".to_string(),
-                description: None,
-                input_schema: Value::Null,
-                max_uses: Some(3),
-                allowed_domains: Some(vec!["blog.rust-lang.org".to_string()]),
-                blocked_domains: Some(vec!["example.com".to_string()]),
-                user_location: Some(json!({ "type": "approximate", "city": "Singapore" })),
-            }]),
-            tool_choice: Some(json!({ "type": "auto" })),
-            thinking: None,
-            metadata: None,
-        };
-
-        let converted = normalize_anthropic_request(&request);
-        let tool = converted
-            .tools
-            .as_ref()
-            .and_then(|items| items.first())
-            .expect("web search tool should exist");
-
-        assert_eq!(tool.tool_type, "web_search_20260209");
-        assert_eq!(tool.function.name, "web_search");
-        assert_eq!(tool.function.parameters, Some(web_search_input_schema()));
-        assert_eq!(
-            tool.web_search
-                .as_ref()
-                .and_then(|options| options.max_uses),
-            Some(3)
-        );
-        assert_eq!(
-            tool.web_search
-                .as_ref()
-                .and_then(|options| options.allowed_domains.as_ref())
-                .and_then(|items| items.first())
-                .map(String::as_str),
-            Some("blog.rust-lang.org")
-        );
-    }
-
-    #[test]
-    fn normalize_anthropic_request_understands_server_tool_use_history() {
-        let request = AnthropicMessagesRequest {
-            model: "claude-sonnet-4-5".to_string(),
-            messages: vec![
-                crate::gateway::models::AnthropicMessage {
-                    role: "assistant".to_string(),
-                    content: json!([{
-                        "type": "server_tool_use",
-                        "id": "srv_1",
-                        "name": "web_search",
-                        "input": { "query": "Rust 1.90 release" }
-                    }]),
-                },
-                crate::gateway::models::AnthropicMessage {
-                    role: "user".to_string(),
-                    content: json!([{
-                        "type": "web_search_tool_result",
-                        "tool_use_id": "srv_1",
-                        "content": [{
-                            "type": "web_search_result",
-                            "title": "Rust Blog",
-                            "url": "https://blog.rust-lang.org"
-                        }]
-                    }]),
-                },
-            ],
-            max_tokens: 2048,
-            system: None,
-            stream: false,
-            temperature: None,
-            top_p: None,
-            stop_sequences: None,
-            tools: None,
-            tool_choice: None,
-            thinking: None,
-            metadata: None,
-        };
-
-        let converted = normalize_anthropic_request(&request);
-
-        assert_eq!(
-            converted.messages[0]
-                .tool_calls
-                .as_ref()
-                .and_then(|items| items.first())
-                .map(|call| call.function.name.as_str()),
-            Some("web_search")
-        );
-        assert_eq!(converted.messages[1].tool_call_id.as_deref(), Some("srv_1"));
-        assert_eq!(
-            converted.messages[1].content,
-            Some(json!([{
-                "type": "web_search_tool_result",
-                "tool_use_id": "srv_1",
-                "content": [{
-                    "type": "web_search_result",
-                    "title": "Rust Blog",
-                    "url": "https://blog.rust-lang.org"
-                }]
-            }]))
-        );
-    }
-
     #[tokio::test]
     async fn build_kiro_payload_moves_long_tool_docs_and_tool_results_into_context() {
         let request = NormalizedRequest {
@@ -2965,7 +2711,6 @@ mod tests {
                         "properties": { "q": { "type": "string" } }
                     })),
                 },
-                web_search: None,
             }]),
             tool_choice: None,
             previous_response_id: None,
@@ -3301,7 +3046,6 @@ mod tests {
                         "properties": { "q": { "type": "string" } }
                     })),
                 },
-                web_search: None,
             }]),
             tool_choice: Some(json!({ "type": "function", "name": "search_docs" })),
             previous_response_id: None,
@@ -3381,7 +3125,6 @@ mod tests {
                         "properties": { "q": { "type": "string" } }
                     })),
                 },
-                web_search: None,
             }]),
             tool_choice: Some(json!({ "type": "function", "name": "missing_tool" })),
             previous_response_id: None,

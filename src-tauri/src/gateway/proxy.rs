@@ -18,7 +18,6 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use url::Url;
 
 use crate::{
     core::account::{Account, AccountStore},
@@ -55,7 +54,7 @@ use super::{
     models::{
         AnthropicContentBlock, AnthropicMessagesRequest, AnthropicMessagesResponse, AnthropicUsage,
         ModelsResponse, NormalizedMessage, NormalizedRequest, OpenAIChatRequest, Tool, ToolCall,
-        ToolCallFunction, WebSearchToolOptions,
+        ToolCallFunction,
     },
     stream::{self, parse_kiro_event_full, KiroEvent},
     thinking_parser::{SegmentType, ThinkingParser},
@@ -74,21 +73,6 @@ struct UpstreamCredentials {
     #[allow(dead_code)]
     auth_method: Option<String>,
     send_opt_out: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct ServerToolCall {
-    id: String,
-    name: String,
-    input: Value,
-    result_content: Value,
-    tool_result_text: String,
-}
-
-#[derive(Debug, Clone)]
-struct ProxyExecutionOutcome {
-    aggregated: stream::AggregatedKiroResponse,
-    server_tool_calls: Vec<ServerToolCall>,
 }
 
 async fn restore_responses_session_messages(
@@ -242,17 +226,10 @@ struct ResponsesOutputText {
     annotations: Vec<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct WebSearchSource {
-    title: String,
-    url: String,
-}
-
 type UpstreamRequestError = (StatusCode, &'static str, String, Option<String>);
 
 #[allow(dead_code)]
 const STREAMING_RESPONSE_PLACEHOLDER: &str = "[streaming response omitted from request log]";
-const MAX_SERVER_WEB_SEARCH_ITERATIONS: usize = 8;
 
 #[derive(Debug, Clone)]
 struct RequestLogContext<'a> {
@@ -1552,114 +1529,6 @@ pub async fn proxy_handler(
         ..request_log_context.clone()
     };
 
-    if has_server_web_search_tool(&request) {
-        let outcome = match execute_request_with_server_tools(&state, &upstream, &request, upstream_log_context.request_index as usize).await {
-            Ok(outcome) => outcome,
-            Err((status, error_type, message)) => {
-                return gateway_error_with_log(
-                    &state,
-                    format,
-                    &upstream_log_context,
-                    GatewayErrorDetails {
-                        status,
-                        error_type,
-                        message: &message,
-                        response_body: None,
-                    },
-                )
-                .await;
-            }
-        };
-
-        if request.stream && matches!(format, ResponseFormat::Responses) {
-            let response = build_stream_responses_completed_event(
-                &request.model,
-                &outcome.aggregated,
-                &outcome.server_tool_calls,
-                &response_id,
-                &message_id,
-                created_at,
-                request.previous_response_id.as_deref(),
-            );
-            let response_body = serialize_logged_value(&response);
-            write_request_log(
-                &upstream_log_context,
-                StatusCode::OK,
-                "success",
-                None,
-                None, // error_type
-                Some(response_body.as_str()),
-                Some(outcome.aggregated.input_tokens),
-                Some(outcome.aggregated.output_tokens),
-                outcome.aggregated.cache_read_input_tokens,
-                outcome.aggregated.cache_creation_input_tokens,
-                &state,
-            );
-            let body = format!("data: {}\n\ndata: [DONE]\n\n", response);
-            return Response::builder()
-                .status(StatusCode::OK)
-                .header(
-                    header::CONTENT_TYPE,
-                    HeaderValue::from_static("text/event-stream"),
-                )
-                .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
-                .header(header::CONNECTION, HeaderValue::from_static("keep-alive"))
-                .body(Body::from(body))
-                .unwrap_or_else(|_| Response::new(Body::empty()));
-        }
-
-        let response = match format {
-            ResponseFormat::Anthropic => build_anthropic_response(
-                &request.model,
-                &outcome.aggregated,
-                &outcome.server_tool_calls,
-            ),
-            ResponseFormat::Responses => build_responses_response_with_ids(
-                &request.model,
-                &outcome.aggregated,
-                &outcome.server_tool_calls,
-                &response_id,
-                &message_id,
-                created_at,
-                request.previous_response_id.as_deref(),
-            ),
-            ResponseFormat::OpenAI => {
-                serde_json::to_value(stream::build_openai_response(
-                    &request.model,
-                    &outcome.aggregated,
-                ))
-                .unwrap_or_else(|_| json!({}))
-            }
-        };
-        let response_body = serialize_logged_value(&response);
-        if matches!(format, ResponseFormat::Responses) {
-            persist_responses_session_entry(
-                &state,
-                &response_id,
-                request.messages.clone(),
-                request.tools.clone(),
-                request.tool_choice.clone(),
-                request.previous_response_id.clone(),
-                &outcome.aggregated,
-            )
-            .await;
-        }
-        write_request_log(
-            &upstream_log_context,
-            StatusCode::OK,
-            "success",
-            None,
-            None, // error_type
-            Some(response_body.as_str()),
-            Some(outcome.aggregated.input_tokens),
-            Some(outcome.aggregated.output_tokens),
-            outcome.aggregated.cache_read_input_tokens,
-            outcome.aggregated.cache_creation_input_tokens,
-            &state,
-        );
-        return Json(response).into_response();
-    }
-
     // 获取账号可用模型列表（用于模型降级）
     let available_models = match get_available_models_for_upstream(&upstream).await {
         Ok(models) => {
@@ -1943,7 +1812,6 @@ pub async fn proxy_handler(
             request.tools.clone(),
             request.tool_choice.clone(),
             request.previous_response_id.clone(),
-            Vec::new(),
             static_log_context,
         );
     }
@@ -2124,11 +1992,10 @@ pub async fn proxy_handler(
     }
 
     let response = match format {
-        ResponseFormat::Anthropic => build_anthropic_response(&request.model, &aggregated, &[]),
+        ResponseFormat::Anthropic => build_anthropic_response(&request.model, &aggregated),
         ResponseFormat::Responses => build_responses_response_with_ids(
             &request.model,
             &aggregated,
-            &[],
             &response_id,
             &message_id,
             created_at,
@@ -2186,431 +2053,6 @@ pub async fn proxy_handler(
         &state,
     );
     Json(response).into_response()
-}
-
-pub async fn mcp_proxy_handler(
-    state: RouterState,
-    client_addr: SocketAddr,
-    headers: HeaderMap,
-    payload: Value,
-) -> Response {
-    let request_index = state
-        .request_count
-        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let started_at = Instant::now();
-    let raw_request_body = payload.to_string();
-    let model_hint = extract_model_from_payload(&raw_request_body);
-    let base_log_context = RequestLogContext {
-        request_index,
-        endpoint: "mcp",
-        client_addr,
-        request: None,
-        upstream: None,
-        started_at,
-        request_body: Some(raw_request_body.as_str()),
-        model_hint,
-        is_stream: None,
-    };
-
-    if state.config.local_only && !client_addr.ip().is_loopback() {
-        let message = format!("已拒绝来自非本机地址的 MCP 访问: {}", client_addr.ip());
-        return gateway_error_with_log(
-            &state,
-            ResponseFormat::Responses,
-            &base_log_context,
-            GatewayErrorDetails {
-                status: StatusCode::FORBIDDEN,
-                error_type: "permission_error",
-                message: &message,
-                response_body: None,
-            },
-        )
-        .await;
-    }
-    if !state.config.local_only
-        && !state.config.allowed_ips.is_empty()
-        && !ip_matches_allowlist(client_addr.ip(), &state.config.allowed_ips)
-    {
-        let message = format!("MCP 访问地址 {} 不在反代白名单中", client_addr.ip());
-        return gateway_error_with_log(
-            &state,
-            ResponseFormat::Responses,
-            &base_log_context,
-            GatewayErrorDetails {
-                status: StatusCode::FORBIDDEN,
-                error_type: "permission_error",
-                message: &message,
-                response_body: None,
-            },
-        )
-        .await;
-    }
-    if let Err(message) = verify_client_auth(&headers, &state.config) {
-        let sanitized = sanitize_error(&message);
-        return gateway_error_with_log(
-            &state,
-            ResponseFormat::Responses,
-            &base_log_context,
-            GatewayErrorDetails {
-                status: StatusCode::UNAUTHORIZED,
-                error_type: "authentication_error",
-                message: &sanitized,
-                response_body: None,
-            },
-        )
-        .await;
-    }
-
-    let upstream = match resolve_upstream_credentials(&state.config, &state).await {
-        Ok(creds) => creds,
-        Err(message) => {
-            let sanitized = sanitize_error(&message);
-            return gateway_error_with_log(
-                &state,
-                ResponseFormat::Responses,
-                &base_log_context,
-                GatewayErrorDetails {
-                    status: StatusCode::UNAUTHORIZED,
-                    error_type: "authentication_error",
-                    message: &sanitized,
-                    response_body: None,
-                },
-            )
-            .await;
-        }
-    };
-    let upstream_log_context = RequestLogContext {
-        upstream: Some(&upstream),
-        ..base_log_context.clone()
-    };
-
-    let upstream_url = format!("{}/mcp", build_q_service_url(&upstream.region));
-
-    let upstream_resp = match with_kiro_upstream_headers(
-        state.http.post(upstream_url),
-        &upstream,
-        "application/json",
-        false,
-        false,
-        true,
-    )
-    .json(&payload)
-    .send()
-    .await
-    {
-        Ok(resp) => resp,
-        Err(error) => {
-            let message = sanitize_error(&format!("MCP 上游请求失败: {error}"));
-            return gateway_error_with_log(
-                &state,
-                ResponseFormat::Responses,
-                &upstream_log_context,
-                GatewayErrorDetails {
-                    status: StatusCode::BAD_GATEWAY,
-                    error_type: "api_error",
-                    message: &message,
-                    response_body: None,
-                },
-            )
-            .await;
-        }
-    };
-
-    let status = upstream_resp.status();
-    let content_type = upstream_resp.headers().get(header::CONTENT_TYPE).cloned();
-    let body = match upstream_resp.bytes().await {
-        Ok(body) => body,
-        Err(error) => {
-            let message = sanitize_error(&format!("读取 MCP 上游响应失败: {error}"));
-            return gateway_error_with_log(
-                &state,
-                ResponseFormat::Responses,
-                &upstream_log_context,
-                GatewayErrorDetails {
-                    status: StatusCode::BAD_GATEWAY,
-                    error_type: "api_error",
-                    message: &message,
-                    response_body: None,
-                },
-            )
-            .await;
-        }
-    };
-
-    // 记录完整的 MCP 响应
-    let logged_response_body = String::from_utf8_lossy(&body).to_string();
-    log::info!("=== MCP API 响应 (Responses 格式) ===");
-    log::info!("Status: {}", status);
-    log::info!("Body:\n{}", logged_response_body);
-    log::info!("======================================");
-
-    if !status.is_success() {
-        let body_text = String::from_utf8_lossy(&body).to_string();
-        let (mapped_status, error_type, message) = map_upstream_error(status, &body_text);
-        return gateway_error_with_log(
-            &state,
-            ResponseFormat::Responses,
-            &upstream_log_context,
-            GatewayErrorDetails {
-                status: mapped_status,
-                error_type,
-                message: &message,
-                response_body: Some(body_text.as_str()),
-            },
-        )
-        .await;
-    }
-
-    let mut builder = Response::builder().status(status);
-    if let Some(value) = content_type {
-        builder = builder.header(header::CONTENT_TYPE, value);
-    } else {
-        builder = builder.header(
-            header::CONTENT_TYPE,
-            HeaderValue::from_static("application/json"),
-        );
-    }
-
-    // 移除重复的日志记录（已在前面记录过）
-
-    let logged_response_body = String::from_utf8_lossy(&body).to_string();
-    write_request_log(
-        &upstream_log_context,
-        status,
-        if status.is_success() { "success" } else { "error" },
-        if status.is_success() { None } else { Some(logged_response_body.as_str()) },
-        None, // error_type
-        Some(logged_response_body.as_str()),
-        None, // input_tokens
-        None, // output_tokens
-        None, // cache_read_input_tokens
-        None, // cache_creation_input_tokens
-        &state,
-    );
-    builder.body(Body::from(body)).unwrap_or_else(|error| {
-        gateway_error_response(
-            ResponseFormat::Responses,
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "api_error",
-            &format!("构建 MCP 响应失败: {error}"),
-        )
-    })
-}
-
-async fn execute_request_with_server_tools(
-    state: &RouterState,
-    upstream: &UpstreamCredentials,
-    request: &NormalizedRequest,
-    request_index: usize,
-) -> Result<ProxyExecutionOutcome, (StatusCode, &'static str, String)> {
-    let mut working_request = request.clone();
-    let web_search_options = request
-        .tools
-        .as_ref()
-        .and_then(|tools| {
-            tools
-                .iter()
-                .find(|tool| tool.tool_type.starts_with("web_search_"))
-        })
-        .and_then(|tool| tool.web_search.clone());
-    let _max_uses = server_web_search_iteration_limit(
-        web_search_options
-            .as_ref()
-            .and_then(|options| options.max_uses),
-    );
-    let mut server_tool_calls = Vec::new();
-
-    // 获取账号可用模型列表（用于模型降级）
-    let available_models = match get_available_models_for_upstream(upstream).await {
-        Ok(models) => {
-            log::debug!(
-                "[Gateway] 账号 {} 可用模型: {:?}",
-                upstream.source_label,
-                models
-            );
-            Some(models)
-        }
-        Err(e) => {
-            log::warn!(
-                "[Gateway] 无法获取账号 {} 的可用模型列表: {}，将不进行模型降级",
-                upstream.source_label,
-                e
-            );
-            None
-        }
-    };
-
-    for _ in 0.._max_uses {
-        let upstream_payload = build_kiro_payload(
-            &state.http,
-            &working_request,
-            upstream.profile_arn.clone(),
-            available_models.as_deref(),
-        )
-        .await
-        .map_err(|message| {
-            (
-                StatusCode::BAD_REQUEST,
-                "invalid_request_error",
-                        sanitize_error(&message),
-                    )
-                })?;
-        let upstream_resp = send_generate_request(&state.http, upstream, &upstream_payload, request_index)
-            .await
-            .map_err(|(status, error_type, message, _)| (status, error_type, message))?;
-
-        // 解码 EventStream 响应
-        let raw_bytes = upstream_resp.bytes().await.map_err(|error| {
-            (
-                StatusCode::BAD_GATEWAY,
-                "api_error",
-                sanitize_error(&format!("读取上游响应失败: {error}")),
-            )
-        })?;
-
-        log::info!(
-            "[网络搜索响应] 原始字节大小: {} 字节",
-            raw_bytes.len()
-        );
-
-        let mut buffer = raw_bytes.to_vec();
-        let mut json_payloads = Vec::new();
-        let mut message_count = 0;
-
-        loop {
-            match decode_message(&buffer) {
-                Ok(Some((msg, consumed_bytes))) => {
-                    message_count += 1;
-                    let message_type = msg.headers.get(":message-type").map(String::as_str);
-
-                    log::info!(
-                        "[网络搜索响应] 消息 #{}: type={:?}, payload_size={} 字节",
-                        message_count,
-                        message_type,
-                        msg.payload.len()
-                    );
-
-                    if matches!(message_type, Some("error") | Some("exception")) {
-                        let error_text = String::from_utf8_lossy(&msg.payload);
-                        log::error!("EventStream 上游错误 (web_search): {}", error_text);
-                        return Err((
-                            StatusCode::BAD_GATEWAY,
-                            "api_error",
-                            sanitize_error(&error_text),
-                        ));
-                    }
-
-                    if matches!(message_type, Some("event")) {
-                        let json_text = String::from_utf8_lossy(&msg.payload);
-                        log::info!(
-                            "[网络搜索响应] Event payload 预览: {}",
-                            json_text.chars().take(200).collect::<String>()
-                        );
-                        json_payloads.push(json_text.to_string());
-                    }
-
-                    buffer.drain(..consumed_bytes);
-                }
-                Ok(None) => {
-                    log::info!("[网络搜索响应] EventStream 解码完成");
-                    break;
-                }
-                Err(e) => {
-                    log::error!("EventStream 解码失败 (web_search): {}", e);
-                    break;
-                }
-            }
-        }
-
-        let body = json_payloads.join("");
-        log::info!(
-            "[网络搜索响应] 解码了 {} 条消息, body 长度: {} 字符",
-            json_payloads.len(),
-            body.len()
-        );
-
-        let mut aggregated = stream::aggregate_kiro_response_from_payloads(&json_payloads);
-
-        // 直接使用本地估算 token（不依赖响应中的 token 信息）
-        log::info!("[网络搜索响应] 使用本地 token 估算");
-
-        // 估算输入 tokens（从请求消息中）
-        let request_text = serde_json::to_string(&working_request.messages).unwrap_or_default();
-        aggregated.input_tokens = super::token_estimator::estimate_tokens(&request_text, &working_request.model);
-
-        // 估算输出 tokens（从响应文本中）
-        let response_text = format!("{}{}", aggregated.text, aggregated.thinking);
-        aggregated.output_tokens = super::token_estimator::estimate_tokens(&response_text, &working_request.model);
-
-        log::info!(
-            "[网络搜索响应] 估算的 tokens: input={}, output={} (model={})",
-            aggregated.input_tokens,
-            aggregated.output_tokens,
-            working_request.model
-        );
-
-        let web_search_calls: Vec<(String, String, String)> = aggregated
-            .tool_calls
-            .iter()
-            .filter(|(_, name, _)| name == "web_search")
-            .cloned()
-            .collect();
-
-        if web_search_calls.is_empty() {
-            return Ok(ProxyExecutionOutcome {
-                aggregated,
-                server_tool_calls,
-            });
-        }
-
-        working_request
-            .messages
-            .push(normalized_assistant_message_from_aggregated(&aggregated));
-
-        let mut tool_result_blocks = Vec::new();
-        for (id, name, arguments) in web_search_calls {
-            let input =
-                serde_json::from_str(&arguments).unwrap_or_else(|_| json!({ "query": arguments }));
-            let mcp_arguments = build_web_search_mcp_arguments(&input);
-            let mcp_result = call_mcp_tool(&state.http, upstream, &name, mcp_arguments).await?;
-            let (result_content, tool_result_text) =
-                parse_web_search_mcp_result(&mcp_result, web_search_options.as_ref());
-
-            server_tool_calls.push(ServerToolCall {
-                id: id.clone(),
-                name,
-                input: input.clone(),
-                result_content: result_content.clone(),
-                tool_result_text,
-            });
-            tool_result_blocks.push(json!({
-                "type": "web_search_tool_result",
-                "tool_use_id": id,
-                "content": result_content
-            }));
-        }
-
-        working_request.messages.push(NormalizedMessage {
-            role: "user".to_string(),
-            content: Some(Value::Array(tool_result_blocks)),
-            tool_calls: None,
-            tool_call_id: None,
-            metadata: None,
-        });
-    }
-
-    Err((
-        StatusCode::BAD_GATEWAY,
-        "api_error",
-        "web_search 代理循环超过最大轮数".to_string(),
-    ))
-}
-
-fn server_web_search_iteration_limit(max_uses: Option<i32>) -> usize {
-    max_uses
-        .unwrap_or(MAX_SERVER_WEB_SEARCH_ITERATIONS as i32)
-        .max(0)
-        .min(MAX_SERVER_WEB_SEARCH_ITERATIONS as i32) as usize
 }
 
 async fn send_generate_request<T: serde::Serialize + ?Sized>(
@@ -2762,254 +2204,6 @@ fn with_kiro_upstream_headers(
     }
 
     builder
-}
-
-async fn call_mcp_tool(
-    http: &Client,
-    upstream: &UpstreamCredentials,
-    tool_name: &str,
-    arguments: Value,
-) -> Result<Value, (StatusCode, &'static str, String)> {
-    let upstream_url = format!("{}/mcp", build_q_service_url(&upstream.region));
-    let payload = json!({
-        "jsonrpc": "2.0",
-        "id": short_uuid(),
-        "method": "tools/call",
-        "params": {
-            "name": tool_name,
-            "arguments": arguments
-        }
-    });
-
-    let response = with_kiro_upstream_headers(
-        http.post(upstream_url),
-        upstream,
-        "application/json",
-        false,
-        false,
-        true,
-    )
-    .json(&payload)
-    .send()
-    .await
-    .map_err(|error| {
-        log::error!("[MCP] 上游请求失败: {}", error);
-        (
-            StatusCode::BAD_GATEWAY,
-            "api_error",
-            sanitize_error(&format!("MCP 上游请求失败: {error}")),
-        )
-    })?;
-
-    let status = response.status();
-    let body = response.text().await.map_err(|error| {
-        log::error!("[MCP] 读取上游响应失败: {}", error);
-        (
-            StatusCode::BAD_GATEWAY,
-            "api_error",
-            sanitize_error(&format!("读取 MCP 上游响应失败: {error}")),
-        )
-    })?;
-
-    // 记录完整的 MCP 响应
-    log::info!("=== MCP API 响应 ===");
-    log::info!("Status: {}", status);
-    log::info!("Body:\n{}", body);
-    log::info!("====================");
-
-    if !status.is_success() {
-        let (mapped_status, error_type, message) = map_upstream_error(status, &body);
-        log::error!("[MCP] 工具调用失败: status={}, error_type={}, message={}", mapped_status, error_type, message);
-        return Err((mapped_status, error_type, message));
-    }
-
-    let value: Value = serde_json::from_str(&body)
-        .unwrap_or_else(|_| json!({ "result": { "content": [{ "type": "text", "text": body }] } }));
-    if let Some(error) = value.get("error") {
-        if !error.is_null() {
-            let message = error
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or("MCP 工具调用失败")
-                .to_string();
-            log::error!("[MCP] 工具调用返回错误: {}", message);
-            return Err((
-                StatusCode::BAD_GATEWAY,
-                "api_error",
-                sanitize_error(&message),
-            ));
-        }
-    }
-
-    Ok(value.get("result").cloned().unwrap_or(value))
-}
-
-fn has_server_web_search_tool(request: &NormalizedRequest) -> bool {
-    request
-        .tools
-        .as_ref()
-        .map(|tools| {
-            tools
-                .iter()
-                .any(|tool| tool.tool_type.starts_with("web_search_"))
-        })
-        .unwrap_or(false)
-}
-
-fn normalized_assistant_message_from_aggregated(
-    aggregated: &stream::AggregatedKiroResponse,
-) -> NormalizedMessage {
-    NormalizedMessage {
-        role: "assistant".to_string(),
-        content: if aggregated.text.is_empty() {
-            None
-        } else {
-            Some(Value::String(aggregated.text.clone()))
-        },
-        tool_calls: if aggregated.tool_calls.is_empty() {
-            None
-        } else {
-            Some(
-                aggregated
-                    .tool_calls
-                    .iter()
-                    .map(|(id, name, arguments)| ToolCall {
-                        id: id.clone(),
-                        call_type: "function".to_string(),
-                        function: ToolCallFunction {
-                            name: name.clone(),
-                            arguments: if arguments.is_empty() { "{}".to_string() } else { arguments.clone() },
-                        },
-                    })
-                    .collect(),
-            )
-        },
-        tool_call_id: None,
-        metadata: if aggregated.thinking.is_empty() {
-            None
-        } else {
-            let mut reasoning_text = json!({
-                "text": aggregated.thinking
-            });
-            if let Some(sig) = &aggregated.thinking_signature {
-                reasoning_text.as_object_mut().unwrap().insert(
-                    "signature".to_string(),
-                    json!(sig),
-                );
-            }
-            Some(json!({
-                "reasoningContent": {
-                    "reasoningText": reasoning_text
-                }
-            }))
-        },
-    }
-}
-
-fn build_web_search_mcp_arguments(input: &Value) -> Value {
-    let query = input
-        .get("query")
-        .and_then(Value::as_str)
-        .or_else(|| input.get("search_query").and_then(Value::as_str))
-        .unwrap_or_default()
-        .to_string();
-    json!({ "query": query })
-}
-
-fn parse_web_search_mcp_result(
-    result: &Value,
-    options: Option<&WebSearchToolOptions>,
-) -> (Value, String) {
-    let text = result
-        .get("content")
-        .and_then(Value::as_array)
-        .and_then(|items| {
-            items.iter().find_map(|item| {
-                if item.get("type").and_then(Value::as_str) == Some("text") {
-                    item.get("text").and_then(Value::as_str).map(str::to_string)
-                } else {
-                    None
-                }
-            })
-        })
-        .unwrap_or_else(|| result.to_string());
-
-    let filtered_results = serde_json::from_str::<Value>(&text)
-        .ok()
-        .and_then(|value| value.get("results").and_then(Value::as_array).cloned())
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|item| domain_matches_filters(item, options))
-        .map(normalize_anthropic_web_search_result)
-        .collect::<Vec<_>>();
-
-    let tool_result_text = if filtered_results.is_empty() {
-        text
-    } else {
-        json!({ "results": filtered_results.clone() }).to_string()
-    };
-
-    (Value::Array(filtered_results), tool_result_text)
-}
-
-fn domain_matches_filters(item: &Value, options: Option<&WebSearchToolOptions>) -> bool {
-    let Some(options) = options else {
-        return true;
-    };
-    let domain = item
-        .get("url")
-        .and_then(Value::as_str)
-        .and_then(extract_domain_from_url);
-    let Some(domain) = domain else {
-        return true;
-    };
-
-    if let Some(allowed) = options
-        .allowed_domains
-        .as_ref()
-        .filter(|items| !items.is_empty())
-    {
-        if !allowed
-            .iter()
-            .any(|entry| domain_matches_rule(&domain, entry))
-        {
-            return false;
-        }
-    }
-    if let Some(blocked) = options.blocked_domains.as_ref() {
-        if blocked
-            .iter()
-            .any(|entry| domain_matches_rule(&domain, entry))
-        {
-            return false;
-        }
-    }
-    true
-}
-
-fn extract_domain_from_url(url: &str) -> Option<String> {
-    Url::parse(url)
-        .ok()?
-        .host_str()
-        .map(|host| host.trim_start_matches("www.").to_ascii_lowercase())
-}
-
-fn domain_matches_rule(domain: &str, rule: &str) -> bool {
-    let normalized = rule.trim().trim_start_matches("www.").to_ascii_lowercase();
-    domain == normalized || domain.ends_with(&format!(".{normalized}"))
-}
-
-fn normalize_anthropic_web_search_result(item: Value) -> Value {
-    match item {
-        Value::Object(mut map) => {
-            map.insert(
-                "type".to_string(),
-                Value::String("web_search_result".to_string()),
-            );
-            Value::Object(map)
-        }
-        other => other,
-    }
 }
 
 fn ip_matches_allowlist(ip: IpAddr, allowlist: &[String]) -> bool {
@@ -3499,7 +2693,6 @@ fn build_anthropic_citation_delta_event(
 
 fn build_anthropic_content_blocks(
     aggregated: &stream::AggregatedKiroResponse,
-    server_tool_calls: &[ServerToolCall],
 ) -> Vec<AnthropicContentBlock> {
     let mut content = Vec::new();
     if !aggregated.thinking.is_empty() {
@@ -3512,30 +2705,6 @@ fn build_anthropic_content_blocks(
             input: None,
             tool_use_id: None,
             content: None,
-            citations: None,
-        });
-    }
-    for call in server_tool_calls {
-        content.push(AnthropicContentBlock {
-            block_type: "server_tool_use".to_string(),
-            text: None,
-            thinking: None,
-            id: Some(call.id.clone()),
-            name: Some(call.name.clone()),
-            input: Some(call.input.clone()),
-            tool_use_id: None,
-            content: None,
-            citations: None,
-        });
-        content.push(AnthropicContentBlock {
-            block_type: "web_search_tool_result".to_string(),
-            text: None,
-            thinking: None,
-            id: None,
-            name: None,
-            input: None,
-            tool_use_id: Some(call.id.clone()),
-            content: Some(call.result_content.clone()),
             citations: None,
         });
     }
@@ -3571,9 +2740,8 @@ fn build_anthropic_content_blocks(
 fn build_anthropic_response(
     model: &str,
     aggregated: &stream::AggregatedKiroResponse,
-    server_tool_calls: &[ServerToolCall],
 ) -> Value {
-    let content = build_anthropic_content_blocks(aggregated, server_tool_calls);
+    let content = build_anthropic_content_blocks(aggregated);
     serde_json::to_value(AnthropicMessagesResponse {
         id: format!("msg_{}", short_uuid()),
         response_type: "message".to_string(),
@@ -3591,7 +2759,6 @@ fn build_anthropic_response(
             output_tokens: aggregated.output_tokens,
             cache_creation_input_tokens: aggregated.cache_creation_input_tokens,
             cache_read_input_tokens: aggregated.cache_read_input_tokens,
-            server_tool_use: None,
         },
     })
     .unwrap_or_else(|_| json!({}))
@@ -3642,129 +2809,19 @@ fn build_responses_annotation_added_event(
     })
 }
 
-fn extract_web_search_sources(server_tool_calls: &[ServerToolCall]) -> Vec<WebSearchSource> {
-    let mut seen = HashSet::new();
-    let mut sources = Vec::new();
-
-    for call in server_tool_calls
-        .iter()
-        .filter(|call| call.name == "web_search")
-    {
-        let Some(results) = call.result_content.as_array() else {
-            continue;
-        };
-
-        for item in results {
-            let Some(url) = item
-                .get("url")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            else {
-                continue;
-            };
-
-            if !seen.insert(url.to_string()) {
-                continue;
-            }
-
-            let title = item
-                .get("title")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .unwrap_or(url)
-                .to_string();
-
-            sources.push(WebSearchSource {
-                title,
-                url: url.to_string(),
-            });
-        }
-    }
-
-    sources
-}
-
 fn build_responses_output_text(
     aggregated: &stream::AggregatedKiroResponse,
-    server_tool_calls: &[ServerToolCall],
 ) -> ResponsesOutputText {
-    let mut text = aggregated.text.clone();
-    let mut annotations = build_responses_citation_annotations(&aggregated.citations);
-    let sources = extract_web_search_sources(server_tool_calls);
-
-    if !sources.is_empty() {
-        if !text.is_empty() {
-            text.push_str("\n\n");
-        }
-        text.push_str("Sources:\n");
-
-        for (index, source) in sources.iter().enumerate() {
-            let prefix = format!("[{}] ", index + 1);
-            let start_index = text.chars().count() + prefix.chars().count();
-            text.push_str(&prefix);
-            text.push_str(&source.title);
-            let end_index = start_index + source.title.chars().count();
-            annotations.push(json!({
-                "type": "url_citation",
-                "start_index": start_index,
-                "end_index": end_index,
-                "url": source.url,
-                "title": source.title
-            }));
-            text.push('\n');
-        }
-
-        text.pop();
-    }
+    let text = aggregated.text.clone();
+    let annotations = build_responses_citation_annotations(&aggregated.citations);
 
     ResponsesOutputText { text, annotations }
 }
 
-fn build_responses_web_search_call(call: &ServerToolCall) -> Value {
-    let mut action = json!({
-        "type": "search"
-    });
-    if let Some(query) = call
-        .input
-        .get("query")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        action["query"] = Value::String(query.to_string());
-    }
-
-    let sources = extract_web_search_sources(std::slice::from_ref(call));
-    if !sources.is_empty() {
-        action["sources"] = Value::Array(
-            sources
-                .into_iter()
-                .map(|source| {
-                    json!({
-                        "type": "source",
-                        "url": source.url,
-                        "title": source.title
-                    })
-                })
-                .collect(),
-        );
-    }
-
-    json!({
-        "id": call.id,
-        "type": "web_search_call",
-        "status": "completed",
-        "action": action
-    })
-}
-
 fn build_responses_message_content(
     aggregated: &stream::AggregatedKiroResponse,
-    server_tool_calls: &[ServerToolCall],
 ) -> Vec<Value> {
-    let output_text = build_responses_output_text(aggregated, server_tool_calls);
+    let output_text = build_responses_output_text(aggregated);
     let mut content = Vec::new();
     if !output_text.text.is_empty() {
         content.push(json!({
@@ -3794,13 +2851,11 @@ fn build_responses_message_content(
 fn build_responses_response(
     model: &str,
     aggregated: &stream::AggregatedKiroResponse,
-    server_tool_calls: &[ServerToolCall],
     previous_response_id: Option<&str>,
 ) -> Value {
     build_responses_response_with_ids(
         model,
         aggregated,
-        server_tool_calls,
         &format!("resp_{}", short_uuid()),
         &format!("msg_{}", short_uuid()),
         chrono::Utc::now().timestamp(),
@@ -3811,26 +2866,20 @@ fn build_responses_response(
 fn build_responses_response_with_ids(
     model: &str,
     aggregated: &stream::AggregatedKiroResponse,
-    server_tool_calls: &[ServerToolCall],
     response_id: &str,
     message_id: &str,
     created_at: i64,
     previous_response_id: Option<&str>,
 ) -> Value {
-    let output_text = build_responses_output_text(aggregated, server_tool_calls);
-    let content = build_responses_message_content(aggregated, server_tool_calls);
+    let output_text = build_responses_output_text(aggregated);
+    let content = build_responses_message_content(aggregated);
 
-    let mut output: Vec<Value> = server_tool_calls
-        .iter()
-        .filter(|call| call.name == "web_search")
-        .map(build_responses_web_search_call)
-        .collect();
-    output.push(json!({
+    let output = vec![json!({
         "id": message_id,
         "type": "message",
         "role": "assistant",
         "content": content
-    }));
+    })];
 
     json!({
         "id": response_id,
@@ -3854,7 +2903,6 @@ fn build_responses_response_with_ids(
 fn build_stream_responses_completed_event(
     model: &str,
     aggregated: &stream::AggregatedKiroResponse,
-    server_tool_calls: &[ServerToolCall],
     response_id: &str,
     message_id: &str,
     created_at: i64,
@@ -3865,7 +2913,6 @@ fn build_stream_responses_completed_event(
         "response": build_responses_response_with_ids(
             model,
             aggregated,
-            server_tool_calls,
             response_id,
             message_id,
             created_at,
@@ -4094,7 +3141,6 @@ fn stream_proxy_response(
     request_tools: Option<Vec<Tool>>,
     request_tool_choice: Option<Value>,
     previous_response_id: Option<String>,
-    server_tool_calls: Vec<ServerToolCall>,
     log_context: RequestLogContext<'static>,
 ) -> Response {
     let (tx, rx) = mpsc::channel::<Result<Bytes, Infallible>>(2048);
@@ -4880,7 +3926,7 @@ fn stream_proxy_response(
                 send_event(&tx, Some("message_stop"), "{\"type\":\"message_stop\"}").await;
             }
             ResponseFormat::Responses => {
-                let output_text = build_responses_output_text(&aggregated, &server_tool_calls);
+                let output_text = build_responses_output_text(&aggregated);
                 if !output_text.text.is_empty() {
                     let text_done = build_stream_responses_output_text_done_event(
                         &response_id,
@@ -4895,7 +3941,7 @@ fn stream_proxy_response(
                     );
                     send_data(&tx, &reasoning_done.to_string()).await;
                 }
-                let content = build_responses_message_content(&aggregated, &server_tool_calls);
+                let content = build_responses_message_content(&aggregated);
                 let output_item_done = json!({
                     "type": "response.output_item.done",
                     "response_id": response_id,
@@ -4913,7 +3959,6 @@ fn stream_proxy_response(
                 let completed = build_stream_responses_completed_event(
                     &model,
                     &aggregated,
-                    &server_tool_calls,
                     &response_id,
                     &message_id,
                     created_at,
@@ -4978,14 +4023,12 @@ fn stream_proxy_response(
                     serde_json::to_string(&build_anthropic_response(
                         &model,
                         &aggregated,
-                        &server_tool_calls,
                     )).unwrap_or_default()
                 }
                 ResponseFormat::Responses => {
                     serde_json::to_string(&build_responses_response_with_ids(
                         &model,
                         &aggregated,
-                        &server_tool_calls,
                         &response_id,
                         &message_id,
                         created_at,
@@ -5770,46 +4813,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_web_search_mcp_result_preserves_results_and_filters_domains() {
-        let result = json!({
-            "content": [{
-                "type": "text",
-                "text": "{\"results\":[{\"title\":\"Rust Blog\",\"url\":\"https://blog.rust-lang.org/inside-rust\"},{\"title\":\"Other\",\"url\":\"https://example.com/post\"}]}"
-            }],
-            "isError": false
-        });
-        let options = WebSearchToolOptions {
-            max_uses: Some(3),
-            allowed_domains: Some(vec!["blog.rust-lang.org".to_string()]),
-            blocked_domains: Some(vec!["example.com".to_string()]),
-            user_location: None,
-        };
-
-        let (content, tool_result_text) = parse_web_search_mcp_result(&result, Some(&options));
-
-        assert_eq!(
-            content,
-            json!([{
-                "type": "web_search_result",
-                "title": "Rust Blog",
-                "url": "https://blog.rust-lang.org/inside-rust"
-            }])
-        );
-        assert!(tool_result_text.contains("blog.rust-lang.org"));
-        assert!(!tool_result_text.contains("example.com"));
-    }
-
-    #[test]
-    fn server_web_search_iteration_limit_uses_max_uses() {
-        assert_eq!(server_web_search_iteration_limit(None), 8);
-        assert_eq!(server_web_search_iteration_limit(Some(1)), 1);
-        assert_eq!(server_web_search_iteration_limit(Some(3)), 3);
-        assert_eq!(server_web_search_iteration_limit(Some(99)), 8);
-        assert_eq!(server_web_search_iteration_limit(Some(0)), 0);
-        assert_eq!(server_web_search_iteration_limit(Some(-5)), 0);
-    }
-
-    #[test]
     fn detect_upstream_error_body_maps_success_status_error_payloads() {
         let error = detect_upstream_error_body(
             r#"{"error":{"message":"Invalid model. Please select a different model to continue.","type":"invalid_request_error"}}"#,
@@ -5819,106 +4822,6 @@ mod tests {
         assert_eq!(error.0, StatusCode::BAD_REQUEST);
         assert_eq!(error.1, "invalid_request_error");
         assert!(error.2.contains("Invalid model"));
-    }
-
-    #[test]
-    fn build_anthropic_response_emits_server_tool_blocks() {
-        let aggregated = stream::AggregatedKiroResponse {
-            text: "我查到了结果".to_string(),
-            thinking: String::new(),
-            tool_calls: Vec::new(),
-            input_tokens: 10,
-            output_tokens: 20,
-            context_usage_percentage: None,
-            citations: Vec::new(),
-            cache_read_input_tokens: None,
-            cache_creation_input_tokens: None,
-            metering_usage: None,
-        };
-        let response = build_anthropic_response(
-            "claude-sonnet-4-5",
-            &aggregated,
-            &[ServerToolCall {
-                id: "srv_1".to_string(),
-                name: "web_search".to_string(),
-                input: json!({ "query": "Rust release" }),
-                result_content: json!([{
-                    "type": "web_search_result",
-                    "title": "Rust Blog",
-                    "url": "https://blog.rust-lang.org"
-                }]),
-                tool_result_text: "{\"results\":[]}".to_string(),
-            }],
-        );
-
-        assert_eq!(response["content"][0]["type"], "server_tool_use");
-        assert_eq!(response["content"][1]["type"], "web_search_tool_result");
-        assert_eq!(response["content"][2]["type"], "text");
-        assert_eq!(response["content"][1]["tool_use_id"], "srv_1");
-    }
-
-    #[test]
-    fn build_responses_response_emits_web_search_call_and_url_citations() {
-        let aggregated = stream::AggregatedKiroResponse {
-            text: "我查到了 Rust 发布记录。".to_string(),
-            thinking: String::new(),
-            tool_calls: Vec::new(),
-            input_tokens: 12,
-            output_tokens: 24,
-            context_usage_percentage: None,
-            citations: Vec::new(),
-            cache_read_input_tokens: None,
-            cache_creation_input_tokens: None,
-            metering_usage: None,
-        };
-        let response = build_responses_response_with_ids(
-            "gpt-4.1",
-            &aggregated,
-            &[ServerToolCall {
-                id: "srv_1".to_string(),
-                name: "web_search".to_string(),
-                input: json!({ "query": "Rust release" }),
-                result_content: json!([
-                    {
-                        "type": "web_search_result",
-                        "title": "Rust Blog",
-                        "url": "https://blog.rust-lang.org"
-                    },
-                    {
-                        "type": "web_search_result",
-                        "title": "Inside Rust",
-                        "url": "https://blog.rust-lang.org/inside-rust"
-                    }
-                ]),
-                tool_result_text: "{\"results\":[]}".to_string(),
-            }],
-            "resp_test",
-            "msg_test",
-            123,
-            Some("resp_prev_123"),
-        );
-
-        assert_eq!(response["previous_response_id"], "resp_prev_123");
-        assert_eq!(response["output"][0]["type"], "web_search_call");
-        assert_eq!(response["output"][0]["action"]["query"], "Rust release");
-        assert_eq!(response["output"][1]["type"], "message");
-        assert_eq!(response["output"][1]["content"][0]["type"], "output_text");
-        assert_eq!(
-            response["output"][1]["content"][0]["annotations"][0]["type"],
-            "url_citation"
-        );
-        assert_eq!(
-            response["output"][1]["content"][0]["annotations"][0]["url"],
-            "https://blog.rust-lang.org"
-        );
-        assert_eq!(
-            response["output"][1]["content"][0]["annotations"][0]["title"],
-            "Rust Blog"
-        );
-        assert!(response["output_text"]
-            .as_str()
-            .expect("output_text should be present")
-            .contains("Sources:\n[1] Rust Blog"));
     }
 
     #[test]
@@ -6096,7 +4999,6 @@ mod tests {
         let event = build_stream_responses_completed_event(
             "gpt-4.1",
             &aggregated,
-            &[],
             "resp_test",
             "msg_test",
             123,
@@ -6118,46 +5020,6 @@ mod tests {
             event["response"]["output"][0]["content"][1]["call_id"],
             "call_1"
         );
-    }
-
-    #[test]
-    fn build_stream_responses_completed_event_keeps_server_web_search_output() {
-        let aggregated = stream::AggregatedKiroResponse {
-            text: "Hello Rust".to_string(),
-            thinking: String::new(),
-            tool_calls: Vec::new(),
-            input_tokens: 3,
-            output_tokens: 5,
-            context_usage_percentage: None,
-            citations: Vec::new(),
-            cache_read_input_tokens: None,
-            cache_creation_input_tokens: None,
-            metering_usage: None,
-        };
-
-        let event = build_stream_responses_completed_event(
-            "gpt-4.1",
-            &aggregated,
-            &[ServerToolCall {
-                id: "srv_1".to_string(),
-                name: "web_search".to_string(),
-                input: json!({ "query": "Rust release" }),
-                result_content: json!([{
-                    "type": "web_search_result",
-                    "title": "Rust Blog",
-                    "url": "https://blog.rust-lang.org"
-                }]),
-                tool_result_text: "{\"results\":[]}".to_string(),
-            }],
-            "resp_test",
-            "msg_test",
-            123,
-            None,
-        );
-
-        assert_eq!(event["response"]["output"][0]["type"], "web_search_call");
-        assert_eq!(event["response"]["output"][0]["action"]["query"], "Rust release");
-        assert_eq!(event["response"]["output"][1]["type"], "message");
     }
 
     #[test]
