@@ -10,7 +10,7 @@ use regex::Regex;
 
 use super::{GatewayConfig, PromptFilterRule};
 
-/// Claude Code 检测后的替换提示（保留 thinking_mode + 精简指令）
+/// Claude Code 检测后的替换提示（完整格式，包含边界标记和 thinking_mode）
 const CLAUDE_CODE_BACKEND_PROMPT: &str = "--- SYSTEM PROMPT ---\n\
 <thinking_mode>enabled</thinking_mode>\n\
 <max_thinking_length>200000</max_thinking_length>\n\n\
