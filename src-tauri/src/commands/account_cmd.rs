@@ -300,6 +300,12 @@ pub async fn sync_account(
             // 直接移动所有权，避免 clone
             a.usage_data = Some(usage_data.usage_data);
             a.status = calc_status(usage_data.is_banned, usage_data.is_auth_error);
+
+            // 封顶账号自动禁用
+            if crate::core::usage::is_usage_capped(a.usage_data.as_ref()) {
+                a.enabled = false;
+            }
+
             // 从 usage_data 中提取并更新 email 和 user_id
             if let Some(user_info) = a.usage_data.as_ref().and_then(|d| d.get("userInfo")) {
                 if let Some(email) = user_info.get("email").and_then(|v| v.as_str()) {
