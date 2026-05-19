@@ -506,16 +506,39 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                         checked={currentAccount.usageData?.overageConfiguration?.overageStatus === 'ENABLED'}
                         disabled={overageToggleLoading}
                         onCheckedChange={async (checked) => {
+                          // 1. 立即更新本地状态（乐观更新）
+                          setCurrentAccount(prev => ({
+                            ...prev,
+                            usageData: {
+                              ...prev.usageData,
+                              overageConfiguration: {
+                                ...prev.usageData?.overageConfiguration,
+                                overageStatus: checked ? 'ENABLED' : 'DISABLED'
+                              }
+                            }
+                          }))
+
                           setOverageToggleLoading(true)
                           try {
                             await invoke('set_overage_status', { id: currentAccount.id, enabled: checked })
-                            // 刷新账号信息并更新本地状态
+                            // 2. API 成功后，再次同步确保数据一致
                             const result = await invoke<{ account: Account; warning?: string }>('sync_account', { id: currentAccount.id })
                             if (result?.account) {
                               setCurrentAccount(result.account)
                             }
                             onRefresh?.()
                           } catch (e) {
+                            // 3. 失败时回滚状态
+                            setCurrentAccount(prev => ({
+                              ...prev,
+                              usageData: {
+                                ...prev.usageData,
+                                overageConfiguration: {
+                                  ...prev.usageData?.overageConfiguration,
+                                  overageStatus: !checked ? 'ENABLED' : 'DISABLED'
+                                }
+                              }
+                            }))
                             console.error('Failed to toggle overage:', e)
                             showError('超额开关切换失败', String(e))
                           } finally {

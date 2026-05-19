@@ -413,7 +413,7 @@ pub async fn check_ide_installation() -> IdeInstallationInfo {
             } else if !ide_exists {
                 Some("未检测到默认路径的 Kiro IDE 可执行文件。\n\n请检查 IDE 是否已安装，或在「设置」→「通用」中配置「自定义 Kiro IDE 安装路径」。".to_string())
             } else if !config_exists {
-                Some("未检测到 Kiro IDE 配置文件（~/.aws/sso/cache/kiro-auth-token.json）。\n\n请先在 Kiro IDE 中登录账号。".to_string())
+                Some("Kiro IDE 已安装，但尚未首次登录。\n\n请先在 Kiro IDE 中完成首次登录后再使用切换功能。".to_string())
             } else {
                 None
             }
@@ -439,20 +439,61 @@ pub async fn check_ide_installation() -> IdeInstallationInfo {
     })
 }
 
-/// 检查 Kiro IDE 配置文件是否存在
+/// 检查 Kiro IDE 配置文件是否存在且包含有效 token
 fn check_kiro_config_dir() -> bool {
     let home = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"));
-    
+
     if let Ok(home_dir) = home {
         let cache_dir = std::path::Path::new(&home_dir)
             .join(".aws")
             .join("sso")
             .join("cache");
-        
-        // 检查 kiro-auth-token.json 是否存在
+
         let token_file = cache_dir.join("kiro-auth-token.json");
-        token_file.exists()
+
+        // 1. 检查文件是否存在
+        if !token_file.exists() {
+            return false;
+        }
+
+        // 2. 读取并解析文件内容
+        if let Ok(content) = std::fs::read_to_string(&token_file) {
+            if let Ok(token_data) = serde_json::from_str::<KiroLocalToken>(&content) {
+                // 3. 验证必须有 access_token 和 refresh_token
+                if token_data.access_token.is_none() || token_data.refresh_token.is_none() {
+                    return false;
+                }
+
+                // 4. 验证必须有 auth_method
+                let auth_method = match token_data.auth_method.as_deref() {
+                    Some(method) => method,
+                    None => return false,
+                };
+
+                // 5. 验证必须有 provider
+                if token_data.provider.is_none() {
+                    return false;
+                }
+
+                // 6. 根据 auth_method 验证特定字段
+                match auth_method {
+                    "social" => {
+                        // Social 账号需要 profileArn
+                        token_data.profile_arn.is_some()
+                    }
+                    "IdC" => {
+                        // IdC 账号 (BuilderId/Enterprise) 需要 clientIdHash 和 region
+                        token_data.client_id_hash.is_some() && token_data.region.is_some()
+                    }
+                    _ => false, // 未知的 auth_method
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     } else {
         false
     }
@@ -508,7 +549,15 @@ pub async fn check_kiro_config_files(auth_method: String, client_id_hash: Option
 pub fn get_kiro_ide_paths() -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
 
-    // 1. 优先检查默认路径
+    // 1. 优先检查自定义路径（如果用户在设置中配置了）
+    if let Ok(settings) = crate::commands::app_settings_cmd::get_app_settings_inner() {
+        if let Some(custom_path) = settings.custom_kiro_path {
+            let path_buf = std::path::PathBuf::from(&custom_path);
+            paths.push(path_buf);
+        }
+    }
+
+    // 2. 如果没有自定义路径，检查默认路径
     if cfg!(target_os = "windows") {
         if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
             paths.push(
@@ -532,14 +581,6 @@ pub fn get_kiro_ide_paths() -> Vec<std::path::PathBuf> {
                     .join("bin")
                     .join("kiro"),
             );
-        }
-    }
-
-    // 2. 如果设置了自定义路径，添加为备选
-    if let Ok(settings) = crate::commands::app_settings_cmd::get_app_settings_inner() {
-        if let Some(custom_path) = settings.custom_kiro_path {
-            let path_buf = std::path::PathBuf::from(&custom_path);
-            paths.push(path_buf);
         }
     }
 

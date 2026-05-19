@@ -210,6 +210,7 @@
   "settings.customKiroPath": "自定义路径",
   "settings.useDefaultPath": "使用默认路径",
   "settings.kiroPathTip": "留空表示使用系统默认安装路径。点击「浏览」可选择自定义安装位置",
+  "settings.kiroPathSaved": "Kiro IDE 路径已保存",
   "settings.browse": "浏览",
   "settings.clear": "清除",
   "settings.usingDefaultPath": "使用默认路径",

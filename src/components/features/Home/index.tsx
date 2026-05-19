@@ -41,8 +41,22 @@ function Home({ onNavigate }: HomeProps) {
   
   const [refreshingAccount, setRefreshingAccount] = useState(false)
   const [mcpToolCount, setMcpToolCount] = useState(0)
+  const [ideInstallInfo, setIdeInstallInfo] = useState<any>(null)
 
   const handleRefresh = useCallback(() => refresh(), [refresh])
+
+  // 检测 IDE 安装状态
+  useEffect(() => {
+    const checkIdeInstallation = async () => {
+      try {
+        const info = await invoke<any>('check_ide_installation')
+        setIdeInstallInfo(info)
+      } catch (e) {
+        console.error('检测 IDE 安装状态失败:', e)
+      }
+    }
+    checkIdeInstallation()
+  }, [])
 
   // 加载 MCP 工具数量
   useEffect(() => {
@@ -82,8 +96,9 @@ function Home({ onNavigate }: HomeProps) {
       setCliLoading(true)
       try {
         const info = await invoke<any>('check_cli_installation')
-        setCliInstalled(info?.cli_installed || info?.db_exists || false)
-        
+        // 只根据可执行文件是否存在判断 CLI 是否安装
+        setCliInstalled(info?.cli_installed || false)
+
         const path = await invoke<string>('get_kiro_cli_default_path')
         if (path) {
           setCliPath(path)
@@ -187,7 +202,13 @@ function Home({ onNavigate }: HomeProps) {
                   />
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm py-10">
-                    {localToken ? '未匹配到账号' : t('home.notLoggedIn')}
+                    {localToken ? '未匹配到账号' : (
+                      ideInstallInfo?.ide_installed === false
+                        ? (ideInstallInfo?.ide_executable_exists === false
+                            ? 'Kiro IDE 未安装'
+                            : 'Kiro IDE 已安装，未登录')
+                        : t('home.notLoggedIn')
+                    )}
                   </div>
                 )}
               </div>

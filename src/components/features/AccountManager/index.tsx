@@ -407,11 +407,17 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   
   // 切换账号启用/禁用
   const handleToggleEnabled = useCallback(async (account: any, enabled: boolean) => {
+    // 乐观更新：立即更新本地状态
+    patchAccountLocally({ ...account, enabled })
+
     try {
       const updated = await invoke<any>('update_account', { params: { id: account.id, enabled } })
       patchAccountLocally(updated)
     } catch (e) {
+      // 失败时回滚
+      patchAccountLocally({ ...account, enabled: !enabled })
       console.error('Toggle enabled failed:', e)
+      showError('启用/禁用切换失败', String(e))
     }
   }, [patchAccountLocally])
 
