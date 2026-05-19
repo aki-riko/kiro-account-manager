@@ -1340,7 +1340,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[tokio::test(flavor = "current_thread")]
     async fn lightweight_routes_increment_request_count_and_write_logs() {
         let fixture = RequestLogTestFixture::new();
         let state = gateway_runtime_test_state();
