@@ -508,7 +508,7 @@ function GatewayPage() {
         <RequestLogsDialog open={showRequestLogs} onOpenChange={setShowRequestLogs} logLevel={config.logLevel} onLogLevelChange={(v) => setField('logLevel', v)} logRequests={config.logRequests} onLogRequestsChange={(v) => setField('logRequests', v)} onSave={handleSilentSave} />
 
         {/* 快速配置客户端弹窗 */}
-        <Dialog open={showClientConfig} onOpenChange={(open) => { setShowClientConfig(open); if (!open) setClientConfigResults([]) }}>
+        <Dialog open={showClientConfig} onOpenChange={setShowClientConfig}>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader className="">
               <DialogTitle className="">⚡ 快速配置客户端</DialogTitle>
