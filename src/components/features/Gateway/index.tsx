@@ -77,6 +77,11 @@ function GatewayPage() {
   const [clientConfigResults, setClientConfigResults] = useState<any[]>([])
   const [selectedClients, setSelectedClients] = useState<string[]>(['claudeCode'])
 
+  const hasConfiguredClients = useMemo(
+    () => clientConfigResults.some(r => r.success),
+    [clientConfigResults]
+  )
+
   const accountOptions = useMemo(
     () => accounts.map(account => ({
       value: account.id,
@@ -497,6 +502,7 @@ function GatewayPage() {
           handleSaveConfig={handleSilentSave}
           handleAutoStartToggle={handleAutoStartToggle}
           onShowClientConfig={() => setShowClientConfig(true)}
+          hasConfiguredClients={hasConfiguredClients}
         />
 
         <RequestLogsDialog open={showRequestLogs} onOpenChange={setShowRequestLogs} logLevel={config.logLevel} onLogLevelChange={(v) => setField('logLevel', v)} logRequests={config.logRequests} onLogRequestsChange={(v) => setField('logRequests', v)} onSave={handleSilentSave} />

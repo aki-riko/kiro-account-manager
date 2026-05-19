@@ -24,6 +24,7 @@ interface GatewayConfigProps {
   handleSaveConfig: () => Promise<void>;
   handleAutoStartToggle: (checked: boolean) => Promise<void>;
   onShowClientConfig?: () => void;
+  hasConfiguredClients?: boolean;
 }
 
 function GatewayConfig({
@@ -38,6 +39,7 @@ function GatewayConfig({
   handleSaveConfig,
   handleAutoStartToggle,
   onShowClientConfig,
+  hasConfiguredClients = false,
 }: GatewayConfigProps) {
   const [showModelMappingDialog, setShowModelMappingDialog] = useState(false)
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false)
@@ -204,10 +206,17 @@ function GatewayConfig({
                 </div>
                 {onShowClientConfig && (
                   <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
-                    <div className="text-sm text-muted-foreground">写入客户端配置</div>
-                    <Button size="sm" variant="outline" className="h-7 text-sm" onClick={onShowClientConfig}>
+                    <div className="text-sm text-muted-foreground">
+                      {hasConfiguredClients ? '✓ 已配置客户端' : '写入客户端配置'}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={hasConfiguredClients ? "default" : "outline"}
+                      className="h-7 text-sm"
+                      onClick={onShowClientConfig}
+                    >
                       <Zap size={12} className="mr-1" />
-                      配置客户端
+                      {hasConfiguredClients ? '重新配置' : '配置客户端'}
                     </Button>
                   </div>
                 )}
