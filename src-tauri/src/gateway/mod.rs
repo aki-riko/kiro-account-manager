@@ -969,7 +969,6 @@ fn router(state: RouterState) -> Router {
     Router::new()
         .route("/health", get(health_handler))
         .route("/v1/models", get(models_handler))
-        .route("/messages", post(messages_handler))
         .route("/v1/messages", post(messages_handler))
         .route("/v1/messages/count_tokens", post(count_tokens_handler))
         .route("/v1/responses", post(responses_handler))
