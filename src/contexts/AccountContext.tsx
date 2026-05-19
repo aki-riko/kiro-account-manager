@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { calcAccountStats, getQuota, getUsed } from '../utils/accountStats'
@@ -52,6 +52,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<any>(null)
 
+  // 用 ref 存储定时器，以便在组件卸载时清理
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null)
+
   // 加载数据
   const loadData = useCallback(async () => {
     try {
@@ -72,30 +75,31 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     let unlistenLogin: UnlistenFn | null = null
     let unlistenAccounts: UnlistenFn | null = null
     let mounted = true
-    
+
     const setup = async () => {
       // 监听登录成功事件，刷新数据
       unlistenLogin = await listen('login-success', () => {
         if (!mounted) return
         loadData()
       })
-      
+
       // 监听账号数据变化
       unlistenAccounts = await listen('accounts-updated', () => {
         if (!mounted) return
         loadData()
       })
     }
-    
+
     loadData().finally(() => {
       if (mounted) setLoading(false)
     })
     setup()
-    
+
     return () => {
       mounted = false
       if (unlistenLogin) unlistenLogin()
       if (unlistenAccounts) unlistenAccounts()
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     }
   }, [loadData])
 
@@ -105,7 +109,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     try {
       await loadData()
     } finally {
-      setTimeout(() => setRefreshing(false), 300)
+      // 清除之前的定时器
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current)
+      }
+      // 设置新的定时器
+      refreshTimerRef.current = setTimeout(() => setRefreshing(false), 300)
     }
   }, [loadData])
 
