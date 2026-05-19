@@ -232,6 +232,14 @@ impl ResponseCache {
             return None;
         }
 
+        // 安全检查：文件大小限制
+        const MAX_CACHE_FILE_SIZE: u64 = 10 * 1024 * 1024; // 10MB
+        let metadata = fs::metadata(&file_path).ok()?;
+        if metadata.len() > MAX_CACHE_FILE_SIZE {
+            log::warn!("[安全] 缓存文件过大: {} bytes", metadata.len());
+            return None;
+        }
+
         let content = fs::read_to_string(&file_path).ok()?;
         serde_json::from_str(&content).ok()
     }
@@ -305,11 +313,14 @@ impl ResponseCache {
         }
     }
 
-    /// 清理键名（移除不安全字符）
+    /// 清理键名（移除不安全字符并限制长度）
     fn sanitize_key(key: &str) -> String {
-        key.chars()
+        const MAX_KEY_LENGTH: usize = 255;
+        let sanitized: String = key.chars()
+            .take(MAX_KEY_LENGTH)
             .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-            .collect()
+            .collect();
+        sanitized
     }
 }
 

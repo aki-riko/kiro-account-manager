@@ -3,6 +3,9 @@ use std::fs;
 use anyhow::{Result, Context};
 use crate::models::ide_session::{IdeSession, SessionSummary};
 
+// 安全限制
+const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024; // 50MB
+
 pub struct SessionStorage {
     base_path: PathBuf,
 }
@@ -11,6 +14,17 @@ impl SessionStorage {
     pub fn new() -> Result<Self> {
         let base_path = Self::get_storage_path()?;
         Ok(Self { base_path })
+    }
+
+    /// 验证路径组件是否安全（防止路径遍历）
+    fn is_safe_path_component(component: &str) -> bool {
+        // 只允许字母、数字、下划线、连字符和点号
+        // 不允许路径分隔符和特殊字符
+        !component.is_empty()
+            && !component.contains("..")
+            && !component.contains('/')
+            && !component.contains('\\')
+            && component.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')
     }
     
     fn get_storage_path() -> Result<PathBuf> {
@@ -86,6 +100,12 @@ impl SessionStorage {
     
     /// 列出指定 workspace 的所有 sessions
     pub fn list_sessions(&self, workspace_hash: &str) -> Result<Vec<SessionSummary>> {
+        // 安全检查：防止路径遍历攻击
+        if !Self::is_safe_path_component(workspace_hash) {
+            log::warn!("[安全] 检测到非法的 workspace_hash: {}", workspace_hash);
+            return Err(anyhow::anyhow!("Invalid workspace hash"));
+        }
+
         let workspace_path = self.base_path.join(workspace_hash);
         let mut sessions = Vec::new();
         
@@ -132,9 +152,15 @@ impl SessionStorage {
     fn load_session_summary(&self, path: &PathBuf, workspace_hash: &str) -> Result<SessionSummary> {
         let metadata = fs::metadata(path)
             .context(format!("Failed to read metadata for {:?}", path))?;
+
+        // 安全检查：文件大小限制
+        if metadata.len() > MAX_FILE_SIZE {
+            return Err(anyhow::anyhow!("File too large: {} bytes", metadata.len()));
+        }
+
         let content = fs::read_to_string(path)
             .context(format!("Failed to read file {:?}", path))?;
-        
+
         let session: IdeSession = serde_json::from_str(&content)
             .map_err(|e| {
                 log::error!("JSON parse error for {:?}: {}", path, e);
@@ -163,10 +189,23 @@ impl SessionStorage {
     
     /// 加载完整 session
     pub fn load_session(&self, workspace_hash: &str, session_id: &str) -> Result<IdeSession> {
+        // 安全检查：防止路径遍历攻击
+        if !Self::is_safe_path_component(workspace_hash) || !Self::is_safe_path_component(session_id) {
+            log::warn!("[安全] 检测到非法的路径参数: workspace_hash={}, session_id={}", workspace_hash, session_id);
+            return Err(anyhow::anyhow!("Invalid path parameters"));
+        }
+
         let path = self.base_path
             .join(workspace_hash)
             .join(format!("{}.json", session_id));
-        
+
+        // 安全检查：文件大小限制
+        let metadata = fs::metadata(&path)
+            .context(format!("Failed to read metadata for session: {}", session_id))?;
+        if metadata.len() > MAX_FILE_SIZE {
+            return Err(anyhow::anyhow!("Session file too large: {} bytes", metadata.len()));
+        }
+
         let content = fs::read_to_string(&path)
             .context(format!("Failed to read session file: {}", session_id))?;
         let session = serde_json::from_str(&content)
@@ -176,6 +215,12 @@ impl SessionStorage {
     
     /// 删除 session
     pub fn delete_session(&self, workspace_hash: &str, session_id: &str) -> Result<()> {
+        // 安全检查：防止路径遍历攻击
+        if !Self::is_safe_path_component(workspace_hash) || !Self::is_safe_path_component(session_id) {
+            log::warn!("[安全] 检测到非法的路径参数: workspace_hash={}, session_id={}", workspace_hash, session_id);
+            return Err(anyhow::anyhow!("Invalid path parameters"));
+        }
+
         let path = self.base_path
             .join(workspace_hash)
             .join(format!("{}.json", session_id));
@@ -188,6 +233,12 @@ impl SessionStorage {
     
     /// 删除整个工作区目录
     pub fn delete_workspace(&self, workspace_hash: &str) -> Result<()> {
+        // 安全检查：防止路径遍历攻击
+        if !Self::is_safe_path_component(workspace_hash) {
+            log::warn!("[安全] 检测到非法的 workspace_hash: {}", workspace_hash);
+            return Err(anyhow::anyhow!("Invalid workspace hash"));
+        }
+
         let workspace_path = self.base_path.join(workspace_hash);
         
         if workspace_path.exists() {
@@ -205,6 +256,7 @@ impl SessionStorage {
         session_id: &str,
         format: ExportFormat,
     ) -> Result<String> {
+        // 安全检查已在 load_session 中完成
         let session = self.load_session(workspace_hash, session_id)?;
         
         match format {
