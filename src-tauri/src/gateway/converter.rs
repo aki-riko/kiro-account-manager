@@ -938,6 +938,11 @@ pub async fn build_kiro_payload(
         };
     }
 
+    // 用边界标记包裹整个系统提示（包括 thinking 标签）
+    if !system_prompt.is_empty() {
+        system_prompt = format!("--- SYSTEM PROMPT ---\n{}\n--- END SYSTEM PROMPT ---", system_prompt);
+    }
+
     if other_messages.is_empty() {
         return Err("没有可发送的消息".to_string());
     }
