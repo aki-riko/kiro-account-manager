@@ -1221,6 +1221,11 @@ mod tests {
             responses_sessions: Arc::new(AsyncMutex::new(HashMap::new())),
             token_cache: Arc::new(AsyncMutex::new(TokenCache::new())),
             load_balancer: Arc::new(load_balancer::LoadBalancer::new(strategy)),
+            log_store: Arc::new(log_store::LogStore::new(1000)),
+            response_cache: Arc::new(AsyncMutex::new(response_cache::ResponseCache::new(
+                response_cache::CacheConfig::default(),
+                None,
+            ))),
         }
     }
 
@@ -1249,6 +1254,11 @@ mod tests {
             responses_sessions: Arc::new(AsyncMutex::new(HashMap::new())),
             token_cache: Arc::new(AsyncMutex::new(TokenCache::new())),
             load_balancer: Arc::new(load_balancer::LoadBalancer::new(strategy)),
+            log_store: Arc::new(log_store::LogStore::new(1000)),
+            response_cache: Arc::new(AsyncMutex::new(response_cache::ResponseCache::new(
+                response_cache::CacheConfig::default(),
+                None,
+            ))),
         }
     }
 

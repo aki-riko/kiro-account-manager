@@ -4893,6 +4893,7 @@ mod tests {
         let aggregated = stream::AggregatedKiroResponse {
             text: "Hello Rust".to_string(),
             thinking: String::new(),
+            thinking_signature: None,
             tool_calls: Vec::new(),
             input_tokens: 3,
             output_tokens: 5,
@@ -4910,7 +4911,6 @@ mod tests {
         let response = build_responses_response_with_ids(
             "gpt-4.1",
             &aggregated,
-            &[],
             "resp_test",
             "msg_test",
             123,
@@ -4939,6 +4939,7 @@ mod tests {
         let aggregated = stream::AggregatedKiroResponse {
             text: "Hello Rust".to_string(),
             thinking: String::new(),
+            thinking_signature: None,
             tool_calls: Vec::new(),
             input_tokens: 3,
             output_tokens: 5,
@@ -4953,7 +4954,7 @@ mod tests {
             metering_usage: None,
         };
 
-        let response = build_anthropic_response("claude-sonnet-4-5", &aggregated, &[]);
+        let response = build_anthropic_response("claude-sonnet-4-5", &aggregated);
 
         assert_eq!(response["content"][0]["type"], "text");
         assert_eq!(
@@ -4978,6 +4979,7 @@ mod tests {
         let aggregated = stream::AggregatedKiroResponse {
             text: "Hello Rust".to_string(),
             thinking: String::new(),
+            thinking_signature: None,
             tool_calls: vec![(
                 "call_1".to_string(),
                 "search_docs".to_string(),
