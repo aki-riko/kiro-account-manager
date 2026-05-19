@@ -160,6 +160,27 @@ npm run tauri build   # 打包安装包
 
 ---
 
+## 🔗 相关项目
+
+### [Kiro-Go](https://github.com/hj01857655/Kiro-Go)
+
+基于 Go 语言开发的 Kiro API 反向代理服务，让你可以用标准的 OpenAI/Anthropic API 格式调用 Kiro 服务。
+
+**核心功能：**
+- 🌐 提供标准 OpenAI `/v1/chat/completions` 和 Anthropic `/v1/messages` 接口
+- ⚖️ 多账号池自动负载均衡（轮询）
+- 🔄 自动 Token 刷新、SSE 流式输出
+- 🎛️ Web 管理面板
+- 📊 用量追踪、账号导入导出
+- 🐳 Docker 容器化部署
+
+**适用场景：**
+- 使用标准 OpenAI/Anthropic SDK 调用 Kiro
+- 服务器端部署，供多个客户端共享账号池
+- 与 Cursor、Continue、Cline 等工具集成
+
+---
+
 ## 💬 交流反馈
 
 - 🐛 [提交 Issue](https://github.com/hj01857655/kiro-account-manager/issues)

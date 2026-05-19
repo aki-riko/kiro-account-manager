@@ -6,7 +6,7 @@
   "nav.desktopOAuth": "在线登入",
   "nav.socialIdC": "Social/IdC",
   "nav.settings": "应用设置",
-  "nav.gateway": "Kiro 2API",
+  "nav.gateway": "Kiro Go",
   "nav.about": "关于",
 
   "gateway.overview": "总览",
@@ -370,7 +370,7 @@
   "about.links": "链接",
   "about.website": "官网",
   "about.tutorial": "使用教程",
-  "about.qqGroup1": "QQ 1群",
+  "about.qqGroup1": "QQ 1群（已满）",
   "about.qqGroup2": "QQ 2群",
 
   "about.shop": "Kiro Gateway",

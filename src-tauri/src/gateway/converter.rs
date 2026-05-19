@@ -2603,12 +2603,9 @@ fn convert_tools(tools: &Option<Vec<Tool>>) -> Option<Vec<KiroTool>> {
             });
         }
 
-        // 始终在 tools 数组末尾添加 cachePoint，触发 Prompt Caching
-        if !result.is_empty() {
-            result.push(KiroTool::CachePoint {
-                cache_point: json!({"type": "default"}),
-            });
-        }
+        // 注意：不要在 tools 数组末尾添加 cachePoint
+        // Kiro API 会拒绝这种格式，导致 "Improperly formed request" 错误
+        // Prompt Caching 应该通过其他方式触发（如消息的 cache_point metadata）
 
         result
     })

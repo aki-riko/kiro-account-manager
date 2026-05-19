@@ -20,6 +20,7 @@ const CURRENT_YEAR = new Date().getFullYear()
 const LINKS = {
   website: 'https://kiro-website-six.vercel.app',
   github: 'https://github.com/hj01857655/kiro-account-manager',
+  kiroGo: 'https://github.com/hj01857655/Kiro-Go',
   qqGroup1: 'https://qm.qq.com/q/Vh7mUrNpa8',
   qqGroup2: 'https://qm.qq.com/q/xi0AglEqGs',
 }
@@ -196,7 +197,7 @@ function About() {
           accent="blue"
           icon={<Link2 size={14} className="text-blue-500" />}
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="space-y-2">
             <LinkRow
               href={LINKS.website}
               icon={<ExternalLink size={15} />}
@@ -212,17 +213,26 @@ function About() {
               accent="github"
             />
             <LinkRow
-              href={LINKS.qqGroup1}
-              icon={<QQIcon size={15} />}
-              label={t('about.qqGroup1')}
-              accent="qq"
+              href={LINKS.kiroGo}
+              icon={<Github size={15} />}
+              label="Kiro-Go"
+              desc="Kiro API 反向代理 - 标准 OpenAI/Anthropic 接口"
+              accent="github"
             />
-            <LinkRow
-              href={LINKS.qqGroup2}
-              icon={<QQIcon size={15} />}
-              label={t('about.qqGroup2')}
-              accent="qq"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <LinkRow
+                href={LINKS.qqGroup1}
+                icon={<QQIcon size={15} />}
+                label={t('about.qqGroup1')}
+                accent="qq"
+              />
+              <LinkRow
+                href={LINKS.qqGroup2}
+                icon={<QQIcon size={15} />}
+                label={t('about.qqGroup2')}
+                accent="qq"
+              />
+            </div>
           </div>
         </SectionCard>
 

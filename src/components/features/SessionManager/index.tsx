@@ -456,7 +456,10 @@ export default function SessionManager() {
 
                         {/* Workspace Name */}
                         <button
-                          onClick={() => setSelectedWorkspace(workspace)}
+                          onClick={() => {
+                            setSelectedWorkspace(workspace)
+                            toggleWorkspace(workspace)
+                          }}
                           className={`flex-1 text-left text-sm transition-all rounded-md px-2 py-1 ${selectedWorkspace === workspace
                               ? ''
                               : 'hover:bg-accent'
