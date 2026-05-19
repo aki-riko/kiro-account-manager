@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { GatewaySurfaceCard } from './GatewayShared'
 import ModelMappingDialog from './ModelMappingDialog'
 import ApiKeysDialog from './ApiKeysDialog'
+import PromptFilterRulesDialog from './PromptFilterRulesDialog'
 
 interface GatewayConfigProps {
   config: any;
@@ -40,6 +41,7 @@ function GatewayConfig({
 }: GatewayConfigProps) {
   const [showModelMappingDialog, setShowModelMappingDialog] = useState(false)
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false)
+  const [showPromptFilterRulesDialog, setShowPromptFilterRulesDialog] = useState(false)
 
   return (
     <div className="grid grid-cols-1 gap-3">
@@ -233,6 +235,16 @@ function GatewayConfig({
                   <Switch checked={!!config.filterEnvNoise} onCheckedChange={(checked: boolean) => setField('filterEnvNoise', checked)} />
                 </div>
               </div>
+              <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+                <div className="text-sm text-muted-foreground">
+                  {config.promptFilterRules?.length > 0
+                    ? `${config.promptFilterRules.length} 条自定义规则，${config.promptFilterRules.filter((r: any) => r.enabled).length} 条启用`
+                    : '暂无自定义规则'}
+                </div>
+                <Button size="sm" variant="outline" className="h-7 text-sm" onClick={() => setShowPromptFilterRulesDialog(true)}>
+                  管理规则
+                </Button>
+              </div>
             </div>
 
             {/* Section 4: 安全与高级 */}
@@ -317,6 +329,15 @@ function GatewayConfig({
         onOpenChange={setShowApiKeysDialog}
         clientApiKeysText={config.clientApiKeysText}
         setConfig={setConfig}
+        onSave={handleSaveConfig}
+      />
+
+      {/* PromptFilterRulesDialog */}
+      <PromptFilterRulesDialog
+        open={showPromptFilterRulesDialog}
+        onOpenChange={setShowPromptFilterRulesDialog}
+        promptFilterRules={config.promptFilterRules}
+        setField={setField}
         onSave={handleSaveConfig}
       />
     </div>

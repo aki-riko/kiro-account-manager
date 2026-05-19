@@ -20,6 +20,7 @@ export interface GatewayConfig {
   filterClaudeCode: boolean;
   filterStripBoundaries: boolean;
   filterEnvNoise: boolean;
+  promptFilterRules: PromptFilterRule[];
   logRequests: boolean;
   responseCacheEnabled: boolean;
   responseCacheTtl: number;
@@ -33,6 +34,15 @@ export interface ModelMappingRule {
   sourceModel: string;
   targetModels: string[];
   weights: number[];
+}
+
+export interface PromptFilterRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  ruleType: string;
+  matchPattern: string;
+  replace: string;
 }
 
 export interface GatewayStatus {
@@ -63,6 +73,7 @@ export const DEFAULT_GATEWAY_CONFIG: GatewayConfig = {
   filterClaudeCode: false,
   filterStripBoundaries: false,
   filterEnvNoise: false,
+  promptFilterRules: [],
   logRequests: true,
   responseCacheEnabled: true,
   responseCacheTtl: 180
@@ -95,7 +106,8 @@ export const buildGatewayConfigSnapshot = (config: GatewayConfig) => JSON.string
   modelMappings: config.modelMappings || [],
   filterClaudeCode: !!config.filterClaudeCode,
   filterStripBoundaries: !!config.filterStripBoundaries,
-  filterEnvNoise: !!config.filterEnvNoise
+  filterEnvNoise: !!config.filterEnvNoise,
+  promptFilterRules: config.promptFilterRules || []
 })
 
 export const buildGatewayRuntimeSnapshot = (config: GatewayConfig) => JSON.stringify({
@@ -115,7 +127,8 @@ export const buildGatewayRuntimeSnapshot = (config: GatewayConfig) => JSON.strin
   modelMappings: config.modelMappings || [],
   filterClaudeCode: !!config.filterClaudeCode,
   filterStripBoundaries: !!config.filterStripBoundaries,
-  filterEnvNoise: !!config.filterEnvNoise
+  filterEnvNoise: !!config.filterEnvNoise,
+  promptFilterRules: config.promptFilterRules || []
 })
 
 export const hydrateGatewayConfig = (gatewayConfig: any): GatewayConfig => ({
@@ -148,6 +161,7 @@ export const hydrateGatewayConfig = (gatewayConfig: any): GatewayConfig => ({
   filterClaudeCode: gatewayConfig?.filterClaudeCode ?? false,
   filterStripBoundaries: gatewayConfig?.filterStripBoundaries ?? false,
   filterEnvNoise: gatewayConfig?.filterEnvNoise ?? false,
+  promptFilterRules: Array.isArray(gatewayConfig?.promptFilterRules) ? gatewayConfig.promptFilterRules : [],
   logRequests: gatewayConfig?.logRequests ?? true,
   responseCacheEnabled: gatewayConfig?.responseCacheEnabled ?? true,
   responseCacheTtl: gatewayConfig?.responseCacheTtl ?? 180
@@ -185,6 +199,7 @@ export const buildGatewayPayload = (config: GatewayConfig) => ({
   filterClaudeCode: !!config.filterClaudeCode,
   filterStripBoundaries: !!config.filterStripBoundaries,
   filterEnvNoise: !!config.filterEnvNoise,
+  promptFilterRules: config.promptFilterRules || [],
   logRequests: config.logRequests !== false
 })
 
