@@ -94,6 +94,13 @@ pub async fn get_kiro_local_token() -> Option<KiroLocalToken> {
 
 /// 读取 `IdC` 客户端注册信息
 pub async fn get_client_registration(client_id_hash: &str) -> Option<ClientRegistration> {
+    // 安全检查：防止路径遍历攻击
+    // 只允许字母、数字、下划线和连字符
+    if !client_id_hash.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+        log::warn!("[安全] 检测到非法的 client_id_hash: {}", client_id_hash);
+        return None;
+    }
+
     let hash = client_id_hash.to_string();
     tokio::task::spawn_blocking(move || {
         let home = std::env::var("USERPROFILE")
