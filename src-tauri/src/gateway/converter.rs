@@ -391,11 +391,36 @@ fn convert_openai_chat_tools(tools: Option<&Value>) -> Option<Vec<Tool>> {
     convert_responses_tools(tools)
 }
 
+/// 缩短工具名称以符合 Kiro API 的 64 字符限制
+///
+/// 对于 MCP 工具（格式：mcp__server__tool），尝试缩短为 mcp__tool
+/// 其他工具直接截断到 64 字符
+fn shorten_tool_name(name: &str) -> String {
+    if name.len() <= 64 {
+        return name.to_string();
+    }
+
+    // MCP 工具：mcp__server__tool -> mcp__tool
+    if name.starts_with("mcp__") {
+        if let Some(last_idx) = name.rfind("__") {
+            if last_idx > 5 {
+                let shortened = format!("mcp__{}", &name[last_idx + 2..]);
+                if shortened.len() <= 64 {
+                    return shortened;
+                }
+            }
+        }
+    }
+
+    // 直接截断到 64 字符
+    name.chars().take(64).collect()
+}
+
 fn convert_anthropic_tool(tool: &crate::gateway::models::AnthropicTool) -> Tool {
     Tool {
         tool_type: "function".to_string(),
         function: ToolFunction {
-            name: tool.name.clone(),
+            name: shorten_tool_name(&tool.name),
             description: tool.description.clone(),
             parameters: Some(normalize_json_schema(tool.input_schema.clone())),
         },
@@ -1371,7 +1396,9 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
     let item_type = item.get("type").and_then(Value::as_str).unwrap_or_default();
 
     if item.get("function").is_some() {
-        return serde_json::from_value::<Tool>(item.clone()).ok();
+        let mut tool: Tool = serde_json::from_value(item.clone()).ok()?;
+        tool.function.name = shorten_tool_name(&tool.function.name);
+        return Some(tool);
     }
 
     // 修复：MCP 工具缺少 type 字段导致之前被跳过
@@ -1394,7 +1421,7 @@ fn convert_responses_tool(item: &Value) -> Option<Tool> {
         return Some(Tool {
             tool_type: "function".to_string(),
             function: ToolFunction {
-                name,
+                name: shorten_tool_name(&name),
                 description,
                 parameters,
             },
