@@ -166,10 +166,10 @@ pub async fn import_from_kiro_cli(
     let provider = determine_provider(cli_account);
     let usage_result = get_usage_by_provider(&provider, &cli_account.access_token).await;
 
-    let (email, user_id, usage_data) = match usage_result {
+    let (email, user_id, usage_data, is_banned, is_auth_error) = match usage_result {
         Ok(result) => {
             let (email, user_id) = extract_user_info(&result.usage_data);
-            (email, user_id, Some(result.usage_data))
+            (email, user_id, Some(result.usage_data), result.is_banned, result.is_auth_error)
         }
         Err(e) => {
             eprintln!("[Kiro CLI Import] 获取配额失败: {e}");
@@ -212,6 +212,9 @@ pub async fn import_from_kiro_cli(
     account.user_id = user_id;
     account.region = Some(cli_account.region.clone());
     account.usage_data = usage_data;
+
+    // 更新账号状态（包括封禁检测）
+    crate::commands::common::update_account_status(&mut account, is_banned, is_auth_error);
 
     // 6. 根据认证类型填充字段
     if cli_account.auth_method == "social" {
@@ -325,10 +328,38 @@ pub async fn switch_to_cli_account(
         account
     };
 
-    // 3. 构造切号载荷
+    // 3. 切号后立即获取配额检测封禁状态
+    let provider = refreshed_account.provider.as_ref()
+        .ok_or("账号缺少 provider 字段")?;
+    let access_token = refreshed_account.access_token.as_ref()
+        .ok_or("账号缺少 access_token")?;
+
+    log::info!("[CLI Switch] 切号后检测账号状态...");
+    match get_usage_by_provider(provider, access_token).await {
+        Ok(usage_result) => {
+            // 更新账号状态（包括封禁检测）
+            let mut store = lock_account_store(&state.store)?;
+            if let Some(a) = store.accounts.iter_mut().find(|a| a.id == account_id) {
+                a.usage_data = Some(usage_result.usage_data);
+                crate::commands::common::update_account_status(a, usage_result.is_banned, usage_result.is_auth_error);
+                let _ = crate::commands::common::save_store(&store);
+
+                if usage_result.is_banned {
+                    log::warn!("[CLI Switch] 检测到账号已封禁");
+                    return Err("账号已被封禁，无法切换到 CLI".to_string());
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("[CLI Switch] 获取配额失败: {}, 继续切号", e);
+            // 获取配额失败不阻止切号，但记录警告
+        }
+    }
+
+    // 4. 构造切号载荷
     let payload = build_switch_payload(&refreshed_account)?;
 
-    // 4. 执行切号写入（包括清除旧 key）
+    // 5. 执行切号写入（包括清除旧 key）
     crate::kiro::cli::switch_cli_account(&expanded_path, &payload)
 }
 

@@ -461,9 +461,9 @@ pub async fn verify_account(
     }; // MutexGuard 在这里被释放
 
     let usage_result = get_usage_by_account(&temp_account, &new_access_token).await?;
-    let usage_data = usage_result.usage_data;
+    let usage_data = usage_result.usage_data.clone();
 
-    // 更新数据库
+    // 更新数据库（包括状态）
     {
         let mut store = lock_store(&state.store, "store")?;
         if let Some(account) = store
@@ -471,9 +471,12 @@ pub async fn verify_account(
             .iter_mut()
             .find(|a| a.refresh_token.as_ref() == Some(&refresh_token))
         {
-            // 直接移动所有权，避免 clone
+            // 更新 token
             account.access_token = Some(new_access_token.clone()); // ✅ 这里必须 clone，因为后面还要用
             account.refresh_token = Some(new_refresh_token.clone()); // ✅ 这里必须 clone，因为后面还要用
+            // 更新 usage_data 和状态（检测封禁）
+            account.usage_data = Some(usage_result.usage_data);
+            update_account_status(account, usage_result.is_banned, usage_result.is_auth_error);
             save_store(&store)?;
         }
     }
