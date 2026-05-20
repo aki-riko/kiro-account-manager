@@ -24,8 +24,7 @@
     "release:major": "standard-version --release-as major",
     "release:patch": "standard-version --release-as patch",
     "release:check": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-release-pipeline.ps1",
-    "install:bun": "bun install",
-    "install:npm": "npm install"
+    "install:bun": "bun install"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
