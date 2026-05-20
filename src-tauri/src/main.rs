@@ -5,6 +5,7 @@
 // 核心模块
 mod core;
 mod state;
+mod security;
 
 // 功能模块
 mod auth;

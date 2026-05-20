@@ -56,8 +56,8 @@ fn prepare_pending_social_login(provider: &str, machineid: String) -> crate::sta
 pub fn get_current_user(state: State<AppState>) -> Option<User> {
     match lock_store(&state.auth.user, "auth user") {
         Ok(user) => user.clone(),
-        Err(err) => {
-            eprintln!("[auth_cmd] {err}");
+        Err(_) => {
+            log::error!("[auth_cmd] Failed to get current user");
             None
         }
     }
@@ -88,8 +88,8 @@ pub fn cancel_kiro_login(state: State<'_, AppState>) -> bool {
         Ok(mut pending_login) => {
             *pending_login = None;
         }
-        Err(err) => {
-            eprintln!("[auth_cmd] {err}");
+        Err(_) => {
+            log::error!("[auth_cmd] Failed to cancel login");
         }
     }
     cancelled_social || cancelled_idc
