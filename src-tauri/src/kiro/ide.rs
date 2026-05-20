@@ -322,13 +322,30 @@ pub async fn switch_kiro_account(
         let content = serde_json::to_string_pretty(&token_data)
             .map_err(|e| format!("Failed to serialize: {e}"))?;
 
-        // 安全检查：确保不是符号链接
+        // 安全检查：确保目标文件不是符号链接
         assert_not_symlink(&file_path)?;
 
         // 原子写入：先写临时文件，再 rename
         let temp_file_path = dir_path.join("kiro-auth-token.json.tmp");
-        std::fs::write(&temp_file_path, &content)
+
+        // 安全检查：如果临时文件已存在，确保不是符号链接后删除
+        if temp_file_path.exists() {
+            assert_not_symlink(&temp_file_path)?;
+            std::fs::remove_file(&temp_file_path)
+                .map_err(|e| format!("Failed to remove existing temp file: {e}"))?;
+        }
+
+        // 使用 OpenOptions 安全写入（create_new 确保不跟随符号链接）
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_file_path)
+            .map_err(|e| format!("Failed to create temp file: {e}"))?;
+        file.write_all(content.as_bytes())
             .map_err(|e| format!("Failed to write temp file: {e}"))?;
+        drop(file);
+
         std::fs::rename(&temp_file_path, &file_path)
             .map_err(|e| format!("Failed to rename file: {e}"))?;
 
@@ -361,11 +378,27 @@ pub async fn switch_kiro_account(
                 let client_reg_content = serde_json::to_string_pretty(&client_reg_data)
                     .map_err(|e| format!("Failed to serialize client registration: {e}"))?;
 
-                // 安全检查：确保不是符号链接
+                // 安全检查：确保目标文件不是符号链接
                 assert_not_symlink(&client_reg_path)?;
 
-                std::fs::write(&client_reg_temp_path, client_reg_content)
-                    .map_err(|e| format!("Failed to write client registration temp: {e}"))?;
+                // 安全检查：如果临时文件已存在，确保不是符号链接后删除
+                if client_reg_temp_path.exists() {
+                    assert_not_symlink(&client_reg_temp_path)?;
+                    std::fs::remove_file(&client_reg_temp_path)
+                        .map_err(|e| format!("Failed to remove existing client temp file: {e}"))?;
+                }
+
+                // 使用 OpenOptions 安全写入（create_new 确保不跟随符号链接）
+                use std::io::Write;
+                let mut file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&client_reg_temp_path)
+                    .map_err(|e| format!("Failed to create client temp file: {e}"))?;
+                file.write_all(client_reg_content.as_bytes())
+                    .map_err(|e| format!("Failed to write client temp file: {e}"))?;
+                drop(file);
+
                 std::fs::rename(&client_reg_temp_path, &client_reg_path)
                     .map_err(|e| format!("Failed to rename client registration: {e}"))?;
 
