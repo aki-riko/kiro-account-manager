@@ -10,10 +10,10 @@ use crate::commands::account_models::{
     write_available_models_cache, ListAvailableModelsResponse,
 };
 use crate::commands::common::{
-    calc_expires_at, calc_status, extract_user_info, find_account_by_id,
+    calc_expires_at, extract_user_info, find_account_by_id,
     find_existing_account_idx, get_enterprise_usage_with_region_probe, get_usage_by_account,
     get_usage_by_provider, is_auth_error_message, is_token_expired, is_token_expiring_soon,
-    lock_store, refresh_token_by_provider, save_store, token_needs_refresh, RefreshResult,
+    lock_store, refresh_token_by_provider, save_store, token_needs_refresh, update_account_status, RefreshResult,
 };
 use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata};
 use crate::state::AppState;
@@ -299,12 +299,7 @@ pub async fn sync_account(
         if let Some(usage_data) = usage {
             // 直接移动所有权，避免 clone
             a.usage_data = Some(usage_data.usage_data);
-            a.status = calc_status(usage_data.is_banned, usage_data.is_auth_error, a.usage_data.as_ref());
-
-            // 封顶账号自动禁用
-            if crate::core::usage::is_usage_capped(a.usage_data.as_ref()) {
-                a.enabled = false;
-            }
+            update_account_status(a, usage_data.is_banned, usage_data.is_auth_error);
 
             // 从 usage_data 中提取并更新 email 和 user_id
             if let Some(user_info) = a.usage_data.as_ref().and_then(|d| d.get("userInfo")) {
@@ -582,7 +577,7 @@ pub async fn add_account_by_social(
         existing.profile_arn = Some(final_profile_arn.clone()); // ✅ 保存 profile_arn
         existing.user_id = user_id;
         existing.usage_data = Some(usage_result.usage_data);
-        existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, existing.usage_data.as_ref());
+        update_account_status(existing, usage_result.is_banned, usage_result.is_auth_error);
         existing.clone() // ✅ 必须 clone，因为要返回给前端
     } else {
         let mut account = Account::new(final_email.clone(), format!("Kiro {idp} 账号"));
@@ -593,7 +588,7 @@ pub async fn add_account_by_social(
         account.auth_method = Some("social".to_string());
         account.user_id = user_id;
         account.usage_data = Some(usage_result.usage_data);
-        account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, account.usage_data.as_ref());
+        update_account_status(&mut account, usage_result.is_banned, usage_result.is_auth_error);
         // 使用传入的 machine_id，没有则自动生成
         account.machine_id =
             machine_id.or_else(|| Some(uuid::Uuid::new_v4().to_string().to_lowercase())); // ✅ 避免 clone
@@ -1023,7 +1018,7 @@ async fn add_account_by_idc_internal(
                 existing.sso_session_id = sso_session_id;
             }
             existing.usage_data = Some(usage_result.usage_data);
-            existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, existing.usage_data.as_ref());
+            update_account_status(existing, usage_result.is_banned, usage_result.is_auth_error);
             existing.clone()
         } else {
             // 创建新的 Enterprise 账号
@@ -1043,7 +1038,7 @@ async fn add_account_by_idc_internal(
             account.id_token = id_token;
             account.sso_session_id = sso_session_id;
             account.usage_data = Some(usage_result.usage_data);
-            account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, account.usage_data.as_ref());
+            update_account_status(&mut account, usage_result.is_banned, usage_result.is_auth_error);
             account.machine_id = Some(
                 params
                     .machine_id
@@ -1099,7 +1094,7 @@ async fn add_account_by_idc_internal(
                 existing.sso_session_id = sso_session_id;
             }
             existing.usage_data = Some(usage_result.usage_data);
-            existing.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, existing.usage_data.as_ref());
+            update_account_status(existing, usage_result.is_banned, usage_result.is_auth_error);
             existing.clone()
         } else {
             // 创建新的 BuilderId 账号
@@ -1108,7 +1103,7 @@ async fn add_account_by_idc_internal(
                 .clone()
                 .or_else(|| user_id.clone())
                 .unwrap_or_else(|| "BuilderId 账号".to_string());
-            
+
             let mut account = Account::new(display_id.clone(), "Kiro BuilderId 账号".to_string());
             account.access_token = Some(final_access_token);
             account.refresh_token = Some(final_refresh_token);
@@ -1126,7 +1121,7 @@ async fn add_account_by_idc_internal(
             account.id_token = id_token;
             account.sso_session_id = sso_session_id;
             account.usage_data = Some(usage_result.usage_data);
-            account.status = calc_status(usage_result.is_banned, usage_result.is_auth_error, account.usage_data.as_ref());
+            update_account_status(&mut account, usage_result.is_banned, usage_result.is_auth_error);
             account.machine_id = Some(
                 params
                     .machine_id
@@ -1727,10 +1722,11 @@ pub async fn set_overage_status(
     // 3. 解析 Kiro 调用上下文
     let ctx = crate::commands::common::resolve_kiro_call_context(&account, "us-east-1");
 
-    // 4. 调用 API
+    // 4. 调用 API（失败后刷新重试）
     let overage_status = if enabled { "ENABLED" } else { "DISABLED" };
     let client = KiroQClient::new()?;
-    client
+
+    let result = client
         .set_user_preference(
             &final_access_token,
             &ctx.machine_id,
@@ -1738,7 +1734,39 @@ pub async fn set_overage_status(
             &ctx.profile_arn,
             overage_status,
         )
-        .await?;
+        .await;
+
+    // 如果首次调用失败且是认证错误，刷新 token 后重试
+    if let Err(ref e) = result {
+        if is_auth_error_message(e) {
+            log::info!("[set_overage_status] Token 失效，尝试刷新后重试");
+            let refresh_result = refresh_token_by_provider(&account).await?;
+
+            // 更新 store 中的 token（在独立作用域内，确保锁在 await 之前释放）
+            {
+                let mut store = lock_store(&state.store, "store")?;
+                if let Some(a) = store.accounts.iter_mut().find(|a| a.id == id) {
+                    apply_refreshed_account_tokens(a, &refresh_result);
+                    save_store(&store)?;
+                }
+            } // 锁在这里释放
+
+            // 用新 token 重试
+            client
+                .set_user_preference(
+                    &refresh_result.access_token,
+                    &ctx.machine_id,
+                    &ctx.region,
+                    &ctx.profile_arn,
+                    overage_status,
+                )
+                .await?;
+        } else {
+            return Err(e.clone());
+        }
+    } else {
+        result?;
+    }
 
     // 5. 更新本地 usage_data 中的 overageConfiguration.overageStatus
     let mut store = lock_store(&state.store, "store")?;

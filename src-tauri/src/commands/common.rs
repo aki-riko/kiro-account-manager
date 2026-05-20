@@ -452,6 +452,27 @@ pub fn calc_status(is_banned: bool, is_auth_error: bool, usage_data: Option<&ser
     }
 }
 
+/// 更新账号状态并自动设置 enabled 字段
+///
+/// 规则：
+/// - banned（封禁）→ enabled = false
+/// - invalid（失效）→ enabled = false
+/// - capped（封顶）→ enabled = false
+/// - overage（超额）→ enabled 保持不变（账号还能用超额配额）
+/// - active（正常）→ enabled 保持不变
+pub fn update_account_status(
+    account: &mut crate::core::account::Account,
+    is_banned: bool,
+    is_auth_error: bool,
+) {
+    account.status = calc_status(is_banned, is_auth_error, account.usage_data.as_ref());
+
+    // 只有封禁、失效、封顶状态才自动禁用账号
+    if matches!(account.status.as_str(), "banned" | "invalid" | "capped") {
+        account.enabled = false;
+    }
+}
+
 fn read_non_empty_string_field(
     value: &serde_json::Value,
     primary_path: &[&str],

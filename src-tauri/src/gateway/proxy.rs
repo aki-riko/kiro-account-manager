@@ -22,8 +22,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::{
     core::account::{Account, AccountStore},
     commands::common::{
-        calc_status, get_usage_by_provider, is_token_expiring_soon,
-        refresh_token_by_provider, resolve_default_profile_arn, RefreshResult,
+        get_usage_by_provider, is_token_expiring_soon,
+        refresh_token_by_provider, resolve_default_profile_arn, update_account_status, RefreshResult,
     },
     commands::machine_guid::get_machine_id,
     clients::{
@@ -2558,10 +2558,7 @@ fn persist_account_refresh(
         if let Some(data) = usage_data {
             target.usage_data = Some(data);
         }
-        target.status = calc_status(is_banned, is_auth_error, target.usage_data.as_ref());
-        if is_banned || is_auth_error {
-            target.enabled = false;
-        }
+        update_account_status(target, is_banned, is_auth_error);
 
         // 失败追踪逻辑
         if should_increment_failure {
