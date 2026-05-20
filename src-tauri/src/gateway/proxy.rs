@@ -396,14 +396,12 @@ fn trim_messages_by_tokens(
             target_tokens: usize,
             model_id: &str,
 ) -> bool {
-            if messages.len() <= 2 {
-                return false;
-            }
-
             let current_tokens = estimate_request_tokens(messages, model_id);
             if current_tokens <= target_tokens {
                 return true;
             }
+
+            log::info!("[网关] 开始裁剪消息：当前 {} tokens，目标 {} tokens", current_tokens, target_tokens);
 
             // 分离 system 消息和对话消息
             let mut system_messages: Vec<NormalizedMessage> = Vec::new();
@@ -418,101 +416,104 @@ fn trim_messages_by_tokens(
             }
 
             if conversation_messages.is_empty() {
+                log::warn!("[网关] 没有对话消息可裁剪");
                 return false;
             }
 
-            // 验证对话消息是否是 user/assistant 交替
-            let mut expected_role = "user";
-            for msg in &conversation_messages {
-                if msg.role != expected_role {
-                    log::error!("[网关] 消息格式错误：期望 {}, 实际 {}", expected_role, msg.role);
-                    return false;
-                }
-                expected_role = if expected_role == "user" { "assistant" } else { "user" };
-            }
-
-            // 确保最后一条是 user
-            if conversation_messages.last().map(|m| m.role.as_str()) != Some("user") {
-                log::error!("[网关] 最后一条消息不是 user");
+            // 确保最后一条是 user 消息（Claude API 要求）
+            let last_msg = conversation_messages.last().unwrap();
+            if last_msg.role != "user" {
+                log::warn!("[网关] 最后一条消息不是 user，无法裁剪");
                 return false;
             }
 
-            // 从后往前保留消息对（user + assistant），直到满足 token 限制
+            // 策略1: 从后往前保留尽可能多的消息
             let mut kept_messages = Vec::new();
 
-            // 先保留最后一条 user 消息
-            if let Some(last_user) = conversation_messages.last() {
-                kept_messages.push(last_user.clone());
-            }
-
-            // 从倒数第二条开始，成对保留（assistant + user）
-            let mut idx = conversation_messages.len().saturating_sub(2);
-            while idx > 0 {
-                // 取一对消息：assistant (idx) + user (idx-1)
-                let assistant_msg = &conversation_messages[idx];
-                let user_msg = &conversation_messages[idx - 1];
-
-                if assistant_msg.role != "assistant" || user_msg.role != "user" {
-                    log::error!("[网关] 消息对格式错误");
-                    break;
-                }
-
-                // 测试加入这一对后的 token 数
+            // 从后往前遍历
+            for msg in conversation_messages.iter().rev() {
                 let mut test_messages = system_messages.clone();
-                test_messages.push(user_msg.clone());
-                test_messages.push(assistant_msg.clone());
-                test_messages.extend(kept_messages.iter().cloned());
+                // 注意：kept_messages 是反向的，需要反转后添加
+                let mut temp_kept = kept_messages.clone();
+                temp_kept.reverse();
+                temp_kept.insert(0, msg.clone());
+                test_messages.extend(temp_kept);
 
                 let test_tokens = estimate_request_tokens(&test_messages, model_id);
                 if test_tokens <= target_tokens {
-                    // 可以加入，插入到开头
-                    kept_messages.insert(0, assistant_msg.clone());
-                    kept_messages.insert(0, user_msg.clone());
-
-                    if idx >= 2 {
-                        idx -= 2;
-                    } else {
-                        break;
-                    }
+                    kept_messages.push(msg.clone());
                 } else {
-                    // 超过限制，停止
+                    // 超过限制，停止添加
                     break;
                 }
             }
 
-            // 重建消息列表：system + 保留的对话消息
+            // 反转回正确的顺序
+            kept_messages.reverse();
+
+            // 如果一条都保留不了，尝试截断最后一条 user 消息
+            if kept_messages.is_empty() {
+                log::warn!("[网关] 无法保留任何消息，尝试截断最后一条 user 消息");
+                let mut last_user = conversation_messages.last().unwrap().clone();
+
+                // 尝试截断消息内容
+                if let Some(content) = &last_user.content {
+                    let content_str = match content {
+                        Value::String(s) => s.clone(),
+                        Value::Array(arr) => {
+                            // 提取文本内容
+                            arr.iter()
+                                .filter_map(|item| {
+                                    item.get("text").and_then(|v| v.as_str()).map(|s| s.to_string())
+                                })
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        }
+                        _ => content.to_string()
+                    };
+
+                    // 逐步减少内容长度，直到满足 token 限制
+                    let mut truncated_content = content_str;
+                    let mut ratio = 0.8;
+
+                    while ratio > 0.1 {
+                        let target_len = (truncated_content.len() as f64 * ratio) as usize;
+                        truncated_content = truncated_content.chars().take(target_len).collect::<String>();
+                        truncated_content.push_str("...[内容已截断]");
+
+                        last_user.content = Some(Value::String(truncated_content.clone()));
+
+                        let mut test_messages = system_messages.clone();
+                        test_messages.push(last_user.clone());
+
+                        let test_tokens = estimate_request_tokens(&test_messages, model_id);
+                        if test_tokens <= target_tokens {
+                            kept_messages.push(last_user);
+                            log::info!("[网关] 成功截断消息内容到 {} 字符", truncated_content.len());
+                            break;
+                        }
+
+                        ratio -= 0.1;
+                    }
+                }
+            }
+
+            if kept_messages.is_empty() {
+                log::error!("[网关] 裁剪失败：无法保留任何消息");
+                return false;
+            }
+
+            // 重建消息列表
             let mut final_messages = system_messages;
             final_messages.extend(kept_messages);
 
-            if final_messages.len() < 2 {
-                return false;
-            }
-
-            // 最终验证：确保是 user/assistant 交替，且最后是 user
-            let conversation_part: Vec<_> = final_messages.iter().filter(|m| m.role != "system").collect();
-            if conversation_part.is_empty() {
-                return false;
-            }
-
-            let mut expected = "user";
-            for msg in &conversation_part {
-                if msg.role != expected {
-                    log::error!("[网关] 裁剪后消息格式错误：期望 {}, 实际 {}", expected, msg.role);
-                    return false;
-                }
-                expected = if expected == "user" { "assistant" } else { "user" };
-            }
-
-            if conversation_part.last().map(|m| m.role.as_str()) != Some("user") {
-                log::error!("[网关] 裁剪后最后一条消息不是 user");
-                return false;
-            }
-
+            let final_tokens = estimate_request_tokens(&final_messages, model_id);
             log::info!(
-                "[网关] 裁剪成功：{} → {} 条消息，预估 {} tokens",
+                "[网关] 裁剪成功：{} → {} 条消息，{} → {} tokens",
                 messages.len(),
                 final_messages.len(),
-                estimate_request_tokens(&final_messages, model_id)
+                current_tokens,
+                final_tokens
             );
 
             *messages = final_messages;
@@ -1349,28 +1350,12 @@ pub async fn proxy_handler(
                             new_token_count
                         );
                     } else {
-                        let error_message = format!(
-                            "Input is too long. Estimated {} tokens exceeds the threshold of {} tokens (55% of {}). Unable to compress or trim further.",
+                        log::warn!(
+                            "[网关] 输入过长: {} tokens 超过阈值 {} tokens ({}的55%)，压缩/裁剪失败，继续转发请求",
                             estimated_tokens,
                             threshold_tokens,
                             max_input_tokens
                         );
-                        let temp_log_context = RequestLogContext {
-                            request: Some(&request),
-                            ..base_log_context.clone()
-                        };
-                        return gateway_error_with_log(
-                            &state,
-                            format,
-                            &temp_log_context,
-                            GatewayErrorDetails {
-                                status: StatusCode::BAD_REQUEST,
-                                error_type: "invalid_request_error",
-                                message: &error_message,
-                                response_body: None,
-                            },
-                        )
-                        .await;
                     }
                 }
             }
@@ -1385,27 +1370,18 @@ pub async fn proxy_handler(
                 );
 
                 if !trimmed {
-                    let error_message = format!(
-                        "Input is too long. Estimated {} tokens exceeds the threshold. Compression failed: {}",
+                    log::warn!(
+                        "[网关] 输入过长: {} tokens 超过阈值，压缩失败: {}，裁剪也失败，继续转发请求",
                         estimated_tokens,
                         e
                     );
-                    let temp_log_context = RequestLogContext {
-                        request: Some(&request),
-                        ..base_log_context.clone()
-                    };
-                    return gateway_error_with_log(
-                        &state,
-                        format,
-                        &temp_log_context,
-                        GatewayErrorDetails {
-                            status: StatusCode::BAD_REQUEST,
-                            error_type: "invalid_request_error",
-                            message: &error_message,
-                            response_body: None,
-                        },
-                    )
-                    .await;
+                } else {
+                    let new_token_count = estimate_request_tokens(&request.messages, &request.model);
+                    log::info!(
+                        "[网关] 成功裁剪消息，从 {} tokens 到 {} tokens",
+                        estimated_tokens,
+                        new_token_count
+                    );
                 }
             }
         }
