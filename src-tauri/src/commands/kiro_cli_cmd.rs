@@ -283,17 +283,52 @@ pub async fn switch_to_cli_account(
     let expanded_path = expand_home_dir(&db_path)?;
 
     // 1. 从 store 读取账号数据
-    let store = lock_account_store(&state.store)?;
-    let account = store
-        .accounts
-        .iter()
-        .find(|a| a.id == account_id)
-        .ok_or_else(|| format!("账号不存在: {account_id}"))?;
+    let account = {
+        let store = lock_account_store(&state.store)?;
+        store
+            .accounts
+            .iter()
+            .find(|a| a.id == account_id)
+            .cloned()
+            .ok_or_else(|| format!("账号不存在: {account_id}"))?
+    };
 
-    // 2. 构造切号载荷
-    let payload = build_switch_payload(account)?;
+    // 2. 切号前刷新 token（确保写入的是有效 token）
+    let refreshed_account = if account.refresh_token.is_some() {
+        log::info!("[CLI Switch] 切号前刷新 token...");
+        match crate::commands::common::refresh_token_by_provider(&account).await {
+            Ok(refresh_result) => {
+                log::info!("[CLI Switch] Token 刷新成功");
+                // 更新 store 中的 token
+                {
+                    let mut store = lock_account_store(&state.store)?;
+                    if let Some(a) = store.accounts.iter_mut().find(|a| a.id == account_id) {
+                        crate::commands::common::apply_refreshed_account_tokens(a, &refresh_result);
+                        let _ = crate::commands::common::save_store(&store);
+                    }
+                }
+                // 构造刷新后的账号对象
+                let mut updated = account.clone();
+                updated.access_token = Some(refresh_result.access_token);
+                updated.refresh_token = refresh_result.refresh_token;
+                // 根据 expires_in 计算 expires_at
+                let expires_at = chrono::Utc::now() + chrono::Duration::seconds(refresh_result.expires_in);
+                updated.expires_at = Some(expires_at.to_rfc3339());
+                updated
+            }
+            Err(e) => {
+                log::warn!("[CLI Switch] Token 刷新失败: {}, 使用现有 token", e);
+                account
+            }
+        }
+    } else {
+        account
+    };
 
-    // 3. 执行切号写入
+    // 3. 构造切号载荷
+    let payload = build_switch_payload(&refreshed_account)?;
+
+    // 4. 执行切号写入（包括清除旧 key）
     crate::kiro::cli::switch_cli_account(&expanded_path, &payload)
 }
 
@@ -327,12 +362,20 @@ fn build_switch_payload(
         _ => return Err(format!("不支持的 provider: {}", provider)),
     };
 
+    // 默认 profile_arn（与 Electron 版本一致）
+    const SOCIAL_PROFILE_ARN: &str = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK";
+    const BUILDER_ID_PROFILE_ARN: &str = "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX";
+
     // 构造 token JSON
     let mut token_data = serde_json::json!({
         "access_token": account.access_token,
         "refresh_token": account.refresh_token,
-        "region": account.region,
+        "region": account.region.as_ref().unwrap_or(&"us-east-1".to_string()),
     });
+
+    // 总是生成新的 expires_at（当前时间 + 1小时）
+    let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
+    token_data["expires_at"] = serde_json::json!(expires_at.to_rfc3339());
 
     // IdC 账号：补齐固定字段
     if auth_method == "IdC" {
@@ -342,19 +385,20 @@ fn build_switch_payload(
             "codewhisperer:conversations",
         ]);
         token_data["oauth_flow"] = serde_json::json!("Pkce");
+        // IdC 账号使用 BuilderId profile_arn
+        let profile_arn = account.profile_arn.as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or(BUILDER_ID_PROFILE_ARN);
+        token_data["profile_arn"] = serde_json::json!(profile_arn);
     }
 
-    // Social 账号：补齐 start_url
+    // Social 账号：补齐 start_url 和 profile_arn
     if auth_method == "social" {
         token_data["start_url"] = serde_json::json!("https://view.awsapps.com/start");
-        if let Some(ref profile_arn) = account.profile_arn {
-            token_data["profile_arn"] = serde_json::json!(profile_arn);
-        }
-    }
-
-    // 补齐过期时间
-    if let Some(ref expires_at) = account.expires_at {
-        token_data["expires_at"] = serde_json::json!(expires_at);
+        let profile_arn = account.profile_arn.as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or(SOCIAL_PROFILE_ARN);
+        token_data["profile_arn"] = serde_json::json!(profile_arn);
     }
 
     let token_value = serde_json::to_string(&token_data)
@@ -364,7 +408,7 @@ fn build_switch_payload(
     let device_reg_data = serde_json::json!({
         "client_id": account.client_id.as_ref().unwrap_or(&String::new()),
         "client_secret": account.client_secret.as_ref().unwrap_or(&String::new()),
-        "region": account.region,
+        "region": account.region.as_ref().unwrap_or(&"us-east-1".to_string()),
     });
 
     let device_reg_value = serde_json::to_string(&device_reg_data)

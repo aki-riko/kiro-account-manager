@@ -293,6 +293,19 @@ pub fn switch_cli_account(
     write_kv_value(&tx, &payload.device_reg_key, &payload.device_reg_value)
         .map_err(|e| format!("写入 device registration 失败: {e}"))?;
 
+    // 清除其他优先级的旧 token key（与 Electron 版本一致）
+    let all_token_keys = vec![
+        "kirocli:social:token",
+        "kirocli:odic:token",
+        "codewhisperer:odic:token",
+    ];
+    for key in all_token_keys {
+        if key != payload.token_key {
+            // 忽略删除失败（key 可能不存在）
+            let _ = tx.execute("DELETE FROM auth_kv WHERE key = ?1", [key]);
+        }
+    }
+
     // 提交事务
     tx.commit().map_err(|e| format!("提交事务失败: {e}"))?;
 
