@@ -117,12 +117,13 @@ pub async fn kiro_login(
     }
 
     match config.auth_method {
-        AuthMethod::Social => login_social(state, &config).await,
+        AuthMethod::Social => login_social(app_handle, state, &config).await,
         AuthMethod::Idc => login_idc(app_handle, state, &config).await,
     }
 }
 
 async fn login_social(
+    app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
     config: &crate::auth::providers::ProviderConfig,
 ) -> Result<String, String> {
@@ -232,6 +233,9 @@ async fn login_social(
     let _ = lock_store(&state.auth.access_token, "auth access_token").map(|mut t| *t = Some(token_result.access_token));
 
     *lock_store(&state.pending_login, "pending_login")? = None;
+
+    println!("\n[social] LOGIN SUCCESS: {}", account.get_display_id());
+    let _ = app_handle.emit("login-success", account.id.clone());
 
     Ok(format!("Successfully logged in with {provider_id}"))
 }
