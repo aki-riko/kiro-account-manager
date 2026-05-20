@@ -154,7 +154,7 @@ try {
   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = (Get-Content -LiteralPath $passwordPath -Raw).Trim()
 
   Ensure-CargoAvailable
-  npm run tauri build
+  bun tauri build
 
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
