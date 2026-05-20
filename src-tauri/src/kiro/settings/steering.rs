@@ -212,7 +212,7 @@ impl SteeringManager {
         };
 
         format!(
-            "## 工作区概览\n- 项目目录：{project_name}\n- 下面这些入口已经在初始化时识别到：\n{signal_lines}\n\n## 建议执行方式\n- 优先在既有目录结构内修改，不新增无关文件\n- 前端改动后运行 `npm run build`\n- Rust / Tauri 改动后运行 `cargo test`\n\n## 协作要求\n- 先确认文件边界，再做改动\n- 输出结论时附上验证证据\n- 避免把临时分析产物混入正式仓库"
+            "## 工作区概览\n- 项目目录：{project_name}\n- 下面这些入口已经在初始化时识别到：\n{signal_lines}\n\n## 建议执行方式\n- 优先在既有目录结构内修改，不新增无关文件\n- 前端改动后运行 `bun build`\n- Rust / Tauri 改动后运行 `cargo test`\n\n## 协作要求\n- 先确认文件边界，再做改动\n- 输出结论时附上验证证据\n- 避免把临时分析产物混入正式仓库"
         )
     }
 

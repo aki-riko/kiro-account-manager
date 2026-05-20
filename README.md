@@ -144,13 +144,13 @@ A: 直接继续安装即可（v1.8.3+ 支持覆盖升级）。
 git clone https://github.com/hj01857655/kiro-account-manager.git
 cd kiro-account-manager
 git checkout public
-npm install
-npm run tauri dev     # 开发模式
-npm run tauri build   # 打包安装包
+bun install
+bun tauri dev     # 开发模式
+bun tauri build   # 打包安装包
 ```
 
 **环境要求**：
-| 通用 | Node.js 20+ · Rust 工具链 (`rustup`) |
+| 通用 | Bun 1.0+ · Rust 工具链 (`rustup`) |
 |------|------|
 | 🪟 Windows | MSVC Build Tools · WebView2 |
 | 🍎 macOS | Xcode Command Line Tools |
