@@ -6,7 +6,7 @@ use crate::kiro::cli::read_kiro_cli_accounts;
 use crate::state::AppState;
 use serde::Serialize;
 use std::sync::{Mutex, MutexGuard};
-use tauri::State;
+use tauri::{Emitter, State};
 
 /// 展开路径中的 ~ 为用户主目录
 fn expand_home_dir(path: &str) -> Result<String, String> {
@@ -282,6 +282,7 @@ pub async fn switch_to_cli_account(
     account_id: String,
     db_path: String,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<crate::kiro::cli::KiroCliWriteBackup, String> {
     let expanded_path = expand_home_dir(&db_path)?;
 
@@ -343,6 +344,9 @@ pub async fn switch_to_cli_account(
                 a.usage_data = Some(usage_result.usage_data);
                 crate::commands::common::update_account_status(a, usage_result.is_banned, usage_result.is_auth_error);
                 let _ = crate::commands::common::save_store(&store);
+
+                // 通知前端刷新账号列表
+                let _ = app.emit("accounts-updated", ());
 
                 if usage_result.is_banned {
                     log::warn!("[CLI Switch] 检测到账号已封禁");
