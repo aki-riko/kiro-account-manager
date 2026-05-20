@@ -110,7 +110,6 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
     refreshToken: currentAccount.refreshToken || ''})
 
   const [refreshing, setRefreshing] = useState(false)
-  const [overageToggleLoading, setOverageToggleLoading] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
   const copiedTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -499,56 +498,13 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 </div>
                 {currentAccount.usageData?.subscriptionInfo?.overageCapability === 'OVERAGE_CAPABLE' && (
                   <div className={`p-3 rounded-lg bg-muted/30`}>
-                    <div className={`text-xs text-muted-foreground mb-1`}>超额开关</div>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        size="sm"
-                        checked={currentAccount.usageData?.overageConfiguration?.overageStatus === 'ENABLED'}
-                        disabled={overageToggleLoading}
-                        onCheckedChange={async (checked) => {
-                          // 1. 立即更新本地状态（乐观更新）
-                          setCurrentAccount(prev => ({
-                            ...prev,
-                            usageData: {
-                              ...prev.usageData,
-                              overageConfiguration: {
-                                ...prev.usageData?.overageConfiguration,
-                                overageStatus: checked ? 'ENABLED' : 'DISABLED'
-                              }
-                            }
-                          }))
-
-                          setOverageToggleLoading(true)
-                          try {
-                            await invoke('set_overage_status', { id: currentAccount.id, enabled: checked })
-                            // 2. API 成功后，再次同步确保数据一致
-                            const result = await invoke<{ account: Account; warning?: string }>('sync_account', { id: currentAccount.id })
-                            if (result?.account) {
-                              setCurrentAccount(result.account)
-                            }
-                            onRefresh?.()
-                          } catch (e) {
-                            // 3. 失败时回滚状态
-                            setCurrentAccount(prev => ({
-                              ...prev,
-                              usageData: {
-                                ...prev.usageData,
-                                overageConfiguration: {
-                                  ...prev.usageData?.overageConfiguration,
-                                  overageStatus: !checked ? 'ENABLED' : 'DISABLED'
-                                }
-                              }
-                            }))
-                            console.error('Failed to toggle overage:', e)
-                            showError('超额开关切换失败', String(e))
-                          } finally {
-                            setOverageToggleLoading(false)
-                          }
-                        }}
-                      />
-                      <span className={`text-xs ${currentAccount.usageData?.overageConfiguration?.overageStatus === 'ENABLED' ? 'text-green-500' : 'text-muted-foreground'}`}>
-                        {overageToggleLoading ? '切换中...' : (currentAccount.usageData?.overageConfiguration?.overageStatus === 'ENABLED' ? '已开启' : '已关闭')}
-                      </span>
+                    <div className={`text-xs text-muted-foreground mb-1`}>超额状态</div>
+                    <div className={"text-foreground"}>
+                      {currentAccount.usageData?.overageConfiguration?.overageStatus === 'ENABLED' ? (
+                        <span className="text-green-500 font-medium">✓ 已开启</span>
+                      ) : (
+                        <span className={"text-muted-foreground"}>✗ 已关闭</span>
+                      )}
                     </div>
                   </div>
                 )}

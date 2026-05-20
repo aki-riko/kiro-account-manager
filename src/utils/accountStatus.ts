@@ -42,7 +42,28 @@ export function isUsageCapped(usageData?: AccountUsageData): boolean {
     return false
   }
 
-  return currentUsage >= usageLimit
+  // 基础额度是否用完
+  const baseUsageFull = currentUsage >= usageLimit
+  if (!baseUsageFull) return false
+
+  // 检查超额情况
+  const overageCapability = usageData?.subscriptionInfo?.overageCapability
+  const overageStatus = usageData?.overageConfiguration?.overageStatus
+  const currentOverages = breakdown.currentOverages ?? 0
+  const overageCap = breakdown.overageCap ?? 0
+
+  // 如果开启了超额且超额还有空间，不算 capped
+  if (overageCapability === 'OVERAGE_CAPABLE' && overageStatus === 'ENABLED') {
+    // 超额也用完了才算 capped
+    if (overageCap > 0 && currentOverages >= overageCap) {
+      return true
+    }
+    // 超额还有空间，不算 capped
+    return false
+  }
+
+  // 没有超额能力或未开启，基础额度用完就是 capped
+  return true
 }
 
 export function normalizeAccountStatus(statusOrAccount: string | Account | any, usageData?: AccountUsageData): string {

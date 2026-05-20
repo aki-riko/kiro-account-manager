@@ -60,7 +60,8 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   })
   const [sortBy, setSortBy] = useState('trialAsc')
   const [refreshingTokenId, setRefreshingTokenId] = useState<string | null>(null)
-  
+  const [togglingOverageId, setTogglingOverageId] = useState<string | null>(null)
+
   // 当前登录的本地 token
   const [localToken, setLocalToken] = useState<any>(null)
   
@@ -372,13 +373,14 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
         isRefreshing: refreshingId === id,
         isRefreshingToken: refreshingTokenId === id,
         isSwitching: switchingId === id,
+        isTogglingOverage: togglingOverageId === id,
         isCopied: copiedId === id,
         availableModels: availableModelsById[id] ?? null,
         availableModelsLoading: Boolean(availableModelsLoadingById[id]),
         availableModelsError: availableModelsErrorById[id] ?? ''}
     }
     return result
-  }, [filteredAccounts, refreshingId, refreshingTokenId, switchingId, copiedId, availableModelsById, availableModelsLoadingById, availableModelsErrorById])
+  }, [filteredAccounts, refreshingId, refreshingTokenId, switchingId, togglingOverageId, copiedId, availableModelsById, availableModelsLoadingById, availableModelsErrorById])
 
 
   const handleSearchChange = useCallback((term: string) => { setSearchTerm(term) }, [])
@@ -418,6 +420,48 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
       patchAccountLocally({ ...account, enabled: !enabled })
       console.error('Toggle enabled failed:', e)
       showError('启用/禁用切换失败', String(e))
+    }
+  }, [patchAccountLocally])
+
+  // 切换超额开关
+  const handleToggleOverage = useCallback(async (account: any, enabled: boolean) => {
+    setTogglingOverageId(account.id)
+
+    // 乐观更新：立即更新本地状态
+    patchAccountLocally({
+      ...account,
+      usageData: {
+        ...account.usageData,
+        overageConfiguration: {
+          ...account.usageData?.overageConfiguration,
+          overageStatus: enabled ? 'ENABLED' : 'DISABLED'
+        }
+      }
+    })
+
+    try {
+      await invoke('set_overage_status', { id: account.id, enabled })
+      // API 成功后，再次同步确保数据一致
+      const result = await invoke<any>('sync_account', { id: account.id })
+      if (result?.account) {
+        patchAccountLocally(result.account)
+      }
+    } catch (e) {
+      // 失败时回滚状态
+      patchAccountLocally({
+        ...account,
+        usageData: {
+          ...account.usageData,
+          overageConfiguration: {
+            ...account.usageData?.overageConfiguration,
+            overageStatus: !enabled ? 'ENABLED' : 'DISABLED'
+          }
+        }
+      })
+      console.error('Failed to toggle overage:', e)
+      showError('超额开关切换失败', String(e))
+    } finally {
+      setTogglingOverageId(null)
     }
   }, [patchAccountLocally])
 
@@ -574,6 +618,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onEdit={setEditingAccount}
           onEditLabel={setEditingLabelAccount}
           onToggleEnabled={handleToggleEnabled}
+          onToggleOverage={handleToggleOverage}
           onDelete={handleDelete}
           onDeleteRemote={handleDeleteRemote}
           onAdd={() => setShowImportModal(true)}
@@ -598,6 +643,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onEdit={setEditingAccount}
           onEditLabel={setEditingLabelAccount}
           onToggleEnabled={handleToggleEnabled}
+          onToggleOverage={handleToggleOverage}
           onDelete={handleDelete}
           onDeleteRemote={handleDeleteRemote}
           onAdd={() => setShowImportModal(true)}

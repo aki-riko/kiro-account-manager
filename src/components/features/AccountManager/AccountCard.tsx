@@ -21,10 +21,12 @@ interface AccountCardProps {
   onEdit: (account: Account) => void;
   onEditLabel?: (account: Account) => void;
   onToggleEnabled?: (account: Account, enabled: boolean) => void;
+  onToggleOverage?: (account: Account, enabled: boolean) => void;
   onDelete: (id: string) => void;
   isRefreshing?: boolean;
   isRefreshingToken?: boolean;
   isSwitching?: boolean;
+  isTogglingOverage?: boolean;
   isCurrentAccount: boolean;
   tagDefinitions?: TagDefinition[];
   groupDefinitions?: GroupDefinition[];
@@ -48,10 +50,12 @@ const AccountCard = memo(function AccountCard({
   onEdit,
   onEditLabel,
   onToggleEnabled,
+  onToggleOverage,
   onDelete,
   isRefreshing = false,
   isRefreshingToken = false,
   isSwitching = false,
+  isTogglingOverage = false,
   isCurrentAccount,
   tagDefinitions = [],
   groupDefinitions = [],
@@ -117,13 +121,26 @@ const AccountCard = memo(function AccountCard({
       </div>
 
       <div className="absolute top-3 right-3 flex items-center gap-2">
-        <div onClick={(e) => e.stopPropagation()}>
+        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
           <Switch
             size="sm"
             checked={account.enabled !== false}
             onCheckedChange={(checked) => onToggleEnabled?.(account, checked)}
+            title="启用/禁用账号"
           />
         </div>
+        {account.usageData?.subscriptionInfo?.overageCapability === 'OVERAGE_CAPABLE' && (
+          <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
+            <span className="text-[9px] text-muted-foreground">⚡</span>
+            <Switch
+              size="sm"
+              checked={account.usageData?.overageConfiguration?.overageStatus === 'ENABLED'}
+              disabled={isTogglingOverage}
+              onCheckedChange={(checked) => onToggleOverage?.(account, checked)}
+              title="超额开关"
+            />
+          </div>
+        )}
         <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${statusMeta.key === 'active'
           ? "bg-green-500/10 text-green-500 border border-green-500/20"
           : statusMeta.tone === 'danger'

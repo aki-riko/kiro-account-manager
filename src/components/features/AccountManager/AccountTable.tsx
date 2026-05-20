@@ -30,6 +30,7 @@ const VirtualRow = memo(function VirtualRow({
   onEdit,
   onEditLabel,
   onToggleEnabled,
+  onToggleOverage,
   onDelete,
   onDeleteRemote,
   onAdd,
@@ -60,10 +61,12 @@ const VirtualRow = memo(function VirtualRow({
             onEdit={onEdit}
             onEditLabel={onEditLabel}
             onToggleEnabled={onToggleEnabled}
+            onToggleOverage={onToggleOverage}
             onDelete={onDelete}
             isRefreshing={Boolean(accountRowStateById?.[item.id]?.isRefreshing)}
             isRefreshingToken={Boolean(accountRowStateById?.[item.id]?.isRefreshingToken)}
             isSwitching={Boolean(accountRowStateById?.[item.id]?.isSwitching)}
+            isTogglingOverage={Boolean(accountRowStateById?.[item.id]?.isTogglingOverage)}
             isCurrentAccount={localToken?.refreshToken && item.refreshToken === localToken.refreshToken}
             tagDefinitions={tagDefinitions}
             groupDefinitions={groupDefinitions}
@@ -108,6 +111,7 @@ function AccountTable({
   onEdit,
   onEditLabel,
   onToggleEnabled,
+  onToggleOverage,
   onDelete,
   onDeleteRemote,
   onAdd,
@@ -252,6 +256,7 @@ function AccountTable({
                     onEdit={onEdit}
                     onEditLabel={onEditLabel}
                     onToggleEnabled={onToggleEnabled}
+                    onToggleOverage={onToggleOverage}
                     onDelete={onDelete}
                     onDeleteRemote={onDeleteRemote}
                     onAdd={onAdd}

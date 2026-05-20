@@ -42,6 +42,7 @@ interface ListRowProps {
   isRefreshing: boolean
   isRefreshingToken: boolean
   isSwitching: boolean
+  isTogglingOverage: boolean
   tagMap: Map<string, any>
   groupMap: Map<string, any>
   t: (key: string) => string
@@ -55,6 +56,7 @@ interface ListRowProps {
   onDelete: (id: string) => void
   onDeleteRemote?: (account: Account) => void
   onToggleEnabled?: (account: Account, enabled: boolean) => void
+  onToggleOverage?: (account: Account, enabled: boolean) => void
   onCopy: (text: string, id: string) => void
 }
 
@@ -65,6 +67,7 @@ const ListRow = memo(function ListRow({
   isRefreshing,
   isRefreshingToken,
   isSwitching,
+  isTogglingOverage,
   tagMap,
   groupMap,
   t,
@@ -78,6 +81,7 @@ const ListRow = memo(function ListRow({
   onDelete,
   onDeleteRemote,
   onToggleEnabled,
+  onToggleOverage,
   onCopy,
 }: ListRowProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
@@ -114,11 +118,14 @@ const ListRow = memo(function ListRow({
       : { icon: LogIn, label: t('accountCard.LogIn'), onClick: () => onSwitch(account), disabled: isSwitching || isUnavailable },
     { divider: true },
     { label: account.enabled === false ? '启用账号' : '禁用账号', onClick: () => onToggleEnabled?.(account, account.enabled === false) },
+    ...(overageCapability === 'OVERAGE_CAPABLE' ? [
+      { label: overageStatus === 'ENABLED' ? '关闭超额' : '开启超额', onClick: () => onToggleOverage?.(account, overageStatus !== 'ENABLED'), disabled: isTogglingOverage },
+    ] : []),
     { icon: Trash2, label: t('accountCard.delete'), onClick: () => onDelete(account.id), danger: true },
     ...(account.provider !== 'Enterprise' && !isBanned && onDeleteRemote ? [
       { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
     ] : []),
-  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onSwitch, onDelete, onDeleteRemote, onToggleEnabled, isRefreshing, isRefreshingToken, isSwitching, isBanned, isUnavailable, isCurrent])
+  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onSwitch, onDelete, onDeleteRemote, onToggleEnabled, onToggleOverage, isRefreshing, isRefreshingToken, isSwitching, isTogglingOverage, isBanned, isUnavailable, isCurrent, overageCapability, overageStatus])
 
   const subscriptionTitle = account.usageData?.subscriptionInfo?.subscriptionTitle || ''
   const subscriptionTone: Parameters<typeof Pill>[0]['tone'] =
@@ -336,9 +343,10 @@ interface AccountListViewProps {
   onDelete: (id: string) => void
   onDeleteRemote?: (account: Account) => void
   onToggleEnabled?: (account: Account, enabled: boolean) => void
+  onToggleOverage?: (account: Account, enabled: boolean) => void
   onCopy: (text: string, id: string) => void
   onAdd: () => void
-  accountRowStateById?: Record<string, { isRefreshing?: boolean; isRefreshingToken?: boolean; isSwitching?: boolean }>
+  accountRowStateById?: Record<string, { isRefreshing?: boolean; isRefreshingToken?: boolean; isSwitching?: boolean; isTogglingOverage?: boolean }>
   localToken?: { refreshToken?: string } | null
   tagDefinitions?: TagDefinition[]
   groupDefinitions?: GroupDefinition[]
@@ -362,6 +370,7 @@ function AccountListView({
   onDelete,
   onDeleteRemote,
   onToggleEnabled,
+  onToggleOverage,
   onCopy,
   onAdd,
   accountRowStateById = {},
@@ -479,6 +488,7 @@ function AccountListView({
                   isRefreshing={accountRowStateById[acc.id]?.isRefreshing ?? false}
                   isRefreshingToken={accountRowStateById[acc.id]?.isRefreshingToken ?? false}
                   isSwitching={accountRowStateById[acc.id]?.isSwitching ?? false}
+                  isTogglingOverage={accountRowStateById[acc.id]?.isTogglingOverage ?? false}
                   tagMap={tagMap}
                   groupMap={groupMap}
                   t={t}
@@ -492,6 +502,7 @@ function AccountListView({
                   onDelete={onDelete}
                   onDeleteRemote={onDeleteRemote}
                   onToggleEnabled={onToggleEnabled}
+                  onToggleOverage={onToggleOverage}
                   onCopy={onCopy}
                 />
               </div>
