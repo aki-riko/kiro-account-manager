@@ -36,6 +36,10 @@ impl OverageCapability {
             _ => Self::Unknown,
         }
     }
+
+    pub fn is_capable(self) -> bool {
+        self == Self::Capable
+    }
 }
 
 /// 状态枚举（账号实际有没有开超额）
@@ -234,19 +238,19 @@ pub fn is_in_overage(usage_data: Option<&Value>) -> bool {
 
 /// 账号是否已封顶不可用
 ///
-/// 真正封顶的两种情况：
-/// 1. 没开超额（overageStatus=DISABLED 或字段缺失）+ 已用 ≥ usageLimit
-/// 2. 开了超额（overageStatus=ENABLED）+ 已用 ≥ usageLimit + overageCap
+/// 封顶判断：所有可用配额（基础+试用+奖励+超额）都用完了
+/// 即 remaining <= 0，其中 remaining = (main + trial + bonus + overage) - (main_usage + trial_usage + bonus_usage)
 pub fn is_usage_capped(usage_data: Option<&Value>) -> bool {
-    let Some(breakdown) = UsageBreakdown::from_usage_data(usage_data) else {
+    let Some(details) = UsageDetails::from_usage_data(usage_data) else {
         return false;
     };
-    if breakdown.limit <= 0.0 {
+    // 总配额 <= 0 说明账号没有任何配额，不算封顶
+    let total_limit = details.main_limit + details.trial_limit + details.bonus_limit + details.overage_cap;
+    if total_limit <= 0.0 {
         return false;
     }
-    let status = OverageStatus::from_usage_data(usage_data);
-    let limit = breakdown.effective_limit(status);
-    breakdown.current >= limit
+    // 剩余配额 <= 0 才算真正封顶
+    details.remaining() <= 0.0
 }
 
 /// 账号配额是否超过给定阈值（百分比，0-100）
