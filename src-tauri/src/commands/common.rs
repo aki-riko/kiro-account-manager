@@ -329,7 +329,34 @@ pub async fn get_usage_by_account(
             account.provider.as_deref(),
         )
         .await;
-    parse_usage_result(usage_call)
+
+    // 如果 getUsageLimits 成功，额外调用 ListAvailableModels 检测封禁
+    // 因为某些封禁状态下 getUsageLimits 会正常返回，但 ListAvailableModels 会返回 403
+    let mut result = parse_usage_result(usage_call)?;
+
+    if !result.is_banned && profile_arn.is_some() {
+        match client
+            .list_available_models(
+                access_token,
+                &machine_id,
+                &region,
+                profile_arn,
+                None,
+                None,
+            )
+            .await
+        {
+            Err(e) if e.starts_with("BANNED:") => {
+                log::warn!("[get_usage_by_account] ListAvailableModels 检测到封禁: {}", e);
+                result.is_banned = true;
+            }
+            _ => {
+                // 其他情况忽略（AUTH_ERROR 或成功都不影响 usage 结果）
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 /// 根据 provider 获取 usage 数据（兼容旧接口，内部调用 getUsageLimits）
