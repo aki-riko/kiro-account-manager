@@ -19,7 +19,7 @@ use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
-use tauri::State;
+use tauri::{Emitter, State};
 
 #[derive(Serialize)]
 pub struct SyncAccountResult {
@@ -1298,6 +1298,7 @@ pub async fn get_account_usage(
 #[tauri::command]
 pub async fn list_available_models(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     id: String,
     model_provider: Option<String>,
     force_refresh: Option<bool>,
@@ -1368,6 +1369,8 @@ pub async fn list_available_models(
                 stored_account.status = "banned".to_string();
                 stored_account.enabled = false;
                 save_store(&store)?;
+                // 通知前端刷新账号列表
+                let _ = app.emit("accounts-updated", ());
             }
             Err(error)
         }
