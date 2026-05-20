@@ -202,10 +202,15 @@ async fn fetch_available_models_page(
             ));
         }
 
-        // 403 → 检查是否为封禁（AccessDeniedException + TemporarilySuspended）
+        // 403 → 检查是否为封禁（AccessDeniedException + TemporarilySuspended 或 suspended）
         if status.as_u16() == 403 {
+            let body_lower = body.to_lowercase();
             if body.contains("AccessDeniedException") && body.contains("TemporarilySuspended") {
                 return Err(format!("BANNED: ListAvailableModels 403 封禁: {body}"));
+            }
+            // 检查 "temporarily is suspended" 或 "suspended" 关键词
+            if body_lower.contains("suspended") {
+                return Err(format!("BANNED: ListAvailableModels 403 账号已暂停: {body}"));
             }
             // 其他 403 错误（如权限问题）不视为封禁
             return Err(format!("AUTH_ERROR: ListAvailableModels 403: {body}"));

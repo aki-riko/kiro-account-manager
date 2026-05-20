@@ -41,6 +41,7 @@ async fn classify_kiro_q_error(api: &str, resp: reqwest::Response) -> String {
     }
 
     if status_code == 403 {
+        let body_lower = body.to_lowercase();
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body) {
             let reason = parsed.get("reason").and_then(|r| r.as_str()).unwrap_or("");
             if reason == "TemporarilySuspended" {
@@ -50,6 +51,10 @@ async fn classify_kiro_q_error(api: &str, resp: reqwest::Response) -> String {
                     .unwrap_or("账号已被封禁");
                 return format!("BANNED: {message}");
             }
+        }
+        // 检查消息中是否包含 "suspended" 关键词
+        if body_lower.contains("suspended") {
+            return format!("BANNED: {body}");
         }
         return format!("AUTH_ERROR: {api} 403: {body}");
     }

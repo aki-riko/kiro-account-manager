@@ -121,6 +121,7 @@ impl KiroPortalClient {
 
             // 403 处理
             if status_code == 403 {
+                let error_msg_lower = error_msg.to_lowercase();
                 // 解析 JSON 检查 reason 字段
                 if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&error_msg) {
                     let reason = parsed.get("reason").and_then(|r| r.as_str()).unwrap_or("");
@@ -133,6 +134,10 @@ impl KiroPortalClient {
                     if reason == "TemporarilySuspended" {
                         return Err(format!("BANNED: {message}"));
                     }
+                }
+                // 检查消息中是否包含 "suspended" 关键词
+                if error_msg_lower.contains("suspended") {
+                    return Err(format!("BANNED: {error_msg}"));
                 }
                 // 403 + 其他情况 → token 无效，需要刷新
                 return Err(format!("AUTH_ERROR: HTTP {} - {}", status_code, error_msg));

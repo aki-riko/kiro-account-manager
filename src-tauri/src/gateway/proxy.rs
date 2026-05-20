@@ -2979,10 +2979,10 @@ fn map_upstream_error(status: StatusCode, body: &str) -> (StatusCode, &'static s
     let explicit_error_type = extract_error_type(body);
     let text = body.to_lowercase();
 
-    // 检测封禁错误（403 + AccessDeniedException + TemporarilySuspended）
+    // 检测封禁错误（403 + AccessDeniedException + TemporarilySuspended 或 suspended）
     let is_banned = status == StatusCode::FORBIDDEN
-        && body.contains("AccessDeniedException")
-        && body.contains("TemporarilySuspended");
+        && (body.contains("AccessDeniedException") && body.contains("TemporarilySuspended")
+            || text.contains("suspended"));
 
     // 检测token失效错误（403 + bearer token invalid/expired）
     let is_token_invalid = status == StatusCode::FORBIDDEN
