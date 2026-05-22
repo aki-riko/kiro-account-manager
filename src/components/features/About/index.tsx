@@ -21,14 +21,14 @@ const LINKS = {
   website: 'https://kiro-website-six.vercel.app',
   github: 'https://github.com/hj01857655/kiro-account-manager',
   kiroGo: 'https://github.com/hj01857655/Kiro-Go',
-  qqGroup1: 'https://qm.qq.com/q/Vh7mUrNpa8',
-  qqGroup2: 'https://qm.qq.com/q/xi0AglEqGs',
+  tgChannel: 'https://t.me/kiro520',
+  tgGroup: 'https://t.me/ide520',
 }
 
-// QQ 图标
-const QQIcon = ({ size = 16 }: { size?: number }) => (
+// Telegram 图标
+const TelegramIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12.003 2c-2.265 0-6.29 1.364-6.29 7.325v1.195S3.55 14.96 3.55 17.474c0 .665.17 1.025.281 1.025.114 0 .902-.484 1.748-2.072 0 0-.18 2.197 1.904 3.967 0 0-1.77.495-1.77 1.182 0 .686 4.078.43 6.29.43 2.213 0 6.29.256 6.29-.43 0-.687-1.77-1.182-1.77-1.182 2.085-1.77 1.905-3.967 1.905-3.967.845 1.588 1.634 2.072 1.746 2.072.111 0 .283-.36.283-1.025 0-2.514-2.166-6.954-2.166-6.954V9.325C18.29 3.364 14.268 2 12.003 2z" />
+    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.692-1.653-1.123-2.678-1.799-1.185-.781-.417-1.21.258-1.911.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.442-.752-.244-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.099.155.232.171.326.016.094.036.308.02.475z"/>
   </svg>
 )
 
@@ -221,15 +221,15 @@ function About() {
             />
             <div className="grid grid-cols-2 gap-2">
               <LinkRow
-                href={LINKS.qqGroup1}
-                icon={<QQIcon size={15} />}
-                label={t('about.qqGroup1')}
+                href={LINKS.tgChannel}
+                icon={<TelegramIcon size={15} />}
+                label={t('about.tgChannel')}
                 accent="qq"
               />
               <LinkRow
-                href={LINKS.qqGroup2}
-                icon={<QQIcon size={15} />}
-                label={t('about.qqGroup2')}
+                href={LINKS.tgGroup}
+                icon={<TelegramIcon size={15} />}
+                label={t('about.tgGroup')}
                 accent="qq"
               />
             </div>

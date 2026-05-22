@@ -371,8 +371,8 @@
   "about.links": "链接",
   "about.website": "官网",
   "about.tutorial": "使用教程",
-  "about.qqGroup1": "QQ 1群（已满）",
-  "about.qqGroup2": "QQ 2群",
+  "about.tgChannel": "Kiro Account Manager 频道",
+  "about.tgGroup": "Kiro Account Manager 交流群",
 
   "about.shop": "Kiro Gateway",
   "about.donate": "请作者喝杯咖啡 ☕",
@@ -931,7 +931,7 @@
   "announcement.content2": "本项目遵循 CC BY-NC-SA 4.0 开源协议，禁止商业使用。",
   "announcement.content3": "请从官方 GitHub 仓库下载，避免使用来路不明的版本。",
   "announcement.official": "官方开源地址：",
-  "announcement.qqGroup": "开源交流群：",
+  "announcement.tgGroup": "Telegram 交流：",
   "announcement.dontRemind": "不再提醒",
   "announcement.understand": "我已知晓",
 

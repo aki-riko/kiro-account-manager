@@ -10,8 +10,8 @@ const ANNOUNCEMENT_API = 'https://kiro-website-six.vercel.app/api/announcement'
 const WEBSITE_URL = 'https://kiro-website-six.vercel.app'
 const GITHUB_URL = 'https://github.com/hj01857655/kiro-account-manager'
 const TUTORIAL_URL = 'https://xcn46cm1l4ir.feishu.cn/wiki/YfaAw3qnoixFJgkzTSmcgtPfntc'
-const QQ_GROUP = '1020204332'
-const QQ_GROUP_URL = 'https://qm.qq.com/q/Vh7mUrNpa8'
+const TG_CHANNEL = 'https://t.me/kiro520'
+const TG_GROUP = 'https://t.me/ide520'
 
 export default function AnnouncementModal() {
   const { t} = useApp()
@@ -66,8 +66,8 @@ export default function AnnouncementModal() {
         websiteUrl: announcement.websiteUrl || WEBSITE_URL,
         officialUrl: announcement.officialUrl || GITHUB_URL,
         tutorialUrl: announcement.tutorialUrl || TUTORIAL_URL,
-        qqGroup: announcement.qqGroup || QQ_GROUP,
-        qqGroupUrl: announcement.qqGroupUrl || QQ_GROUP_URL
+        tgChannel: announcement.tgChannel || TG_CHANNEL,
+        tgGroup: announcement.tgGroup || TG_GROUP
       })
       setShow(true)
     } catch (e) {
@@ -113,14 +113,14 @@ export default function AnnouncementModal() {
           </div>
 
           {/* 官方开源信息 */}
-          {(announcement.websiteUrl || announcement.officialUrl || announcement.qqGroup) && (
+          {(announcement.websiteUrl || announcement.officialUrl || announcement.tgChannel || announcement.tgGroup) && (
             <div className={`mt-5 p-4 rounded-xl bg-muted/30`}>
               <p className={`text-sm font-medium mb-3 text-foreground`}>相关链接</p>
               <div className="flex flex-wrap gap-2">
                 {announcement.websiteUrl && (
-                  <a 
+                  <a
                     href={announcement.websiteUrl}
-                    target="_blank" 
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm hover:opacity-90 transition"
                   >
@@ -129,9 +129,9 @@ export default function AnnouncementModal() {
                   </a>
                 )}
                 {announcement.officialUrl && (
-                  <a 
+                  <a
                     href={announcement.officialUrl}
-                    target="_blank" 
+                    target="_blank"
                     rel="noopener noreferrer"
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-muted/50 text-foreground`}
                   >
@@ -140,9 +140,9 @@ export default function AnnouncementModal() {
                   </a>
                 )}
                 {announcement.tutorialUrl && (
-                  <a 
+                  <a
                     href={announcement.tutorialUrl}
-                    target="_blank" 
+                    target="_blank"
                     rel="noopener noreferrer"
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-muted/50 text-primary`}
                   >
@@ -150,15 +150,26 @@ export default function AnnouncementModal() {
                     <span>教程</span>
                   </a>
                 )}
-                {announcement.qqGroup && (
-                  <a 
-                    href={announcement.qqGroupUrl || '#'}
-                    target="_blank" 
+                {announcement.tgChannel && (
+                  <a
+                    href={announcement.tgChannel}
+                    target="_blank"
                     rel="noopener noreferrer"
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-muted/50 text-primary`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-muted/50 text-blue-500`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.692-1.653-1.123-2.678-1.799-1.185-.781-.417-1.21.258-1.911.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.442-.752-.244-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.099.155.232.171.326.016.094.036.308.02.475z"/></svg>
+                    <span>频道</span>
+                  </a>
+                )}
+                {announcement.tgGroup && (
+                  <a
+                    href={announcement.tgGroup}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-muted/50 text-blue-500`}
                   >
                     <MessageCircle size={14} />
-                    <span>QQ群</span>
+                    <span>讨论组</span>
                   </a>
                 )}
               </div>

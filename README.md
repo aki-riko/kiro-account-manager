@@ -9,8 +9,8 @@
   <img src="https://img.shields.io/github/v/release/hj01857655/kiro-account-manager?label=Version&color=green" alt="Version">
   <img src="https://img.shields.io/github/downloads/hj01857655/kiro-account-manager/total?color=brightgreen" alt="Downloads">
   <img src="https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-orange" alt="License">
-  <img src="https://img.shields.io/badge/QQ群1-1020204332-12B7F5?logo=tencentqq" alt="QQ群1">
-  <img src="https://img.shields.io/badge/QQ群2-1080919449-12B7F5?logo=tencentqq" alt="QQ群2">
+  <img src="https://img.shields.io/badge/Telegram-频道-2CA5E0?logo=telegram" alt="Telegram频道">
+  <img src="https://img.shields.io/badge/Telegram-讨论组-2CA5E0?logo=telegram" alt="Telegram讨论组">
   <img src="https://img.shields.io/badge/语言-简体中文-red" alt="语言">
 </p>
 
@@ -21,7 +21,7 @@
 <p align="center">
   🌐 <b><a href="https://kiro-website-six.vercel.app">官方网站</a></b> | 
   📥 <b><a href="#-下载">立即下载</a></b> | 
-  💬 <b><a href="https://qm.qq.com/q/xi0AglEqGs">加入 QQ 2群</a></b>
+  💬 <b><a href="https://t.me/ide520">Telegram 讨论组</a></b>
 </p>
 
 > **📢 语言支持**：本项目**仅支持简体中文界面**。
@@ -184,8 +184,8 @@ bun tauri build   # 打包安装包
 ## 💬 交流反馈
 
 - 🐛 [提交 Issue](https://github.com/hj01857655/kiro-account-manager/issues)
-- 💬 QQ 1群：[1020204332](https://qm.qq.com/q/Vh7mUrNpa8)
-- 💬 QQ 2群：[1080919449](https://qm.qq.com/q/xi0AglEqGs)
+- 📢 Telegram 频道：[https://t.me/kiro520](https://t.me/kiro520)
+- 💬 Telegram 讨论组：[https://t.me/ide520](https://t.me/ide520)
 
 ---
 
