@@ -4,23 +4,31 @@ import { initReactI18next, I18nextProvider } from 'react-i18next'
 
 // 从 JSON 文件导入翻译
 import zhCN from '../locales/zh-CN.json'
+import en from '../locales/en.json'
+import ru from '../locales/ru.json'
 
-// 初始化 i18n（仅支持中文）
+// 初始化 i18n（支持中文、英文、俄文）
 i18n
   .use(initReactI18next)
   .init({
     lng: 'zh-CN',
     fallbackLng: 'zh-CN',
-    supportedLngs: ['zh-CN'],
-    
+    supportedLngs: ['zh-CN', 'en', 'ru'],
+
     resources: {
-      'zh-CN': { translation: zhCN }},
-    
+      'zh-CN': { translation: zhCN },
+      'en': { translation: en },
+      'ru': { translation: ru }
+    },
+
     interpolation: {
-      escapeValue: false},
-    
+      escapeValue: false
+    },
+
     react: {
-      useSuspense: false}})
+      useSuspense: false
+    }
+  })
 
 // I18nProvider 组件
 function I18nProvider({ children }) {
