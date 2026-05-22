@@ -115,7 +115,7 @@ export default function AnnouncementModal() {
           {/* 官方开源信息 */}
           {(announcement.websiteUrl || announcement.officialUrl || announcement.tgChannel || announcement.tgGroup) && (
             <div className={`mt-5 p-4 rounded-xl bg-muted/30`}>
-              <p className={`text-sm font-medium mb-3 text-foreground`}>相关链接</p>
+              <p className={`text-sm font-medium mb-3 text-foreground`}>Related links</p>
               <div className="flex flex-wrap gap-2">
                 {announcement.websiteUrl && (
                   <a
@@ -125,7 +125,7 @@ export default function AnnouncementModal() {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm hover:opacity-90 transition"
                   >
                     <span>🌐</span>
-                    <span>官网</span>
+                    <span>Website</span>
                   </a>
                 )}
                 {announcement.officialUrl && (
@@ -147,7 +147,7 @@ export default function AnnouncementModal() {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-muted/50 text-primary`}
                   >
                     <span>📖</span>
-                    <span>教程</span>
+                    <span>Tutorial</span>
                   </a>
                 )}
                 {announcement.tgChannel && (
@@ -158,7 +158,7 @@ export default function AnnouncementModal() {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-muted/50 text-blue-500`}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.692-1.653-1.123-2.678-1.799-1.185-.781-.417-1.21.258-1.911.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.442-.752-.244-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.099.155.232.171.326.016.094.036.308.02.475z"/></svg>
-                    <span>频道</span>
+                    <span>Channel</span>
                   </a>
                 )}
                 {announcement.tgGroup && (
@@ -169,7 +169,7 @@ export default function AnnouncementModal() {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition hover:bg-muted/50 text-blue-500`}
                   >
                     <MessageCircle size={14} />
-                    <span>讨论组</span>
+                    <span>Community</span>
                   </a>
                 )}
               </div>
@@ -179,7 +179,7 @@ export default function AnnouncementModal() {
           {/* 续杯交流群 */}
           {announcement.buyGroup && (
             <div className={`mt-3 p-4 rounded-xl bg-muted/30`}>
-              <p className={`text-sm font-medium mb-3 text-foreground`}>账号购买需求：</p>
+              <p className={`text-sm font-medium mb-3 text-foreground`}>Account purchase needs:</p>
               <div className="space-y-2">
                 {announcement.buyUrl && (
                   <a 
@@ -189,7 +189,7 @@ export default function AnnouncementModal() {
                     className="flex items-center gap-2 text-blue-500 hover:text-blue-400 text-sm"
                   >
                     <ExternalLink size={14} className="shrink-0" />
-                    <span>在线购买</span>
+                    <span>Buy online</span>
                   </a>
                 )}
                 {announcement.refillTutorialUrl && (
@@ -200,7 +200,7 @@ export default function AnnouncementModal() {
                     className="flex items-center gap-2 text-blue-500 hover:text-blue-400 text-sm"
                   >
                     <ExternalLink size={14} className="shrink-0" />
-                    <span>Kiro续杯教程</span>
+                    <span>{t('announcement.refillTutorial')}</span>
                   </a>
                 )}
                 <a 
@@ -224,7 +224,7 @@ export default function AnnouncementModal() {
               checked={agreed}
               onCheckedChange={setAgreed}
             />
-            <span className="text-sm">我已阅读并知晓以上内容</span>
+            <span className="text-sm">I have read and understood the above</span>
           </label>
           <div className="flex gap-3">
             <button
