@@ -40,11 +40,11 @@ const MAX_FAILURES_PER_ACCOUNT: u32 = 3;
 const MAX_KIRO_PAYLOAD_SIZE: usize = 450 * 1024; // 450KB - Kiro API 的 HTTP 请求大小限制（更保守）
 
 // Token 限制的默认值（当无法从 API 获取时使用）
+#[allow(dead_code)]
 const SUMMARIZATION_THRESHOLD_PERCENT: f64 = 0.55; // 55% 触发裁剪（预留更多安全空间，避免 Kiro IDE 上下文导致超限）
 
 use super::{
     append_gateway_request_log,
-    compress::compress_conversation_history,
     converter::{
         build_kiro_payload, get_available_models,
         normalize_anthropic_request, normalize_responses_request,
@@ -318,6 +318,7 @@ fn check_payload_size(payload: &Value) -> usize {
 }
 
 /// Token 估算器类型（根据模型选择不同的估算方法）
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 enum TokenizerType {
     Claude,   // Anthropic Claude 模型
@@ -345,17 +346,18 @@ impl TokenizerType {
 }
 
 /// 估算请求消息的 token 数量（支持多种模型）
-/// 
+///
 /// 参考 Kiro IDE 源码：extension.js 行 310847-310873
 /// - Claude: length / 4 + newlines * 0.5 + code_blocks * 2
 /// - OpenAI: 使用 Generic 方法（tiktoken 需要额外依赖）
 /// - Llama: length / 3.5
 /// - Generic: length / 4 + newlines * 0.5 + code_blocks * 2
-/// 
+///
 /// 注意：这是粗略估算，用于提前拒绝明显超长的请求
 /// - Kiro API 的 max_input_tokens 是 200k
 /// - Kiro IDE 在 80% (160k tokens) 时触发自动总结
 /// - 网关在 160k tokens 时直接拒绝（无法实现 AI 总结）
+#[allow(dead_code)]
 fn estimate_request_tokens(messages: &[NormalizedMessage], model_id: &str) -> usize {
     let tokenizer_type = TokenizerType::from_model_id(model_id);
     
@@ -391,6 +393,7 @@ fn estimate_request_tokens(messages: &[NormalizedMessage], model_id: &str) -> us
 /// 4. 至少保留 2 条消息（system + 最后一条用户消息）
 ///
 /// 返回：是否成功裁剪
+#[allow(dead_code)]
 fn trim_messages_by_tokens(
             messages: &mut Vec<NormalizedMessage>,
             target_tokens: usize,
@@ -574,6 +577,7 @@ fn extract_plain_text(value: Option<&Value>) -> String {
 ///   return baseTokens + newlineTokens + codeBlockTokens;
 /// }
 /// ```
+#[allow(dead_code)]
 fn estimate_text_tokens(text: &str, tokenizer_type: TokenizerType) -> usize {
     if text.is_empty() {
         return 0;
@@ -605,6 +609,7 @@ fn estimate_text_tokens(text: &str, tokenizer_type: TokenizerType) -> usize {
 /// - newline_tokens = ceil(lines * 0.5)
 /// - code_block_tokens = code_blocks * 2
 /// - total = base_tokens + newline_tokens + code_block_tokens
+#[allow(dead_code)]
 fn estimate_generic_tokens(text: &str) -> usize {
     // 基础估算：4 字符 = 1 token（向上取整）
     let base_tokens = text.len().div_ceil(4);
@@ -623,12 +628,13 @@ fn estimate_generic_tokens(text: &str) -> usize {
 /// 获取模型的最大输入 token 数
 ///
 /// 根据模型 ID 返回对应的 maxInputTokens
-/// 
+///
 /// 数据来源：
 /// - Kiro 官方文档：https://kiro.dev/docs/models/
 /// - Claude Opus 4.6/4.7：1M tokens
 /// - Claude Sonnet 4.6：1M tokens
 /// - 其他 Claude 4.x：200k tokens
+#[allow(dead_code)]
 async fn get_model_max_input_tokens(model_id: &str) -> usize {
     let model_lower = model_id.to_lowercase();
     
@@ -2221,7 +2227,7 @@ async fn resolve_managed_account_credentials(
                 );
                 return Ok(UpstreamCredentials {
                     access_token: access_token.clone(),
-                    profile_arn: Some(ctx.profile_arn),
+                    profile_arn: ctx.profile_arn,
                     provider: account.provider.clone(),
                     region: ctx.region,
                     source_label: format_managed_upstream_source(&state.config, &account),
@@ -2289,8 +2295,11 @@ async fn resolve_managed_account_credentials(
                 .clone()
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(get_machine_id);
-            let profile_arn = refresh.profile_arn.or_else(|| account.profile_arn.clone())
-                .or_else(|| Some(resolve_default_profile_arn(account.provider.as_deref()).to_string()));
+            let profile_arn = match account.provider.as_deref() {
+                Some("Enterprise") => None,
+                provider => refresh.profile_arn.or_else(|| account.profile_arn.clone())
+                    .or_else(|| Some(resolve_default_profile_arn(provider).to_string())),
+            };
             let region = resolve_kiro_upstream_region(
                 profile_arn.as_deref(),
                 account.region.as_deref(),

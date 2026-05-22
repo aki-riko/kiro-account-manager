@@ -1737,7 +1737,7 @@ pub async fn set_overage_status(
             &final_access_token,
             &ctx.machine_id,
             &ctx.region,
-            &ctx.profile_arn,
+            ctx.profile_arn.as_deref(),
             overage_status,
         )
         .await;
@@ -1763,7 +1763,7 @@ pub async fn set_overage_status(
                     &refresh_result.access_token,
                     &ctx.machine_id,
                     &ctx.region,
-                    &ctx.profile_arn,
+                    ctx.profile_arn.as_deref(),
                     overage_status,
                 )
                 .await?;

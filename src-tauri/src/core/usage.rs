@@ -37,6 +37,7 @@ impl OverageCapability {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_capable(self) -> bool {
         self == Self::Capable
     }

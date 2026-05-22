@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::gateway::converter::build_kiro_payload;
 use crate::gateway::eventstream::decode_message;
 use crate::gateway::models::NormalizedMessage;

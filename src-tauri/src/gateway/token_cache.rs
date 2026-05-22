@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};

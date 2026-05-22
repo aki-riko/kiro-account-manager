@@ -222,15 +222,17 @@ impl KiroQClient {
         access_token: &str,
         machine_id: &str,
         region: &str,
-        profile_arn: &str,
+        profile_arn: Option<&str>,
         overage_status: &str,
     ) -> Result<(), String> {
         let url = format!("{}/setUserPreference", build_q_service_url(region));
 
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "overageConfiguration": { "overageStatus": overage_status },
-            "profileArn": profile_arn
         });
+        if let Some(profile_arn) = profile_arn.filter(|value| !value.trim().is_empty()) {
+            body["profileArn"] = serde_json::json!(profile_arn);
+        }
 
         let request = with_kiro_q_headers(self.client.post(&url), access_token, machine_id)
             .header("content-type", "application/json")

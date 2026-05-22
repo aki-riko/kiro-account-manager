@@ -300,6 +300,7 @@ struct RouterState {
     last_error: Arc<AsyncMutex<Option<String>>>,
     http: Client,
     responses_sessions: ResponsesSessionStore,
+    #[allow(dead_code)]
     token_cache: Arc<AsyncMutex<TokenCache>>,
     load_balancer: Arc<load_balancer::LoadBalancer>,
     log_store: Arc<log_store::LogStore>,

@@ -60,12 +60,12 @@ pub fn find_account_by_id(
 ///
 /// 解析规则：
 /// - machine_id：账号自带（非空）→ 否则系统 machine_guid
-/// - profile_arn：账号自带 → 否则 provider 默认 ARN
+/// - profile_arn：Enterprise → None；其他账号自带 → 否则 provider 默认 ARN
 /// - region：profile_arn 解析出来的 region 优先 → 账号 region → fallback
 pub struct KiroCallContext {
     pub machine_id: String,
     pub region: String,
-    pub profile_arn: String,
+    pub profile_arn: Option<String>,
 }
 
 pub fn resolve_kiro_call_context(account: &Account, fallback_region: &str) -> KiroCallContext {
@@ -78,14 +78,17 @@ pub fn resolve_kiro_call_context(account: &Account, fallback_region: &str) -> Ki
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(get_machine_id);
 
-    let profile_arn = account
-        .profile_arn
-        .clone()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| resolve_default_profile_arn(account.provider.as_deref()).to_string());
+    let profile_arn = match account.provider.as_deref() {
+        Some("Enterprise") => None,
+        provider => account
+            .profile_arn
+            .clone()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| Some(resolve_default_profile_arn(provider).to_string())),
+    };
 
     let region = resolve_kiro_upstream_region(
-        Some(&profile_arn),
+        profile_arn.as_deref(),
         account.region.as_deref(),
         fallback_region,
     );
