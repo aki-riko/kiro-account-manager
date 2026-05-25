@@ -59,7 +59,7 @@ function Settings() {
     const [autoSwitchInterval, setAutoSwitchInterval] = useState(5)
 
     // 关闭窗口行为
-    const [closeToTray, setCloseToTray] = useState(true)
+    const [closeToTray, setCloseToTray] = useState(false)
 
     // Kiro IDE 状态
     const [, setLoading] = useState(false)
@@ -123,7 +123,7 @@ function Settings() {
                 setAutoSwitchThreshold(appSettings.autoSwitchThreshold ?? 1)
                 setAutoSwitchInterval(appSettings.autoSwitchInterval ?? 5)
                 // 关闭窗口行为
-                setCloseToTray(appSettings.closeToTray ?? true)
+                setCloseToTray(appSettings.closeToTray ?? false)
             }
         } catch (err) {
             console.error('Failed to load settings:', err)

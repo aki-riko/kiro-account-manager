@@ -342,7 +342,7 @@ fn setup_window_close_handler(app: &mut tauri::App) -> Result<(), Box<dyn std::e
                 let settings = commands::app_settings_cmd::get_app_settings_inner()
                     .unwrap_or_default();
 
-                if settings.close_to_tray.unwrap_or(true) {
+                if settings.close_to_tray.unwrap_or(false) {
                     // 最小化到托盘
                     api.prevent_close();
                     let _ = window_clone.hide();

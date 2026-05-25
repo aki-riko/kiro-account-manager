@@ -82,7 +82,7 @@ impl Default for AppSettings {
             telemetry_edit_stats: Some(false),
             telemetry_feedback: Some(false),
             custom_kiro_path: None,
-            close_to_tray: Some(true), // 默认最小化到托盘
+            close_to_tray: Some(false), // 默认直接退出，由用户主动开启最小化到托盘
         }
     }
 }

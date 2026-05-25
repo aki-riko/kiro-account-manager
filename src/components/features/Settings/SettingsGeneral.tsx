@@ -255,8 +255,8 @@ function SettingsGeneral({
           <SwitchRow
             checked={closeToTray}
             onCheckedChange={handleCloseToTrayChange}
-            label="最小化到托盘"
-            hint="(关闭按钮 → 后台运行)"
+            label={t('settings.minimizeToTray')}
+            hint={t('settings.minimizeToTrayHint')}
           />
         </div>
       </SectionCard>
