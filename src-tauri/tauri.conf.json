@@ -4,8 +4,8 @@
   "version": "1.8.7",
   "identifier": "com.kiro.account-manager",
   "build": {
-    "beforeDevCommand": "bun dev",
-    "beforeBuildCommand": "bun build",
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
