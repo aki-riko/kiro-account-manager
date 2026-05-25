@@ -1,10 +1,11 @@
-import { Clock, Globe, Search, Shield, Shuffle, AlertTriangle, Eye, EyeOff, Repeat, RefreshCw, Check, Copy, Cpu, X, FolderOpen, ExternalLink, Users, User } from 'lucide-react'
+import { Clock, Globe, Search, Shield, Shuffle, AlertTriangle, Eye, EyeOff, Repeat, RefreshCw, Check, Copy, Cpu, X, FolderOpen, ExternalLink, Users, User, Languages } from 'lucide-react'
 import { Input } from '../../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import React from 'react'
 import { TFunction } from 'i18next'
 import SectionCard from './SectionCard'
 import SwitchRow from './SwitchRow'
+import { useI18n } from '../../../hooks/useI18n'
 
 interface BrowserInfo {
   name: string;
@@ -59,6 +60,27 @@ interface SettingsGeneralProps {
 }
 
 /// 紧凑开关行已抽到 ./SwitchRow
+
+function LanguageSelector({ t }: { t: TFunction }) {
+  const { locale, setLocale, supportedLanguages } = useI18n()
+
+  return (
+    <div className="flex items-center justify-between py-1">
+      <div className="flex items-center gap-2">
+        <Globe size={14} className="text-muted-foreground" />
+        <span className="text-sm text-foreground">{t('settings.displayLanguage')}</span>
+      </div>
+      <Select value={locale} onValueChange={setLocale}>
+        <SelectTrigger className="h-7 w-[140px] text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {supportedLanguages.map(lang => (
+            <SelectItem key={lang.code} value={lang.code}>{lang.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
 
 function SettingsGeneral({
   autoRefresh,
@@ -133,6 +155,14 @@ function SettingsGeneral({
 
   return (
     <div className="space-y-3">
+      {/* 语言设置 */}
+      <SectionCard
+        title={t('settings.language')}
+        icon={<Languages size={14} className="text-primary" />}
+      >
+        <LanguageSelector t={t} />
+      </SectionCard>
+
       {/* 账号管理 */}
       <SectionCard
         title={t('settings.account')}

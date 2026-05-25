@@ -11,7 +11,7 @@ import ru from '../locales/ru.json'
 i18n
   .use(initReactI18next)
   .init({
-    lng: 'zh-CN',
+    lng: localStorage.getItem('app-language') || 'zh-CN',
     fallbackLng: 'zh-CN',
     supportedLngs: ['zh-CN', 'en', 'ru'],
 
