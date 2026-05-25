@@ -299,6 +299,7 @@
   "accounts.banned": "Заблокирован",
   "accounts.invalid": "Недействителен",
   "accounts.expired": "Истёк",
+  "accounts.capped": "Лимит исчерпан",
   "accounts.noAccounts": "Нет аккаунтов",
   "accounts.addFirst": "Нажмите 'Добавить аккаунт' выше для начала",
   "accounts.confirmDelete": "Вы уверены, что хотите удалить этот аккаунт?",

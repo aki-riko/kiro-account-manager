@@ -127,7 +127,7 @@ export function getAccountStatusMeta(statusOrAccount: string | Account | any, t?
     case 'active':
       return { key: 'active', label: t?.('accounts.active') ?? '正常', tone: 'success' }
     case 'capped':
-      return { key: 'capped', label: t?.('accounts.capped') ?? '已封顶', tone: 'danger' }
+      return { key: 'capped', label: t?.('accounts.capped') ?? '封顶', tone: 'danger' }
     case 'overage':
       return { key: 'overage', label: t?.('accounts.overage') ?? '超额中', tone: 'warning' }
     case 'banned':

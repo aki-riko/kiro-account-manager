@@ -302,6 +302,7 @@
   "accounts.banned": "Banned",
   "accounts.invalid": "Invalid",
   "accounts.expired": "Expired",
+  "accounts.capped": "Capped",
   "accounts.noAccounts": "No accounts",
   "accounts.addFirst": "Click 'Add Account' above to start",
   "accounts.confirmDelete": "Are you sure you want to delete this account?",
