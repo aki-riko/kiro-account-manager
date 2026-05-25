@@ -10,6 +10,7 @@ pub enum KiroEvent {
     },
     ToolUseInputDelta {
         id: String,
+        name: Option<String>,
         input_delta: String,
     },
     ToolUseStop {
@@ -293,6 +294,7 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
                 log::debug!("[Tool Use] 发送 ToolUseInputDelta: id={}, delta_len={}", tool_use_id, input_delta.len());
                 return Some(KiroEvent::ToolUseInputDelta {
                     id: tool_use_id.to_string(),
+                    name: if name.is_empty() { None } else { Some(name) },
                     input_delta,
                 });
             }
@@ -407,11 +409,25 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
                 }
                 KiroEvent::ToolUseStart { id, name } => {
                     log::debug!("[聚合] 工具使用开始: id={}, name={}", id, name);
-                    tool_accumulators.entry(id).or_insert((name, String::new()));
+                    let entry = tool_accumulators
+                        .entry(id)
+                        .or_insert((String::new(), String::new()));
+                    if entry.0.is_empty() {
+                        entry.0 = name;
+                    }
                 }
-                KiroEvent::ToolUseInputDelta { id, input_delta } => {
+                KiroEvent::ToolUseInputDelta {
+                    id,
+                    name,
+                    input_delta,
+                } => {
                     log::debug!("[聚合] 工具输入增量: id={}, delta_len={}", id, input_delta.len());
-                    if let Some((_, current_input)) = tool_accumulators.get_mut(&id) {
+                    if let Some((existing_name, current_input)) = tool_accumulators.get_mut(&id) {
+                        if existing_name.is_empty() {
+                            if let Some(name) = name {
+                                *existing_name = name;
+                            }
+                        }
                         if input_delta.trim_start().starts_with('{') && current_input.trim_start().starts_with('{') {
                             log::debug!("[聚合] 检测到完整 JSON input，替换而不是追加");
                             *current_input = input_delta;
@@ -419,7 +435,7 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
                             current_input.push_str(&input_delta);
                         }
                     } else {
-                        tool_accumulators.insert(id, (String::new(), input_delta));
+                        tool_accumulators.insert(id, (name.unwrap_or_default(), input_delta));
                     }
                 }
                 KiroEvent::ToolUseStop { id } => {
@@ -793,6 +809,7 @@ mod tests {
             parse_kiro_event_full(r#"{"toolUseId":"tool_1","input":{"q":"gateway"}}"#),
             Some(KiroEvent::ToolUseInputDelta {
                 id: "tool_1".to_string(),
+                name: None,
                 input_delta: "{\"q\":\"gateway\"}".to_string(),
             })
         );
@@ -830,6 +847,40 @@ mod tests {
                 unit_plural: "credits".to_string(),
                 usage: 0.3876425741791045,
             })
+        );
+    }
+
+    #[test]
+    fn parse_kiro_event_full_keeps_tool_name_with_wrapped_input() {
+        assert_eq!(
+            parse_kiro_event_full(
+                r#"{"toolUseEvent":{"toolUseId":"tool_1","name":"server_health","input":"{}"}}"#
+            ),
+            Some(KiroEvent::ToolUseInputDelta {
+                id: "tool_1".to_string(),
+                name: Some("server_health".to_string()),
+                input_delta: "{}".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn aggregate_kiro_response_from_payloads_keeps_name_when_input_arrives_first() {
+        let payloads = vec![
+            r#"{"toolUseEvent":{"toolUseId":"tool_1","name":"server_health","input":"{}"}}"#
+                .to_string(),
+            r#"{"toolUseEvent":{"toolUseId":"tool_1","stop":true}}"#.to_string(),
+        ];
+
+        let aggregated = aggregate_kiro_response_from_payloads(&payloads);
+
+        assert_eq!(
+            aggregated.tool_calls,
+            vec![(
+                "tool_1".to_string(),
+                "server_health".to_string(),
+                "{}".to_string()
+            )]
         );
     }
 

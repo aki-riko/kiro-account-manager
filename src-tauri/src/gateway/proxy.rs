@@ -42,6 +42,8 @@ const MAX_KIRO_PAYLOAD_SIZE: usize = 450 * 1024; // 450KB - Kiro API 的 HTTP �
 // Token 限制的默认值（当无法从 API 获取时使用）
 #[allow(dead_code)]
 const SUMMARIZATION_THRESHOLD_PERCENT: f64 = 0.55; // 55% 触发裁剪（预留更多安全空间，避免 Kiro IDE 上下文导致超限）
+const COUNT_TOKENS_SAFETY_MULTIPLIER: f64 = 1.15;
+const EMPTY_ANTHROPIC_RESPONSE_FALLBACK: &str = "[Gateway received an empty upstream response.]";
 
 use super::{
     append_gateway_request_log,
@@ -264,16 +266,18 @@ fn build_models_response() -> Value {
 }
 
 fn build_count_tokens_response(payload: &Value) -> Value {
-    let mut chars = 0usize;
-    if let Some(messages) = payload.get("messages").and_then(Value::as_array) {
-        for message in messages {
-            chars += extract_plain_text(message.get("content")).chars().count();
-        }
-    }
-    if let Some(input) = payload.get("input") {
-        chars += extract_plain_text(Some(input)).chars().count();
-    }
-    json!({ "input_tokens": (chars / 4).max(1) })
+    json!({ "input_tokens": estimate_count_tokens_payload(payload).max(1) })
+}
+
+fn estimate_count_tokens_payload(payload: &Value) -> usize {
+    let model_id = payload
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let tokenizer_type = TokenizerType::from_model_id(model_id);
+    let serialized = serde_json::to_string(payload).unwrap_or_else(|_| payload.to_string());
+    let raw_tokens = estimate_text_tokens(&serialized, tokenizer_type);
+    ((raw_tokens as f64) * COUNT_TOKENS_SAFETY_MULTIPLIER).ceil() as usize
 }
 
 fn build_health_response() -> Value {
@@ -382,6 +386,32 @@ fn estimate_request_tokens(messages: &[NormalizedMessage], model_id: &str) -> us
             tokens
 })
 .sum()
+}
+
+fn estimate_request_tokens_with_tools(
+            messages: &[NormalizedMessage],
+            tools: &Option<Vec<Tool>>,
+            model_id: &str,
+) -> usize {
+            let tokenizer_type = TokenizerType::from_model_id(model_id);
+            let mut tokens = estimate_request_tokens(messages, model_id);
+
+            if let Some(tools) = tools {
+                for tool in tools {
+                    tokens += estimate_text_tokens(&tool.function.name, tokenizer_type);
+                    if let Some(description) = &tool.function.description {
+                        tokens += estimate_text_tokens(description, tokenizer_type);
+                    }
+                    if let Some(parameters) = &tool.function.parameters {
+                        tokens += estimate_text_tokens(&parameters.to_string(), tokenizer_type);
+                    }
+                    if let Some(cache_control) = &tool.cache_control {
+                        tokens += estimate_text_tokens(&cache_control.to_string(), tokenizer_type);
+                    }
+                }
+            }
+
+            tokens
 }
 
 /// 智能裁剪消息列表到目标 token 数
