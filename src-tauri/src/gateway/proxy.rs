@@ -3367,20 +3367,148 @@ fn stream_proxy_response(
                                                 }
                                             }
                                         }
-                                        KiroEvent::ToolUseInputDelta { id, input_delta } => {
-                                            // 只累积 input 片段，不立即转发
-                                            // 参考 Kiro-Go 的做法：等到 ToolUseStop 时再一次性发送完整的 input
-                                            if let Some((_, current_input)) =
+                                        KiroEvent::ToolUseInputDelta { id, name, input_delta } => {
+                                            // 当 input delta 先于 start 到达时（Kiro 流可能乱序），
+                                            // 用 delta 中携带的 name 主动发起 start 事件，避免客户端卡死
+                                            let mut started_from_delta = false;
+                                            if let Some((existing_name, current_input)) =
                                                 tool_accumulators.get_mut(&id)
                                             {
+                                                if existing_name.is_empty() {
+                                                    if let Some(n) = name.as_ref() {
+                                                        *existing_name = restore_tool_name(n);
+                                                    }
+                                                }
                                                 current_input.push_str(&input_delta);
                                             } else {
+                                                let resolved_name = name
+                                                    .as_ref()
+                                                    .map(|n| restore_tool_name(n))
+                                                    .unwrap_or_default();
                                                 tool_accumulators.insert(
                                                     id.clone(),
-                                                    (String::new(), input_delta.clone()),
+                                                    (resolved_name, input_delta.clone()),
                                                 );
+                                                started_from_delta = true;
                                             }
-                                            // 不再立即转发片段，避免客户端收到不完整的 JSON
+
+                                            // 如果是 delta 先到，并且携带了 name，则补发 start 事件
+                                            if started_from_delta {
+                                                if let Some(raw_name) = name.as_ref() {
+                                                    let original_name = restore_tool_name(raw_name);
+                                                    saw_tool_calls = true;
+                                                    match format {
+                                                        ResponseFormat::Anthropic => {
+                                                            if !tool_block_indexes.contains_key(&id) {
+                                                                ensure_anthropic_message_start(
+                                                                    &tx,
+                                                                    &mut message_started,
+                                                                    &anthropic_id,
+                                                                    &model,
+                                                                    aggregated.input_tokens,
+                                                                    aggregated.output_tokens,
+                                                                    aggregated.cache_read_input_tokens,
+                                                                    aggregated.cache_creation_input_tokens,
+                                                                )
+                                                                .await;
+                                                                close_content_block(
+                                                                    &tx,
+                                                                    &mut text_block_index,
+                                                                )
+                                                                .await;
+                                                                close_content_block(
+                                                                    &tx,
+                                                                    &mut thinking_block_index,
+                                                                )
+                                                                .await;
+                                                                let index = next_block_index;
+                                                                next_block_index += 1;
+                                                                tool_block_indexes
+                                                                    .insert(id.clone(), index);
+                                                                let data = json!({
+                                                                    "type": "content_block_start",
+                                                                    "index": index,
+                                                                    "content_block": {
+                                                                        "type": "tool_use",
+                                                                        "id": id,
+                                                                        "name": original_name,
+                                                                        "input": {}
+                                                                    }
+                                                                });
+                                                                send_event(
+                                                                    &tx,
+                                                                    Some("content_block_start"),
+                                                                    &data.to_string(),
+                                                                )
+                                                                .await;
+                                                            }
+                                                        }
+                                                        ResponseFormat::Responses => {
+                                                            if !responses_tool_output_indexes
+                                                                .contains_key(&id)
+                                                            {
+                                                                let output_index =
+                                                                    responses_next_output_index;
+                                                                responses_next_output_index += 1;
+                                                                responses_tool_output_indexes
+                                                                    .insert(id.clone(), output_index);
+                                                                let data = json!({
+                                                                    "type": "response.output_item.added",
+                                                                    "response_id": response_id,
+                                                                    "output_index": output_index,
+                                                                    "item": {
+                                                                        "id": id,
+                                                                        "type": "function_call",
+                                                                        "status": "in_progress",
+                                                                        "call_id": id,
+                                                                        "name": original_name,
+                                                                        "arguments": ""
+                                                                    }
+                                                                });
+                                                                send_data(&tx, &data.to_string()).await;
+                                                            }
+                                                        }
+                                                        ResponseFormat::OpenAI => {
+                                                            if !openai_tool_call_indexes
+                                                                .contains_key(&id)
+                                                            {
+                                                                let tool_index = openai_next_tool_index;
+                                                                openai_next_tool_index += 1;
+                                                                openai_tool_call_indexes
+                                                                    .insert(id.clone(), tool_index);
+                                                                let chunk = stream::build_openai_chunk(
+                                                                    &completion_id,
+                                                                    created_at,
+                                                                    &model,
+                                                                    crate::gateway::models::OpenAIChatDelta {
+                                                                        role: None,
+                                                                        content: None,
+                                                                        tool_calls: Some(vec![
+                                                                            crate::gateway::models::OpenAIDeltaToolCall {
+                                                                                index: tool_index,
+                                                                                id: id.clone(),
+                                                                                call_type: "function".to_string(),
+                                                                                function: crate::gateway::models::OpenAIToolCallFunction {
+                                                                                    name: original_name.clone(),
+                                                                                    arguments: "".to_string(),
+                                                                                },
+                                                                            }
+                                                                        ]),
+                                                                    },
+                                                                    None,
+                                                                    None,
+                                                                );
+                                                                if let Ok(chunk_json) =
+                                                                    serde_json::to_string(&chunk)
+                                                                {
+                                                                    send_data(&tx, &chunk_json).await;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            // 不再立即转发片段，避免客户端收到不完整的 JSON（参考 Kiro-Go）
                                         }
                                         KiroEvent::ToolUseStop { id } => match format {
                                             ResponseFormat::Anthropic => {
@@ -3654,12 +3782,18 @@ fn stream_proxy_response(
             )
             .await;
         }
-        // 收集未关闭的工具调用（没有收到 stop 事件的）
-        for (id, (name, input)) in tool_accumulators.drain() {
-            if !name.is_empty() {
+        // 收集未关闭的工具调用（没有收到 stop 事件的），不要直接 push 到 aggregated.tool_calls
+        // 因为 Anthropic 末尾分支需要区分"已正常 stop"和"未 stop"的，避免重复发送事件
+        let unstopped_tools: Vec<(String, String, String)> = tool_accumulators
+            .drain()
+            .filter(|(_, (name, input))| !name.is_empty() || !input.is_empty())
+            .map(|(id, (name, input))| {
                 log::warn!("[流式] 收集未关闭的工具调用: id={}, name={}", id, name);
-                aggregated.tool_calls.push((id, name, input));
-            }
+                (id, name, input)
+            })
+            .collect();
+        for tool in &unstopped_tools {
+            aggregated.tool_calls.push(tool.clone());
         }
         aggregated.tool_calls = stream::deduplicate_tool_calls(aggregated.tool_calls);
 
@@ -3745,22 +3879,28 @@ fn stream_proxy_response(
                 close_content_block(&tx, &mut text_block_index).await;
                 close_content_block(&tx, &mut thinking_block_index).await;
 
-                // 发送未关闭的工具调用（没有收到 stop 事件的）
-                for (id, name, input) in &aggregated.tool_calls {
-                    let block_index = next_block_index;
-                    next_block_index += 1;
+                // 只处理"未收到 stop 事件"的工具调用，避免重复发送已经在流中正常 stop 过的
+                for (id, name, input) in &unstopped_tools {
+                    // 如果之前已经发过 content_block_start（delta 先到时），直接补 delta+stop
+                    let block_index = if let Some(idx) = tool_block_indexes.remove(id) {
+                        idx
+                    } else {
+                        let idx = next_block_index;
+                        next_block_index += 1;
+                        let start = json!({
+                            "type": "content_block_start",
+                            "index": idx,
+                            "content_block": {
+                                "type": "tool_use",
+                                "id": id,
+                                "name": name,
+                                "input": {}
+                            }
+                        });
+                        send_event(&tx, Some("content_block_start"), &start.to_string()).await;
+                        idx
+                    };
                     let parsed_input: Value = serde_json::from_str(input).unwrap_or_else(|_| json!({}));
-                    let start = json!({
-                        "type": "content_block_start",
-                        "index": block_index,
-                        "content_block": {
-                            "type": "tool_use",
-                            "id": id,
-                            "name": name,
-                            "input": {}
-                        }
-                    });
-                    send_event(&tx, Some("content_block_start"), &start.to_string()).await;
                     let delta = json!({
                         "type": "content_block_delta",
                         "index": block_index,
@@ -3776,6 +3916,16 @@ fn stream_proxy_response(
                     });
                     send_event(&tx, Some("content_block_stop"), &stop.to_string()).await;
                     saw_tool_calls = true;
+                }
+
+                // 兜底关闭：如果 tool_block_indexes 还有遗留（理论上 unstopped_tools 已经覆盖，
+                // 但万一有 start 事件发了但既没 stop 也没在 unstopped_tools 里），统一发 stop
+                for (_, idx) in tool_block_indexes.drain() {
+                    let stop = json!({
+                        "type": "content_block_stop",
+                        "index": idx
+                    });
+                    send_event(&tx, Some("content_block_stop"), &stop.to_string()).await;
                 }
 
                 let mut usage = json!({
