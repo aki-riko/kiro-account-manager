@@ -600,3 +600,77 @@ fn get_cli_database_paths() -> Vec<std::path::PathBuf> {
     paths
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 在系统临时目录建一个带 auth_kv 表的唯一测试库，返回路径。
+    fn make_temp_db() -> String {
+        let path = std::env::temp_dir()
+            .join(format!("kam_cli_test_{}.sqlite3", uuid::Uuid::new_v4()));
+        let conn = Connection::open(&path).expect("open temp db");
+        conn.execute(
+            "CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .expect("create auth_kv");
+        path.to_string_lossy().into_owned()
+    }
+
+    fn insert_kv(db_path: &str, key: &str, value: &str) {
+        let conn = Connection::open(db_path).expect("open db");
+        write_kv_value(&conn, key, value).expect("write kv");
+    }
+
+    fn key_exists(db_path: &str, key: &str) -> bool {
+        let conn = Connection::open(db_path).expect("open db");
+        read_kv_value(&conn, key).is_ok()
+    }
+
+    #[test]
+    fn logout_removes_all_token_keys_but_keeps_device_registration() {
+        let db = make_temp_db();
+        insert_kv(&db, "kirocli:social:token", "{\"a\":1}");
+        insert_kv(&db, "codewhisperer:odic:token", "{\"b\":2}");
+        // device-registration 不是 token key，登出应当保留它（设备注册信息，重新登录复用）
+        insert_kv(&db, "kirocli:social:device-registration", "{\"reg\":true}");
+
+        let removed = logout_cli_account(&db).expect("logout ok");
+        assert_eq!(removed, 2, "应删除 2 个 token key");
+
+        assert!(!key_exists(&db, "kirocli:social:token"));
+        assert!(!key_exists(&db, "codewhisperer:odic:token"));
+        assert!(
+            key_exists(&db, "kirocli:social:device-registration"),
+            "device-registration 应保留"
+        );
+
+        let _ = std::fs::remove_file(&db);
+    }
+
+    #[test]
+    fn logout_is_idempotent_when_no_token_keys() {
+        let db = make_temp_db();
+        // 只有 device-registration，没有任何 token key
+        insert_kv(&db, "kirocli:social:device-registration", "{\"reg\":true}");
+
+        let removed = logout_cli_account(&db).expect("logout ok");
+        assert_eq!(removed, 0, "本来就没登录，删除数量为 0");
+        assert!(key_exists(&db, "kirocli:social:device-registration"));
+
+        // 再调一次依旧返回 0，且不报错（幂等）
+        let removed_again = logout_cli_account(&db).expect("logout ok again");
+        assert_eq!(removed_again, 0);
+
+        let _ = std::fs::remove_file(&db);
+    }
+
+    #[test]
+    fn logout_errors_when_db_missing() {
+        let missing = std::env::temp_dir()
+            .join(format!("kam_cli_missing_{}.sqlite3", uuid::Uuid::new_v4()));
+        let result = logout_cli_account(&missing.to_string_lossy());
+        assert!(result.is_err(), "数据库不存在应返回 Err");
+    }
+}
+
