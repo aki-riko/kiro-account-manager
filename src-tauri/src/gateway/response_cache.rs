@@ -335,7 +335,6 @@ pub struct CacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread::sleep;
 
     #[test]
     fn test_cache_entry_expiration() {
