@@ -46,17 +46,17 @@ Kiro Account Manager is a desktop application based on **Tauri 2.x** for central
 
 ## 📥 Download
 
-**Latest Version v1.8.6** (Released 2026-05-10): Please visit [Releases](https://github.com/hj01857655/kiro-account-manager/releases/latest) (auto-kept up-to-date)
+**Latest Version v1.8.9** (Released 2026-06-01): Please visit [Releases](https://github.com/hj01857655/kiro-account-manager/releases/latest) (auto-kept up-to-date)
 
 > The download links below may lag behind, refer to Releases for the latest versions.
 
 | Platform | Architecture | File Format | Download Link |
 |----------|-------------|-------------|---------------|
-| 🪟 **Windows** | x64 | MSI Installer | [KiroAccountManager_1.8.6_x64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.6/KiroAccountManager_1.8.6_x64_zh-CN.msi) |
-| 🍎 **macOS** | Intel (x64) | DMG Image | [KiroAccountManager_1.8.6_x64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.6/KiroAccountManager_1.8.6_x64.dmg) |
-| 🍎 **macOS** | Apple Silicon (M1/M2/M3) | DMG Image | [KiroAccountManager_1.8.6_aarch64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.6/KiroAccountManager_1.8.6_aarch64.dmg) |
-| 🐧 **Linux** | x86_64 | AppImage | [KiroAccountManager_1.8.6_amd64.AppImage](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.6/KiroAccountManager_1.8.6_amd64.AppImage) |
-| 🐧 **Linux** | x86_64 | DEB Package | [KiroAccountManager_1.8.6_amd64.deb](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.6/KiroAccountManager_1.8.6_amd64.deb) |
+| 🪟 **Windows** | x64 | MSI Installer | [KiroAccountManager_1.8.9_x64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.9/KiroAccountManager_1.8.9_x64_zh-CN.msi) |
+| 🍎 **macOS** | Intel (x64) | DMG Image | [KiroAccountManager_1.8.9_x64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.9/KiroAccountManager_1.8.9_x64.dmg) |
+| 🍎 **macOS** | Apple Silicon (M1/M2/M3) | DMG Image | [KiroAccountManager_1.8.9_aarch64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.9/KiroAccountManager_1.8.9_aarch64.dmg) |
+| 🐧 **Linux** | x86_64 | AppImage | [KiroAccountManager_1.8.9_amd64.AppImage](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.9/KiroAccountManager_1.8.9_amd64.AppImage) |
+| 🐧 **Linux** | x86_64 | DEB Package | [KiroAccountManager_1.8.9_amd64.deb](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.8.9/KiroAccountManager_1.8.9_amd64.deb) |
 
 > **macOS Style Note**: If style display issues occur, please adjust based on the current repository source code (I don't have a macOS device, cannot reproduce and debug).
 
@@ -199,4 +199,4 @@ This software is for learning and communication purposes only. Users are respons
 ---
 
 <p align="center">Made with ❤️ by hj01857655</p>
-<p align="center"><sub>Last updated: 2026-05-10 | Version: v1.8.6</sub></p>
+<p align="center"><sub>Last updated: 2026-06-01 | Version: v1.8.9</sub></p>
