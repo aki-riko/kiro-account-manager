@@ -361,7 +361,12 @@ fn format_messages_for_summary(messages: &[NormalizedMessage]) -> String {
 
             // 限制每条消息的长度
             let truncated = if text.len() > 1000 {
-                format!("{}...[已截断]", &text[..1000])
+                // 回退到最近的字符边界，避免在多字节字符（中文/emoji）中间切断导致 panic
+                let mut end = 1000;
+                while end > 0 && !text.is_char_boundary(end) {
+                    end -= 1;
+                }
+                format!("{}...[已截断]", &text[..end])
             } else {
                 text
             };

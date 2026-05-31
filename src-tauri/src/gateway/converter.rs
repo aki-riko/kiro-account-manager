@@ -499,7 +499,12 @@ fn convert_anthropic_tool(tool: &crate::gateway::models::AnthropicTool) -> (Tool
     // 截断超长描述（和 Kiro-Go 保持一致）
     let description = tool.description.as_ref().map(|desc| {
         if desc.len() > TOOL_DESCRIPTION_MAX_LENGTH {
-            format!("{}...", &desc[..TOOL_DESCRIPTION_MAX_LENGTH])
+            // 按字节上限截断，但回退到最近的字符边界，避免在多字节字符（中文/emoji）中间切断导致 panic
+            let mut end = TOOL_DESCRIPTION_MAX_LENGTH;
+            while end > 0 && !desc.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{}...", &desc[..end])
         } else {
             desc.clone()
         }
@@ -1187,15 +1192,11 @@ pub async fn build_kiro_payload(
 }
 
 pub fn get_available_models() -> Vec<ModelInfo> {
-    // 最后更新：2026-05-10
     // 数据来源：Kiro ListAvailableModels API 实际返回
-    // API 返回的 modelId：auto, claude-opus-4.7, claude-opus-4.6, claude-sonnet-4.6,
-    //   claude-opus-4.5, claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5,
-    //   deepseek-3.2, minimax-m2.5, minimax-m2.1, glm-5, qwen3-coder-next
     [
         // 自动选择
         "auto",
-        // Claude 4.7 系列（目前仅 Opus 4.7）
+        // Claude 系列
         "claude-opus-4.8",
         "claude-opus-4.8-thinking",
         "claude-opus-4.7",
@@ -1204,14 +1205,12 @@ pub fn get_available_models() -> Vec<ModelInfo> {
         "claude-opus-4.6-thinking",
         "claude-sonnet-4.6",
         "claude-sonnet-4.6-thinking",
-        // Claude 4.5 系列
         "claude-opus-4.5",
         "claude-opus-4.5-thinking",
         "claude-sonnet-4.5",
         "claude-sonnet-4.5-thinking",
         "claude-haiku-4.5",
         "claude-haiku-4.5-thinking",
-        // Claude 4 系列
         "claude-sonnet-4",
         "claude-sonnet-4-thinking",
         // 开源模型
@@ -2814,6 +2813,41 @@ mod tests {
         time::Duration,
     };
 
+    /// 回归测试：工具描述超长且截断点落在多字节字符（中文）中间时不得 panic。
+    /// 旧实现 `&desc[..TOOL_DESCRIPTION_MAX_LENGTH]` 按字节切，会在
+    /// `byte index ... is not a char boundary` 处 panic（叠加 panic=abort 直接崩进程）。
+    #[test]
+    fn convert_anthropic_tool_truncates_multibyte_description_without_panic() {
+        // '中' = 3 字节。3413 个 '中' = 10239 字节 > 10237(TOOL_DESCRIPTION_MAX_LENGTH)，
+        // 且字节边界只落在 3 的倍数上，10237 不是边界 → 旧代码会 panic。
+        let multibyte_desc = "中".repeat(3413);
+        assert!(multibyte_desc.len() > TOOL_DESCRIPTION_MAX_LENGTH);
+        assert!(
+            !multibyte_desc.is_char_boundary(TOOL_DESCRIPTION_MAX_LENGTH),
+            "测试前提：截断点必须落在多字节字符中间，否则测不到该 bug"
+        );
+
+        let tool = AnthropicTool {
+            r#type: Some("custom".to_string()),
+            name: "长描述工具".to_string(),
+            description: Some(multibyte_desc),
+            input_schema: json!({ "type": "object" }),
+            max_uses: None,
+            allowed_domains: None,
+            blocked_domains: None,
+            user_location: None,
+            cache_control: None,
+        };
+
+        // 不 panic 即通过；同时校验截断后的描述本身是合法 UTF-8（隐含于 String 类型）
+        let (converted, _mapping) = convert_anthropic_tool(&tool);
+        let desc = converted.function.description.expect("描述应存在");
+        assert!(desc.ends_with("..."), "超长描述应被截断并加省略号");
+        // 截断主体（去掉结尾的 "..."）必须落在字符边界，长度不超过字节上限
+        let body_len = desc.len() - "...".len();
+        assert!(body_len <= TOOL_DESCRIPTION_MAX_LENGTH);
+    }
+
     #[test]
     fn normalize_anthropic_request_keeps_system_tools_and_tool_result() {
         let request = AnthropicMessagesRequest {
@@ -2852,10 +2886,16 @@ mod tests {
                 allowed_domains: None,
                 blocked_domains: None,
                 user_location: None,
+                cache_control: None,
             }]),
             tool_choice: Some(json!({"type":"auto"})),
             thinking: None,
             metadata: None,
+            context_editing: None,
+            mcp_servers: None,
+            betas: None,
+            cache_control: None,
+            top_k: None,
         };
 
         let converted = normalize_anthropic_request(&request);
@@ -2924,10 +2964,12 @@ mod tests {
                         "properties": { "q": { "type": "string" } }
                     })),
                 },
+                cache_control: None,
             }]),
             tool_choice: None,
             previous_response_id: None,
-        thinking: None,
+            thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let payload = build_kiro_payload(
@@ -2997,7 +3039,8 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
-        thinking: None,
+            thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -3033,7 +3076,8 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
-        thinking: None,
+            thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -3259,10 +3303,12 @@ mod tests {
                         "properties": { "q": { "type": "string" } }
                     })),
                 },
+                cache_control: None,
             }]),
             tool_choice: Some(json!({ "type": "function", "name": "search_docs" })),
             previous_response_id: None,
-        thinking: None,
+            thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -3302,7 +3348,8 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: Some("resp_prev_123".to_string()),
-        thinking: None,
+            thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -3338,10 +3385,12 @@ mod tests {
                         "properties": { "q": { "type": "string" } }
                     })),
                 },
+                cache_control: None,
             }]),
             tool_choice: Some(json!({ "type": "function", "name": "missing_tool" })),
             previous_response_id: None,
-        thinking: None,
+            thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let error = build_kiro_payload(&Client::new(), &request, None, None)
@@ -3384,6 +3433,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
         thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -3473,7 +3523,8 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
-        thinking: None,
+            thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -3520,7 +3571,8 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
-        thinking: None,
+            thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -3601,7 +3653,8 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
-        thinking: None,
+            thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -3751,15 +3804,20 @@ mod tests {
             stream: false,
             temperature: None,
             top_p: None,
+            top_k: None,
             stop_sequences: None,
             tools: None,
             tool_choice: None,
             thinking: None,
             metadata: None,
+            context_editing: None,
+            mcp_servers: None,
+            betas: None,
+            cache_control: None,
         };
 
         let converted = normalize_anthropic_request(&request);
-        
+
         // 验证 content 仍然是数组（而不是被转换成字符串）
         assert_eq!(converted.messages.len(), 1);
         let content = converted.messages[0].content.as_ref().expect("content should exist");

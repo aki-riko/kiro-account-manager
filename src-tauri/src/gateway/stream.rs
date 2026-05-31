@@ -73,7 +73,12 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
     if is_metering_or_usage_event {
         log::debug!("[Token 解析] 发现 token/usage 事件: {}",
             if json_str.len() > 500 {
-                format!("{}...", &json_str[..500])
+                // 回退到最近的字符边界，避免在多字节字符（中文/emoji）中间切断导致 panic
+                let mut end = 500;
+                while end > 0 && !json_str.is_char_boundary(end) {
+                    end -= 1;
+                }
+                format!("{}...", &json_str[..end])
             } else {
                 json_str.to_string()
             }

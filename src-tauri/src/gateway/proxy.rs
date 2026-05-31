@@ -4065,7 +4065,7 @@ fn stream_proxy_response(
                 log_context.request_index,
                 aggregated.text.len(),
                 aggregated.thinking.len(),
-                aggregated.tool_calls.iter().map(|(id, name, args)| format!("{}({})={}", name, id, &args[..args.len().min(100)])).collect::<Vec<_>>(),
+                aggregated.tool_calls.iter().map(|(id, name, args)| format!("{}({})={}", name, id, &args[..safe_truncate(args, 100)])).collect::<Vec<_>>(),
                 aggregated.input_tokens,
                 aggregated.output_tokens,
             );
@@ -4299,9 +4299,9 @@ async fn send_event(
             .join(".kiro-account-manager")
             .join("logs");
         let entry = if let Some(event_name) = event {
-            format!("[{}] SSE event={}: {}\n", chrono::Local::now().format("%H:%M:%S%.3f"), event_name, &payload[..payload.len().min(2000)])
+            format!("[{}] SSE event={}: {}\n", chrono::Local::now().format("%H:%M:%S%.3f"), event_name, &payload[..safe_truncate(payload, 2000)])
         } else {
-            format!("[{}] SSE data: {}\n", chrono::Local::now().format("%H:%M:%S%.3f"), &payload[..payload.len().min(2000)])
+            format!("[{}] SSE data: {}\n", chrono::Local::now().format("%H:%M:%S%.3f"), &payload[..safe_truncate(payload, 2000)])
         };
         let _ = std::fs::OpenOptions::new()
             .create(true)
@@ -4375,7 +4375,45 @@ mod tests {
             load_balancer: Arc::new(crate::gateway::load_balancer::LoadBalancer::new(
                 crate::gateway::load_balancer::LoadBalancerStrategy::RoundRobin,
             )),
+            log_store: Arc::new(crate::gateway::log_store::LogStore::new(1000)),
+            response_cache: Arc::new(AsyncMutex::new(
+                crate::gateway::response_cache::ResponseCache::new(
+                    crate::gateway::response_cache::CacheConfig::default(),
+                    None,
+                ),
+            )),
         }
+    }
+
+    #[test]
+    fn safe_truncate_never_splits_multibyte_chars() {
+        // '中' 是 3 字节。构造一个字节长度超过上限、且上限不落在字符边界上的串。
+        // 上限 100：'中'.repeat(40) = 120 字节，字符边界在 0,3,6,...,99,102；100 不是边界。
+        // 旧代码 &s[..100] 会 panic（byte index 100 is not a char boundary）。
+        let s = "中".repeat(40);
+        let end = safe_truncate(&s, 100);
+        // 回退到最近的合法边界 99（= 33 个 '中'）
+        assert!(s.is_char_boundary(end), "回退点必须是合法字符边界");
+        assert!(end <= 100, "不得超过字节上限");
+        // 真正切一刀，确认不 panic
+        let _ = &s[..end];
+        assert_eq!(end, 99);
+
+        // ASCII：上限正好落在边界，原样返回
+        let ascii = "A".repeat(120);
+        assert_eq!(safe_truncate(&ascii, 100), 100);
+
+        // 串本身比上限短：返回全长
+        assert_eq!(safe_truncate("abc", 100), 3);
+
+        // 上限 0：返回 0，不 panic
+        assert_eq!(safe_truncate(&s, 0), 0);
+
+        // emoji（4 字节）边界回退
+        let emoji = "😀".repeat(10); // 40 字节，边界 0,4,8,...,40
+        let e = safe_truncate(&emoji, 10); // 10 不是 4 的倍数 → 回退到 8
+        assert_eq!(e, 8);
+        let _ = &emoji[..e];
     }
 
     #[test]
@@ -4770,6 +4808,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: Some("resp_prev_123".to_string()),
             thinking: None,
+            tool_name_map: Default::default(),
         };
 
         let merged = restore_responses_session_messages(&state, &request).await;
@@ -4833,6 +4872,7 @@ mod tests {
         let aggregated = stream::AggregatedKiroResponse {
             text: "Hello Rust".to_string(),
             thinking: String::new(),
+            thinking_signature: None,
             tool_calls: Vec::new(),
             input_tokens: 3,
             output_tokens: 5,
@@ -4850,7 +4890,6 @@ mod tests {
         let response = build_responses_response_with_ids(
             "gpt-5.4",
             &aggregated,
-            &[],
             "resp_test",
             "msg_test",
             123,
