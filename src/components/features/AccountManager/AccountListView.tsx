@@ -48,7 +48,8 @@ interface ListRowProps {
   t: (key: string) => string
   maskEmail: (email: string) => string
   onSelectOne: (id: string, checked: any) => void
-  onSwitch: (account: Account) => void
+  onLogin: (account: Account) => void
+  onLogout: (account: Account) => void
   onRefresh: (id: string) => void
   onRefreshToken: (id: string) => void
   onEdit: (account: Account) => void
@@ -73,7 +74,8 @@ const ListRow = memo(function ListRow({
   t,
   maskEmail,
   onSelectOne,
-  onSwitch,
+  onLogin,
+  onLogout,
   onRefresh,
   onRefreshToken,
   onEdit,
@@ -114,8 +116,8 @@ const ListRow = memo(function ListRow({
     { icon: RefreshCw, label: t('accountCard.refresh'), onClick: () => onRefresh(account.id), disabled: isRefreshing },
     { icon: Key, label: t('accountCard.refreshToken'), onClick: () => onRefreshToken?.(account.id), disabled: isRefreshingToken },
     isCurrent
-      ? { icon: LogOut, label: t('accountCard.LogOut'), onClick: () => onSwitch(account), disabled: isSwitching, danger: true }
-      : { icon: LogIn, label: t('accountCard.LogIn'), onClick: () => onSwitch(account), disabled: isSwitching || isUnavailable },
+      ? { icon: LogOut, label: t('accountCard.LogOut'), onClick: () => onLogout(account), disabled: isSwitching, danger: true }
+      : { icon: LogIn, label: t('accountCard.LogIn'), onClick: () => onLogin(account), disabled: isSwitching || isUnavailable },
     { divider: true },
     { label: account.enabled === false ? '启用账号' : '禁用账号', onClick: () => onToggleEnabled?.(account, account.enabled === false) },
     ...(overageCapability === 'OVERAGE_CAPABLE' ? [
@@ -125,7 +127,7 @@ const ListRow = memo(function ListRow({
     ...(account.provider !== 'Enterprise' && !isBanned && onDeleteRemote ? [
       { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
     ] : []),
-  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onSwitch, onDelete, onDeleteRemote, onToggleEnabled, onToggleOverage, isRefreshing, isRefreshingToken, isSwitching, isTogglingOverage, isBanned, isUnavailable, isCurrent, overageCapability, overageStatus])
+  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onLogin, onLogout, onDelete, onDeleteRemote, onToggleEnabled, onToggleOverage, isRefreshing, isRefreshingToken, isSwitching, isTogglingOverage, isBanned, isUnavailable, isCurrent, overageCapability, overageStatus])
 
   const subscriptionTitle = account.usageData?.subscriptionInfo?.subscriptionTitle || ''
   const subscriptionTone: Parameters<typeof Pill>[0]['tone'] =
@@ -275,7 +277,7 @@ const ListRow = memo(function ListRow({
       <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-card/95 backdrop-blur-sm rounded-md shadow-sm border border-border px-1 py-1">
         {isCurrent ? (
           <button
-            onClick={(e) => { e.stopPropagation(); onSwitch(account) }}
+            onClick={(e) => { e.stopPropagation(); onLogout(account) }}
             disabled={isSwitching}
             className="h-7 w-7 rounded-md inline-flex items-center justify-center bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
             title={t('accountCard.LogOut')}
@@ -284,7 +286,7 @@ const ListRow = memo(function ListRow({
           </button>
         ) : (
           <button
-            onClick={(e) => { e.stopPropagation(); onSwitch(account) }}
+            onClick={(e) => { e.stopPropagation(); onLogin(account) }}
             disabled={isSwitching || isUnavailable}
             className="h-7 w-7 rounded-md inline-flex items-center justify-center bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
             title={t('accountCard.LogIn')}
@@ -335,7 +337,8 @@ interface AccountListViewProps {
   selectedIdsSet?: Set<string>
   onSelectAll: (checked: any) => void
   onSelectOne: (id: string, checked: any) => void
-  onSwitch: (account: Account) => void
+  onLogin: (account: Account) => void
+  onLogout: (account: Account) => void
   onRefresh: (id: string) => void
   onRefreshToken: (id: string) => void
   onEdit: (account: Account) => void
@@ -362,7 +365,8 @@ function AccountListView({
   selectedIdsSet,
   onSelectAll,
   onSelectOne,
-  onSwitch,
+  onLogin,
+  onLogout,
   onRefresh,
   onRefreshToken,
   onEdit,
@@ -494,7 +498,8 @@ function AccountListView({
                   t={t}
                   maskEmail={maskEmail}
                   onSelectOne={onSelectOne}
-                  onSwitch={onSwitch}
+                  onLogin={onLogin}
+                  onLogout={onLogout}
                   onRefresh={onRefresh}
                   onRefreshToken={onRefreshToken}
                   onEdit={onEdit}

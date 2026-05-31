@@ -24,7 +24,8 @@ const VirtualRow = memo(function VirtualRow({
   onSelectOne,
   copiedId,
   onCopy,
-  onSwitch,
+  onLogin,
+  onLogout,
   onRefresh,
   onRefreshToken,
   onEdit,
@@ -55,7 +56,8 @@ const VirtualRow = memo(function VirtualRow({
             onSelect={(checked: boolean) => onSelectOne(item.id, checked)}
             copiedId={copiedId}
             onCopy={onCopy}
-            onSwitch={onSwitch}
+            onLogin={onLogin}
+            onLogout={onLogout}
             onRefresh={onRefresh}
             onRefreshToken={onRefreshToken}
             onEdit={onEdit}
@@ -105,7 +107,8 @@ function AccountTable({
   onSelectOne,
   copiedId,
   onCopy,
-  onSwitch,
+  onLogin,
+  onLogout,
   onRefresh,
   onRefreshToken,
   onEdit,
@@ -150,7 +153,7 @@ function AccountTable({
       { divider: true },
       { icon: Key , label: t('accountCard.refreshQuota'), onClick: () => onRefresh(account.id), disabled: Boolean(rowState.isRefreshing) },
       { icon: KeyRound , label: t('accountCard.refreshToken'), onClick: () => onRefreshToken?.(account.id), disabled: Boolean(rowState.isRefreshingToken) },
-      { icon: LogIn, label: isUnavailable ? `${statusMeta.label}账号不可切换` : t('accountCard.LogIn'), onClick: () => onSwitch(account), disabled: Boolean(rowState.isSwitching) || isUnavailable },
+      { icon: LogIn, label: isUnavailable ? `${statusMeta.label}账号不可切换` : t('accountCard.LogIn'), onClick: () => onLogin(account), disabled: Boolean(rowState.isSwitching) || isUnavailable },
       { divider: true },
       { label: account.enabled === false ? '启用账号' : '禁用账号', onClick: () => onToggleEnabled?.(account, account.enabled === false) },
       { icon: Trash2, label: t('accountCard.delete'), onClick: () => onDelete(account.id), danger: true },
@@ -161,7 +164,7 @@ function AccountTable({
     }
 
     return items
-  }, [t, onEdit, onEditLabel, onCopy, onRefreshToken, onRefresh, onSwitch, onDelete, onDeleteRemote, accountRowStateById])
+  }, [t, onEdit, onEditLabel, onCopy, onRefreshToken, onRefresh, onLogin, onDelete, onDeleteRemote, accountRowStateById])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -250,7 +253,8 @@ function AccountTable({
                     onSelectOne={onSelectOne}
                     copiedId={copiedId}
                     onCopy={onCopy}
-                    onSwitch={onSwitch}
+                    onLogin={onLogin}
+                    onLogout={onLogout}
                     onRefresh={onRefresh}
                     onRefreshToken={onRefreshToken}
                     onEdit={onEdit}

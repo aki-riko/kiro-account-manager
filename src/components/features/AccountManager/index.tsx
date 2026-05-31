@@ -74,6 +74,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     switchDialog,
     setSwitchDialog,
     handleSwitchAccount,
+    handleLogoutAccount,
     confirmSwitch,
     closeSwitchDialog} = useSwitchAccount(setLocalToken)
   
@@ -612,7 +613,8 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onSelectOne={handleSelectOne}
           copiedId={copiedId}
           onCopy={handleCopy}
-          onSwitch={handleSwitchAccount}
+          onLogin={handleSwitchAccount}
+          onLogout={handleLogoutAccount}
           onRefresh={handleRefreshWithNotify}
           onRefreshToken={handleRefreshToken}
           onEdit={setEditingAccount}
@@ -637,7 +639,8 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onSelectAll={handleSelectAll}
           onSelectOne={handleSelectOne}
           onCopy={handleCopy}
-          onSwitch={handleSwitchAccount}
+          onLogin={handleSwitchAccount}
+          onLogout={handleLogoutAccount}
           onRefresh={handleRefreshWithNotify}
           onRefreshToken={handleRefreshToken}
           onEdit={setEditingAccount}

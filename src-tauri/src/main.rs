@@ -73,7 +73,7 @@ use commands::group_tag_cmd::{
 //kiro-cli
 use commands::kiro_cli_cmd::{
     check_cli_installation, get_kiro_cli_default_path, import_from_kiro_cli,
-    read_cli_db_snapshot, rollback_cli_switch, switch_to_cli_account,
+    logout_cli_account, read_cli_db_snapshot, rollback_cli_switch, switch_to_cli_account,
 };
 //kiroshe
 use commands::kiro_settings_cmd::{
@@ -123,7 +123,7 @@ use commands::skills_cmd::{
 //Kiro IDE
 use crate::kiro::ide::{
     check_ide_installation, check_kiro_config_files,
-    get_kiro_local_token, read_kiro_accounts, switch_kiro_account,
+    get_kiro_local_token, logout_kiro_account, read_kiro_accounts, switch_kiro_account,
 };
 //Kiro进程
 use crate::kiro::process::{close_kiro_ide, is_kiro_ide_running, start_kiro_ide};
@@ -413,6 +413,7 @@ fn main() {
             read_cli_db_snapshot,
             switch_to_cli_account,
             rollback_cli_switch,
+            logout_cli_account,
             // 分组与标签命令
             get_groups,
             add_group,
@@ -440,6 +441,7 @@ fn main() {
             get_kiro_local_token,
             read_kiro_accounts,
             switch_kiro_account,
+            logout_kiro_account,
             set_custom_kiro_path,
             get_custom_kiro_path,
             clear_custom_kiro_path,

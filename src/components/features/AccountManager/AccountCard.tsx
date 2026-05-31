@@ -15,7 +15,8 @@ interface AccountCardProps {
   onSelect: (checked: boolean) => void;
   copiedId: string | null;
   onCopy: (text: string, id?: string) => void;
-  onSwitch: (account: Account) => void;
+  onLogin: (account: Account) => void;
+  onLogout: (account: Account) => void;
   onRefresh: (id: string) => void;
   onRefreshToken?: (id: string) => void;
   onEdit: (account: Account) => void;
@@ -44,7 +45,8 @@ const AccountCard = memo(function AccountCard({
   onSelect,
   copiedId,
   onCopy,
-  onSwitch,
+  onLogin,
+  onLogout,
   onRefresh,
   onRefreshToken,
   onEdit,
@@ -298,7 +300,7 @@ const AccountCard = memo(function AccountCard({
           {/* 主操作：登录/登出（带文字） */}
           {isCurrentAccount ? (
             <button
-              onClick={(e) => { e.stopPropagation(); onSwitch(account) }}
+              onClick={(e) => { e.stopPropagation(); onLogout(account) }}
               disabled={isSwitching}
               className="flex-1 h-8 px-2 rounded-md inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
               title={t('accountCard.LogOut')}
@@ -308,7 +310,7 @@ const AccountCard = memo(function AccountCard({
             </button>
           ) : (
             <button
-              onClick={(e) => { e.stopPropagation(); onSwitch(account) }}
+              onClick={(e) => { e.stopPropagation(); onLogin(account) }}
               disabled={isSwitching || isUnavailable}
               className="flex-1 h-8 px-2 rounded-md inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
               title={t('accountCard.LogIn')}

@@ -324,6 +324,40 @@ pub fn switch_cli_account(
     })
 }
 
+/// 退出 CLI 2.0 当前登录态：清空所有 token key（登录的逆操作）。
+///
+/// 与 `switch_cli_account` 对称——切号是写入某个 token key，登出则删除全部 token key，
+/// 让 CLI 回到"未登录"状态。device-registration 保留（那是设备注册信息，非登录凭证，
+/// 重新登录时复用）。返回删除的 key 数量，便于前端区分"本来就没登录"与"清掉了登录态"。
+pub fn logout_cli_account(db_path: &str) -> Result<usize, String> {
+    if !Path::new(db_path).exists() {
+        return Err(format!("数据库文件不存在: {db_path}"));
+    }
+
+    let mut conn = Connection::open(db_path)
+        .map_err(|e| format!("无法打开数据库: {e}"))?;
+
+    let tx = conn.transaction()
+        .map_err(|e| format!("无法开启事务: {e}"))?;
+
+    // 清空所有优先级的 token key（与 switch_cli_account 清理的集合一致）
+    let all_token_keys = [
+        "kirocli:social:token",
+        "kirocli:odic:token",
+        "codewhisperer:odic:token",
+    ];
+    let mut removed = 0usize;
+    for key in all_token_keys {
+        // 忽略单条删除失败（key 可能不存在），用 changes 累计实际删除数量
+        if let Ok(n) = tx.execute("DELETE FROM auth_kv WHERE key = ?1", [key]) {
+            removed += n;
+        }
+    }
+
+    tx.commit().map_err(|e| format!("提交事务失败: {e}"))?;
+    Ok(removed)
+}
+
 /// 读取 auth_kv 键值
 fn read_kv_value(conn: &Connection, key: &str) -> SqliteResult<String> {
     let mut stmt = conn.prepare("SELECT value FROM auth_kv WHERE key = ?1")?;

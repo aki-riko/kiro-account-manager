@@ -426,6 +426,19 @@ pub fn rollback_cli_switch(
     crate::kiro::cli::rollback_cli_switch(&expanded_path, &backup)
 }
 
+/// 退出 CLI 2.0 当前登录态（清空所有 token key，切号的逆操作）。
+///
+/// 数据库不存在时视为本来就没登录，幂等返回 0。返回实际清掉的 token key 数量。
+#[tauri::command]
+pub fn logout_cli_account(db_path: String) -> Result<usize, String> {
+    let expanded_path = expand_home_dir(&db_path)?;
+    // 数据库文件不存在 = 没装/没登录 CLI，幂等返回 0，不报错
+    if !std::path::Path::new(&expanded_path).exists() {
+        return Ok(0);
+    }
+    crate::kiro::cli::logout_cli_account(&expanded_path)
+}
+
 /// 构造切号载荷（从 Account 转换为 CLI 2.0 格式）
 fn build_switch_payload(
     account: &Account,

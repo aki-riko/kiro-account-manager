@@ -50,13 +50,66 @@ export function useSwitchAccount(onLocalTokenChange) {
       switchTarget: 'ide'})
   }, [t])
 
-  // 确认切换
+  // 显示退出登录确认弹窗（登入的逆操作：清除当前登录态，账号仍保留在列表中）
+  const handleLogoutAccount = useCallback((account) => {
+    setSwitchDialog({
+      type: 'confirm',
+      mode: 'logout',
+      title: t('switch.logoutTitle'),
+      message: `${t('switch.confirmLogout')} ${account.email}？`,
+      account,
+      switchTarget: 'ide'})
+  }, [t])
+
+  // 确认切换 / 退出登录（共用一个弹窗，靠 mode 区分）
   const confirmSwitch = useCallback(async () => {
     const account = switchDialog?.account
     if (!account) return
 
+    const mode = (switchDialog as any)?.mode
+    const switchTarget = (switchDialog as any)?.switchTarget || (appSettings as any)?.switchTarget || 'ide'
+
     setSwitchDialog(null)
     setSwitchingId(account.id)
+
+    // 退出登录分支：login 写入登录态，logout 删除登录态。无需检测 IDE 安装/刷新 token，
+    // 后端命令对"本来就没登录"幂等返回成功。
+    if (mode === 'logout') {
+      try {
+        if (switchTarget === 'ide' || switchTarget === 'both') {
+          await invoke('logout_kiro_account')
+        }
+        if (switchTarget === 'cli' || switchTarget === 'both') {
+          try {
+            const cliPath = await invoke<string>('get_kiro_cli_default_path')
+            if (cliPath) {
+              await invoke('logout_cli_account', { dbPath: cliPath })
+            }
+          } catch (e) {
+            console.warn('[Logout] CLI 登出失败:', e)
+          }
+        }
+
+        // 刷新本地 token，使 LIVE 标识消失（账号记录仍留在列表中）
+        invoke('get_kiro_local_token').then(onLocalTokenChange).catch(() => onLocalTokenChange(null))
+
+        const targetLabel = switchTarget === 'both' ? 'IDE + CLI' : switchTarget === 'cli' ? 'CLI' : 'IDE'
+        setSwitchDialog({
+          type: 'success',
+          title: t('switch.logoutSuccess'),
+          message: `${account.email}\n\n🎯 ${t('switch.switchTarget')}: ${targetLabel}\n${t('switch.logoutDone')}`,
+          account: null})
+      } catch (e) {
+        setSwitchDialog({
+          type: 'error',
+          title: t('switch.logoutFailed'),
+          message: String(e),
+          account: null})
+      } finally {
+        setSwitchingId(null)
+      }
+      return
+    }
 
     try {
       // 检测 IDE 安装状态
@@ -225,6 +278,7 @@ export function useSwitchAccount(onLocalTokenChange) {
     switchDialog,
     setSwitchDialog,
     handleSwitchAccount,
+    handleLogoutAccount,
     confirmSwitch,
     closeSwitchDialog}
 }
