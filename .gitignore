@@ -55,3 +55,6 @@ src-tauri/debug_responses/
 # Local agent knowledge mirror (do not push)
 MEMORY.md
 
+# Codegraph index (local tool artifact)
+.codegraph/
+
