@@ -17,8 +17,8 @@ use crate::commands::common::{
 };
 use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata};
 use crate::state::AppState;
+use crate::utils::client_id_hash::{extract_start_url_from_client_secret, normalize_start_url};
 use serde::{Deserialize, Serialize};
-use sha1::{Digest, Sha1};
 use tauri::{Emitter, State};
 
 #[derive(Serialize)]
@@ -39,52 +39,6 @@ pub struct UpdateAccountParams {
     pub client_secret: Option<String>,
     pub machine_id: Option<String>,
     pub enabled: Option<bool>,
-}
-
-// ===== 辅助函数 =====
-
-/// 从 clientSecret JWT 中提取 startUrl
-fn extract_start_url_from_client_secret(client_secret: &str) -> Option<String> {
-    use base64::{engine::general_purpose, Engine as _};
-
-    // JWT 格式：header.payload.signature
-    let parts: Vec<&str> = client_secret.split('.').collect();
-    if parts.len() < 2 {
-        return None;
-    }
-
-    // Base64 解码 payload
-    let payload = parts[1];
-    let decoded = general_purpose::URL_SAFE_NO_PAD.decode(payload).ok()?;
-    let payload_str = String::from_utf8(decoded).ok()?;
-
-    // 解析 JSON
-    let payload_json: serde_json::Value = serde_json::from_str(&payload_str).ok()?;
-    let serialized_str = payload_json.get("serialized")?.as_str()?;
-    let serialized: serde_json::Value = serde_json::from_str(serialized_str).ok()?;
-
-    // 提取 initiateLoginUri
-    serialized
-        .get("initiateLoginUri")?
-        .as_str()
-        .map(|s| s.to_string())
-}
-
-/// 根据 startUrl 计算 clientIdHash（与 Kiro IDE 源码一致）
-fn calculate_client_id_hash(start_url: &str) -> String {
-    let input = format!(r#"{{"startUrl":"{start_url}"}}"#);
-    let mut hasher = Sha1::new();
-    hasher.update(input.as_bytes());
-    hex::encode(hasher.finalize())
-}
-
-fn resolve_builder_client_id_hash(
-    client_id_hash: Option<String>,
-    start_url: Option<&str>,
-) -> String {
-    client_id_hash.unwrap_or_else(|| {
-        calculate_client_id_hash(start_url.unwrap_or("https://view.awsapps.com/start"))
-    })
 }
 
 // ===== 数据结构 =====
@@ -829,9 +783,11 @@ async fn add_account_by_idc_internal(
 ) -> Result<AddAccountResult, String> {
     let is_enterprise = params.provider_id == "Enterprise";
 
-    // 从 clientSecret JWT 中提取 startUrl（如果未提供）
-    let start_url = if params.start_url.is_some() {
-        params.start_url.clone()
+    // 从 clientSecret JWT 中提取 startUrl（如果未提供）。
+    // 两条来源都过 normalize_start_url 去尾斜杠：params.start_url 可能由前端带斜杠传入，
+    // JWT 真相源虽已规范化，这里统一兜底，保证落进 account.start_url 的永远是无斜杠规范形。
+    let start_url = if let Some(ref url) = params.start_url {
+        Some(normalize_start_url(url))
     } else if is_enterprise {
         extract_start_url_from_client_secret(&params.client_secret)
     } else {
@@ -979,12 +935,12 @@ async fn add_account_by_idc_internal(
             )
         })?;
 
-        // 计算 client_id_hash（可选）
-        let client_id_hash = if let Some(hash) = params.client_id_hash.clone() {
-            Some(hash) // 如果提供了 clientIdHash，直接使用
-        } else {
-            start_url.as_ref().map(|url| calculate_client_id_hash(url)) // 如果提取到了 startUrl，计算
-        };
+        // 解析 client_id_hash：走统一裁决点，Enterprise 会在此硬校验（issue #119）
+        let client_id_hash = Some(crate::commands::common::resolve_idc_client_id_hash(
+            &params.provider_id,
+            params.client_id_hash.as_deref(),
+            start_url.as_deref(),
+        )?);
 
         let mut store = lock_store(&state.store, "store")?;
         let existing_idx = find_existing_account_idx(
@@ -1058,11 +1014,12 @@ async fn add_account_by_idc_internal(
     } else {
         // BuilderId 账号：允许没有 userId/email，用 refreshToken 去重
 
-        // 计算 client_id_hash（可选）
-        let client_id_hash = Some(resolve_builder_client_id_hash(
-            params.client_id_hash,
+        // 解析 client_id_hash：走统一裁决点（BuilderId 缺 startUrl 时用常量兜底）
+        let client_id_hash = Some(crate::commands::common::resolve_idc_client_id_hash(
+            &params.provider_id,
+            params.client_id_hash.as_deref(),
             params.start_url.as_deref(),
-        ));
+        )?);
 
         let mut store = lock_store(&state.store, "store")?;
         let existing_idx = find_existing_account_idx(
@@ -1375,39 +1332,6 @@ pub async fn list_available_models(
             Err(error)
         }
         Err(error) => Err(error),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::resolve_builder_client_id_hash;
-
-    #[test]
-    fn resolve_builder_client_id_hash_prefers_explicit_hash() {
-        let resolved = resolve_builder_client_id_hash(
-            Some("provided-hash".to_string()),
-            Some("https://example.awsapps.com/start"),
-        );
-
-        assert_eq!(resolved, "provided-hash");
-    }
-
-    #[test]
-    fn resolve_builder_client_id_hash_uses_start_url_when_hash_missing() {
-        let start_url = "https://example.awsapps.com/start";
-        let resolved = resolve_builder_client_id_hash(None, Some(start_url));
-
-        assert_eq!(resolved, super::calculate_client_id_hash(start_url));
-    }
-
-    #[test]
-    fn resolve_builder_client_id_hash_falls_back_to_default_start_url() {
-        let resolved = resolve_builder_client_id_hash(None, None);
-
-        assert_eq!(
-            resolved,
-            super::calculate_client_id_hash("https://view.awsapps.com/start")
-        );
     }
 }
 

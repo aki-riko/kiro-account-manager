@@ -54,6 +54,13 @@ export function buildSwitchParams(account) {
     params.clientId = account.clientId
     params.clientSecret = account.clientSecret
 
+    // clientIdHash 是 token 文件名的真实来源（IDE 登录产物里直接存了它）。
+    // 优先把它传给后端，避免后端用 start_url 重算时因 start_url 缺失/错误而文件名错位。
+    if (account.clientIdHash) {
+      params.clientIdHash = account.clientIdHash
+    }
+
+    // Enterprise 仍透传 startUrl 作为后端兜底（clientIdHash 缺失时才用它重算）。
     if (account.provider === 'Enterprise') {
       params.startUrl = account.startUrl
     }

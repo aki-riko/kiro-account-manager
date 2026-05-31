@@ -4,6 +4,7 @@ use crate::core::account::Account;
 use crate::commands::common::{extract_user_info, get_usage_by_provider};
 use crate::kiro::cli::read_kiro_cli_accounts;
 use crate::state::AppState;
+use crate::utils::client_id_hash::{extract_start_url_from_client_secret, normalize_start_url};
 use serde::Serialize;
 use std::sync::{Mutex, MutexGuard};
 use tauri::{Emitter, State};
@@ -21,6 +22,11 @@ fn expand_home_dir(path: &str) -> Result<String, String> {
 }
 
 /// 从 CLI 账号判断 provider
+///
+/// IdC 账号靠 token 自带的 start_url 区分 BuilderId 与 Enterprise（与前端 JSON 导入
+/// 同源逻辑）：start_url 缺失或就是 BuilderId 默认值（view.awsapps.com/start）→ BuilderId，
+/// 否则是企业自己的 d-xxx 域名 → Enterprise。这样导入的 Enterprise 账号才能保留正确
+/// 的 provider，切回 IDE 时算出正确的 clientIdHash（issue #119）。
 fn determine_provider(cli_account: &crate::kiro::cli::KiroCliAccount) -> String {
     if cli_account.auth_method == "social" {
         // Social Login，通过 profile_arn 判断
@@ -31,10 +37,17 @@ fn determine_provider(cli_account: &crate::kiro::cli::KiroCliAccount) -> String 
                 return "Github".to_string();
             }
         }
-        "Unknown".to_string()
-    } else {
-        // OIDC，默认 BuilderId
-        "BuilderId".to_string()
+        return "Unknown".to_string();
+    }
+
+    // IdC：用 start_url 区分 BuilderId / Enterprise
+    match cli_account.start_url.as_deref().map(str::trim) {
+        Some(url)
+            if !url.is_empty() && !crate::commands::common::is_builder_id_start_url(url) =>
+        {
+            "Enterprise".to_string()
+        }
+        _ => "BuilderId".to_string(),
     }
 }
 
@@ -208,7 +221,7 @@ pub async fn import_from_kiro_cli(
     account.access_token = Some(cli_account.access_token.clone());
     account.refresh_token = Some(cli_account.refresh_token.clone());
     account.expires_at.clone_from(&cli_account.expires_at);
-    account.provider = Some(provider);
+    account.provider = Some(provider.clone());
     account.user_id = user_id;
     account.region = Some(cli_account.region.clone());
     account.usage_data = usage_data;
@@ -224,6 +237,42 @@ pub async fn import_from_kiro_cli(
         account.auth_method = Some("IdC".to_string());
         account.client_id.clone_from(&cli_account.client_id);
         account.client_secret.clone_from(&cli_account.client_secret);
+
+        // start_url：优先用 token 自带的，缺失则回退到 clientSecret JWT（与添加路径同源）。
+        // 切回 IDE 时要靠它算出正确的 clientIdHash —— Enterprise 必须是自己的 d-xxx 域名。
+        // 统一 normalize_start_url 去尾斜杠（JWT 那条已在真相源规范化，token 那条这里兜底），
+        // 保证落进 account.start_url 的永远是无斜杠规范形。
+        let start_url = cli_account
+            .start_url
+            .clone()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                cli_account
+                    .client_secret
+                    .as_deref()
+                    .and_then(extract_start_url_from_client_secret)
+            })
+            .map(|s| normalize_start_url(&s));
+
+        // clientIdHash：走统一裁决点，Enterprise 在此硬校验（issue #119）。导入数据被污染
+        // （Enterprise 缺 start_url / 落到 BuilderId 默认值）时直接返回结构化失败，不写坏数据。
+        let client_id_hash = match crate::commands::common::resolve_idc_client_id_hash(
+            &provider,
+            None,
+            start_url.as_deref(),
+        ) {
+            Ok(hash) => hash,
+            Err(e) => {
+                return Ok(KiroCliImportResult {
+                    success: false,
+                    is_new: false,
+                    account: None,
+                    error: Some(format!("解析 clientIdHash 失败: {e}")),
+                });
+            }
+        };
+        account.client_id_hash = Some(client_id_hash);
+        account.start_url = start_url;
     }
 
     // 7. 生成或保留 machine_id
@@ -384,7 +433,8 @@ fn build_switch_payload(
     // 判断账号类型
     let provider = account.provider.as_ref().ok_or("账号缺少 provider 字段")?;
     let (token_key, device_reg_key, auth_method) = match provider.as_str() {
-        "BuilderId" => (
+        // Enterprise 也是 IdC/SSO，写入 odic key（真实 kiro-cli 实测样本即来自 SSO 登录）
+        "BuilderId" | "Enterprise" => (
             "kirocli:odic:token",
             "kirocli:odic:device-registration",
             "IdC",
@@ -397,41 +447,77 @@ fn build_switch_payload(
         _ => return Err(format!("不支持的 provider: {}", provider)),
     };
 
-    // 默认 profile_arn（与 Electron 版本一致）
-    const SOCIAL_PROFILE_ARN: &str = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK";
-    const BUILDER_ID_PROFILE_ARN: &str = "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX";
+    // Social 默认 profile_arn（与 Electron 版本一致；IdC token 不带 profile_arn）
+    const SOCIAL_PROFILE_ARN: &str =
+        "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK";
+    // CLI 默认 Builder ID start_url（Enterprise 用账号自带的 d-xxx start_url）。
+    // 复用 common 的共享常量，避免字面量重复、与 clientIdHash 常量保持同源。
+    const DEFAULT_START_URL: &str = crate::commands::common::KIRO_BUILDER_ID_START_URL;
 
-    // 构造 token JSON
+    let default_region = "us-east-1".to_string();
+    let region = account.region.as_ref().unwrap_or(&default_region);
+
+    // expires_at：真实 kiro-cli 用 RFC3339 + 'Z'（而非 chrono 默认的 +00:00 偏移）
+    let token_expires_at = (chrono::Utc::now() + chrono::Duration::hours(1))
+        .to_rfc3339_opts(chrono::SecondsFormat::Micros, true);
+
+    // 公共字段（IdC 与 social 的 token 都包含 oauth_flow / scopes，与实测一致）
     let mut token_data = serde_json::json!({
         "access_token": account.access_token,
         "refresh_token": account.refresh_token,
-        "region": account.region.as_ref().unwrap_or(&"us-east-1".to_string()),
-    });
-
-    // 总是生成新的 expires_at（当前时间 + 1小时）
-    let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
-    token_data["expires_at"] = serde_json::json!(expires_at.to_rfc3339());
-
-    // IdC 账号：补齐固定字段
-    if auth_method == "IdC" {
-        token_data["scopes"] = serde_json::json!([
+        "expires_at": token_expires_at,
+        "region": region,
+        "oauth_flow": "Pkce",
+        "scopes": [
             "codewhisperer:completions",
             "codewhisperer:analysis",
-            "codewhisperer:conversations",
-        ]);
-        token_data["oauth_flow"] = serde_json::json!("Pkce");
-        // IdC 账号使用 BuilderId profile_arn
-        let profile_arn = account.profile_arn.as_ref()
-            .map(|s| s.as_str())
-            .unwrap_or(BUILDER_ID_PROFILE_ARN);
-        token_data["profile_arn"] = serde_json::json!(profile_arn);
-    }
+            "codewhisperer:conversations"
+        ],
+    });
 
-    // Social 账号：补齐 start_url 和 profile_arn
-    if auth_method == "social" {
-        token_data["start_url"] = serde_json::json!("https://view.awsapps.com/start");
-        let profile_arn = account.profile_arn.as_ref()
-            .map(|s| s.as_str())
+    if auth_method == "IdC" {
+        // IdC/SSO token：带 start_url，且 **不带** profile_arn（与真实 kiro-cli 一致）
+        // 写出边界统一 normalize_start_url 去尾斜杠：本次修复前存的老账号 start_url
+        // 可能带斜杠，真实 kiro-cli token 里存的是无斜杠版本，这里兜底规范化。
+        let start_url = match provider.as_str() {
+            // BuilderId 的 startUrl 固定，缺省直接兜底到默认值
+            "BuilderId" => account
+                .start_url
+                .as_deref()
+                .map(normalize_start_url)
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| DEFAULT_START_URL.to_string()),
+            // Enterprise 必须用账号自带的 d-xxx 域名，绝不能回退到 BuilderId 默认值。
+            // 缺失或等于 BuilderId 默认值都视为脏数据，直接拒绝（issue #119 根因）。
+            "Enterprise" => {
+                let url = account
+                    .start_url
+                    .as_deref()
+                    .map(normalize_start_url)
+                    .filter(|s| !s.is_empty())
+                    .ok_or(
+                        "Enterprise 账号必须提供 start_url（企业自己的 d-xxx 域名），\
+                         不能为空",
+                    )?;
+                if crate::commands::common::is_builder_id_start_url(&url) {
+                    return Err(
+                        "Enterprise 账号的 start_url 不能是 BuilderId 默认值\
+                         （https://view.awsapps.com/start），请填入企业自己的 d-xxx 域名"
+                            .to_string(),
+                    );
+                }
+                url
+            }
+            _ => return Err(format!("不支持的 IdC provider: {provider}")),
+        };
+        token_data["start_url"] = serde_json::json!(start_url);
+    } else {
+        // Social token：带 start_url 与 profile_arn
+        token_data["start_url"] = serde_json::json!(DEFAULT_START_URL);
+        let profile_arn = account
+            .profile_arn
+            .as_deref()
+            .filter(|s| !s.is_empty())
             .unwrap_or(SOCIAL_PROFILE_ARN);
         token_data["profile_arn"] = serde_json::json!(profile_arn);
     }
@@ -439,11 +525,23 @@ fn build_switch_payload(
     let token_value = serde_json::to_string(&token_data)
         .map_err(|e| format!("序列化 token 失败: {e}"))?;
 
-    // 构造 device registration JSON
+    // device-registration：真实 CLI 含 client_secret_expires_at / oauth_flow / scopes。
+    // 本地未持久化 client_secret 过期时间，按 90 天兜底（AWS SSO client_secret 默认有效期，
+    // 该字段仅用于 CLI 本地判断，实际有效性由 AWS 服务端校验）。
+    let secret_expires_at = (chrono::Utc::now() + chrono::Duration::days(90))
+        .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let empty = String::new();
     let device_reg_data = serde_json::json!({
-        "client_id": account.client_id.as_ref().unwrap_or(&String::new()),
-        "client_secret": account.client_secret.as_ref().unwrap_or(&String::new()),
-        "region": account.region.as_ref().unwrap_or(&"us-east-1".to_string()),
+        "client_id": account.client_id.as_ref().unwrap_or(&empty),
+        "client_secret": account.client_secret.as_ref().unwrap_or(&empty),
+        "client_secret_expires_at": secret_expires_at,
+        "region": region,
+        "oauth_flow": "Pkce",
+        "scopes": [
+            "codewhisperer:completions",
+            "codewhisperer:analysis",
+            "codewhisperer:conversations"
+        ],
     });
 
     let device_reg_value = serde_json::to_string(&device_reg_data)

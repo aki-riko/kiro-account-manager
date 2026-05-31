@@ -5,8 +5,8 @@ use super::{AuthProvider, AuthResult, RefreshMetadata};
 use crate::auth::auth_social::{generate_code_challenge_social, generate_code_verifier_social};
 use crate::clients::aws_sso_client::{AWSSSOClient, GRANT_SCOPES};
 use crate::utils::browser::open_browser;
+use crate::utils::client_id_hash::calculate_client_id_hash;
 use async_trait::async_trait;
-use sha1::{Digest, Sha1};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -252,15 +252,6 @@ impl IdcProvider {
         }
     }
 
-    /// 计算 clientIdHash（跟 Kiro 一样用 SHA1）
-    fn compute_client_id_hash(start_url: &str) -> String {
-        let input = serde_json::json!({ "startUrl": start_url }).to_string();
-        let mut hasher = Sha1::new();
-        hasher.update(input.as_bytes());
-        let hash = hasher.finalize();
-        hex::encode(hash)
-    }
-
     /// 构建 scopes 字符串
     fn get_scopes() -> String {
         GRANT_SCOPES.join(",")
@@ -353,7 +344,7 @@ impl AuthProvider for IdcProvider {
         // Step 10: 构建 AuthResult
         let expires_at =
             chrono::Local::now() + chrono::Duration::seconds(token_response.expires_in);
-        let client_id_hash = Self::compute_client_id_hash(start_url);
+        let client_id_hash = calculate_client_id_hash(start_url);
 
         #[cfg(debug_assertions)]
         println!("[IdC] {provider} login successful!");
@@ -404,7 +395,9 @@ impl AuthProvider for IdcProvider {
             chrono::Local::now() + chrono::Duration::seconds(token_response.expires_in);
         let client_id_hash = metadata
             .client_id_hash
-            .unwrap_or_else(|| Self::compute_client_id_hash(self.get_start_url()));
+            .unwrap_or_else(|| {
+                calculate_client_id_hash(self.get_start_url())
+            });
 
         Ok(AuthResult {
             access_token: token_response.access_token,

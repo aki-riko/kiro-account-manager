@@ -35,6 +35,9 @@ pub struct KiroCliAccount {
     pub token_key: String,   // 记录来源键名
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
+    /// IdC/SSO token 自带的 start_url（真实 kiro-cli token 里就有，
+    /// 用来区分 BuilderId 与 Enterprise，并还原正确的 clientIdHash）
+    pub start_url: Option<String>,
 }
 
 /// Device Registration 数据（仅 AWS SSO OIDC）
@@ -164,6 +167,10 @@ fn read_token_from_db(conn: &Connection, key: &str) -> SqliteResult<KiroCliAccou
         .as_str()
         .map(std::string::ToString::to_string);
 
+    let start_url = token_data["start_url"]
+        .as_str()
+        .map(std::string::ToString::to_string);
+
     let scopes = token_data["scopes"].as_array().map(|arr| {
         arr.iter()
             .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
@@ -190,6 +197,7 @@ fn read_token_from_db(conn: &Connection, key: &str) -> SqliteResult<KiroCliAccou
         token_key: key.to_string(),
         client_id: None,
         client_secret: None,
+        start_url,
     })
 }
 

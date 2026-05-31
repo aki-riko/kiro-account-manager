@@ -344,6 +344,7 @@ fn build_switch_params(
         start_url: account.start_url.clone(),
         client_id: account.client_id.clone(),
         client_secret: account.client_secret.clone(),
+        client_id_hash: account.client_id_hash.clone(),
         region: account.region.clone(),
     }
 }

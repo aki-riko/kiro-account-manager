@@ -1,17 +1,8 @@
 // Kiro IDE 相关功能
 
 use serde::{Deserialize, Serialize};
-use sha1::{Digest, Sha1};
 
 // ===== 辅助函数 =====
-
-/// 根据 startUrl 计算 clientIdHash（与 Kiro IDE 源码一致）
-fn calculate_client_id_hash(start_url: &str) -> String {
-    let input = format!(r#"{{"startUrl":"{start_url}"}}"#);
-    let mut hasher = Sha1::new();
-    hasher.update(input.as_bytes());
-    hex::encode(hasher.finalize())
-}
 
 /// 检查文件是否为符号链接（安全性检查，参考 Kiro IDE）
 fn assert_not_symlink(path: &std::path::Path) -> Result<(), String> {
@@ -242,6 +233,8 @@ pub struct SwitchAccountParams {
     #[serde(default)]
     pub start_url: Option<String>, // Enterprise 必须提供，BuilderId 不需要
     #[serde(default)]
+    pub client_id_hash: Option<String>, // 优先用账号已存的 hash（IDE 登录产物里直接存了它）
+    #[serde(default)]
     pub client_id: Option<String>,
     #[serde(default)]
     pub client_secret: Option<String>,
@@ -264,6 +257,9 @@ pub async fn switch_kiro_account(
         let client_id = params.client_id;
         let client_secret = params.client_secret;
         let region = params.region;
+        let client_id_hash = params
+            .client_id_hash
+            .filter(|h| !h.trim().is_empty());
 
         // 获取 token 目录
         let home = std::env::var("USERPROFILE")
@@ -281,26 +277,27 @@ pub async fn switch_kiro_account(
         let file_path = dir_path.join("kiro-auth-token.json");
         let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
 
+        // IdC 账号统一解析 clientIdHash：规则收敛在 common::resolve_idc_client_id_hash，
+        // 切号 / 添加 / 导入共用同一裁决点（优先已存 hash → BuilderId 常量兜底 /
+        // Enterprise 由 startUrl 现算 → Enterprise 硬校验拦截 issue #119 根因）。
+        let idc_hash = if auth_method == "IdC" {
+            Some(crate::commands::common::resolve_idc_client_id_hash(
+                &provider,
+                client_id_hash.as_deref(),
+                start_url.as_deref(),
+            )?)
+        } else {
+            None
+        };
+
         // 根据 auth_method 构建 token 数据
         let token_data = if auth_method == "IdC" {
-            // 确定 startUrl
-            let actual_start_url = if provider == "BuilderId" {
-                "https://view.awsapps.com/start".to_string()
-            } else if provider == "Enterprise" {
-                start_url
-                    .clone()
-                    .ok_or("Enterprise 账号必须提供 start_url")?
-            } else {
-                return Err(format!("未知的 IdC Provider: {provider}"));
-            };
-
-            // 计算 clientIdHash
-            let hash = calculate_client_id_hash(&actual_start_url);
+            let hash = idc_hash.clone().ok_or("IdC 账号缺少 clientIdHash")?;
 
             serde_json::json!({
                 "accessToken": access_token,
                 "refreshToken": refresh_token,
-                "expiresAt": expires_at.to_rfc3339(),
+                "expiresAt": expires_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                 "authMethod": "IdC",
                 "provider": provider,
                 "clientIdHash": hash,
@@ -355,17 +352,9 @@ pub async fn switch_kiro_account(
         // IdC 账号还需要写入 Client Registration 文件
         if auth_method == "IdC" {
             if let (Some(cid), Some(csec)) = (client_id, client_secret) {
-                // 确定 startUrl
-                let actual_start_url = if provider == "BuilderId" {
-                    "https://view.awsapps.com/start".to_string()
-                } else if provider == "Enterprise" {
-                    start_url.ok_or("Enterprise 账号必须提供 start_url")?
-                } else {
-                    return Err(format!("未知的 IdC Provider: {provider}"));
-                };
-
-                // 计算 clientIdHash
-                let hash = calculate_client_id_hash(&actual_start_url);
+                // 复用上面统一解析出的 clientIdHash（与 token 文件里的 clientIdHash 保持一致，
+                // 确保 {hash}.json 文件名与 IDE 查找的路径完全匹配）
+                let hash = idc_hash.clone().ok_or("IdC 账号缺少 clientIdHash")?;
 
                 let client_reg_path = dir_path.join(format!("{hash}.json"));
                 let client_reg_temp_path = dir_path.join(format!("{hash}.json.tmp"));
@@ -373,7 +362,7 @@ pub async fn switch_kiro_account(
                 let client_reg_data = serde_json::json!({
                     "clientId": cid,
                     "clientSecret": csec,
-                    "expiresAt": client_expires.to_rfc3339()
+                    "expiresAt": client_expires.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
                 });
                 let client_reg_content = serde_json::to_string_pretty(&client_reg_data)
                     .map_err(|e| format!("Failed to serialize client registration: {e}"))?;
