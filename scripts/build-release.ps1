@@ -171,7 +171,12 @@ try {
     throw "Build finished but no MSI artifacts were found in $bundleDir"
   }
 
-  $msiArtifact = $artifacts | Where-Object Extension -eq '.msi' | Select-Object -First 1
+  $msiArtifacts = $artifacts | Where-Object Extension -eq '.msi'
+  # 优先选择与目标版本匹配的 MSI，避免旧版本残留产物（如 1.8.7）按文件名排序被误选
+  $msiArtifact = $msiArtifacts | Where-Object { $_.Name -like "*_${expectedVersion}_*" } | Select-Object -First 1
+  if (-not $msiArtifact) {
+    $msiArtifact = $msiArtifacts | Select-Object -First 1
+  }
   if (-not $msiArtifact) {
     throw "Build finished but no MSI package was found in $bundleDir"
   }
