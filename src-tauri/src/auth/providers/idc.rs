@@ -287,10 +287,15 @@ impl AuthProvider for IdcProvider {
         let (server, _port, redirect_uri) = start_local_server()?;
 
         // Step 3: 注册客户端（Authorization Code Flow）
+        // 注意：register 时传给 AWS 的 redirect_uri 必须不带端口（http://127.0.0.1/oauth/callback），
+        // 才能拿到带 REFRESH_TOKEN grant 的 client。Kiro IDE 源码里就是这么传的。
+        // 本地服务器仍然监听动态端口，AWS 对 loopback 地址按 RFC 8252 允许任意端口匹配。
+        // 后续 authorize / createToken 用真实带端口的 redirect_uri。
         #[cfg(debug_assertions)]
         println!("[IdC] Registering auth code client...");
+        let register_redirect_uri = "http://127.0.0.1/oauth/callback";
         let client_reg = sso_client
-            .register_client(start_url, &redirect_uri, provider == "Enterprise")
+            .register_client(start_url, register_redirect_uri, provider == "Enterprise")
             .await?;
 
         #[cfg(debug_assertions)]

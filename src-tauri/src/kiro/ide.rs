@@ -290,6 +290,23 @@ pub async fn switch_kiro_account(
             None
         };
 
+        // IdC 账号切号前防呆：clientSecret 必须带 REFRESH_TOKEN grant，否则 IDE 一刷
+        // token 就被 AWS 拒，报 "Unable to fetch account usage data: Invalid token"。
+        // 脏数据来源：(1) Amazon Q CLI 注册的 client（clientName=`Amazon Q Developer for command line`）；
+        // (2) 旧版 KAM 用带端口 redirect_uri 注册的 client（自 2026-06 起新版本已修）。
+        // 这两类 client 的 clientSecret JWT payload 里 enabledGrants 为 null。
+        if auth_method == "IdC" {
+            if let Some(secret) = client_secret.as_deref() {
+                if !crate::utils::client_id_hash::client_supports_refresh_token(secret) {
+                    return Err(format!(
+                        "此 {provider} 账号的 client 不支持 refresh_token grant，无法在 Kiro IDE 中正常使用。\n\n\
+                         可能来源：从 Amazon Q CLI 导入，或旧版 KAM 在线登录注册。\n\n\
+                         解决方法：删除此账号后通过新版 KAM 重新「在线登录」，或直接在 Kiro IDE 里登录后再用「从 IDE 导入」。"
+                    ));
+                }
+            }
+        }
+
         // 根据 auth_method 构建 token 数据
         let token_data = if auth_method == "IdC" {
             let hash = idc_hash.clone().ok_or("IdC 账号缺少 clientIdHash")?;
@@ -346,6 +363,15 @@ pub async fn switch_kiro_account(
         std::fs::rename(&temp_file_path, &file_path)
             .map_err(|e| format!("Failed to rename file: {e}"))?;
 
+        // 强制更新 mtime，让 IDE 的 fs.watchFile（基于 mtime polling）一定能感知到变化。
+        // Windows 下 rename 有时不会改变 mtime（NTFS 时间戳精度 + 短间隔写入），
+        // 而 Kiro IDE 用 fs.watchFile 以 5 秒 polling 监听 token 文件，mtime 不变就不触发。
+        // 后果：IDE 内存里继续缓存旧账号 token → AWS 返回 401 Invalid token。
+        let _ = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&file_path)
+            .and_then(|f| f.set_modified(std::time::SystemTime::now()));
+
         // 设置文件权限为 0600（仅 Unix 系统）
         set_file_permissions(&file_path).ok();
 
@@ -401,6 +427,54 @@ pub async fn switch_kiro_account(
         Ok(SwitchAccountResult {
             success: true,
             message: format!("Switched to {provider} ({auth_method}) account"),
+        })
+    })
+    .await
+    .map_err(|e| format!("Task failed: {e}"))?
+}
+
+/// 退出当前 Kiro IDE 登录（删除本地 token 文件，账号仍保留在 KAM 列表中）
+///
+/// 这是 `switch_kiro_account` 的逆操作：switch 写入
+/// `~/.aws/sso/cache/kiro-auth-token.json`，logout 删除它。删除后 Kiro IDE 不再处于
+/// 登录态——`get_kiro_local_token` 返回 None，前端的 LIVE 标识随之消失，但账号记录依旧
+/// 留在 KAM 列表里，可随时再次登入。
+///
+/// 仅删除 `kiro-auth-token.json`（真正的会话凭证）。IdC 的 `{clientIdHash}.json` 属于
+/// 客户端注册信息（clientId/clientSecret），不是登录会话本身，保留它不影响"已登出"语义，
+/// 下次登入会复用或覆盖，故不删除。
+///
+/// 文件不存在视为已处于登出态，返回成功（幂等）。
+#[tauri::command]
+pub async fn logout_kiro_account() -> Result<SwitchAccountResult, String> {
+    tokio::task::spawn_blocking(|| {
+        let home = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .map_err(|_| "Cannot find home directory")?;
+
+        let file_path = std::path::Path::new(&home)
+            .join(".aws")
+            .join("sso")
+            .join("cache")
+            .join("kiro-auth-token.json");
+
+        // 文件不存在 = 本来就没登录，幂等返回成功
+        if !file_path.exists() {
+            return Ok(SwitchAccountResult {
+                success: true,
+                message: "Already logged out".to_string(),
+            });
+        }
+
+        // 安全检查：确保目标不是符号链接，避免误删链接指向的真实文件
+        assert_not_symlink(&file_path)?;
+
+        std::fs::remove_file(&file_path)
+            .map_err(|e| format!("Failed to remove token file: {e}"))?;
+
+        Ok(SwitchAccountResult {
+            success: true,
+            message: "Logged out from Kiro IDE".to_string(),
         })
     })
     .await

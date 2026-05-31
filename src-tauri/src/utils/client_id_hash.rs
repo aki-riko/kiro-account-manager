@@ -63,9 +63,55 @@ pub fn extract_start_url_from_client_secret(client_secret: &str) -> Option<Strin
         .map(normalize_start_url)
 }
 
+/// 检查 clientSecret（JWT）是否带 REFRESH_TOKEN grant —— 切号前防呆。
+///
+/// AWS SSO OIDC 的 `/client/register` 行为：传 `redirectUris=["http://127.0.0.1/oauth/callback"]`
+/// （不带端口）才会开 REFRESH_TOKEN grant；带端口或被外部工具（如 Amazon Q CLI 注册的
+/// `clientName=Amazon Q Developer for command line` 客户端）注册的 client，
+/// `enabledGrants` 是空的。这种 client 只能登录一次拿 access_token，**不能 refresh**。
+///
+/// 切号到这种账号 → IDE 把它当 IdC 凭证用 → token 一过期 IDE 用 refresh_token + clientId/clientSecret
+/// 调 SSO `/token grant_type=refresh_token` → AWS 校验 enabledGrants 没 REFRESH_TOKEN → 拒
+/// → IDE 报 `Unable to fetch account usage data: Invalid token`。
+///
+/// 切号前先用本函数判一下，没 grant 就给用户清晰错误，避免 IDE 那边一头雾水。
+pub fn client_supports_refresh_token(client_secret: &str) -> bool {
+    use base64::{engine::general_purpose, Engine as _};
+
+    let parts: Vec<&str> = client_secret.split('.').collect();
+    if parts.len() < 2 {
+        // 不是 JWT 格式 —— 无法判断，保守允许（切号继续走，让 IDE 自己报）
+        return true;
+    }
+
+    let Some(decoded) = general_purpose::URL_SAFE_NO_PAD.decode(parts[1]).ok() else {
+        return true;
+    };
+    let Some(payload_str) = String::from_utf8(decoded).ok() else {
+        return true;
+    };
+    let Ok(payload_json) = serde_json::from_str::<serde_json::Value>(&payload_str) else {
+        return true;
+    };
+    let Some(serialized_str) = payload_json.get("serialized").and_then(|v| v.as_str()) else {
+        return true;
+    };
+    let Ok(serialized) = serde_json::from_str::<serde_json::Value>(serialized_str) else {
+        return true;
+    };
+
+    // enabledGrants 是 object，含 AUTH_CODE / REFRESH_TOKEN 两个 key 才算完整。
+    // 实测 Q CLI 注册的 client `enabledGrants` 是 null；带端口 redirect_uri 注册的也是 null。
+    // 真实 Kiro IDE 注册的：{ AUTH_CODE: {...}, REFRESH_TOKEN: {...} }。
+    serialized
+        .get("enabledGrants")
+        .and_then(|g| g.get("REFRESH_TOKEN"))
+        .is_some()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{calculate_client_id_hash, normalize_start_url};
+    use super::{calculate_client_id_hash, client_supports_refresh_token, normalize_start_url};
 
     #[test]
     fn normalize_strips_trailing_slash_and_whitespace() {
@@ -109,5 +155,13 @@ mod tests {
             calculate_client_id_hash("https://d-90660ceab3.awsapps.com/start/"),
             calculate_client_id_hash("https://d-90660ceab3.awsapps.com/start")
         );
+    }
+
+    #[test]
+    fn malformed_client_secret_treated_as_supporting() {
+        // 非 JWT 格式 —— 保守允许，让切号继续走（不替 IDE 当法官）
+        assert!(client_supports_refresh_token(""));
+        assert!(client_supports_refresh_token("not-a-jwt"));
+        assert!(client_supports_refresh_token("only.two"));
     }
 }
