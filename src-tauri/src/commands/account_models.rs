@@ -333,7 +333,7 @@ mod tests {
         );
         assert_eq!(
             params.get("modelProvider").map(String::as_str),
-            Some("anthropic")
+            Some("qdev")
         );
         assert_eq!(
             params.get("nextToken").map(String::as_str),

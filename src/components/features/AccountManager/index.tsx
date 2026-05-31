@@ -179,7 +179,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
               availableModelsCache: {
                 response,
                 cachedAt: Math.floor(Date.now() / 1000),
-                modelProvider: null}}
+                modelProvider: "qdev"}}
           : account
       )))
       return response
