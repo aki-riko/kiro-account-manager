@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 
-export async function applyMachineGuid(account, settings = {}) {
+export async function applyMachineGuid(account, settings: Record<string, any> = {}) {
   const autoChangeMachineId = settings.autoChangeMachineId !== false
   const bindMachineIdToAccount = settings.bindMachineIdToAccount !== false
 
@@ -42,7 +42,7 @@ export function buildSwitchParams(account) {
   const isIdC = account.provider === 'BuilderId' || account.provider === 'Enterprise' || account.clientIdHash
   const authMethod = isIdC ? 'IdC' : 'social'
 
-  const params = {
+  const params: Record<string, any> = {
     accessToken: account.accessToken,
     refreshToken: account.refreshToken,
     provider: account.provider || 'Google',
@@ -63,6 +63,14 @@ export function buildSwitchParams(account) {
     // Enterprise 仍透传 startUrl 作为后端兜底（clientIdHash 缺失时才用它重算）。
     if (account.provider === 'Enterprise') {
       params.startUrl = account.startUrl
+    }
+
+    // BuilderId 真实缓存带 profileArn（实测 IDE 源码 FixedProfileArns 里 BuilderId 固定
+    // arn:...:638616132270:profile/AAAACCCCXXXX）。透传账号自带值，让后端"账号自带优先、
+    // 否则默认常量兜底"生效；缺它会导致 IDE 调 Q API 时无 profile，BuilderId 账号失效。
+    // Enterprise 不带 profileArn（与真实缓存一致），故只对 BuilderId 透传。
+    if (account.provider === 'BuilderId' && account.profileArn) {
+      params.profileArn = account.profileArn
     }
   } else {
     params.profileArn = account.profileArn || 'arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK'

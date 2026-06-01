@@ -290,19 +290,25 @@ pub async fn switch_kiro_account(
             None
         };
 
-        // IdC 账号切号前防呆：clientSecret 必须带 REFRESH_TOKEN grant，否则 IDE 一刷
-        // token 就被 AWS 拒，报 "Unable to fetch account usage data: Invalid token"。
-        // 脏数据来源：(1) Amazon Q CLI 注册的 client（clientName=`Amazon Q Developer for command line`）；
-        // (2) 旧版 KAM 用带端口 redirect_uri 注册的 client（自 2026-06 起新版本已修）。
-        // 这两类 client 的 clientSecret JWT payload 里 enabledGrants 为 null。
+        // IdC 账号 client_secret 健康度检查（只警告不阻挡切号）：
+        // 部分历史账号（早期 KAM 在线登录或 Amazon Q CLI 导入）的 clientSecret JWT
+        // payload 里 enabledGrants 为空，缺 REFRESH_TOKEN grant，IDE 那边 token 一过期
+        // 调 SSO refresh 时会被 AWS 拒，回报 "Unable to fetch account usage data: Invalid token"。
+        //
+        // KAM 不应替 IDE 当法官——access_token 在 1 小时有效期内**仍然能用**，
+        // 历史用户切号到这种账号过去一直工作正常，强行阻断会导致灾难性回归。
+        // 这里改成日志告警，让用户/KAM UI 自行决定如何提示，切号流程继续。
+        // v1.8.9+ 在线登录已修复（redirect_uri 不带端口才会拿到带 REFRESH_TOKEN grant 的 client），
+        // 受影响账号重新登录一次即可获得健康 client。
         if auth_method == "IdC" {
             if let Some(secret) = client_secret.as_deref() {
                 if !crate::utils::client_id_hash::client_supports_refresh_token(secret) {
-                    return Err(format!(
-                        "此 {provider} 账号的 client 不支持 refresh_token grant，无法在 Kiro IDE 中正常使用。\n\n\
-                         可能来源：从 Amazon Q CLI 导入，或旧版 KAM 在线登录注册。\n\n\
-                         解决方法：删除此账号后通过新版 KAM 重新「在线登录」，或直接在 Kiro IDE 里登录后再用「从 IDE 导入」。"
-                    ));
+                    log::warn!(
+                        "[switch_kiro_account] {} 账号的 clientSecret 缺少 REFRESH_TOKEN grant，\
+                         IDE token 过期后 refresh 会被 AWS 拒。\
+                         建议用户在 KAM v1.8.9+ 重新登录此账号以获取健康 client。",
+                        provider
+                    );
                 }
             }
         }
@@ -310,16 +316,32 @@ pub async fn switch_kiro_account(
         // 根据 auth_method 构建 token 数据
         let token_data = if auth_method == "IdC" {
             let hash = idc_hash.clone().ok_or("IdC 账号缺少 clientIdHash")?;
+            let region_value = region.ok_or("IdC 账号必须提供 region")?;
 
-            serde_json::json!({
+            let mut obj = serde_json::json!({
                 "accessToken": access_token,
                 "refreshToken": refresh_token,
                 "expiresAt": expires_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                "clientIdHash": hash,
                 "authMethod": "IdC",
                 "provider": provider,
-                "clientIdHash": hash,
-                "region": region.ok_or("IdC 账号必须提供 region")?,
-            })
+                "region": region_value,
+            });
+
+            // BuilderId 真实缓存带 profileArn（Enterprise 不带）。实测 IDE 写出的 BuilderId
+            // token 末尾有 profileArn，缺它会导致 IDE 调 CodeWhisperer/Q API 时无 profile，
+            // BuilderId 账号在 IDE 里失效——别的管理器照真实格式写了 profileArn 所以能用。
+            // 账号自带优先，否则用 BuilderId 默认常量（与真实缓存里的值一致）。
+            if provider == "BuilderId" {
+                let arn = profile_arn
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or_else(|| {
+                        crate::commands::common::KIRO_BUILDER_ID_PROFILE_ARN.to_string()
+                    });
+                obj["profileArn"] = serde_json::Value::String(arn);
+            }
+
+            obj
         } else {
             let arn = profile_arn
                 .unwrap_or_else(|| crate::commands::common::KIRO_SOCIAL_PROFILE_ARN.to_string());
