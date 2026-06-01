@@ -326,7 +326,7 @@ pub fn switch_cli_account(
 
 /// 退出 CLI 2.0 当前登录态：清空所有 token key（登录的逆操作）。
 ///
-/// 与 `switch_cli_account` 对称——切号是写入某个 token key，登出则删除全部 token key，
+/// 与 `switch_cli_account` 对称——切号是写入某个 token key，退出登录则删除全部 token key，
 /// 让 CLI 回到"未登录"状态。device-registration 保留（那是设备注册信息，非登录凭证，
 /// 重新登录时复用）。返回删除的 key 数量，便于前端区分"本来就没登录"与"清掉了登录态"。
 pub fn logout_cli_account(db_path: &str) -> Result<usize, String> {
@@ -632,7 +632,7 @@ mod tests {
         let db = make_temp_db();
         insert_kv(&db, "kirocli:social:token", "{\"a\":1}");
         insert_kv(&db, "codewhisperer:odic:token", "{\"b\":2}");
-        // device-registration 不是 token key，登出应当保留它（设备注册信息，重新登录复用）
+        // device-registration 不是 token key，退出登录应当保留它（设备注册信息，重新登录复用）
         insert_kv(&db, "kirocli:social:device-registration", "{\"reg\":true}");
 
         let removed = logout_cli_account(&db).expect("logout ok");

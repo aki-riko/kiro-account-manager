@@ -297,7 +297,7 @@ const AccountCard = memo(function AccountCard({
         </div>
 
         <div className="mt-auto pt-2.5 border-t border-border/50 flex items-center gap-1">
-          {/* 主操作：登录/登出（带文字） */}
+          {/* 主操作：登录/退出登录（带文字） */}
           {isCurrentAccount ? (
             <button
               onClick={(e) => { e.stopPropagation(); onLogout(account) }}
