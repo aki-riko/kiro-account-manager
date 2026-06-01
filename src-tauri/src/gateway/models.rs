@@ -536,7 +536,8 @@ pub struct OpenAIChatRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct OpenAIMessage {
     pub role: String,
-    pub content: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<serde_json::Value>,
     #[serde(default)]
     pub tool_calls: Option<Vec<OpenAIToolCall>>,
     #[serde(default)]

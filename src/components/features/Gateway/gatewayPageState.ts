@@ -200,7 +200,9 @@ export const buildGatewayPayload = (config: GatewayConfig) => ({
   filterStripBoundaries: !!config.filterStripBoundaries,
   filterEnvNoise: !!config.filterEnvNoise,
   promptFilterRules: config.promptFilterRules || [],
-  logRequests: config.logRequests !== false
+  logRequests: config.logRequests !== false,
+  responseCacheEnabled: !!config.responseCacheEnabled,
+  responseCacheTtl: Number(config.responseCacheTtl) || 3600
 })
 
 export const loadGatewayPageData = async () => {

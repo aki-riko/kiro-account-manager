@@ -101,10 +101,6 @@ pub fn normalize_anthropic_request(request: &AnthropicMessagesRequest) -> Normal
 }
 
 pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest, String> {
-    if payload.get("messages").is_some() && payload.get("input").is_none() {
-        return normalize_openai_chat_payload(payload);
-    }
-
     let model = payload
         .get("model")
         .and_then(Value::as_str)
@@ -173,7 +169,7 @@ pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> NormalizedR
     for msg in &request.messages {
         match msg.role.as_str() {
             "system" => {
-                let text = extract_text_content(Some(&msg.content));
+                let text = extract_text_content(msg.content.as_ref());
                 if !text.is_empty() {
                     messages.push(NormalizedMessage {
                         role: "system".to_string(),
@@ -185,7 +181,7 @@ pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> NormalizedR
                 }
             }
             "tool" => {
-                let content = extract_text_content(Some(&msg.content));
+                let content = extract_text_content(msg.content.as_ref());
                 let tool_call_id = msg.tool_call_id.clone().unwrap_or_default();
                 pending_tool_results.push((tool_call_id, content));
             }
@@ -214,7 +210,7 @@ pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> NormalizedR
 
                 messages.push(NormalizedMessage {
                     role: msg.role.clone(),
-                    content: Some(msg.content.clone()),
+                    content: msg.content.clone(),
                     tool_calls,
                     tool_call_id: None,
                     metadata: None,
@@ -1879,7 +1875,7 @@ fn extract_text_content(content: Option<&Value>) -> String {
         Some(value @ Value::Array(_)) => {
             extract_text_blocks(value, &["text", "input_text", "output_text"])
         }
-        Some(other) => other.to_string(),
+        Some(other) => serde_json::to_string(other).unwrap_or_default(),
     }
 }
 
@@ -2241,7 +2237,11 @@ fn extract_tool_results(content: Option<&Value>) -> Vec<KiroToolResult> {
                 Some(Value::Array(array)) => {
                     extract_text_blocks(&Value::Array(array.clone()), &["text", "output_text"])
                 }
-                Some(other) => other.to_string(),
+                Some(other) => {
+                    // 使用 serde_json::to_string 而不是 to_string() 来避免双重序列化
+                    // 如果是对象或其他类型，序列化为 JSON 字符串
+                    serde_json::to_string(other).unwrap_or_else(|_| String::new())
+                }
                 None => String::new(),
             };
             let status = if item
