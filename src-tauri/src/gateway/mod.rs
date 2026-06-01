@@ -219,16 +219,22 @@ pub struct GatewayStatus {
 #[serde(rename_all = "camelCase")]
 pub struct GatewayRequestLogEntry {
     pub occurred_at: String,
+    /// 全局唯一的请求 ID（UUID）
+    pub request_id: String,
     pub request_index: u64,
     pub endpoint: String,
     pub client_ip: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     pub stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub upstream_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
     pub status_code: u16,
     pub outcome: String,
     pub duration_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_body: Option<String>,
@@ -249,6 +255,43 @@ pub struct GatewayRequestLogEntry {
     /// 错误类型（如 invalid_request_error, authentication_error 等）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error_type: Option<String>,
+    /// 流式响应信息
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream_info: Option<StreamInfo>,
+    /// 请求摘要信息
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_summary: Option<RequestSummary>,
+    /// 响应摘要信息
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_summary: Option<ResponseSummary>,
+}
+
+/// 流式响应信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamInfo {
+    pub chunk_count: usize,
+    /// 首字节时间（毫秒）
+    pub first_chunk_ms: u64,
+}
+
+/// 请求摘要信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestSummary {
+    pub message_count: usize,
+    pub tool_count: usize,
+    pub total_content_length: usize,
+    pub has_images: bool,
+}
+
+/// 响应摘要信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponseSummary {
+    pub content_length: usize,
+    pub tool_calls_count: usize,
+    pub stop_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

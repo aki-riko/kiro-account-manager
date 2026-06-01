@@ -1173,7 +1173,7 @@ pub async fn build_kiro_payload(
                     documents: None,
                     images: images_option(current_images),
                     user_input_message_context: build_user_context(
-                        convert_tools(&processed_tools),
+                        None, // Continue请求不需要tools，只需要tool_results
                         current_tool_results,
                     ),
                     user_intent: None,

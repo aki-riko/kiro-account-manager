@@ -966,8 +966,60 @@ fn write_request_log(
         );
     }
 
+    // 生成请求摘要
+    let request_summary = context.request.map(|req| {
+        use crate::gateway::RequestSummary;
+        RequestSummary {
+            message_count: req.messages.len(),
+            tool_count: req.tools.as_ref().map(|t| t.len()).unwrap_or(0),
+            total_content_length: req.messages.iter()
+                .filter_map(|m| m.content.as_ref())
+                .map(|c| c.to_string().len())
+                .sum(),
+            has_images: req.messages.iter().any(|m| {
+                m.content.as_ref()
+                    .and_then(|c| c.as_array())
+                    .map(|arr| arr.iter().any(|item| {
+                        item.get("type").and_then(|t| t.as_str()) == Some("image")
+                    }))
+                    .unwrap_or(false)
+            }),
+        }
+    });
+
+    // 生成响应摘要
+    let response_summary = _response_body.and_then(|body| {
+        use crate::gateway::ResponseSummary;
+        serde_json::from_str::<serde_json::Value>(body).ok().map(|v| {
+            ResponseSummary {
+                content_length: body.len(),
+                tool_calls_count: v.get("content")
+                    .and_then(|c| c.as_array())
+                    .map(|arr| arr.iter().filter(|item| {
+                        item.get("type").and_then(|t| t.as_str()) == Some("tool_use")
+                    }).count())
+                    .unwrap_or(0),
+                stop_reason: v.get("stop_reason")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s.to_string()),
+            }
+        })
+    });
+
+    // 流式响应信息
+    let stream_info = if context.is_stream.unwrap_or(false) {
+        Some(crate::gateway::StreamInfo {
+            is_stream: true,
+            chunk_count: None, // 需要在流式处理中累计
+            first_chunk_ms: None, // 需要在流式处理中记录
+        })
+    } else {
+        None
+    };
+
     let entry = GatewayRequestLogEntry {
-        occurred_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        occurred_at: chrono::Utc::now().to_rfc3339(),
+        request_id: uuid::Uuid::new_v4().to_string(),
         request_index: context.request_index,
         endpoint: context.endpoint.to_string(),
         client_ip: context.client_addr.ip().to_string(),
@@ -991,6 +1043,9 @@ fn write_request_log(
         cache_read_input_tokens,
         cache_creation_input_tokens,
         error_type: error_type.map(str::to_string),
+        request_summary,
+        response_summary,
+        stream_info,
     };
 
     // 如果关闭了日志记录，跳过
