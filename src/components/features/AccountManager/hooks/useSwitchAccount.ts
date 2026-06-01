@@ -50,7 +50,7 @@ export function useSwitchAccount(onLocalTokenChange) {
       switchTarget: 'ide'})
   }, [t])
 
-  // 显示退出登录确认弹窗（登入的逆操作：清除当前登录态，账号仍保留在列表中）
+  // 显示退出登录确认弹窗（登录的逆操作：清除当前登录态，账号仍保留在列表中）
   const handleLogoutAccount = useCallback((account) => {
     setSwitchDialog({
       type: 'confirm',
@@ -86,7 +86,7 @@ export function useSwitchAccount(onLocalTokenChange) {
               await invoke('logout_cli_account', { dbPath: cliPath })
             }
           } catch (e) {
-            console.warn('[Logout] CLI 登出失败:', e)
+            console.warn('[Logout] CLI 退出登录失败:', e)
           }
         }
 
@@ -112,11 +112,16 @@ export function useSwitchAccount(onLocalTokenChange) {
     }
 
     try {
-      // 检测 IDE 安装状态
+      // 检测 IDE 安装状态。
+      // 切换的唯一前置条件是「Kiro IDE 可执行文件存在」，与是否已登录无关——
+      // switch_kiro_account 后端会自动 create_dir_all 并写入 kiro-auth-token.json
+      // 及 IdC 的 {clientIdHash}.json，切换本身就等同于首次登录。
+      // 旧逻辑用 ide_installed（= 可执行文件存在「且」已有有效 token 文件）当门槛，
+      // 因果倒置：要求文件先存在，却又让切换去创建它，导致未登录时被「请先首次登录」拦死。
       const ideInfo = await invoke<InstallationInfo>('check_ide_installation')
-      const installed = ideInfo?.ide_installed ?? ideInfo?.ideInstalled ?? ideInfo?.installed
-      if (!installed) {
-        // 使用后端返回的详细错误信息
+      const ideExecExists = ideInfo?.ide_executable_exists ?? ideInfo?.ide_installed ?? ideInfo?.ideInstalled ?? ideInfo?.installed
+      if (!ideExecExists) {
+        // 仅当可执行文件确实缺失时才阻断（IDE 未安装 / 自定义路径错误）。
         const errorMsg = ideInfo?.error_message || t('switch.ideNotInstalledMessage')
         setSwitchDialog({
           type: 'error',

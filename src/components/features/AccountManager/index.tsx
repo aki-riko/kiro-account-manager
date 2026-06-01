@@ -738,7 +738,9 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           message={switchDialog.message}
           onConfirm={switchDialog.type === 'confirm' ? confirmSwitch : closeSwitchDialog}
           onCancel={closeSwitchDialog}
-          confirmText={switchDialog.type === 'confirm' ? t('switch.confirmBtn') : t('common.ok')}
+          confirmText={switchDialog.type === 'confirm'
+            ? ((switchDialog as any).mode === 'logout' ? t('switch.confirmLogout') : t('switch.confirmBtn'))
+            : t('common.ok')}
           customContent={switchDialog.type === 'confirm' ? (
             <div className="flex items-center gap-3 mt-3 p-3 rounded-xl bg-muted/30 border border-border">
               <span className="text-xs text-muted-foreground font-medium shrink-0">切换目标</span>
