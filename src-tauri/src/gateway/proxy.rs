@@ -1009,9 +1009,8 @@ fn write_request_log(
     // 流式响应信息
     let stream_info = if context.is_stream.unwrap_or(false) {
         Some(crate::gateway::StreamInfo {
-            is_stream: true,
-            chunk_count: None, // 需要在流式处理中累计
-            first_chunk_ms: None, // 需要在流式处理中记录
+            chunk_count: 0, // 需要在流式处理中累计
+            first_chunk_ms: 0, // 需要在流式处理中记录
         })
     } else {
         None
