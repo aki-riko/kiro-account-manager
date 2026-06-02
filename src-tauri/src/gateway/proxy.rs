@@ -2429,6 +2429,14 @@ async fn resolve_managed_account_credentials(
                         "账号 {} 配额已满，已自动禁用",
                         account.label
                     ));
+                } else {
+                    // 配额已恢复，检查是否需要自动启用账号
+                    // 仅当账号因配额满被自动禁用时才自动启用
+                    if !account.enabled
+                        && account.disabled_reason.as_deref() == Some("配额已满")
+                    {
+                        enable_account_by_id(&account.id);
+                    }
                 }
             }
 
@@ -2517,6 +2525,17 @@ fn disable_account_by_id(account_id: &str, reason: &str) {
         account.disabled_reason = Some(reason.to_string());
         store.save_to_file();
         log::info!("[网关] 账号 {} 已自动禁用: {}", account_id, reason);
+    }
+}
+
+/// 启用指定账号（配额恢复时自动调用）
+fn enable_account_by_id(account_id: &str) {
+    let mut store = AccountStore::new();
+    if let Some(account) = store.accounts.iter_mut().find(|a| a.id == account_id) {
+        account.enabled = true;
+        account.disabled_reason = None;
+        store.save_to_file();
+        log::info!("[网关] 账号 {} 配额已恢复，已自动启用", account_id);
     }
 }
 
