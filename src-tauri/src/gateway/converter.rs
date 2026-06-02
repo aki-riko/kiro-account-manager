@@ -840,8 +840,28 @@ pub async fn build_kiro_payload(
             }
         }
 
-        // 确保从 keep_from_index 开始的第一条是 user（规则 1）
-        while keep_from_index < total && conversation_messages[keep_from_index].role != "user" {
+        // 确保裁剪边界不切断工具调用链：
+        // - 如果保留片段从 toolResults 开始，必须把前一个 assistant(toolUses) 一起保留；
+        // - 如果保留片段从 assistant 开始，优先把它前面的 user 一起保留，而不是向后跳过。
+        while keep_from_index > 0 {
+            let first = &conversation_messages[keep_from_index];
+            if normalized_message_has_tool_results(first) {
+                keep_from_index -= 1;
+                continue;
+            }
+            if first.role == "assistant" {
+                keep_from_index -= 1;
+                continue;
+            }
+            break;
+        }
+
+        // 如果已经无法再向前扩展，才向后寻找一个普通 user 开头；
+        // 注意不能从带 toolResults 的 user 开始，否则会变成孤儿 toolResults。
+        while keep_from_index < total
+            && (conversation_messages[keep_from_index].role != "user"
+                || normalized_message_has_tool_results(&conversation_messages[keep_from_index]))
+        {
             keep_from_index += 1;
         }
 
@@ -1828,6 +1848,23 @@ fn merge_adjacent_messages(messages: &[&NormalizedMessage]) -> Vec<NormalizedMes
     }
 
     merged
+}
+
+fn normalized_message_has_tool_results(message: &NormalizedMessage) -> bool {
+    if message.role == "tool" || message.tool_call_id.is_some() {
+        return true;
+    }
+
+    message
+        .content
+        .as_ref()
+        .and_then(Value::as_array)
+        .map(|items| {
+            items.iter().any(|item| {
+                item.get("type").and_then(Value::as_str) == Some("tool_result")
+            })
+        })
+        .unwrap_or(false)
 }
 
 fn build_user_context(
