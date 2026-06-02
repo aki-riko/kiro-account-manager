@@ -1613,12 +1613,28 @@ pub async fn proxy_handler(
     const MAX_ACCOUNT_RETRIES: u32 = 3;
     let mut account_attempt = 0;
     let mut tried_account_ids: HashSet<String> = HashSet::new();
+    let mut last_rate_limit_error: Option<(StatusCode, String, String, Option<String>)> = None;
     
     let upstream_resp = loop {
         account_attempt += 1;
         
         if account_attempt > MAX_ACCOUNT_RETRIES {
-            // 所有账号都尝试过了，返回最后一个错误
+            // 所有账号都尝试过了，透传最后一个 429 错误
+            if let Some((status, error_type, message, response_body)) = last_rate_limit_error.take() {
+                return gateway_error_with_log(
+                    &state,
+                    format,
+                    &upstream_payload_log_context,
+                    GatewayErrorDetails {
+                        status,
+                        error_type: Box::leak(error_type.into_boxed_str()),
+                        message: Box::leak(message.into_boxed_str()),
+                        response_body: response_body.as_ref().map(|s| Box::leak(s.clone().into_boxed_str()) as &str),
+                    },
+                )
+                .await;
+            }
+            // 如果没有保存 429 错误（不应该发生），返回默认错误
             return gateway_error_with_log(
                 &state,
                 format,
@@ -1693,18 +1709,26 @@ pub async fn proxy_handler(
                 // 检查是否是 429 错误
                 if status == StatusCode::TOO_MANY_REQUESTS {
                     let account_id = extract_account_id_from_upstream(&current_upstream);
-                    
+
+                    // 保存最后一个 429 错误详情，以便最终透传
+                    last_rate_limit_error = Some((
+                        status,
+                        error_type.to_string(),
+                        message.clone(),
+                        upstream_response_body.clone(),
+                    ));
+
                     // 标记账号为速率限制
                     state.load_balancer.mark_rate_limited(&account_id).await;
                     state.load_balancer.record_failure(&account_id).await;
-                    
+
                     log::warn!(
                         "[Gateway] 账号 {} 返回 429 错误，标记为速率限制并切换账号 (尝试: {}/{})",
                         current_upstream.source_label,
                         account_attempt,
                         MAX_ACCOUNT_RETRIES
                     );
-                    
+
                     // 继续尝试下一个账号
                     continue;
                 }

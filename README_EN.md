@@ -75,10 +75,12 @@ Kiro Account Manager is a desktop application based on **Tauri 2.x** for central
 
 ## 📸 Screenshots
 
-![Home](screenshots/首页.webp)
-![Account Management](screenshots/账号管理.webp)
-![Desktop Authorization](screenshots/桌面授权.webp)
-![Rules Management](screenshots/规则管理.webp)
+![Home](screenshots/首页.png)
+![Account Management](screenshots/账号管理.png)
+![Online Login](screenshots/在线登录.png)
+![Rules Management](screenshots/规则管理.png)
+![Session Management](screenshots/会话管理.png)
+![Kiro API Proxy](screenshots/Kiro2API.png)
 ![Settings](screenshots/设置.png)
 ![About](screenshots/关于.png)
 
