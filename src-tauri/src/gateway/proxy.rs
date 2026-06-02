@@ -922,6 +922,49 @@ fn request_endpoint(format: ResponseFormat) -> &'static str {
     }
 }
 
+fn client_log_prefix(format: ResponseFormat) -> &'static str {
+    match format {
+        ResponseFormat::Anthropic => "anthropic-messages",
+        ResponseFormat::Responses => "openai-responses",
+        ResponseFormat::OpenAI => "openai-chat",
+    }
+}
+
+fn client_log_prefix_for_endpoint(endpoint: &str) -> &'static str {
+    match endpoint {
+        "v1/messages" => "anthropic-messages",
+        "v1/responses" => "openai-responses",
+        "v1/chat/completions" => "openai-chat",
+        _ => "client",
+    }
+}
+
+fn client_sse_log_file(event: Option<&str>, payload: &str) -> &'static str {
+    if event.is_some() {
+        return "anthropic-messages-response-sse.log";
+    }
+
+    if let Ok(value) = serde_json::from_str::<Value>(payload) {
+        if value
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|item| item.starts_with("response."))
+        {
+            return "openai-responses-response-sse.log";
+        }
+
+        if value
+            .get("object")
+            .and_then(Value::as_str)
+            .is_some_and(|item| item.starts_with("chat.completion"))
+        {
+            return "openai-chat-response-sse.log";
+        }
+    }
+
+    "client-response-sse.log"
+}
+
 fn serialize_logged_value(value: &Value) -> String {
     serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
 }
@@ -1017,7 +1060,7 @@ fn write_request_log(
     };
 
     let entry = GatewayRequestLogEntry {
-        occurred_at: chrono::Utc::now().to_rfc3339(),
+        occurred_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         request_id: uuid::Uuid::new_v4().to_string(),
         request_index: context.request_index,
         endpoint: context.endpoint.to_string(),
@@ -1137,7 +1180,7 @@ async fn gateway_error_with_log(
         cache_creation,
         state,
     );
-    gateway_error_response(format, error.status, error.error_type, error.message)
+    gateway_error_response(format, error.status, error.error_type, error.message, error.response_body)
 }
 
 pub async fn proxy_handler(
@@ -1151,6 +1194,7 @@ pub async fn proxy_handler(
         .request_count
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let endpoint = request_endpoint(format);
+    let client_log_prefix = client_log_prefix(format);
     let started_at = Instant::now();
     let raw_request_body = payload.to_string();
 
@@ -1161,16 +1205,19 @@ pub async fn proxy_handler(
             .join(".kiro-account-manager")
             .join("logs");
         let _ = std::fs::create_dir_all(&log_dir);
-        let entry = format!("[{}] CLIENT REQUEST #{} ({}): {}\n",
+        let body_end = safe_truncate(&raw_request_body, 50000);
+        let entry = format!("[{}] kind=client_request idx={} endpoint={} bytes={} truncated={} body={}\n",
             chrono::Local::now().format("%H:%M:%S"),
             request_index,
             endpoint,
-            &raw_request_body[..safe_truncate(&raw_request_body, 50000)]
+            raw_request_body.len(),
+            body_end < raw_request_body.len(),
+            &raw_request_body[..body_end]
         );
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_dir.join("Anthropic-request.log"))
+            .open(log_dir.join(format!("{client_log_prefix}-request.log")))
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
@@ -1917,6 +1964,29 @@ pub async fn proxy_handler(
         )
         .await;
     }
+    {
+        let log_dir = dirs::data_dir()
+            .unwrap_or_default()
+            .join(".kiro-account-manager")
+            .join("logs");
+        let _ = std::fs::create_dir_all(&log_dir);
+        let response_body = serde_json::to_string(&response).unwrap_or_default();
+        let body_end = safe_truncate(&response_body, 50000);
+        let entry = format!(
+            "[{}] kind=client_response idx={} endpoint={} stream=false status=200 bytes={} truncated={} body={}\n",
+            chrono::Local::now().format("%H:%M:%S"),
+            request_index,
+            endpoint,
+            response_body.len(),
+            body_end < response_body.len(),
+            &response_body[..body_end]
+        );
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_dir.join(format!("{}-response.log", client_log_prefix)))
+            .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
+    }
     // ===== 响应缓存：写入（仅非流式成功响应） =====
     {
         let response_json = serde_json::to_string(&response).unwrap_or_default();
@@ -1972,11 +2042,19 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
             .join(".kiro-account-manager")
             .join("logs");
         let _ = std::fs::create_dir_all(&log_dir);
-        let entry = format!("[{}] REQUEST #{}: {}\n", chrono::Local::now().format("%H:%M:%S"), request_index, &payload_json[..safe_truncate(&payload_json, 50000)]);
+        let body_end = safe_truncate(&payload_json, 50000);
+        let entry = format!(
+            "[{}] kind=kiro_request idx={} upstream=generateAssistantResponse bytes={} truncated={} body={}\n",
+            chrono::Local::now().format("%H:%M:%S"),
+            request_index,
+            payload_json.len(),
+            body_end < payload_json.len(),
+            &payload_json[..body_end]
+        );
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_dir.join("Kiro-request.log"))
+            .open(log_dir.join("kiro-request.log"))
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
@@ -2020,11 +2098,20 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
                 .unwrap_or_default()
                 .join(".kiro-account-manager")
                 .join("logs");
-            let entry = format!("[{}] RESPONSE #{} {}: {}\n", chrono::Local::now().format("%H:%M:%S"), request_index, status.as_u16(), &body[..safe_truncate(&body, 50000)]);
+            let body_end = safe_truncate(&body, 50000);
+            let entry = format!(
+                "[{}] kind=kiro_response idx={} upstream=generateAssistantResponse status={} bytes={} truncated={} body={}\n",
+                chrono::Local::now().format("%H:%M:%S"),
+                request_index,
+                status.as_u16(),
+                body.len(),
+                body_end < body.len(),
+                &body[..body_end]
+            );
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(log_dir.join("Kiro-request.log"))
+                .open(log_dir.join("kiro-request.log"))
                 .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
         }
 
@@ -2457,7 +2544,7 @@ fn persist_account_refresh(
         // 失败追踪逻辑
         if should_increment_failure {
             target.failure_count += 1;
-            target.last_failure_at = Some(Local::now().to_rfc3339());
+            target.last_failure_at = Some(Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
 
             // 如果失败次数达到阈值，自动禁用账号
             if target.failure_count >= MAX_FAILURES_PER_ACCOUNT {
@@ -2860,7 +2947,16 @@ fn gateway_error_response(
     status: StatusCode,
     error_type: &str,
     message: &str,
+    response_body: Option<&str>,
 ) -> Response {
+    // 如果有原始响应体且是有效的 JSON，直接透传
+    if let Some(body_str) = response_body {
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body_str) {
+            return (status, Json(json_value)).into_response();
+        }
+    }
+
+    // 否则使用构造的错误响应
     let body = build_gateway_error_body(format, status, error_type, message);
     (status, Json(body)).into_response()
 }
@@ -3193,15 +3289,17 @@ fn stream_proxy_response(
                                         .unwrap_or_default()
                                         .join(".kiro-account-manager")
                                         .join("logs");
-                                    let entry = format!("[{}] EVENT {}: {}\n",
+                                    let entry = format!("[{}] kind=kiro_event idx={} event={} bytes={} payload={}\n",
                                         chrono::Local::now().format("%H:%M:%S%.3f"),
+                                        log_context.request_index,
                                         event_type.unwrap_or("unknown"),
+                                        json_text.len(),
                                         json_text
                                     );
                                     let _ = std::fs::OpenOptions::new()
                                         .create(true)
                                         .append(true)
-                                        .open(log_dir.join("Kiro-response_eventstream.log"))
+                                        .open(log_dir.join("kiro-response-eventstream.log"))
                                         .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
                                 }
 
@@ -4101,20 +4199,26 @@ fn stream_proxy_response(
                 }
             };
 
-            let entry = format!("[{}] CLIENT RESPONSE #{} ({}): {}\n",
+            let body_end = safe_truncate(&response_body, 50000);
+            let entry = format!("[{}] kind=client_response idx={} endpoint={} stream=true status=200 bytes={} truncated={} body={}\n",
                 chrono::Local::now().format("%H:%M:%S"),
                 log_context.request_index,
                 log_context.endpoint,
-                &response_body[..safe_truncate(&response_body, 50000)]
+                response_body.len(),
+                body_end < response_body.len(),
+                &response_body[..body_end]
             );
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(log_dir.join("Anthropic-request.log"))
+                .open(log_dir.join(format!(
+                    "{}-response.log",
+                    client_log_prefix_for_endpoint(log_context.endpoint)
+                )))
                 .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
 
             // 也写入 upstream 成功响应
-            let upstream_entry = format!("[{}] RESPONSE #{} 200: text_len={}, thinking_len={}, tool_calls={:?}, input={}, output={}\n",
+            let upstream_entry = format!("[{}] kind=kiro_response_summary idx={} status=200 text_len={} thinking_len={} tool_calls={:?} input={} output={}\n",
                 chrono::Local::now().format("%H:%M:%S"),
                 log_context.request_index,
                 aggregated.text.len(),
@@ -4126,7 +4230,7 @@ fn stream_proxy_response(
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(log_dir.join("Kiro-request.log"))
+                .open(log_dir.join("kiro-request.log"))
                 .and_then(|mut f| std::io::Write::write_all(&mut f, upstream_entry.as_bytes()));
         }
 
@@ -4352,15 +4456,29 @@ async fn send_event(
             .unwrap_or_default()
             .join(".kiro-account-manager")
             .join("logs");
+        let body_end = safe_truncate(payload, 2000);
         let entry = if let Some(event_name) = event {
-            format!("[{}] SSE event={}: {}\n", chrono::Local::now().format("%H:%M:%S%.3f"), event_name, &payload[..safe_truncate(payload, 2000)])
+            format!(
+                "[{}] kind=client_sse event={} bytes={} truncated={} data={}\n",
+                chrono::Local::now().format("%H:%M:%S%.3f"),
+                event_name,
+                payload.len(),
+                body_end < payload.len(),
+                &payload[..body_end]
+            )
         } else {
-            format!("[{}] SSE data: {}\n", chrono::Local::now().format("%H:%M:%S%.3f"), &payload[..safe_truncate(payload, 2000)])
+            format!(
+                "[{}] kind=client_sse event=data bytes={} truncated={} data={}\n",
+                chrono::Local::now().format("%H:%M:%S%.3f"),
+                payload.len(),
+                body_end < payload.len(),
+                &payload[..body_end]
+            )
         };
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_dir.join("Anthropic-response-sse.log"))
+            .open(log_dir.join(client_sse_log_file(event, payload)))
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
