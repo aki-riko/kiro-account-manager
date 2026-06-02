@@ -257,7 +257,7 @@ mod tests {
 
     fn create_test_log(index: u64, outcome: &str, model: &str) -> GatewayRequestLogEntry {
         GatewayRequestLogEntry {
-            occurred_at: chrono::Utc::now().to_rfc3339(),
+            occurred_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             request_id: uuid::Uuid::new_v4().to_string(),
             request_index: index,
             endpoint: "messages".to_string(),
