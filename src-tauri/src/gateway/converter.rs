@@ -1120,7 +1120,7 @@ pub async fn build_kiro_payload(
     }
 
     // toolResults 从 sanitized item 中获取（如果有的话）
-    let current_tool_results = if let Some(HistoryItem::User { user_input_message }) = &sanitized_current {
+    let mut current_tool_results = if let Some(HistoryItem::User { user_input_message }) = &sanitized_current {
         user_input_message.user_input_message_context
             .as_ref()
             .and_then(|ctx| ctx.tool_results.clone())
@@ -1131,6 +1131,7 @@ pub async fn build_kiro_payload(
             _ => extract_tool_results(current_message.content.as_ref()),
         }
     };
+    order_tool_results_like_previous_tool_uses(&mut current_tool_results, &history);
 
     // 最终保护：如果 content 和 toolResults 都为空，设置默认 content
     if current_content.trim().is_empty() && current_tool_results.is_empty() {
@@ -1145,13 +1146,9 @@ pub async fn build_kiro_payload(
         _ => false,
     } || current_message.tool_call_id.is_some();
 
-    // ✅ 修复：Kiro API 不接受空 content，即使有 toolResults
-    // 如果有 toolResults 但 content 不为空，保留 content
-    // 如果有 toolResults 且 content 为空，设置占位符
+    // Kiro 的 tool result continuation 要求 content 为空，结果只放在 toolResults。
     if !current_tool_results.is_empty() || original_has_tool_results {
-        if current_content.trim().is_empty() {
-            current_content = "[Tool results]".to_string();
-        }
+        current_content.clear();
     }
     let current_images = extract_images(client, current_message.content.as_ref()).await;
 
@@ -1173,7 +1170,7 @@ pub async fn build_kiro_payload(
                     documents: None,
                     images: images_option(current_images),
                     user_input_message_context: build_user_context(
-                        None, // Continue请求不需要tools，只需要tool_results
+                        convert_tools(&processed_tools),
                         current_tool_results,
                     ),
                     user_intent: None,
@@ -1858,6 +1855,48 @@ fn build_user_context(
         tools,
         user_settings: None,
     })
+}
+
+fn order_tool_results_like_previous_tool_uses(
+    tool_results: &mut Vec<KiroToolResult>,
+    history: &Option<Vec<HistoryItem>>,
+) {
+    if tool_results.len() < 2 {
+        return;
+    }
+
+    let Some(tool_use_ids) = history.as_ref().and_then(|items| {
+        items.iter().rev().find_map(|item| match item {
+            HistoryItem::Assistant {
+                assistant_response_message,
+            } => assistant_response_message
+                .tool_uses
+                .as_ref()
+                .filter(|tool_uses| !tool_uses.is_empty())
+                .map(|tool_uses| {
+                    tool_uses
+                        .iter()
+                        .map(|tool_use| tool_use.tool_use_id.clone())
+                        .collect::<Vec<_>>()
+                }),
+            _ => None,
+        })
+    }) else {
+        return;
+    };
+
+    let mut remaining = std::mem::take(tool_results);
+    let mut ordered = Vec::with_capacity(remaining.len());
+    for tool_use_id in tool_use_ids {
+        if let Some(index) = remaining
+            .iter()
+            .position(|result| result.tool_use_id == tool_use_id)
+        {
+            ordered.push(remaining.remove(index));
+        }
+    }
+    ordered.extend(remaining);
+    *tool_results = ordered;
 }
 
 fn images_option(images: Vec<ImageBlock>) -> Option<Vec<ImageBlock>> {
@@ -3330,6 +3369,168 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn build_kiro_payload_includes_tools_when_current_message_has_tool_results() {
+        let request = NormalizedRequest {
+            model: "claude-sonnet-4-5-20250929".to_string(),
+            messages: vec![NormalizedMessage {
+                role: "user".to_string(),
+                content: Some(json!([{
+                    "type": "tool_result",
+                    "tool_use_id": "toolu_123",
+                    "content": "result text"
+                }])),
+                tool_calls: None,
+                tool_call_id: None,
+                metadata: None,
+            }],
+            stream: false,
+            max_tokens: Some(1024),
+            temperature: None,
+            top_p: None,
+            stop: None,
+            tools: Some(vec![Tool {
+                tool_type: "function".to_string(),
+                function: crate::gateway::models::ToolFunction {
+                    name: "search_docs".to_string(),
+                    description: Some("搜索文档".to_string()),
+                    parameters: Some(json!({
+                        "type": "object",
+                        "properties": { "q": { "type": "string" } }
+                    })),
+                },
+                cache_control: None,
+            }]),
+            tool_choice: None,
+            previous_response_id: None,
+            thinking: None,
+            tool_name_map: Default::default(),
+        };
+
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
+            .await
+            .expect("payload should build");
+
+        let context = payload
+            .conversation_state
+            .current_message
+            .user_input_message
+            .user_input_message_context
+            .as_ref()
+            .expect("tool_results context should exist");
+
+        assert!(
+            payload
+                .conversation_state
+                .current_message
+                .user_input_message
+                .content
+                .is_empty(),
+            "tool result continuation content must be empty"
+        );
+        assert_eq!(context.tools.as_ref().map(Vec::len), Some(1), "Kiro IDE includes tools with current toolResults");
+        assert_eq!(context.tool_results.as_ref().map(Vec::len), Some(1));
+    }
+
+    #[tokio::test]
+    async fn build_kiro_payload_orders_current_tool_results_like_previous_tool_uses() {
+        let request = NormalizedRequest {
+            model: "claude-sonnet-4-5-20250929".to_string(),
+            messages: vec![
+                NormalizedMessage {
+                    role: "user".to_string(),
+                    content: Some(json!("search twice")),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    metadata: None,
+                },
+                NormalizedMessage {
+                    role: "assistant".to_string(),
+                    content: None,
+                    tool_calls: Some(vec![
+                        ToolCall {
+                            id: "tooluse_a".to_string(),
+                            call_type: "function".to_string(),
+                            function: ToolCallFunction {
+                                name: "searchPathnamesOnly".to_string(),
+                                arguments: "{}".to_string(),
+                            },
+                        },
+                        ToolCall {
+                            id: "tooluse_b".to_string(),
+                            call_type: "function".to_string(),
+                            function: ToolCallFunction {
+                                name: "runTerminalCmd".to_string(),
+                                arguments: "{}".to_string(),
+                            },
+                        },
+                    ]),
+                    tool_call_id: None,
+                    metadata: None,
+                },
+                NormalizedMessage {
+                    role: "user".to_string(),
+                    content: Some(json!([
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tooluse_b",
+                            "content": "second result"
+                        },
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "tooluse_a",
+                            "content": "first result"
+                        }
+                    ])),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    metadata: None,
+                },
+            ],
+            stream: false,
+            max_tokens: Some(1024),
+            temperature: None,
+            top_p: None,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+            previous_response_id: None,
+            thinking: None,
+            tool_name_map: Default::default(),
+        };
+
+        let payload = build_kiro_payload(&Client::new(), &request, None, None)
+            .await
+            .expect("payload should build");
+
+        let context = payload
+            .conversation_state
+            .current_message
+            .user_input_message
+            .user_input_message_context
+            .as_ref()
+            .expect("tool_results context should exist");
+
+        let ids: Vec<_> = context
+            .tool_results
+            .as_ref()
+            .expect("tool_results should exist")
+            .iter()
+            .map(|result| result.tool_use_id.as_str())
+            .collect();
+
+        assert_eq!(ids, vec!["tooluse_a", "tooluse_b"]);
+        assert!(
+            payload
+                .conversation_state
+                .current_message
+                .user_input_message
+                .content
+                .is_empty(),
+            "tool result continuation content must be empty"
+        );
+    }
+
+    #[tokio::test]
     async fn build_kiro_payload_reuses_previous_response_id_as_conversation_id() {
         let request = NormalizedRequest {
             model: "claude-sonnet-4-5-20250929".to_string(),
@@ -3939,4 +4140,3 @@ mod tests {
         );
     }
 }
-

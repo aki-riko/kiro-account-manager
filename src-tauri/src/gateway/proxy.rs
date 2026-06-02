@@ -1170,7 +1170,7 @@ pub async fn proxy_handler(
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_dir.join("gateway-client.log"))
+            .open(log_dir.join("Anthropic-request.log"))
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
@@ -1976,7 +1976,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_dir.join("gateway-upstream.log"))
+            .open(log_dir.join("Kiro-request.log"))
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
@@ -2024,7 +2024,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(log_dir.join("gateway-upstream.log"))
+                .open(log_dir.join("Kiro-request.log"))
                 .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
         }
 
@@ -3201,7 +3201,7 @@ fn stream_proxy_response(
                                     let _ = std::fs::OpenOptions::new()
                                         .create(true)
                                         .append(true)
-                                        .open(log_dir.join("gateway-eventstream.log"))
+                                        .open(log_dir.join("Kiro-response_eventstream.log"))
                                         .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
                                 }
 
@@ -4110,7 +4110,7 @@ fn stream_proxy_response(
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(log_dir.join("gateway-client.log"))
+                .open(log_dir.join("Anthropic-request.log"))
                 .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
 
             // 也写入 upstream 成功响应
@@ -4126,7 +4126,7 @@ fn stream_proxy_response(
             let _ = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(log_dir.join("gateway-upstream.log"))
+                .open(log_dir.join("Kiro-request.log"))
                 .and_then(|mut f| std::io::Write::write_all(&mut f, upstream_entry.as_bytes()));
         }
 
@@ -4360,7 +4360,7 @@ async fn send_event(
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_dir.join("gateway-client-sse.log"))
+            .open(log_dir.join("Anthropic-response-sse.log"))
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 

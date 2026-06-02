@@ -258,6 +258,7 @@ mod tests {
     fn create_test_log(index: u64, outcome: &str, model: &str) -> GatewayRequestLogEntry {
         GatewayRequestLogEntry {
             occurred_at: chrono::Utc::now().to_rfc3339(),
+            request_id: uuid::Uuid::new_v4().to_string(),
             request_index: index,
             endpoint: "messages".to_string(),
             client_ip: "127.0.0.1".to_string(),
@@ -276,6 +277,9 @@ mod tests {
             cache_read_input_tokens: None,
             cache_creation_input_tokens: None,
             error_type: None,
+            stream_info: None,
+            request_summary: None,
+            response_summary: None,
         }
     }
 
