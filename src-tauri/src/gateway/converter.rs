@@ -882,10 +882,32 @@ pub async fn build_kiro_payload(
             conversation_messages = conversation_messages[keep_from_index..end_index].to_vec();
         }
 
+        let history_len_after_trim = conversation_messages.len().saturating_sub(1);
+        let first_role_after_trim = conversation_messages
+            .first()
+            .map(|message| message.role.as_str())
+            .unwrap_or("none");
+        let last_role_after_trim = conversation_messages
+            .last()
+            .map(|message| message.role.as_str())
+            .unwrap_or("none");
+        let current_has_tool_results_after_trim = conversation_messages
+            .last()
+            .map(normalized_message_has_tool_results)
+            .unwrap_or(false);
+        let first_has_tool_results_after_trim = conversation_messages
+            .first()
+            .map(normalized_message_has_tool_results)
+            .unwrap_or(false);
         log::info!(
-            "[网关] 裁剪完成：{} → {} 条对话消息",
+            "[网关] 裁剪完成：{} → {} 条对话消息 | history={} | first={}{} | current={}{}",
             total,
-            conversation_messages.len()
+            conversation_messages.len(),
+            history_len_after_trim,
+            first_role_after_trim,
+            if first_has_tool_results_after_trim { "(toolResults)" } else { "" },
+            last_role_after_trim,
+            if current_has_tool_results_after_trim { "(toolResults)" } else { "" }
         );
     }
 
