@@ -1016,6 +1016,7 @@ fn router(state: RouterState) -> Router {
         .route("/v1/messages", post(messages_handler))
         .route("/v1/messages/count_tokens", post(count_tokens_handler))
         .route("/v1/responses", post(responses_handler))
+        .route("/v1/responses/input_tokens", post(openai_tokens_handler))
         .route("/v1/chat/completions", post(openai_chat_handler))
         .with_state(state)
 }
@@ -1159,7 +1160,6 @@ async fn models_handler(
 ) -> Response {
     proxy::models_handler(state, addr, headers).await
 }
-
 async fn count_tokens_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<RouterState>,
@@ -1167,6 +1167,15 @@ async fn count_tokens_handler(
     Json(payload): Json<Value>,
 ) -> Response {
     proxy::count_tokens_handler(state, addr, headers, payload).await
+}
+
+async fn openai_tokens_handler(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(state): State<RouterState>,
+    headers: HeaderMap,
+    Json(payload): Json<Value>,
+) -> Response {
+    proxy::openai_tokens_handler(state, addr, headers, payload).await
 }
 
 async fn messages_handler(

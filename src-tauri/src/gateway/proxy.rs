@@ -263,10 +263,18 @@ fn build_models_response() -> Value {
     })
     .unwrap_or_else(|_| json!({ "object": "list", "data": [] }))
 }
-
 fn build_count_tokens_response(payload: &Value) -> Value {
     json!({ "input_tokens": estimate_count_tokens_payload(payload).max(1) })
 }
+
+fn build_openai_tokens_response(payload: &Value) -> Value {
+    json!({
+        "object": "response.input_tokens",
+        "input_tokens": estimate_count_tokens_payload(payload).max(1)
+    })
+}
+
+
 
 fn estimate_count_tokens_payload(payload: &Value) -> usize {
     let model_id = payload
@@ -914,6 +922,24 @@ pub async fn count_tokens_handler(
     .await
 }
 
+pub async fn openai_tokens_handler(
+    state: RouterState,
+    client_addr: SocketAddr,
+    headers: HeaderMap,
+    payload: Value,
+) -> Response {
+    let request_body = payload.to_string();
+    guarded_local_response(
+        state,
+        client_addr,
+        headers,
+        "tokens",
+        Some(request_body.as_str()),
+        build_openai_tokens_response(&payload),
+    )
+    .await
+}
+
 fn request_endpoint(format: ResponseFormat) -> &'static str {
     match format {
         ResponseFormat::Anthropic => "v1/messages",
@@ -1443,14 +1469,29 @@ pub async fn proxy_handler(
     let upstream = match resolve_upstream_credentials(&state.config, &state).await {
         Ok(creds) => creds,
         Err(message) => {
-            let sanitized = sanitize_error(&message);
+            // 检查是否是配额不足错误（以 __402__ 为前缀标记）
+            let (status, error_type, display_message) = if message.starts_with("__402__") {
+                (
+                    StatusCode::PAYMENT_REQUIRED,
+                    "insufficient_quota",
+                    message.strip_prefix("__402__").unwrap_or(&message),
+                )
+            } else {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    "authentication_error",
+                    message.as_str(),
+                )
+            };
+
+            let sanitized = sanitize_error(display_message);
                 return gateway_error_with_log(
                     &state,
                     format,
                     &request_log_context,
                     GatewayErrorDetails {
-                        status: StatusCode::UNAUTHORIZED,
-                        error_type: "authentication_error",
+                        status,
+                        error_type,
                         message: &sanitized,
                         response_body: None,
                     },
@@ -2139,6 +2180,12 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
                 .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
         }
 
+        // 402 配额不足错误不重试，直接返回
+        if status == StatusCode::PAYMENT_REQUIRED {
+            let (mapped_status, error_type, message) = map_upstream_error(status, &body);
+            return Err((mapped_status, error_type, message, Some(body)));
+        }
+
         // 429 限流错误不重试，直接返回
         if status == StatusCode::TOO_MANY_REQUESTS {
             let (mapped_status, error_type, message) = map_upstream_error(status, &body);
@@ -2367,14 +2414,14 @@ async fn resolve_managed_account_credentials(
     };
 
     if accounts.is_empty() {
-        return Err("未找到符合反代配置的可用账号".to_string());
+        return Err("__402__未找到符合反代配置的可用账号".to_string());
     }
 
     // 使用 LoadBalancer 选择账号
     let selected_account = state.load_balancer.select_account(&accounts).await;
 
     let Some(account) = selected_account else {
-        return Err("LoadBalancer 未能选择可用账号".to_string());
+        return Err("__402__LoadBalancer 未能选择可用账号".to_string());
     };
 
     // 增加连接计数
@@ -3044,7 +3091,6 @@ fn map_upstream_error(status: StatusCode, body: &str) -> (StatusCode, &'static s
     } else {
         status
     };
-
     // 根据检测结果返回特殊的error_type
     let error_type = if is_banned {
         "account_banned_error"
@@ -3054,6 +3100,7 @@ fn map_upstream_error(status: StatusCode, body: &str) -> (StatusCode, &'static s
         explicit_error_type.unwrap_or(match mapped_status {
             StatusCode::UNAUTHORIZED => "authentication_error",
             StatusCode::FORBIDDEN => "permission_error",
+            StatusCode::PAYMENT_REQUIRED => "insufficient_quota",
             StatusCode::TOO_MANY_REQUESTS => "rate_limit_error",
             StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::CONFLICT => {
                 "invalid_request_error"
@@ -3064,7 +3111,6 @@ fn map_upstream_error(status: StatusCode, body: &str) -> (StatusCode, &'static s
 
     (mapped_status, error_type, sanitized)
 }
-
 fn extract_error_type(body: &str) -> Option<&'static str> {
     let value = serde_json::from_str::<Value>(body).ok()?;
     let raw = value
@@ -3075,6 +3121,7 @@ fn extract_error_type(body: &str) -> Option<&'static str> {
     match raw {
         "authentication_error" => Some("authentication_error"),
         "permission_error" => Some("permission_error"),
+        "insufficient_quota" => Some("insufficient_quota"),
         "rate_limit_error" => Some("rate_limit_error"),
         "invalid_request_error" => Some("invalid_request_error"),
         "api_error" => Some("api_error"),

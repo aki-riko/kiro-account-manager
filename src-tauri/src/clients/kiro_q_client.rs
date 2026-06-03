@@ -137,7 +137,6 @@ impl KiroQClient {
     }
 
     /// ListAvailableModels 接口
-    #[allow(dead_code)]
     pub async fn list_available_models(
         &self,
         access_token: &str,
