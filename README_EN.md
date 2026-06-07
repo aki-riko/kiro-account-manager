@@ -100,6 +100,7 @@ Kiro Account Manager is a desktop application based on **Tauri 2.x** for central
 ### 🔄 One-click Account Switching
 - Seamless Kiro IDE account switching, automatic machine ID reset
 - Auto-skip banned accounts, auto-switch on low balance
+- Auto-enable accounts when quota is restored
 
 ### 📦 Batch Operations
 - JSON import/export, import from Kiro IDE / kiro-cli
@@ -115,6 +116,10 @@ Four themes, AI model locking, Agent autonomous mode, auto token refresh, proxy 
 Built-in OpenAI-compatible gateway, supports direct integration with third-party tools like Cursor / Continue / Cline.
 - Compatible with Anthropic `/v1/messages`, OpenAI `/v1/responses`, `/v1/chat/completions`
 - Intelligent model degradation, multi-account load balancing, API Key authentication
+- Passthrough original JSON format for non-200 responses
+- Anthropic 429 error response passthrough
+- Responses format response body structure optimization
+- Tool result ordering and StreamInfo tracking enhancement
 
 ---
 
