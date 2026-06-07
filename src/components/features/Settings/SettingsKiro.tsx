@@ -199,6 +199,17 @@ function SettingsKiro({
         accent="amber"
         icon={<Wrench size={14} className="text-amber-500" />}
       >
+        <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-card">
+          <span className="text-sm font-medium text-foreground whitespace-nowrap">{t('settings.configureMCP')}</span>
+          <Select value={configureMcp} onValueChange={handleConfigureMcpChange}>
+            <SelectTrigger className="h-8 text-xs ml-auto w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Enabled">{t('settings.configureMCPEnabled')}</SelectItem>
+              <SelectItem value="Disabled">{t('settings.configureMCPDisabled')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <Input
           value={trustedTools}
           onChange={e => setTrustedTools(e.target.value)}
@@ -209,7 +220,7 @@ function SettingsKiro({
         <p className="text-[11px] text-muted-foreground">{t('settings.trustedToolsDesc')}</p>
       </SectionCard>
 
-      {/* === 4. 网络与 MCP === */}
+      {/* === 4. 网络代理 === */}
       <SectionCard
         title={t('settings.proxy')}
         accent="green"
@@ -217,18 +228,6 @@ function SettingsKiro({
         desc={t('settings.proxyTip')}
       >
         <div className="space-y-3">
-          {/* MCP（独占一行的开关行风格）*/}
-          <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-card">
-            <span className="text-sm font-medium text-foreground whitespace-nowrap">{t('settings.configureMCP')}</span>
-            <Select value={configureMcp} onValueChange={handleConfigureMcpChange}>
-              <SelectTrigger className="h-8 text-xs ml-auto w-[160px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Enabled">{t('settings.configureMCPEnabled')}</SelectItem>
-                <SelectItem value="Disabled">{t('settings.configureMCPDisabled')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* HTTP 代理输入 + 操作按钮 */}
           <div>
             <Label className="block text-[11px] text-muted-foreground mb-1">{t('settings.httpProxy')}</Label>
