@@ -57,3 +57,6 @@ MEMORY.md
 
 # Codegraph index (local tool artifact)
 .codegraph/
+
+# Rust target directories (including custom profiles)
+src-tauri/target-*
