@@ -146,9 +146,9 @@ A: 直接继续安装即可（v1.8.3+ 支持覆盖升级）。
 ```bash
 git clone https://github.com/hj01857655/kiro-account-manager.git
 cd kiro-account-manager
-npm install
-npm run tauri dev    # 开发模式
-npm run tauri build  # 构建发行版
+bun install
+bun run tauri dev    # 开发模式
+bun run tauri build  # 构建发行版
 ```
 
 前置要求：Node.js 20+、Rust 工具链、系统 WebView 依赖。

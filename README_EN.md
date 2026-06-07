@@ -144,9 +144,9 @@ A: Continue installation (v1.8.3+ supports overwrite upgrade).
 ```bash
 git clone https://github.com/hj01857655/kiro-account-manager.git
 cd kiro-account-manager
-npm install
-npm run tauri dev    # Development mode
-npm run tauri build  # Build release
+bun install
+bun run tauri dev    # Development mode
+bun run tauri build  # Build release
 ```
 
 Prerequisites: Node.js 20+, Rust toolchain, system WebView dependencies.
