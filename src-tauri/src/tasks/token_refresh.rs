@@ -82,9 +82,11 @@ impl TokenRefreshService {
                                 .lock()
                                 .map_err(|_| "Failed to acquire account store lock".to_string())?;
                             store.reload();
-                            if let Some(acc) = store.accounts.iter_mut().find(|a| a.id == account.id)
+                            if let Some(acc) =
+                                store.accounts.iter_mut().find(|a| a.id == account.id)
                             {
-                                if acc.refresh_token.as_deref() != account.refresh_token.as_deref() {
+                                if acc.refresh_token.as_deref() != account.refresh_token.as_deref()
+                                {
                                     log::info!(
                                         "Token refresh loop: skipped stale refresh result for {}",
                                         email_display
@@ -125,14 +127,16 @@ impl TokenRefreshService {
                             // 如果是认证错误且 token 已过期，标记为 invalid
                             if is_auth_error_message(&e) && is_token_expired(expires_at) {
                                 let state = self.app_handle.state::<AppState>();
-                                let mut store = state
-                                    .store
-                                    .lock()
-                                    .map_err(|_| "Failed to acquire account store lock".to_string())?;
+                                let mut store = state.store.lock().map_err(|_| {
+                                    "Failed to acquire account store lock".to_string()
+                                })?;
                                 store.reload();
-                                if let Some(acc) = store.accounts.iter_mut().find(|a| a.id == account.id)
+                                if let Some(acc) =
+                                    store.accounts.iter_mut().find(|a| a.id == account.id)
                                 {
-                                    if acc.refresh_token.as_deref() != account.refresh_token.as_deref() {
+                                    if acc.refresh_token.as_deref()
+                                        != account.refresh_token.as_deref()
+                                    {
                                         log::info!(
                                             "Token refresh loop: skipped stale auth failure for {}",
                                             email_display

@@ -400,9 +400,7 @@ impl AuthProvider for IdcProvider {
             chrono::Local::now() + chrono::Duration::seconds(token_response.expires_in);
         let client_id_hash = metadata
             .client_id_hash
-            .unwrap_or_else(|| {
-                calculate_client_id_hash(self.get_start_url())
-            });
+            .unwrap_or_else(|| calculate_client_id_hash(self.get_start_url()));
 
         Ok(AuthResult {
             access_token: token_response.access_token,

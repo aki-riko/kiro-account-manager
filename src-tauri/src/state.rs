@@ -1,7 +1,7 @@
 // 应用全局状态
 
-use crate::core::account::{AccountStore, GroupTagStore};
 use crate::auth::AuthState;
+use crate::core::account::{AccountStore, GroupTagStore};
 use crate::gateway::GatewayRuntime;
 use std::sync::Mutex;
 

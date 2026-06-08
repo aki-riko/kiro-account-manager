@@ -57,13 +57,11 @@ pub fn start_auto_switch_task(app_handle: AppHandle) {
 
             // 获取配置参数
             let threshold = settings.auto_switch_threshold.unwrap_or(DEFAULT_THRESHOLD);
-            let interval_minutes = settings
-                .auto_switch_interval
-                .unwrap_or(DEFAULT_INTERVAL);
-            
+            let interval_minutes = settings.auto_switch_interval.unwrap_or(DEFAULT_INTERVAL);
+
             // 获取自动刷新间隔
             let refresh_interval = settings.auto_refresh_interval.unwrap_or(50);
-            
+
             // 如果自动换号间隔小于自动刷新间隔，发出警告
             if interval_minutes < refresh_interval {
                 log::warn!(
@@ -72,7 +70,7 @@ pub fn start_auto_switch_task(app_handle: AppHandle) {
                     refresh_interval
                 );
             }
-            
+
             let interval_duration = Duration::from_secs((interval_minutes as u64) * 60);
 
             log::info!(
@@ -314,10 +312,7 @@ async fn switch_account(_app_handle: &AppHandle, account: &Account) -> Result<()
 }
 
 /// 应用机器码
-fn apply_machine_guid(
-    account: &Account,
-    settings: &AppSettings,
-) -> Result<Account, String> {
+fn apply_machine_guid(account: &Account, settings: &AppSettings) -> Result<Account, String> {
     let account = account.clone();
 
     // 如果启用了机器码绑定
@@ -333,9 +328,7 @@ fn apply_machine_guid(
 }
 
 /// 构建切换参数
-fn build_switch_params(
-    account: &Account,
-) -> crate::kiro::ide::SwitchAccountParams {
+fn build_switch_params(account: &Account) -> crate::kiro::ide::SwitchAccountParams {
     crate::kiro::ide::SwitchAccountParams {
         access_token: account.access_token.clone().unwrap_or_default(),
         refresh_token: account.refresh_token.clone().unwrap_or_default(),

@@ -134,7 +134,10 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
         return (false, false);
     };
 
-    log::info!("[deep_link] Processing callback with expected state: {}", expected_state);
+    log::info!(
+        "[deep_link] Processing callback with expected state: {}",
+        expected_state
+    );
 
     // 解析 URL
     let parsed = match url::Url::parse(url) {
@@ -189,9 +192,7 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        handle_deep_link, register_waiter, DeepLinkCallbackWaiter,
-    };
+    use super::{handle_deep_link, register_waiter, DeepLinkCallbackWaiter};
     use std::time::Duration;
 
     #[test]
@@ -228,12 +229,11 @@ mod tests {
     fn handle_deep_link_keeps_waiter_when_scheme_does_not_match() {
         let waiter = register_waiter("expected-state");
 
-        assert!(!handle_deep_link(
-            "wrong-scheme://callback?code=ok&state=expected-state"
-        ).0);
+        assert!(!handle_deep_link("wrong-scheme://callback?code=ok&state=expected-state").0);
 
-        let handled =
-            handle_deep_link("kiro://kiro.kiroAgent/authenticate-success?code=ok&state=expected-state");
+        let handled = handle_deep_link(
+            "kiro://kiro.kiroAgent/authenticate-success?code=ok&state=expected-state",
+        );
         assert!(handled.0);
         assert!(handled.1);
         assert_eq!(

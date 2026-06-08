@@ -87,7 +87,10 @@ pub async fn get_kiro_local_token() -> Option<KiroLocalToken> {
 pub async fn get_client_registration(client_id_hash: &str) -> Option<ClientRegistration> {
     // 安全检查：防止路径遍历攻击
     // 只允许字母、数字、下划线和连字符
-    if !client_id_hash.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+    if !client_id_hash
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    {
         log::warn!("[安全] 检测到非法的 client_id_hash: {}", client_id_hash);
         return None;
     }
@@ -257,9 +260,7 @@ pub async fn switch_kiro_account(
         let client_id = params.client_id;
         let client_secret = params.client_secret;
         let region = params.region;
-        let client_id_hash = params
-            .client_id_hash
-            .filter(|h| !h.trim().is_empty());
+        let client_id_hash = params.client_id_hash.filter(|h| !h.trim().is_empty());
 
         // 获取 token 目录
         let home = std::env::var("USERPROFILE")
@@ -500,7 +501,10 @@ pub async fn switch_kiro_account(
         if let Some(old_hash) = previous_idc_hash {
             let new_hash = idc_hash.as_deref();
             if Some(old_hash.as_str()) != new_hash {
-                if old_hash.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+                if old_hash
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+                {
                     let old_reg_path = dir_path.join(format!("{old_hash}.json"));
                     if old_reg_path.exists() {
                         match assert_not_symlink(&old_reg_path) {
@@ -591,7 +595,10 @@ pub async fn logout_kiro_account() -> Result<SwitchAccountResult, String> {
         // IdC 账号：对齐 IDE `deleteClientRegistration`，删除 {clientIdHash}.json。
         if let Some(hash) = idc_client_id_hash {
             // 防路径遍历：仅允许字母、数字、下划线、连字符（与 get_client_registration 一致）。
-            if hash.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+            if hash
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            {
                 let client_reg_path = cache_dir.join(format!("{hash}.json"));
                 if client_reg_path.exists() {
                     // symlink 检查后再删，避免误删链接目标。删除失败仅告警，不影响退出登录结果。
@@ -638,12 +645,12 @@ pub struct IdeInstallationInfo {
 pub async fn check_ide_installation() -> IdeInstallationInfo {
     tokio::task::spawn_blocking(|| {
         let (ide_path, ide_exists) = detect_kiro_ide_executable();
-        
+
         // 检查配置目录是否存在
         let config_exists = check_kiro_config_dir();
 
         let ide_installed = ide_exists && config_exists;
-        
+
         // 生成详细的错误提示
         let error_message = if !ide_installed {
             if !ide_exists && !config_exists {
@@ -679,8 +686,7 @@ pub async fn check_ide_installation() -> IdeInstallationInfo {
 
 /// 检查 Kiro IDE 配置文件是否存在且包含有效 token
 fn check_kiro_config_dir() -> bool {
-    let home = std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"));
+    let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME"));
 
     if let Ok(home_dir) = home {
         let cache_dir = std::path::Path::new(&home_dir)
@@ -750,7 +756,10 @@ fn detect_kiro_ide_executable() -> (Option<String>, bool) {
 
 /// 检测配置文件是否存在（用于切换账号前验证）
 #[tauri::command]
-pub async fn check_kiro_config_files(auth_method: String, client_id_hash: Option<String>) -> Result<bool, String> {
+pub async fn check_kiro_config_files(
+    auth_method: String,
+    client_id_hash: Option<String>,
+) -> Result<bool, String> {
     tokio::task::spawn_blocking(move || {
         let home = std::env::var("USERPROFILE")
             .or_else(|_| std::env::var("HOME"))

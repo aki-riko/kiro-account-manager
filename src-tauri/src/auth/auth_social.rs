@@ -1,4 +1,5 @@
 use crate::auth::{DesktopRefreshResponse, DESKTOP_AUTH_API};
+use crate::clients::http_client::{build_http_client, get_kiro_app_version};
 
 /// 生成PKCE `code_verifier`（32字节，base64url）
 pub fn generate_code_verifier_social() -> String {
@@ -29,14 +30,14 @@ pub async fn exchange_social_code_for_token(
     redirect_uri: &str,
     machineid: &str,
 ) -> Result<DesktopRefreshResponse, String> {
-    let client = reqwest::Client::new();
+    let client = build_http_client()?;
     let body = serde_json::json!({
         "code": code,
         "code_verifier": code_verifier,
         "redirect_uri": redirect_uri
     });
 
-    let kiro_ide_version = "0.6.18";
+    let kiro_ide_version = get_kiro_app_version();
     let user_agent = format!("KiroIDE-{kiro_ide_version}-{machineid}");
 
     let response = client

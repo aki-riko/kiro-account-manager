@@ -88,8 +88,6 @@ impl AccountTagLink {
 pub struct AvailableModelsCacheEntry {
     pub response: serde_json::Value,
     pub cached_at: i64,
-    #[serde(default)]
-    pub model_provider: Option<String>,
 }
 
 // ============================================================
@@ -302,11 +300,17 @@ fn normalize_account(account: &mut Account) -> bool {
 }
 
 fn same_account_identity(left: &Account, right: &Account) -> bool {
-    let left_user_id = left.user_id.as_ref().map(|value| value.trim()).unwrap_or("");
-    let right_user_id = right.user_id.as_ref().map(|value| value.trim()).unwrap_or("");
-    !left_user_id.is_empty()
-        && !right_user_id.is_empty()
-        && left_user_id == right_user_id
+    let left_user_id = left
+        .user_id
+        .as_ref()
+        .map(|value| value.trim())
+        .unwrap_or("");
+    let right_user_id = right
+        .user_id
+        .as_ref()
+        .map(|value| value.trim())
+        .unwrap_or("");
+    !left_user_id.is_empty() && !right_user_id.is_empty() && left_user_id == right_user_id
 }
 
 fn account_quality_score(account: &Account) -> usize {
@@ -425,13 +429,7 @@ fn normalize_accounts(accounts: Vec<Account>) -> (Vec<Account>, bool) {
 fn is_unavailable_status(status: &str) -> bool {
     matches!(
         status,
-        "banned"
-            | "封禁"
-            | "已封禁"
-            | "invalid"
-            | "失效"
-            | "已失效"
-            | "Token已失效"
+        "banned" | "封禁" | "已封禁" | "invalid" | "失效" | "已失效" | "Token已失效"
     )
 }
 
@@ -468,27 +466,140 @@ impl AccountStore {
         data_dir.join(".kiro-account-manager").join("accounts.json")
     }
 
-    fn load_from_file(path: &PathBuf) -> Vec<Account> {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            match serde_json::from_str::<Vec<Account>>(&content) {
-                Ok(accounts) => {
-                    eprintln!("[AccountStore] 成功加载 {} 个账号", accounts.len());
-                    accounts
-                }
-                Err(e) => {
-                    eprintln!("[AccountStore] JSON 反序列化失败: {e}");
-                    eprintln!("[AccountStore] 文件路径: {}", path.display());
-                    Vec::new()
-                }
+    fn backup_path_for(path: &PathBuf) -> PathBuf {
+        path.with_extension("json.bak")
+    }
+
+    fn timestamped_backup_path_for(path: &PathBuf) -> PathBuf {
+        let backup_name = format!(
+            "accounts.backup-{}-{}.json",
+            chrono::Local::now().format("%Y%m%d-%H%M%S%.3f"),
+            uuid::Uuid::new_v4()
+        );
+        path.parent()
+            .map(|parent| parent.join(&backup_name))
+            .unwrap_or_else(|| PathBuf::from(backup_name))
+    }
+
+    fn backup_candidates_for(path: &PathBuf) -> Vec<PathBuf> {
+        let mut candidates = Vec::new();
+        let latest_backup = Self::backup_path_for(path);
+        if latest_backup.exists() {
+            candidates.push(latest_backup);
+        }
+
+        if let Some(parent) = path.parent() {
+            if let Ok(entries) = std::fs::read_dir(parent) {
+                let mut timestamped: Vec<PathBuf> = entries
+                    .flatten()
+                    .map(|entry| entry.path())
+                    .filter(|entry_path| {
+                        entry_path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .map(|name| {
+                                name.starts_with("accounts.backup-") && name.ends_with(".json")
+                            })
+                            .unwrap_or(false)
+                    })
+                    .collect();
+                timestamped.sort_by_key(|entry_path| {
+                    std::fs::metadata(entry_path)
+                        .and_then(|metadata| metadata.modified())
+                        .ok()
+                });
+                timestamped.reverse();
+                candidates.extend(timestamped);
             }
-        } else {
-            eprintln!("[AccountStore] 无法读取文件: {}", path.display());
-            Vec::new()
+        }
+
+        candidates
+    }
+
+    fn parse_accounts_json(path: &PathBuf, content: &str) -> Result<Vec<Account>, String> {
+        serde_json::from_str::<Vec<Account>>(content)
+            .map_err(|e| format!("账号文件解析失败: {}; 错误: {e}", path.display()))
+    }
+
+    fn load_backup_or_panic(path: &PathBuf, original_error: String) -> Vec<Account> {
+        let mut backup_errors = Vec::new();
+        for backup_path in Self::backup_candidates_for(path) {
+            match std::fs::read_to_string(&backup_path)
+                .map_err(|e| format!("读取备份失败: {}; 错误: {e}", backup_path.display()))
+                .and_then(|content| Self::parse_accounts_json(&backup_path, &content))
+            {
+                Ok(accounts) => {
+                    eprintln!(
+                        "[AccountStore] 主账号文件损坏，已从备份加载 {} 个账号: {}",
+                        accounts.len(),
+                        backup_path.display()
+                    );
+                    if let Err(error) = std::fs::copy(&backup_path, path) {
+                        eprintln!("[AccountStore] 从备份修复主账号文件失败: {error}");
+                    }
+                    return accounts;
+                }
+                Err(error) => backup_errors.push(error),
+            }
+        }
+
+        panic!(
+            "账号文件已损坏且没有可用备份，已阻止继续加载以避免覆盖清空: {original_error}; 备份错误: {}",
+            backup_errors.join("; ")
+        );
+    }
+
+    fn load_from_file(path: &PathBuf) -> Vec<Account> {
+        let content = match std::fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(_) => {
+                eprintln!("[AccountStore] 无法读取文件: {}", path.display());
+                return Vec::new();
+            }
+        };
+
+        match Self::parse_accounts_json(path, &content) {
+            Ok(accounts) => {
+                eprintln!("[AccountStore] 成功加载 {} 个账号", accounts.len());
+                accounts
+            }
+            Err(error) => {
+                eprintln!("[AccountStore] {error}");
+                Self::load_backup_or_panic(path, error)
+            }
         }
     }
 
     pub fn save_to_file(&self) -> bool {
         self.try_save_to_file().is_ok()
+    }
+
+    fn backup_path(&self) -> PathBuf {
+        Self::backup_path_for(&self.file_path)
+    }
+
+    fn validate_existing_file_before_save(&self) -> Result<(), String> {
+        if !self.file_path.exists() {
+            return Ok(());
+        }
+
+        let content = std::fs::read_to_string(&self.file_path)
+            .map_err(|e| format!("读取现有账号文件失败: {e}"))?;
+        serde_json::from_str::<Vec<Account>>(&content).map_err(|e| {
+            format!(
+                "现有账号文件已损坏，已拒绝覆盖保存以避免数据丢失: {}; 错误: {e}",
+                self.file_path.display()
+            )
+        })?;
+
+        std::fs::copy(&self.file_path, self.backup_path())
+            .map_err(|e| format!("备份账号文件失败: {e}"))?;
+        std::fs::copy(
+            &self.file_path,
+            Self::timestamped_backup_path_for(&self.file_path),
+        )
+        .map_err(|e| format!("创建账号历史备份失败: {e}"))?;
+        Ok(())
     }
 
     pub fn try_save_to_file(&self) -> Result<(), String> {
@@ -499,19 +610,30 @@ impl AccountStore {
             }
         }
 
-        match serde_json::to_string_pretty(&self.accounts) {
-            Ok(json) => {
-                if let Err(e) = std::fs::write(&self.file_path, json) {
-                    eprintln!("[AccountStore] 写入文件失败: {e}");
-                    return Err(format!("写入账号文件失败: {e}"));
-                }
-                Ok(())
-            }
-            Err(e) => {
-                eprintln!("[AccountStore] 序列化失败: {e}");
-                Err(format!("序列化账号数据失败: {e}"))
-            }
+        let json = serde_json::to_string_pretty(&self.accounts).map_err(|e| {
+            eprintln!("[AccountStore] 序列化失败: {e}");
+            format!("序列化账号数据失败: {e}")
+        })?;
+
+        self.validate_existing_file_before_save()?;
+
+        let temp_path = self.file_path.with_extension("json.tmp");
+        std::fs::write(&temp_path, json).map_err(|e| {
+            eprintln!("[AccountStore] 写入临时账号文件失败: {e}");
+            format!("写入临时账号文件失败: {e}")
+        })?;
+
+        if self.file_path.exists() {
+            std::fs::remove_file(&self.file_path)
+                .map_err(|e| format!("替换账号文件前删除旧文件失败: {e}"))?;
         }
+        std::fs::rename(&temp_path, &self.file_path).map_err(|e| {
+            let _ = std::fs::remove_file(&temp_path);
+            eprintln!("[AccountStore] 替换账号文件失败: {e}");
+            format!("替换账号文件失败: {e}")
+        })?;
+
+        Ok(())
     }
 
     pub fn get_all(&self) -> Vec<Account> {
@@ -803,11 +925,93 @@ impl GroupTagStore {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::{normalize_accounts, Account};
+    use super::{normalize_accounts, Account, AccountStore};
     use crate::core::usage::is_usage_capped;
+    use std::path::PathBuf;
+
+    fn unique_test_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "kiro-account-store-{name}-{}.json",
+            uuid::Uuid::new_v4()
+        ))
+    }
+
+    #[test]
+    fn load_from_file_recovers_from_backup_when_primary_json_is_corrupt() {
+        let path = unique_test_path("corrupt");
+        let backup_path = path.with_extension("json.bak");
+        std::fs::write(&path, "[").unwrap();
+        let backup_account = Account::new("backup@example.com".to_string(), "backup".to_string());
+        std::fs::write(
+            &backup_path,
+            serde_json::to_string_pretty(&vec![backup_account]).unwrap(),
+        )
+        .unwrap();
+
+        let accounts = AccountStore::load_from_file(&path);
+
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0].email.as_deref(), Some("backup@example.com"));
+        let repaired = std::fs::read_to_string(&path).unwrap();
+        assert!(repaired.contains("backup@example.com"));
+
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(backup_path);
+    }
+
+    #[test]
+    #[should_panic(expected = "没有可用备份")]
+    fn load_from_file_panics_on_corrupt_account_json_without_backup() {
+        let path = unique_test_path("corrupt-no-backup");
+        std::fs::write(&path, "[").unwrap();
+
+        let _ = AccountStore::load_from_file(&path);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn try_save_to_file_preserves_previous_valid_file_as_latest_and_history_backups() {
+        let path = unique_test_path("backup");
+        let mut existing = Account::new("old@example.com".to_string(), "old".to_string());
+        existing.user_id = Some("old-user".to_string());
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&vec![existing]).unwrap(),
+        )
+        .unwrap();
+
+        let mut fresh = Account::new("new@example.com".to_string(), "new".to_string());
+        fresh.user_id = Some("new-user".to_string());
+        let store = AccountStore {
+            accounts: vec![fresh],
+            file_path: path.clone(),
+        };
+
+        store.try_save_to_file().unwrap();
+
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert!(saved.contains("new@example.com"));
+        let backup_path = path.with_extension("json.bak");
+        let backup = std::fs::read_to_string(&backup_path).unwrap();
+        assert!(backup.contains("old@example.com"));
+
+        let history_backups = AccountStore::backup_candidates_for(&path);
+        assert!(history_backups.iter().any(|candidate| {
+            candidate
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.starts_with("accounts.backup-") && name.ends_with(".json"))
+                .unwrap_or(false)
+        }));
+
+        let _ = std::fs::remove_file(path);
+        for candidate in history_backups {
+            let _ = std::fs::remove_file(candidate);
+        }
+    }
 
     #[test]
     fn account_is_not_available_when_monthly_usage_is_capped() {

@@ -1,7 +1,4 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
-// 速度测试 - 修改 1
-
 // 核心模块
 mod core;
 mod state;
@@ -9,41 +6,42 @@ mod state;
 // 功能模块
 mod auth;
 mod auto_switch;
-mod model_lock;
 mod clients;
 mod commands;
 mod gateway;
 mod kiro;
+mod model_lock;
 mod models;
 mod services;
-mod tasks;  // 后台任务模块
+mod tasks; // 后台任务模块
 mod utils;
 
-use core::account::{AccountStore, GroupTagStore};
 use auth::AuthState;
+use core::account::{AccountStore, GroupTagStore};
+use services::session_storage::SessionStorage;
 use state::AppState;
 use std::sync::Mutex;
-use tauri::Listener;
-use services::session_storage::SessionStorage;
+use tauri::{Listener, Manager};
 
 // 导入命令
-use utils::browser::{detect_installed_browsers};
+use utils::browser::detect_installed_browsers;
 
 //账号管理页面
 use commands::account_cmd::{
-    add_account_by_idc, add_account_by_social, add_local_kiro_account, delete_account,
-    delete_account_remote, delete_accounts, export_accounts, get_account_usage, get_accounts,
-    get_accounts_by_group, get_accounts_by_tag, get_available_accounts, import_accounts,
-    list_available_models, refresh_account_token, set_overage_status, sync_account, update_account, verify_account,
-    check_token_status, check_all_tokens_status, refresh_all_expiring_tokens,
+    add_account_by_idc, add_account_by_social, add_local_kiro_account, check_all_tokens_status,
+    check_token_status, delete_account, delete_account_remote, delete_accounts, export_accounts,
+    get_account_usage, get_accounts, get_accounts_by_group, get_accounts_by_tag,
+    get_available_accounts, import_accounts, list_available_models, refresh_account_token,
+    refresh_all_expiring_tokens, set_overage_status, sync_account, update_account, verify_account,
 };
 //应用设置
-use commands::app_settings_cmd::{
-    bind_machine_id_to_account, get_all_bound_machine_ids, get_app_settings, get_bound_machine_id,
-    get_usage_history, save_app_settings, save_usage_history_entry, unbind_machine_id_from_account,
-    get_custom_kiro_path, set_custom_kiro_path, clear_custom_kiro_path,
-};
 use commands::app_data_cmd::{get_app_data_dir, open_app_data_dir};
+use commands::app_settings_cmd::{
+    bind_machine_id_to_account, clear_custom_kiro_path, get_all_bound_machine_ids,
+    get_app_settings, get_bound_machine_id, get_custom_kiro_path, get_usage_history,
+    save_app_settings, save_usage_history_entry, set_custom_kiro_path,
+    unbind_machine_id_from_account,
+};
 //授权相关
 use commands::auth_cmd::{
     cancel_kiro_login, get_current_user, get_supported_providers, handle_kiro_social_callback,
@@ -56,13 +54,32 @@ use commands::cli_config_cmd::{
 
 //网关反代
 use commands::gateway_cmd::{
-    clear_gateway_request_logs, configure_proxy_clients, get_gateway_config, get_gateway_log_dir, get_gateway_request_logs,
-    get_gateway_request_stats, get_gateway_model_stats, get_gateway_endpoint_stats,
-    get_gateway_status, open_gateway_log_dir, save_gateway_config, start_gateway, stop_gateway,
+    cleanup_stale_health,
+    clear_banned_account,
+    clear_gateway_request_logs,
+    clear_rate_limit_account,
+    configure_proxy_clients,
+    get_all_account_health,
+    get_banned_accounts,
+    get_gateway_config,
+    get_gateway_endpoint_stats,
+    get_gateway_log_dir,
+    get_gateway_model_stats,
+    get_gateway_request_logs,
+    get_gateway_request_stats,
+    get_gateway_status,
+    // 负载均衡 API
+    get_rate_limited_accounts,
+    open_gateway_log_dir,
+    reset_account_health,
+    save_gateway_config,
+    start_gateway,
+    stop_gateway,
+    test_route_config,
 };
 //缓存管理
 use commands::cache_cmd::{
-    get_cache_config, get_cache_stats, clear_all_cache, clear_session_cache, cleanup_expired_cache,
+    cleanup_expired_cache, clear_all_cache, clear_session_cache, get_cache_config, get_cache_stats,
 };
 //分组
 use commands::group_tag_cmd::{
@@ -72,20 +89,19 @@ use commands::group_tag_cmd::{
 };
 //kiro-cli
 use commands::kiro_cli_cmd::{
-    check_cli_installation, get_kiro_cli_default_path, import_from_kiro_cli,
-    logout_cli_account, read_cli_db_snapshot, rollback_cli_switch, switch_to_cli_account,
+    check_cli_installation, get_kiro_cli_default_path, import_from_kiro_cli, logout_cli_account,
+    read_cli_db_snapshot, rollback_cli_switch, switch_to_cli_account,
 };
 //kiroshe
 use commands::kiro_settings_cmd::{
-    get_kiro_settings, set_kiro_agent_autonomy,
-    set_kiro_codebase_indexing, set_kiro_configure_mcp, set_kiro_debug_logs, set_kiro_model,
-    set_kiro_notification, set_kiro_proxy, set_kiro_reference_tracker, set_kiro_tab_autocomplete,
-    set_kiro_telemetry, set_kiro_trusted_commands, set_kiro_trusted_tools, set_kiro_usage_summary,
+    get_kiro_settings, set_kiro_agent_autonomy, set_kiro_codebase_indexing, set_kiro_configure_mcp,
+    set_kiro_debug_logs, set_kiro_model, set_kiro_notification, set_kiro_proxy,
+    set_kiro_reference_tracker, set_kiro_tab_autocomplete, set_kiro_telemetry,
+    set_kiro_trusted_commands, set_kiro_trusted_tools, set_kiro_usage_summary,
 };
 use commands::machine_guid::{
-    clear_macos_override, generate_machine_guid,
-    get_system_machine_guid, reset_system_machine_guid, restart_as_admin,
-    set_custom_machine_guid,
+    clear_macos_override, generate_machine_guid, get_system_machine_guid,
+    reset_system_machine_guid, restart_as_admin, set_custom_machine_guid,
 };
 use commands::mcp_cmd::{
     delete_mcp_server, get_mcp_config, get_mcp_tool_stats, save_mcp_server, toggle_mcp_server,
@@ -97,9 +113,9 @@ use commands::custom_agents_cmd::{
 };
 use commands::hooks_cmd::{create_hook, delete_hook, get_hook, get_hooks, save_hook};
 use commands::session_manager::{
-    list_workspaces, list_sessions, load_session, delete_session, delete_workspace, export_session, search_sessions,
+    delete_session, delete_workspace, export_session, list_sessions, list_workspaces, load_session,
+    search_sessions,
 };
-
 
 //代理
 use commands::proxy_cmd::detect_system_proxy;
@@ -122,8 +138,8 @@ use commands::skills_cmd::{
 };
 //Kiro IDE
 use crate::kiro::ide::{
-    check_ide_installation, check_kiro_config_files,
-    get_kiro_local_token, logout_kiro_account, read_kiro_accounts, switch_kiro_account,
+    check_ide_installation, check_kiro_config_files, get_kiro_local_token, logout_kiro_account,
+    read_kiro_accounts, switch_kiro_account,
 };
 //Kiro进程
 use crate::kiro::process::{close_kiro_ide, is_kiro_ide_running, start_kiro_ide};
@@ -167,9 +183,9 @@ fn setup_log_plugin() -> tauri_plugin_log::Builder {
         // 文件名：app.log（所有模块通用应用日志，含 [Gateway]/[Account] 等前缀区分）
         // Gateway 业务请求单独写 gateway-*.log
         .targets([
-            tauri_plugin_log::Target::new(
-                tauri_plugin_log::TargetKind::LogDir { file_name: Some("app".to_string()) }
-            ),
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                file_name: Some("app".to_string()),
+            }),
             tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
         ])
         // 日志轮转：每个文件最大 10MB，保留最近 5 个文件
@@ -218,6 +234,15 @@ fn handle_deep_link_event(app_handle: &tauri::AppHandle, payload: &str) {
     }
 
     auth::handle_incoming_deep_link(app_handle, &url);
+}
+
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
 /// 应用 setup 回调
@@ -333,14 +358,14 @@ fn setup_system_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Err
 /// 监听窗口关闭事件
 fn setup_window_close_handler(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::Manager;
-    
+
     if let Some(window) = app.get_webview_window("main") {
         let window_clone = window.clone();
         window.on_window_event(move |event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // 读取配置，决定是最小化到托盘还是直接退出
-                let settings = commands::app_settings_cmd::get_app_settings_inner()
-                    .unwrap_or_default();
+                let settings =
+                    commands::app_settings_cmd::get_app_settings_inner().unwrap_or_default();
 
                 if settings.close_to_tray.unwrap_or(false) {
                     // 最小化到托盘
@@ -504,6 +529,15 @@ fn main() {
             open_gateway_log_dir,
             clear_gateway_request_logs,
             configure_proxy_clients,
+            // Gateway 负载均衡 API
+            get_rate_limited_accounts,
+            get_banned_accounts,
+            clear_banned_account,
+            clear_rate_limit_account,
+            get_all_account_health,
+            reset_account_health,
+            cleanup_stale_health,
+            test_route_config,
             // 缓存管理命令
             get_cache_config,
             get_cache_stats,
@@ -565,7 +599,9 @@ fn main() {
             write_codex_cli_config,
             // 应用数据目录命令
             get_app_data_dir,
-            open_app_data_dir
+            open_app_data_dir,
+            // 窗口显示命令
+            show_main_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

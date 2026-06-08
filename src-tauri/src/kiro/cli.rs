@@ -284,11 +284,11 @@ pub fn switch_cli_account(
         return Err(format!("数据库文件不存在: {db_path}"));
     }
 
-    let mut conn = Connection::open(db_path)
-        .map_err(|e| format!("无法打开数据库: {e}"))?;
+    let mut conn = Connection::open(db_path).map_err(|e| format!("无法打开数据库: {e}"))?;
 
     // 开启事务
-    let tx = conn.transaction()
+    let tx = conn
+        .transaction()
         .map_err(|e| format!("无法开启事务: {e}"))?;
 
     // 备份旧值
@@ -334,10 +334,10 @@ pub fn logout_cli_account(db_path: &str) -> Result<usize, String> {
         return Err(format!("数据库文件不存在: {db_path}"));
     }
 
-    let mut conn = Connection::open(db_path)
-        .map_err(|e| format!("无法打开数据库: {e}"))?;
+    let mut conn = Connection::open(db_path).map_err(|e| format!("无法打开数据库: {e}"))?;
 
-    let tx = conn.transaction()
+    let tx = conn
+        .transaction()
         .map_err(|e| format!("无法开启事务: {e}"))?;
 
     // 清空所有优先级的 token key（与 switch_cli_account 清理的集合一致）
@@ -383,7 +383,8 @@ pub fn read_cli_db_snapshot(db_path: &str) -> Result<KiroCliDbSnapshot, String> 
         .map_err(|e| format!("无法打开数据库: {e}"))?;
 
     // 读取所有 token 条目
-    let mut stmt = conn.prepare("SELECT key, value FROM auth_kv WHERE key LIKE '%token'")
+    let mut stmt = conn
+        .prepare("SELECT key, value FROM auth_kv WHERE key LIKE '%token'")
         .map_err(|e| format!("查询失败: {e}"))?;
 
     let entries: Vec<KiroCliAuthEntry> = stmt
@@ -413,14 +414,17 @@ pub fn read_cli_db_snapshot(db_path: &str) -> Result<KiroCliDbSnapshot, String> 
 
 /// 解析 Token JSON 数据
 fn parse_token_data(json_str: &str) -> Result<TokenData, String> {
-    let data: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| format!("JSON 解析失败: {e}"))?;
+    let data: serde_json::Value =
+        serde_json::from_str(json_str).map_err(|e| format!("JSON 解析失败: {e}"))?;
 
     Ok(TokenData {
         access_token: data["access_token"].as_str().unwrap_or("").to_string(),
         refresh_token: data["refresh_token"].as_str().unwrap_or("").to_string(),
         expires_at: data["expires_at"].as_str().map(String::from),
-        region: data["region"].as_str().unwrap_or(CLI_DEFAULT_REGION).to_string(),
+        region: data["region"]
+            .as_str()
+            .unwrap_or(CLI_DEFAULT_REGION)
+            .to_string(),
         start_url: data["start_url"].as_str().map(String::from),
         oauth_flow: data["oauth_flow"].as_str().map(String::from),
         scopes: data["scopes"].as_array().map(|arr| {
@@ -432,24 +436,20 @@ fn parse_token_data(json_str: &str) -> Result<TokenData, String> {
 }
 
 /// 回滚切号操作（恢复备份数据）
-pub fn rollback_cli_switch(
-    db_path: &str,
-    backup: &KiroCliWriteBackup,
-) -> Result<(), String> {
+pub fn rollback_cli_switch(db_path: &str, backup: &KiroCliWriteBackup) -> Result<(), String> {
     if !Path::new(db_path).exists() {
         return Err(format!("数据库文件不存在: {db_path}"));
     }
 
-    let mut conn = Connection::open(db_path)
-        .map_err(|e| format!("无法打开数据库: {e}"))?;
+    let mut conn = Connection::open(db_path).map_err(|e| format!("无法打开数据库: {e}"))?;
 
-    let tx = conn.transaction()
+    let tx = conn
+        .transaction()
         .map_err(|e| format!("无法开启事务: {e}"))?;
 
     // 恢复 token
     if let Some((key, value)) = &backup.old_token {
-        write_kv_value(&tx, key, value)
-            .map_err(|e| format!("恢复 token 失败: {e}"))?;
+        write_kv_value(&tx, key, value).map_err(|e| format!("恢复 token 失败: {e}"))?;
     }
 
     // 恢复 device registration
@@ -482,7 +482,9 @@ pub fn check_cli_installation() -> CliInstallationInfo {
     let db_path = detect_cli_database();
 
     let cli_installed = cli_path.is_some();
-    let db_exists = db_path.as_ref().is_some_and(|p| std::path::Path::new(p).exists());
+    let db_exists = db_path
+        .as_ref()
+        .is_some_and(|p| std::path::Path::new(p).exists());
 
     CliInstallationInfo {
         cli_installed,
@@ -606,8 +608,8 @@ mod tests {
 
     /// 在系统临时目录建一个带 auth_kv 表的唯一测试库，返回路径。
     fn make_temp_db() -> String {
-        let path = std::env::temp_dir()
-            .join(format!("kam_cli_test_{}.sqlite3", uuid::Uuid::new_v4()));
+        let path =
+            std::env::temp_dir().join(format!("kam_cli_test_{}.sqlite3", uuid::Uuid::new_v4()));
         let conn = Connection::open(&path).expect("open temp db");
         conn.execute(
             "CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
@@ -667,10 +669,9 @@ mod tests {
 
     #[test]
     fn logout_errors_when_db_missing() {
-        let missing = std::env::temp_dir()
-            .join(format!("kam_cli_missing_{}.sqlite3", uuid::Uuid::new_v4()));
+        let missing =
+            std::env::temp_dir().join(format!("kam_cli_missing_{}.sqlite3", uuid::Uuid::new_v4()));
         let result = logout_cli_account(&missing.to_string_lossy());
         assert!(result.is_err(), "数据库不存在应返回 Err");
     }
 }
-

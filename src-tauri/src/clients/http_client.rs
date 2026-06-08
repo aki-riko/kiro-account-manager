@@ -1,10 +1,22 @@
 //! HTTP 客户端公共模块
 //! 提供统一的 HTTP 客户端构建，支持代理配置
-use reqwest::{Client, Proxy};
+use crate::commands::app_settings_cmd::get_app_settings_inner;
+use reqwest::{Client, ClientBuilder, Proxy};
 use serde_json::Value;
-use std::{path::PathBuf, time::Duration};
+#[cfg(not(target_os = "windows"))]
+use std::process::Command;
+use std::{path::PathBuf, sync::LazyLock, time::Duration};
 
 const KIRO_APP_VERSION_FALLBACK: &str = "0.0.0";
+const KIRO_NODE_VERSION_FALLBACK: &str = "22.22.0";
+static KIRO_UA_OS_RELEASE: LazyLock<String> = LazyLock::new(detect_os_release_for_user_agent);
+static KIRO_UA_NODE_VERSION: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("KIRO_NODE_VERSION")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| KIRO_NODE_VERSION_FALLBACK.to_string())
+});
 const SUPPORTED_KIRO_REGIONS: &[&str] = &[
     "us-east-1",
     "us-east-2",
@@ -232,8 +244,82 @@ pub fn get_kiro_app_version() -> String {
         .unwrap_or_else(|| KIRO_APP_VERSION_FALLBACK.to_string())
 }
 
+fn kiro_ide_user_agent_suffix(machine_id: &str) -> String {
+    format!("KiroIDE-{}-{}", get_kiro_app_version(), machine_id.trim())
+}
+
+fn js_os_platform_for_user_agent() -> &'static str {
+    match std::env::consts::OS {
+        "windows" => "win32",
+        "macos" => "darwin",
+        "linux" => "linux",
+        other => other,
+    }
+}
+
+fn detect_os_release_for_user_agent() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
+
+        let release = (|| -> Option<String> {
+            let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+            let key = hklm
+                .open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")
+                .ok()?;
+            let major = key
+                .get_value::<u32, _>("CurrentMajorVersionNumber")
+                .unwrap_or(10);
+            let minor = key
+                .get_value::<u32, _>("CurrentMinorVersionNumber")
+                .unwrap_or(0);
+            let build = key
+                .get_value::<String, _>("CurrentBuildNumber")
+                .or_else(|_| key.get_value::<String, _>("CurrentBuild"))
+                .ok()?;
+            Some(format!("{major}.{minor}.{build}"))
+        })();
+
+        return release.unwrap_or_else(|| "10.0.0".to_string());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new("uname")
+            .arg("-r")
+            .output()
+            .ok()
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "0.0.0".to_string())
+    }
+}
+
+pub fn build_kiro_x_amz_user_agent(machine_id: &str) -> String {
+    format!(
+        "aws-sdk-js/1.0.0 {}",
+        kiro_ide_user_agent_suffix(machine_id)
+    )
+}
+
 pub fn build_kiro_custom_user_agent(machine_id: &str) -> String {
-    format!("KiroIDE {} {}", get_kiro_app_version(), machine_id)
+    format!(
+        "aws-sdk-js/1.0.0 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/codewhispererruntime#1.0.0 m/N,E {}",
+        js_os_platform_for_user_agent(),
+        KIRO_UA_OS_RELEASE.as_str(),
+        KIRO_UA_NODE_VERSION.as_str(),
+        kiro_ide_user_agent_suffix(machine_id)
+    )
+}
+
+pub fn build_kiro_control_plane_user_agent() -> String {
+    format!(
+        "aws-sdk-js/1.0.0 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/kirocontrolplanebearer#1.0.0 m/N,E",
+        js_os_platform_for_user_agent(),
+        KIRO_UA_OS_RELEASE.as_str(),
+        KIRO_UA_NODE_VERSION.as_str()
+    )
 }
 
 pub fn is_supported_kiro_region(region: &str) -> bool {
@@ -274,10 +360,6 @@ pub fn get_usage_probe_regions() -> &'static [&'static str] {
     USAGE_PROBE_REGIONS
 }
 
-pub fn build_q_service_url(region: &str) -> String {
-    format!("https://q.{}.amazonaws.com", region)
-}
-
 pub fn should_send_codewhisperer_optout() -> bool {
     let Some(json) = read_kiro_settings_json() else {
         return true;
@@ -310,11 +392,49 @@ pub fn should_add_redirect_for_internal(provider: Option<&str>) -> bool {
     provider.is_some_and(|value| value.trim().eq_ignore_ascii_case("Internal"))
 }
 
+fn normalize_proxy_url(proxy: &str) -> Option<String> {
+    let proxy = proxy.trim();
+    if proxy.is_empty() {
+        return None;
+    }
+
+    if proxy.contains("://") {
+        Some(proxy.to_string())
+    } else {
+        Some(format!("http://{proxy}"))
+    }
+}
+
 /// 获取 Kiro IDE 设置中的代理
 fn get_proxy_from_kiro_settings() -> Option<String> {
-    read_kiro_settings_json().and_then(|json| {
-        get_setting_string(&json, "http.proxy").filter(|value| !value.trim().is_empty())
-    })
+    read_kiro_settings_json()
+        .and_then(|json| get_setting_string(&json, "http.proxy"))
+        .and_then(|value| normalize_proxy_url(&value))
+}
+
+fn resolve_app_proxy_url() -> Option<String> {
+    let mode = match get_app_settings_inner() {
+        Ok(settings) => settings.app_proxy_mode,
+        Err(e) => {
+            log::warn!("[HttpClient] 读取应用代理设置失败: {}, 使用默认模式", e);
+            None
+        }
+    }
+    .unwrap_or_else(|| "followKiro".to_string());
+
+    match mode.as_str() {
+        "disabled" => None,
+        "followKiro" | _ => get_proxy_from_kiro_settings(),
+    }
+}
+
+pub fn apply_app_proxy(builder: ClientBuilder) -> Result<ClientBuilder, String> {
+    match resolve_app_proxy_url() {
+        Some(proxy_url) => Proxy::all(&proxy_url)
+            .map(|proxy| builder.proxy(proxy))
+            .map_err(|e| format!("应用接口代理配置错误: {e}")),
+        None => Ok(builder),
+    }
 }
 
 /// 构建 HTTP 客户端（支持代理、超时配置）
@@ -324,7 +444,7 @@ pub fn build_http_client() -> Result<Client, String> {
 
 /// 构建用于流式请求的 HTTP 客户端（无总超时限制）
 pub fn build_streaming_http_client() -> Result<Client, String> {
-    let mut builder = Client::builder()
+    let builder = Client::builder()
         .connect_timeout(Duration::from_secs(30))
         .pool_idle_timeout(Duration::from_secs(120))
         .pool_max_idle_per_host(20)
@@ -333,14 +453,7 @@ pub fn build_streaming_http_client() -> Result<Client, String> {
         .http2_keep_alive_timeout(Duration::from_secs(20))
         .http2_keep_alive_while_idle(true);
 
-    // 尝试从 Kiro 设置获取代理
-    if let Some(proxy_url) = get_proxy_from_kiro_settings() {
-        if let Ok(proxy) = Proxy::all(&proxy_url) {
-            builder = builder.proxy(proxy);
-        }
-    }
-
-    builder
+    apply_app_proxy(builder)?
         .build()
         .map_err(|e| format!("Failed to create streaming HTTP client: {e}"))
 }
@@ -350,7 +463,7 @@ pub fn build_http_client_with_timeout(
     timeout_secs: u64,
     connect_timeout_secs: u64,
 ) -> Result<Client, String> {
-    let mut builder = Client::builder()
+    let builder = Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
         .connect_timeout(Duration::from_secs(connect_timeout_secs))
         .pool_idle_timeout(Duration::from_secs(120))
@@ -360,33 +473,19 @@ pub fn build_http_client_with_timeout(
         .http2_keep_alive_timeout(Duration::from_secs(20))
         .http2_keep_alive_while_idle(true);
 
-    // 尝试从 Kiro 设置获取代理
-    if let Some(proxy_url) = get_proxy_from_kiro_settings() {
-        if let Ok(proxy) = Proxy::all(&proxy_url) {
-            builder = builder.proxy(proxy);
-        }
-    }
-
-    builder
+    apply_app_proxy(builder)?
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))
 }
 
 /// 构建 HTTP 客户端（带 User-Agent）
 pub fn build_http_client_with_user_agent(user_agent: &str) -> Result<Client, String> {
-    let mut builder = Client::builder()
+    let builder = Client::builder()
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(10))
         .user_agent(user_agent);
 
-    // 尝试从 Kiro 设置获取代理
-    if let Some(proxy_url) = get_proxy_from_kiro_settings() {
-        if let Ok(proxy) = Proxy::all(&proxy_url) {
-            builder = builder.proxy(proxy);
-        }
-    }
-
-    builder
+    apply_app_proxy(builder)?
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {e}"))
 }
@@ -394,10 +493,25 @@ pub fn build_http_client_with_user_agent(user_agent: &str) -> Result<Client, Str
 #[cfg(test)]
 mod tests {
     use super::{
-        is_external_idp_auth_method, is_supported_kiro_region,
-        parse_region_from_profile_arn, resolve_kiro_upstream_region,
+        build_kiro_custom_user_agent, build_kiro_x_amz_user_agent, is_external_idp_auth_method,
+        is_supported_kiro_region, parse_region_from_profile_arn, resolve_kiro_upstream_region,
         should_add_redirect_for_internal,
     };
+
+    #[test]
+    fn kiro_user_agents_match_aws_sdk_js_shape() {
+        let user_agent = build_kiro_custom_user_agent("machine-abc");
+        let x_amz_user_agent = build_kiro_x_amz_user_agent("machine-abc");
+
+        assert!(user_agent.starts_with("aws-sdk-js/1.0.0 ua/2.1 os/"));
+        assert!(user_agent.contains(" lang/js md/nodejs#"));
+        assert!(user_agent.contains(" api/codewhispererruntime#1.0.0 m/N,E KiroIDE-"));
+        assert!(user_agent.ends_with("-machine-abc"));
+
+        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.0 KiroIDE-"));
+        assert!(x_amz_user_agent.ends_with("-machine-abc"));
+        assert!(!x_amz_user_agent.contains(" ua/2.1 "));
+    }
 
     #[test]
     fn parse_region_from_profile_arn_accepts_supported_regions_only() {

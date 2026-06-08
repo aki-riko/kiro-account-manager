@@ -75,7 +75,11 @@ fn read_amount(item: &Value, integer_key: &str, precision_key: &str) -> Option<f
     item.get(precision_key)
         .and_then(Value::as_f64)
         .or_else(|| item.get(integer_key).and_then(Value::as_f64))
-        .or_else(|| item.get(integer_key).and_then(Value::as_i64).map(|n| n as f64))
+        .or_else(|| {
+            item.get(integer_key)
+                .and_then(Value::as_i64)
+                .map(|n| n as f64)
+        })
 }
 
 /// usageBreakdownList[0] 三个核心字段：current / limit / overage_cap
@@ -88,16 +92,17 @@ pub struct UsageBreakdown {
 
 impl UsageBreakdown {
     pub fn from_usage_data(usage_data: Option<&Value>) -> Option<Self> {
-        let item = usage_data?
-            .get("usageBreakdownList")?
-            .as_array()?
-            .first()?;
+        let item = usage_data?.get("usageBreakdownList")?.as_array()?.first()?;
 
         let current = read_amount(item, "currentUsage", "currentUsageWithPrecision")?;
         let limit = read_amount(item, "usageLimit", "usageLimitWithPrecision")?;
         let overage_cap = read_amount(item, "overageCap", "overageCapWithPrecision").unwrap_or(0.0);
 
-        Some(Self { current, limit, overage_cap })
+        Some(Self {
+            current,
+            limit,
+            overage_cap,
+        })
     }
 
     /// 总可用额度（含超额）
@@ -135,12 +140,12 @@ pub struct UsageDetails {
 
 impl UsageDetails {
     pub fn from_usage_data(usage_data: Option<&Value>) -> Option<Self> {
-        let item = usage_data?
-            .get("usageBreakdownList")?
-            .as_array()?
-            .first()?;
+        let item = usage_data?.get("usageBreakdownList")?.as_array()?.first()?;
 
-        let main_limit = item.get("usageLimit").and_then(Value::as_f64).unwrap_or(0.0);
+        let main_limit = item
+            .get("usageLimit")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
         let main_usage = item
             .get("currentUsage")
             .and_then(Value::as_f64)
@@ -194,7 +199,9 @@ impl UsageDetails {
             .unwrap_or((0.0, 0.0));
 
         let overage_cap = if OverageStatus::from_usage_data(usage_data).is_enabled() {
-            item.get("overageCap").and_then(Value::as_f64).unwrap_or(0.0)
+            item.get("overageCap")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0)
         } else {
             0.0
         };
@@ -246,7 +253,8 @@ pub fn is_usage_capped(usage_data: Option<&Value>) -> bool {
         return false;
     };
     // 总配额 <= 0 说明账号没有任何配额，不算封顶
-    let total_limit = details.main_limit + details.trial_limit + details.bonus_limit + details.overage_cap;
+    let total_limit =
+        details.main_limit + details.trial_limit + details.bonus_limit + details.overage_cap;
     if total_limit <= 0.0 {
         return false;
     }
@@ -314,16 +322,28 @@ mod tests {
         let d = data("DISABLED", 0.0, 100.0, 0.0, "OVERAGE_CAPABLE");
         assert!(OverageCapability::from_usage_data(Some(&d)).is_capable());
         let d2 = data("DISABLED", 0.0, 100.0, 0.0, "OVERAGE_INCAPABLE");
-        assert_eq!(OverageCapability::from_usage_data(Some(&d2)), OverageCapability::Incapable);
-        assert_eq!(OverageCapability::from_usage_data(None), OverageCapability::Unknown);
+        assert_eq!(
+            OverageCapability::from_usage_data(Some(&d2)),
+            OverageCapability::Incapable
+        );
+        assert_eq!(
+            OverageCapability::from_usage_data(None),
+            OverageCapability::Unknown
+        );
     }
 
     #[test]
     fn threshold_uses_effective_limit() {
         // base 100，overage 100，已用 150 → enabled 时 75%，disabled 时算 150% 但 disabled 已经 capped
         let enabled = data("ENABLED", 150.0, 100.0, 100.0, "OVERAGE_CAPABLE");
-        assert!((UsageBreakdown::from_usage_data(Some(&enabled)).unwrap()
-            .usage_percentage(OverageStatus::Enabled) - 75.0).abs() < 0.01);
+        assert!(
+            (UsageBreakdown::from_usage_data(Some(&enabled))
+                .unwrap()
+                .usage_percentage(OverageStatus::Enabled)
+                - 75.0)
+                .abs()
+                < 0.01
+        );
         assert!(!usage_exceeds_threshold(Some(&enabled), 80.0));
         assert!(usage_exceeds_threshold(Some(&enabled), 70.0));
     }

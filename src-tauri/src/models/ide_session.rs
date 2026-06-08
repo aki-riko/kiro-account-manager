@@ -89,7 +89,7 @@ mod content_format {
         use serde_json::Value;
 
         let value = Value::deserialize(deserializer)?;
-        
+
         match value {
             // 如果是字符串，转换为单个 ContentItem
             Value::String(s) => Ok(vec![ContentItem {
@@ -101,11 +101,13 @@ mod content_format {
                 let mut items = Vec::new();
                 for item in arr {
                     if let Value::Object(obj) = item {
-                        let content_type = obj.get("type")
+                        let content_type = obj
+                            .get("type")
                             .and_then(|v| v.as_str())
                             .unwrap_or("text")
                             .to_string();
-                        let text = obj.get("text")
+                        let text = obj
+                            .get("text")
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
                             .to_string();

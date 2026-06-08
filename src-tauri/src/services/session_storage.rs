@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::fs;
-use anyhow::{Result, Context};
 use crate::models::ide_session::{IdeSession, SessionSummary};
+use anyhow::{Context, Result};
+use std::fs;
+use std::path::PathBuf;
 
 // 安全限制
 const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024; // 50MB
@@ -24,14 +24,16 @@ impl SessionStorage {
             && !component.contains("..")
             && !component.contains('/')
             && !component.contains('\\')
-            && component.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')
+            && component
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')
     }
-    
+
     fn get_storage_path() -> Result<PathBuf> {
         #[cfg(target_os = "windows")]
         {
-            let appdata = std::env::var("APPDATA")
-                .context("Failed to get APPDATA environment variable")?;
+            let appdata =
+                std::env::var("APPDATA").context("Failed to get APPDATA environment variable")?;
             Ok(PathBuf::from(appdata)
                 .join("Kiro")
                 .join("User")
@@ -39,11 +41,10 @@ impl SessionStorage {
                 .join("kiro.kiroagent")
                 .join("workspace-sessions"))
         }
-        
+
         #[cfg(target_os = "macos")]
         {
-            let home = std::env::var("HOME")
-                .context("Failed to get HOME environment variable")?;
+            let home = std::env::var("HOME").context("Failed to get HOME environment variable")?;
             Ok(PathBuf::from(home)
                 .join("Library")
                 .join("Application Support")
@@ -53,11 +54,10 @@ impl SessionStorage {
                 .join("kiro.kiroagent")
                 .join("workspace-sessions"))
         }
-        
+
         #[cfg(target_os = "linux")]
         {
-            let home = std::env::var("HOME")
-                .context("Failed to get HOME environment variable")?;
+            let home = std::env::var("HOME").context("Failed to get HOME environment variable")?;
             Ok(PathBuf::from(home)
                 .join(".config")
                 .join("Kiro")
@@ -67,20 +67,21 @@ impl SessionStorage {
                 .join("workspace-sessions"))
         }
     }
-    
+
     /// 列出所有 workspace
     pub fn list_workspaces(&self) -> Result<Vec<String>> {
         let mut workspaces = Vec::new();
-        
+
         if !self.base_path.exists() {
             return Ok(workspaces);
         }
-        
+
         // 收集工作区及其修改时间
         let mut workspace_with_time: Vec<(String, std::time::SystemTime)> = Vec::new();
-        
-        for entry in fs::read_dir(&self.base_path)
-            .context("Failed to read workspace-sessions directory")? {
+
+        for entry in
+            fs::read_dir(&self.base_path).context("Failed to read workspace-sessions directory")?
+        {
             let entry = entry?;
             if entry.file_type()?.is_dir() {
                 let name = entry.file_name().to_string_lossy().to_string();
@@ -88,16 +89,19 @@ impl SessionStorage {
                 workspace_with_time.push((name, modified));
             }
         }
-        
+
         // 按修改时间倒序排序（最近使用的在前）
         workspace_with_time.sort_by(|a, b| b.1.cmp(&a.1));
-        
+
         // 只返回名称
-        workspaces = workspace_with_time.into_iter().map(|(name, _)| name).collect();
-        
+        workspaces = workspace_with_time
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+
         Ok(workspaces)
     }
-    
+
     /// 列出指定 workspace 的所有 sessions
     pub fn list_sessions(&self, workspace_hash: &str) -> Result<Vec<SessionSummary>> {
         // 安全检查：防止路径遍历攻击
@@ -108,29 +112,31 @@ impl SessionStorage {
 
         let workspace_path = self.base_path.join(workspace_hash);
         let mut sessions = Vec::new();
-        
+
         if !workspace_path.exists() {
             log::warn!("Workspace directory does not exist: {}", workspace_hash);
             return Ok(sessions);
         }
-        
-        for entry in fs::read_dir(&workspace_path)
-            .context(format!("Failed to read workspace directory: {}", workspace_hash))? {
+
+        for entry in fs::read_dir(&workspace_path).context(format!(
+            "Failed to read workspace directory: {}",
+            workspace_hash
+        ))? {
             let entry = entry?;
             let path = entry.path();
-            
+
             // 只处理 .json 文件
             if path.extension().and_then(|s| s.to_str()) != Some("json") {
                 continue;
             }
-            
+
             // 跳过 sessions.json（索引文件）
             if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
                 if filename == "sessions.json" {
                     continue;
                 }
             }
-            
+
             match self.load_session_summary(&path, workspace_hash) {
                 Ok(summary) => sessions.push(summary),
                 Err(e) => {
@@ -139,37 +145,38 @@ impl SessionStorage {
                 }
             }
         }
-        
+
         // 按修改时间倒序排序
-        sessions.sort_by(|a, b| {
-            b.modified_at.unwrap_or(0).cmp(&a.modified_at.unwrap_or(0))
-        });
-        
+        sessions.sort_by(|a, b| b.modified_at.unwrap_or(0).cmp(&a.modified_at.unwrap_or(0)));
+
         Ok(sessions)
     }
-    
+
     /// 加载 session 摘要
     fn load_session_summary(&self, path: &PathBuf, workspace_hash: &str) -> Result<SessionSummary> {
-        let metadata = fs::metadata(path)
-            .context(format!("Failed to read metadata for {:?}", path))?;
+        let metadata =
+            fs::metadata(path).context(format!("Failed to read metadata for {:?}", path))?;
 
         // 安全检查：文件大小限制
         if metadata.len() > MAX_FILE_SIZE {
             return Err(anyhow::anyhow!("File too large: {} bytes", metadata.len()));
         }
 
-        let content = fs::read_to_string(path)
-            .context(format!("Failed to read file {:?}", path))?;
+        let content =
+            fs::read_to_string(path).context(format!("Failed to read file {:?}", path))?;
 
         let session: IdeSession = serde_json::from_str(&content)
             .map_err(|e| {
                 log::error!("JSON parse error for {:?}: {}", path, e);
                 // 打印前 500 个字符帮助调试
-                log::error!("File content preview: {}", &content.chars().take(500).collect::<String>());
+                log::error!(
+                    "File content preview: {}",
+                    &content.chars().take(500).collect::<String>()
+                );
                 e
             })
             .context(format!("Failed to parse JSON from {:?}", path))?;
-        
+
         Ok(SessionSummary {
             session_id: session.session_id,
             title: session.title,
@@ -178,59 +185,80 @@ impl SessionStorage {
             workspace_hash: workspace_hash.to_string(),
             message_count: session.history.len(),
             file_size: metadata.len(),
-            created_at: metadata.created().ok()
+            created_at: metadata
+                .created()
+                .ok()
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs() as i64),
-            modified_at: metadata.modified().ok()
+            modified_at: metadata
+                .modified()
+                .ok()
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs() as i64),
         })
     }
-    
+
     /// 加载完整 session
     pub fn load_session(&self, workspace_hash: &str, session_id: &str) -> Result<IdeSession> {
         // 安全检查：防止路径遍历攻击
-        if !Self::is_safe_path_component(workspace_hash) || !Self::is_safe_path_component(session_id) {
-            log::warn!("[安全] 检测到非法的路径参数: workspace_hash={}, session_id={}", workspace_hash, session_id);
+        if !Self::is_safe_path_component(workspace_hash)
+            || !Self::is_safe_path_component(session_id)
+        {
+            log::warn!(
+                "[安全] 检测到非法的路径参数: workspace_hash={}, session_id={}",
+                workspace_hash,
+                session_id
+            );
             return Err(anyhow::anyhow!("Invalid path parameters"));
         }
 
-        let path = self.base_path
+        let path = self
+            .base_path
             .join(workspace_hash)
             .join(format!("{}.json", session_id));
 
         // 安全检查：文件大小限制
-        let metadata = fs::metadata(&path)
-            .context(format!("Failed to read metadata for session: {}", session_id))?;
+        let metadata = fs::metadata(&path).context(format!(
+            "Failed to read metadata for session: {}",
+            session_id
+        ))?;
         if metadata.len() > MAX_FILE_SIZE {
-            return Err(anyhow::anyhow!("Session file too large: {} bytes", metadata.len()));
+            return Err(anyhow::anyhow!(
+                "Session file too large: {} bytes",
+                metadata.len()
+            ));
         }
 
         let content = fs::read_to_string(&path)
             .context(format!("Failed to read session file: {}", session_id))?;
-        let session = serde_json::from_str(&content)
-            .context("Failed to parse session JSON")?;
+        let session = serde_json::from_str(&content).context("Failed to parse session JSON")?;
         Ok(session)
     }
-    
+
     /// 删除 session
     pub fn delete_session(&self, workspace_hash: &str, session_id: &str) -> Result<()> {
         // 安全检查：防止路径遍历攻击
-        if !Self::is_safe_path_component(workspace_hash) || !Self::is_safe_path_component(session_id) {
-            log::warn!("[安全] 检测到非法的路径参数: workspace_hash={}, session_id={}", workspace_hash, session_id);
+        if !Self::is_safe_path_component(workspace_hash)
+            || !Self::is_safe_path_component(session_id)
+        {
+            log::warn!(
+                "[安全] 检测到非法的路径参数: workspace_hash={}, session_id={}",
+                workspace_hash,
+                session_id
+            );
             return Err(anyhow::anyhow!("Invalid path parameters"));
         }
 
-        let path = self.base_path
+        let path = self
+            .base_path
             .join(workspace_hash)
             .join(format!("{}.json", session_id));
-        
-        fs::remove_file(&path)
-            .context(format!("Failed to delete session: {}", session_id))?;
-        
+
+        fs::remove_file(&path).context(format!("Failed to delete session: {}", session_id))?;
+
         Ok(())
     }
-    
+
     /// 删除整个工作区目录
     pub fn delete_workspace(&self, workspace_hash: &str) -> Result<()> {
         // 安全检查：防止路径遍历攻击
@@ -240,15 +268,15 @@ impl SessionStorage {
         }
 
         let workspace_path = self.base_path.join(workspace_hash);
-        
+
         if workspace_path.exists() {
             fs::remove_dir_all(&workspace_path)
                 .context(format!("Failed to delete workspace: {}", workspace_hash))?;
         }
-        
+
         Ok(())
     }
-    
+
     /// 导出 session
     pub fn export_session(
         &self,
@@ -258,40 +286,44 @@ impl SessionStorage {
     ) -> Result<String> {
         // 安全检查已在 load_session 中完成
         let session = self.load_session(workspace_hash, session_id)?;
-        
+
         match format {
-            ExportFormat::Json => {
-                serde_json::to_string_pretty(&session)
-                    .context("Failed to serialize session to JSON")
-            }
-            ExportFormat::Markdown => {
-                Ok(self.session_to_markdown(&session))
-            }
+            ExportFormat::Json => serde_json::to_string_pretty(&session)
+                .context("Failed to serialize session to JSON"),
+            ExportFormat::Markdown => Ok(self.session_to_markdown(&session)),
         }
     }
-    
+
     fn session_to_markdown(&self, session: &IdeSession) -> String {
         let mut md = String::new();
         md.push_str(&format!("# {}\n\n", session.title));
         md.push_str(&format!("- **Session ID**: {}\n", session.session_id));
         md.push_str(&format!("- **Type**: {}\n", session.session_type));
-        md.push_str(&format!("- **Workspace**: {}\n", session.workspace_directory));
+        md.push_str(&format!(
+            "- **Workspace**: {}\n",
+            session.workspace_directory
+        ));
         md.push_str(&format!("- **Messages**: {}\n\n", session.history.len()));
         md.push_str("---\n\n");
-        
+
         for (i, item) in session.history.iter().enumerate() {
             md.push_str(&format!("## Message {}\n\n", i + 1));
-            md.push_str(&format!("**{}**:\n\n", 
-                if item.message.role == "user" { "User" } else { "Assistant" }
+            md.push_str(&format!(
+                "**{}**:\n\n",
+                if item.message.role == "user" {
+                    "User"
+                } else {
+                    "Assistant"
+                }
             ));
-            
+
             for content in &item.message.content {
                 md.push_str(&format!("{}\n\n", content.text));
             }
-            
+
             md.push_str("---\n\n");
         }
-        
+
         md
     }
 }

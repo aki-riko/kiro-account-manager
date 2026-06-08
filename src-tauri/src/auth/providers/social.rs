@@ -3,9 +3,9 @@
 
 use super::{AuthProvider, AuthResult, RefreshMetadata};
 use crate::auth::auth_social;
+use crate::clients::kiro_auth_client::KiroAuthServiceClient;
 use crate::commands::machine_guid::get_machine_id;
 use crate::core::deep_link_handler::{register_waiter, DeepLinkCallbackWaiter};
-use crate::clients::kiro_auth_client::KiroAuthServiceClient;
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -136,7 +136,8 @@ impl AuthProvider for SocialProvider {
             client_id_hash: None,
             sso_session_id: None,
             start_url: None, // Social 不需要 start_url
-            profile_arn: metadata.profile_arn.or(token_response.profile_arn),
+            // 优先使用 API 返回的新 profileArn，没有才用旧的
+            profile_arn: token_response.profile_arn.or(metadata.profile_arn),
         })
     }
 

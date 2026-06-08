@@ -117,8 +117,6 @@ impl AWSSSOClient {
         let text = resp.text().await.unwrap_or_default();
 
         if !status.is_success() {
-            // 特殊处理：用户提供的 Start URL 无效（跟 Kiro IDE 一样）
-            // 参考：extension.js 行 138415-138416
             if has_user_provided_input && status.as_u16() == 400 {
                 // 检查错误描述中是否包含 "invalid start url provided"
                 if text.to_lowercase().contains("invalid start url provided") {
@@ -219,12 +217,24 @@ impl AWSSSOClient {
         if !status.is_success() {
             log::debug!("[AWS SSO] RefreshToken Status: {status}");
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                let keys = json
+                    .as_object()
+                    .map(|object| object.keys().cloned().collect::<Vec<_>>())
+                    .unwrap_or_default();
+                let error_code = json
+                    .get("error")
+                    .or_else(|| json.get("errorCode"))
+                    .or_else(|| json.get("__type"))
+                    .and_then(|item| item.as_str())
+                    .unwrap_or("unknown");
                 log::debug!(
-                    "[AWS SSO] RefreshToken Response:\n{}",
-                    serde_json::to_string_pretty(&json).unwrap_or(text.clone())
+                    "[AWS SSO] RefreshToken Response: body_len={}, keys={:?}, error_code={}",
+                    text.len(),
+                    keys,
+                    error_code
                 );
             } else {
-                log::debug!("[AWS SSO] RefreshToken Response: {text}");
+                log::debug!("[AWS SSO] RefreshToken Response: body_len={}", text.len());
             }
         }
 
