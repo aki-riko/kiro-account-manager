@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { Copy, Check, RefreshCw, User, CreditCard, Shield, Cpu, Loader2, FileText, Image as ImageIcon, Zap, Hash, ChevronDown, X } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
-import { formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
+import { formatUsage, getAccountDisplayName, calcTotalUsageWithExtras } from '../../../utils/accountStats'
 import { getAccountStatusMeta, isBannedStatus } from '../../../utils/accountStatus'
 import { getProviderDisplayName, isGitHubProvider } from '../../../utils/accountProvider'
 import {
@@ -12,7 +12,7 @@ import {
   DialogContent,
   DialogBody} from '../../shared/dialog'
 import { Switch } from '../../ui/switch'
-import { Account } from '../../../types/account'
+import { Account, AvailableModel, ListAvailableModelsResponse } from '../../../types/account'
 import React from 'react'
 
 interface QuotaCardProps {
@@ -30,7 +30,7 @@ interface QuotaCardProps {
 const QuotaCard = memo(({ title, used, quota, icon, status, expiry, colors, t }: QuotaCardProps) => {
   const isActive = status === 'ACTIVE'
   const hasQuota = quota > 0
-  
+
   return (
     <div className={`rounded-lg p-3 border transition-colors duration-200 hover:shadow-md ${
       hasQuota && isActive
@@ -87,6 +87,28 @@ interface AccountDetailModalProps {
   onRefresh?: () => void;
 }
 
+const formatTokenLimit = (value?: number | null) => {
+  if (!value) return '-'
+  if (value >= 1000000) return `${(value / 1000000).toFixed(value % 1000000 === 0 ? 0 : 1)}M`
+  if (value >= 1000) return `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}K`
+  return String(value)
+}
+
+const formatModelList = (values?: string[] | null) => values?.filter(Boolean).join(', ') || '-'
+
+const formatEffortLabel = (model: AvailableModel) => {
+  const levels = formatModelList(model.effortLevels)
+  return model.effortSchemaPath ? `${model.effortSchemaPath}: ${levels}` : levels
+}
+
+const getPrimaryUsage = (account: Account) => {
+  const breakdown = account.usageData?.usageBreakdownList?.[0]
+  return {
+    quota: breakdown?.usageLimit ?? 0,
+    used: breakdown?.currentUsage ?? 0,
+  }
+}
+
 function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalProps) {
   const { t } = useApp()
   const { showError } = useDialog()
@@ -97,14 +119,13 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
     inputFocus: 'focus:ring-primary/20 focus:border-primary'
   }), [])
 
-  const initQuota = currentAccount.usageData?.usageBreakdownList?.[0]?.usageLimit ?? currentAccount.quota ?? 0
-  const initUsed = currentAccount.usageData?.usageBreakdownList?.[0]?.currentUsage ?? currentAccount.used ?? 0
-  
+  const initialUsage = getPrimaryUsage(currentAccount)
+
   const [form, setForm] = useState({
     email: currentAccount.email || getAccountDisplayName(currentAccount),
     label: currentAccount.label || '',
-    quota: initQuota,
-    used: initUsed,
+    quota: initialUsage.quota,
+    used: initialUsage.used,
     status: currentAccount.status,
     accessToken: currentAccount.accessToken || '',
     refreshToken: currentAccount.refreshToken || ''})
@@ -114,7 +135,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
   const copiedTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Models 相关 state
-  const [models, setModels] = useState<any[]>([])
+  const [models, setModels] = useState<AvailableModel[]>([])
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState<string | null>(null)
   const [modelsExpanded, setModelsExpanded] = useState(false)
@@ -125,12 +146,12 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
     setModelsError(null)
     try {
       console.log('[AccountDetailModal] Fetching models for account:', account.id, 'forceRefresh:', forceRefresh)
-      const response = await invoke<any>('list_available_models', { 
-        id: account.id, 
-        forceRefresh 
+      const response = await invoke<ListAvailableModelsResponse>('list_available_models', {
+        id: account.id,
+        forceRefresh
       })
       console.log('[AccountDetailModal] Models response:', response)
-      const modelsList = Array.isArray(response?.availableModels) ? response.availableModels : []
+      const modelsList = response.availableModels
       console.log('[AccountDetailModal] Models list:', modelsList.length, 'models')
       setModels(modelsList)
     } catch (e) {
@@ -157,11 +178,12 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
 
   useEffect(() => {
     setCurrentAccount(account)
+    const usage = getPrimaryUsage(account)
     setForm({
       email: account.email || getAccountDisplayName(account),
       label: account.label || '',
-      quota: account.usageData?.usageBreakdownList?.[0]?.usageLimit ?? account.quota ?? 0,
-      used: account.usageData?.usageBreakdownList?.[0]?.currentUsage ?? account.used ?? 0,
+      quota: usage.quota,
+      used: usage.used,
       status: account.status,
       accessToken: account.accessToken || '',
       refreshToken: account.refreshToken || ''})
@@ -173,12 +195,12 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
       const result = await invoke<{ account: Account, warning?: string }>('sync_account', { id: account.id })
       const updated = result.account
       setCurrentAccount(updated)
-      
+
       // 如果有警告，显示提示
       if (result.warning) {
         await showError('同步警告', result.warning)
       }
-      
+
       // 封禁账号额度为 0
       const isBanned = isBannedStatus(updated)
       const quota = isBanned ? 0 : (updated.usageData?.usageBreakdownList?.[0]?.usageLimit ?? 0)
@@ -208,31 +230,26 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
     copiedTimerRef.current = setTimeout(() => setCopied(null), 1500)
   }
 
-  // 从 usageData 读取免费试用和奖励信息
+  // 计算总配额和使用量（基于表单值 + usageData 中的额外配额）
+  const {
+    totalQuota,
+    totalUsed,
+    totalPercent,
+    freeTrialQuota,
+    freeTrialUsed,
+    bonusQuota,
+    bonusUsed
+  } = calcTotalUsageWithExtras(
+    form.quota,
+    form.used,
+    currentAccount.usageData
+  )
+
+  // 从 usageData 读取额外信息（用于显示详情）
   const breakdown = currentAccount.usageData?.usageBreakdownList?.[0]
   const freeTrialInfo = breakdown?.freeTrialInfo
   const bonuses = breakdown?.bonuses || []
-  const now = Date.now()
-  
-  // 检查试用是否过期
-  const trialExpiry = freeTrialInfo?.freeTrialExpiry ? freeTrialInfo.freeTrialExpiry * 1000 : 0
-  const trialActive = freeTrialInfo?.freeTrialStatus === 'ACTIVE' || (trialExpiry > now)
-  const freeTrialQuota = trialActive ? (freeTrialInfo?.usageLimit || 0) : 0
-  const freeTrialUsed = trialActive ? (freeTrialInfo?.currentUsage || 0) : 0
-  
-  // 检查每个奖励是否过期（只计入未过期且状态为 ACTIVE 的奖励）
-  let bonusQuota = 0, bonusUsed = 0
-  bonuses.forEach(b => {
-    const expiry = b.expiresAt ? b.expiresAt * 1000 : Infinity
-    if (expiry > now && b.status === 'ACTIVE') {
-      bonusQuota += b.usageLimit || 0
-      bonusUsed += b.currentUsage || 0
-    }
-  })
-  
-  const totalQuota = form.quota + freeTrialQuota + bonusQuota
-  const totalUsed = form.used + freeTrialUsed + bonusUsed
-  const totalPercent = totalQuota > 0 ? Math.min(100, (totalUsed / totalQuota) * 100) : 0
+
   const statusMeta = getAccountStatusMeta({ status: form.status, usageData: currentAccount.usageData }, t)
 
   return createPortal(
@@ -240,7 +257,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
       <DialogContent maxWidth="800px" showClose={false}>
         {/* 顶部渐变背景 */}
         <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-br from-blue-500/5 via-purple-500/3 to-transparent pointer-events-none rounded-t-2xl" />
-        
+
         <div className={`sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border px-6 py-4 rounded-t-2xl`}>
           <div className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">账号详情</div>
           <div className="flex items-start gap-3">
@@ -248,15 +265,15 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
             <div className={`
               w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md
               ${currentAccount.provider === 'Google'
-                ? 'bg-gradient-to-br from-red-500 to-orange-500' 
+                ? 'bg-gradient-to-br from-red-500 to-orange-500'
                 : isGitHubProvider(currentAccount.provider)
-                  ? 'bg-gradient-to-br from-gray-700 to-gray-900' 
+                  ? 'bg-gradient-to-br from-gray-700 to-gray-900'
                   : 'bg-gradient-to-br from-blue-500 to-indigo-600'
               }`}
             >
               <User size={22} className="text-white" strokeWidth={2} />
             </div>
-            
+
             {/* 账号信息 */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
@@ -277,7 +294,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                   {currentAccount.usageData?.subscriptionInfo?.subscriptionTitle || 'Free'}
                 </span>
               </div>
-              
+
               <div className={`flex items-center gap-2 text-xs text-muted-foreground mb-2`}>
                 <span className={`flex items-center gap-1 font-medium ${
                   currentAccount.provider === 'Google' ? 'text-red-500'
@@ -291,7 +308,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 <span>·</span>
                 <span>{t('detail.addedAt')} {currentAccount.addedAt?.split(' ')[0]}</span>
               </div>
-              
+
               {/* 机器码 */}
               {currentAccount.machineId && (
                 <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-muted/30`}>
@@ -299,7 +316,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                   <code className="text-[10px] font-mono text-red-400">
                     {currentAccount.machineId}
                   </code>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => handleCopy(currentAccount.machineId || '', 'machineId')}
                     className={`p-0.5 rounded hover:bg-muted/50 cursor-pointer transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30`}
@@ -318,7 +335,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
             </button>
           </div>
         </div>
-        
+
         {/* Body - 使用 DialogBody 的 noPadding，自己控制每个区域的 padding */}
         <DialogBody noPadding>
           {/* 配额总览 */}
@@ -330,21 +347,21 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 </div>
                 <span className={`text-sm font-semibold text-foreground`}>{t('detail.quotaOverview')}</span>
               </div>
-              <button 
-                type="button" 
-                onClick={handleRefresh} 
-                disabled={refreshing} 
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshing}
                 className={`
                   p-2 rounded-lg transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30
                   ${refreshing ? 'bg-blue-500/20' : 'bg-blue-500/20 hover:bg-blue-500/30'}
                   disabled:opacity-50 disabled:cursor-not-allowed
-                `} 
+                `}
                 title={t('detail.syncQuota')}
               >
                 <RefreshCw size={15} className={`text-blue-500 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
             </div>
-              
+
             <div className="mb-5">
               <div className="flex items-baseline justify-between mb-3">
                 <div>
@@ -352,25 +369,25 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                   <span className={`text-lg text-muted-foreground ml-2`}>/ {formatUsage(totalQuota)}</span>
                 </div>
                 <span className={`text-base font-medium px-3 py-1 rounded-lg ${
-                  totalPercent > 80 ? 'bg-red-500/20 text-red-500' 
-                  : totalPercent > 50 ? 'bg-yellow-500/20 text-yellow-600' 
+                  totalPercent > 80 ? 'bg-red-500/20 text-red-500'
+                  : totalPercent > 50 ? 'bg-yellow-500/20 text-yellow-600'
                   : 'bg-green-500/20 text-green-600'
                 }`}>
                   {totalPercent.toFixed(0)}% {t('detail.used')}
                 </span>
               </div>
               <div className={`h-4 bg-muted/30 rounded-full overflow-hidden shadow-inner`}>
-                <div 
+                <div
                   className={`h-full rounded-full transition-all duration-500 shadow-lg ${
-                    totalPercent > 80 ? 'bg-gradient-to-r from-red-400 to-red-500' 
-                    : totalPercent > 50 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' 
+                    totalPercent > 80 ? 'bg-gradient-to-r from-red-400 to-red-500'
+                    : totalPercent > 50 ? 'bg-gradient-to-r from-yellow-400 to-orange-500'
                     : 'bg-gradient-to-r from-green-400 to-emerald-500'
-                  }`} 
-                  style={{ width: `${totalPercent}%` }} 
+                  }`}
+                  style={{ width: `${totalPercent}%` }}
                 />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-3 gap-3">
               {/* 主配额卡片 */}
               <QuotaCard
@@ -382,7 +399,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 colors={colors}
                 t={t}
               />
-              
+
               {/* 试用配额卡片 */}
               <QuotaCard
                 title={t('detail.freeTrial')}
@@ -394,7 +411,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 colors={colors}
                 t={t}
               />
-              
+
               {/* 奖励配额卡片 */}
               <QuotaCard
                 title={t('detail.bonusTotal')}
@@ -406,7 +423,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 t={t}
               />
             </div>
-            
+
             {/* Bonuses 列表 */}
             {bonuses.length > 0 && (
               <div className="mt-6 pt-5 border-t border-border">
@@ -418,18 +435,18 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 <div className="space-y-3">
                   {bonuses.map((bonus, idx) => (
                     <div key={idx} className={`flex items-center justify-between p-4 rounded-xl border transition-colors duration-200 hover:shadow-md ${
-                      bonus.status === 'ACTIVE' 
-                        ? 'bg-purple-500/10 border-purple-500/30' 
+                      bonus.status === 'ACTIVE'
+                        ? 'bg-purple-500/10 border-purple-500/30'
                         : `bg-muted/30 border-border`
                     }`}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-sm font-medium text-foreground`}>{bonus.displayName || bonus.bonusCode}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${
-                            bonus.status === 'ACTIVE' 
-                              ? 'bg-green-500/20 text-green-500' 
-                              : bonus.status === 'EXHAUSTED' 
-                                ? `bg-muted/30 text-muted-foreground` 
+                            bonus.status === 'ACTIVE'
+                              ? 'bg-green-500/20 text-green-500'
+                              : bonus.status === 'EXHAUSTED'
+                                ? `bg-muted/30 text-muted-foreground`
                                 : 'bg-yellow-500/20 text-yellow-600'
                           }`}>
                             {bonus.status}
@@ -450,7 +467,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 </div>
               </div>
             )}
-            
+
             {/* 订阅信息 */}
             <div className="mt-6 pt-5 border-t border-border">
               <div className="flex items-center gap-2 mb-4">
@@ -615,7 +632,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
 
           {/* 账户可用模型 */}
           <div className={`px-6 py-4`}>
-            <div 
+            <div
               className="flex items-center gap-2 cursor-pointer select-none"
               onClick={() => setModelsExpanded(!modelsExpanded)}
             >
@@ -653,18 +670,18 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[320px] overflow-y-auto pr-1">
-                  {models.map((model, index) => (
-                    <div 
-                      key={model.modelId} 
+                  {models.map((model) => (
+                    <div
+                      key={model.modelId}
                       className={`group p-3 bg-background rounded-xl border shadow-sm hover:shadow-md hover:border-primary/30 transition-all duration-200 ${
-                        index === 0 ? 'ring-1 ring-primary/20' : ''
+                        model.isDefault ? 'ring-1 ring-primary/20' : ''
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5">
                             <div className={`w-2 h-2 rounded-full shrink-0 ${
-                              index === 0 ? 'bg-primary animate-pulse' : 'bg-muted-foreground/40'
+                              model.isDefault ? 'bg-primary animate-pulse' : 'bg-muted-foreground/40'
                             }`} />
                             <code className="text-xs font-bold text-foreground truncate">
                               {model.modelId}
@@ -678,34 +695,54 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-                        <div className="flex items-center gap-1.5">
-                          {model.supportedInputTypes?.includes('TEXT') && (
-                            <span className="text-[10px] px-1.5 h-5 bg-blue-500/10 text-blue-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
-                              <FileText size={12} />Text
-                            </span>
-                          )}
-                          {model.supportedInputTypes?.includes('IMAGE') && (
-                            <span className="text-[10px] px-1.5 h-5 bg-purple-500/10 text-purple-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
-                              <ImageIcon size={12} />Image
-                            </span>
-                          )}
-                          {model.rateMultiplier !== undefined && (
-                            <span className="text-[10px] px-1.5 h-5 bg-amber-500/10 text-amber-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
-                              <Zap size={12} />{model.rateMultiplier}x
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
-                          <Hash size={12} />
-                          <span className="text-green-600">
-                            {model.tokenLimits?.maxInputTokens ? (model.tokenLimits.maxInputTokens >= 1000000 ? `${(model.tokenLimits.maxInputTokens / 1000000).toFixed(0)}M` : `${(model.tokenLimits.maxInputTokens / 1000).toFixed(0)}K`) : '-'}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-border/50">
+                        {model.provider && (
+                          <span className="text-[10px] px-1.5 h-5 bg-slate-500/10 text-slate-600 dark:text-slate-300 border-0 rounded inline-flex items-center gap-0.5 font-medium">
+                            {model.provider}
                           </span>
-                          <span>/</span>
-                          <span className="text-orange-600">
-                            {model.tokenLimits?.maxOutputTokens ? (model.tokenLimits.maxOutputTokens >= 1000000 ? `${(model.tokenLimits.maxOutputTokens / 1000000).toFixed(0)}M` : `${(model.tokenLimits.maxOutputTokens / 1000).toFixed(0)}K`) : '-'}
+                        )}
+                        {model.supportedInputTypes?.includes('TEXT') && (
+                          <span className="text-[10px] px-1.5 h-5 bg-blue-500/10 text-blue-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
+                            <FileText size={12} />Text
                           </span>
-                        </div>
+                        )}
+                        {model.supportedInputTypes?.includes('IMAGE') && (
+                          <span className="text-[10px] px-1.5 h-5 bg-purple-500/10 text-purple-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
+                            <ImageIcon size={12} />Image
+                          </span>
+                        )}
+                        {model.rateMultiplier !== undefined && model.rateMultiplier !== null && (
+                          <span className="text-[10px] px-1.5 h-5 bg-amber-500/10 text-amber-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
+                            <Zap size={12} />{model.rateMultiplier}x{model.rateUnit ? ` ${model.rateUnit}` : ''}
+                          </span>
+                        )}
+                        <span className="text-[10px] px-1.5 h-5 bg-emerald-500/10 text-emerald-600 border-0 rounded inline-flex items-center gap-0.5 font-medium font-mono">
+                          <Hash size={12} />{formatTokenLimit(model.tokenLimits?.maxInputTokens)} / {formatTokenLimit(model.tokenLimits?.maxOutputTokens)}
+                        </span>
+                        {model.promptCaching?.supportsPromptCaching !== undefined && model.promptCaching?.supportsPromptCaching !== null && (
+                          <span className={`text-[10px] px-1.5 h-5 border-0 rounded inline-flex items-center gap-0.5 font-medium ${
+                            model.promptCaching.supportsPromptCaching
+                              ? 'bg-green-500/10 text-green-600'
+                              : 'bg-muted text-muted-foreground'
+                          }`}>
+                            Cache {model.promptCaching.supportsPromptCaching ? 'On' : 'Off'}
+                          </span>
+                        )}
+                        {model.contextWindow && (
+                          <span className="text-[10px] px-1.5 h-5 bg-cyan-500/10 text-cyan-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
+                            Context {formatTokenLimit(model.contextWindow)}
+                          </span>
+                        )}
+                        {model.effortLevels?.length ? (
+                          <span className="text-[10px] px-1.5 h-5 bg-indigo-500/10 text-indigo-600 border-0 rounded inline-flex items-center gap-0.5 font-medium">
+                            Effort {formatEffortLabel(model)}
+                          </span>
+                        ) : null}
+                        {model.capabilities?.length ? (
+                          <span className="text-[10px] px-1.5 h-5 bg-muted text-muted-foreground border-0 rounded inline-flex items-center gap-0.5 font-medium max-w-full truncate">
+                            Cap {formatModelList(model.capabilities)}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   ))}

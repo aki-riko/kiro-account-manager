@@ -20,7 +20,7 @@ import { getThemeAccent } from '../KiroConfig/themeAccent'
 import { Account, GroupDefinition } from '../../../types/account'
 
 const PRESET_COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', 
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
   '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
 ]
 
@@ -138,7 +138,9 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
     refreshToken: account.refreshToken || '',
     clientId: account.clientId || '',
     clientSecret: account.clientSecret || '',
-    machineId: account.machineId || ''})
+    machineId: account.machineId || '',
+    addedAt: account.addedAt || '',
+    expiresAt: account.expiresAt || ''})
 
   const [selectedTagIds, setSelectedTagIds] = useState((account.tagLinks || []).map(link => link.tagId))
   const [selectedGroupId, setSelectedGroupId] = useState(account.groupId || '')
@@ -146,18 +148,24 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
   const [saving, setSaving] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
-  
+
+  const formatResetTime = (value?: string | number | null) => {
+    if (!value) return undefined
+    const timestamp = typeof value === 'number' && value < 1e12 ? value * 1000 : value
+    return new Date(timestamp).toLocaleString()
+  }
+
   // 账号信息状态（验证后更新）
   const [accountInfo, setAccountInfo] = useState<{
     email: string;
     subscriptionType: string;
     usage: { current: number; limit: number };
-    daysRemaining?: number;
+    resetTime?: string;
   } | null>(null)
 
   useEffect(() => {
     getGroups().then(setGroups).catch(() => {})
-    
+
     // 初始化账号信息
     if (account.usageData) {
       const usageData = account.usageData
@@ -165,14 +173,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
       const subscriptionInfo = usageData.subscriptionInfo
       const breakdown = usageData.usageBreakdownList?.[0]
       const nextReset = usageData.nextDateReset
-      
-      // 计算剩余天数
-      let daysRemaining: number | undefined
-      if (nextReset) {
-        const resetDate = new Date(typeof nextReset === 'string' ? nextReset : (nextReset < 1e12 ? nextReset * 1000 : nextReset))
-        daysRemaining = Math.max(0, Math.ceil((resetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-      }
-      
+
       setAccountInfo({
         email: account.email || userInfo.email || '',
         subscriptionType: subscriptionInfo?.subscriptionTitle || subscriptionInfo?.type || 'Free',
@@ -180,7 +181,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
           current: breakdown?.currentUsage ?? 0,
           limit: breakdown?.usageLimit ?? 0
         },
-        daysRemaining
+        resetTime: formatResetTime(nextReset)
       })
     }
   }, [account])
@@ -231,13 +232,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
       const subscriptionInfo = usageData.subscriptionInfo
       const verifyBreakdown = usageData.usageBreakdownList?.[0]
       const verifyNextReset = usageData.nextDateReset
-      
-      let verifyDaysRemaining: number | undefined
-      if (verifyNextReset) {
-        const resetDate = new Date(typeof verifyNextReset === 'string' ? verifyNextReset : (verifyNextReset < 1e12 ? verifyNextReset * 1000 : verifyNextReset))
-        verifyDaysRemaining = Math.max(0, Math.ceil((resetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-      }
-      
+
       setAccountInfo({
         email: userInfo.email || '',
         subscriptionType: subscriptionInfo?.subscriptionTitle || subscriptionInfo?.type || 'Free',
@@ -245,7 +240,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
           current: verifyBreakdown?.currentUsage ?? 0,
           limit: verifyBreakdown?.usageLimit ?? 0
         },
-        daysRemaining: verifyDaysRemaining
+        resetTime: formatResetTime(verifyNextReset)
       })
     } catch (e) {
       await showError(t('editAccount.verifyFailed'), String(e))
@@ -262,7 +257,9 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
         label: form.label || null,
         accessToken: form.accessToken || null,
         refreshToken: form.refreshToken || null,
-        machineId: form.machineId || null}
+        machineId: form.machineId || null,
+        addedAt: form.addedAt || null,
+        expiresAt: form.expiresAt}
       if (isIdCAccount) {
         params.clientId = form.clientId || null
         params.clientSecret = form.clientSecret || null
@@ -330,8 +327,8 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
                   </span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground text-xs block mb-1">剩余天数</span>
-                  <span className="font-medium">{accountInfo.daysRemaining ?? '-'} 天</span>
+                  <span className="text-muted-foreground text-xs block mb-1">重置时间</span>
+                  <span className="font-medium">{accountInfo.resetTime ?? '-'}</span>
                 </div>
               </div>
             </div>
@@ -349,6 +346,56 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
               onChange={(e) => setForm({ ...form, label: e.target.value })}
               className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={`block text-sm font-medium text-foreground mb-2`}>
+                添加时间
+              </label>
+              <input
+                type="text"
+                placeholder="YYYY/MM/DD HH:mm:ss"
+                value={form.addedAt}
+                onChange={(e) => setForm({ ...form, addedAt: e.target.value })}
+                className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none font-mono`}
+              />
+            </div>
+            <div>
+              <label className={`block text-sm font-medium text-foreground mb-2`}>
+                Token 到期时间
+              </label>
+              <input
+                type="text"
+                placeholder="YYYY/MM/DD HH:mm:ss"
+                value={form.expiresAt}
+                onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
+                className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none font-mono`}
+              />
+            </div>
+          </div>
+
+          {/* Access Token */}
+          <div>
+            <label className={`block text-sm font-medium text-foreground mb-2`}>
+              Access Token
+            </label>
+            <div className="relative">
+              <textarea
+                placeholder="access token"
+                value={form.accessToken}
+                onChange={(e) => setForm({ ...form, accessToken: e.target.value })}
+                rows={3}
+                className={`w-full px-4 py-3 pr-10 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 resize-none outline-none font-mono`}
+              />
+              <button
+                onClick={() => handleCopy(form.accessToken, 'accessToken')}
+                className={`absolute right-3 top-3 p-1.5 rounded-lg hover:bg-muted/50 cursor-pointer`}
+                title={copiedField === 'accessToken' ? '已复制' : '复制'}
+              >
+                {copiedField === 'accessToken' ? <Check size={16} className="text-green-500" /> : <Copy size={16} className={"text-muted-foreground"} />}
+              </button>
+            </div>
           </div>
 
           {/* Refresh Token */}
@@ -480,9 +527,9 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
 
           {/* 标签 */}
           <div>
-            <TagSelector 
-              selectedTagIds={selectedTagIds} 
-              onChange={setSelectedTagIds} 
+            <TagSelector
+              selectedTagIds={selectedTagIds}
+              onChange={setSelectedTagIds}
             />
           </div>
         </div>

@@ -3,19 +3,20 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递 State
 #![allow(clippy::too_many_lines)] // 命令文件包含多个函数
 
-use crate::core::account::Account;
+use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata};
 use crate::auth::{refresh_token_desktop, User};
 use crate::commands::account_models::{
     clear_available_models_cache, fetch_all_available_models, read_available_models_cache,
     write_available_models_cache, ListAvailableModelsResponse,
 };
 use crate::commands::common::{
-    calc_expires_at, extract_user_info, find_account_by_id,
-    find_existing_account_idx, get_enterprise_usage_with_region_probe, get_usage_by_account,
-    get_usage_by_provider, is_auth_error_message, is_token_expired, is_token_expiring_soon,
-    lock_store, refresh_token_by_provider, save_store, token_needs_refresh, update_account_status, RefreshResult,
+    calc_expires_at, extract_user_info, find_account_by_id, find_existing_account_idx,
+    get_enterprise_usage_with_region_probe, get_usage_by_account, get_usage_by_provider,
+    is_auth_error_message, is_token_expired, is_token_expiring_soon, lock_store,
+    refresh_token_by_provider, save_store, token_needs_refresh, update_account_status,
+    RefreshResult,
 };
-use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata};
+use crate::core::account::Account;
 use crate::state::AppState;
 use crate::utils::client_id_hash::{extract_start_url_from_client_secret, normalize_start_url};
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,8 @@ pub struct UpdateAccountParams {
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     pub machine_id: Option<String>,
+    pub added_at: Option<String>,
+    pub expires_at: Option<String>,
     pub enabled: Option<bool>,
 }
 
@@ -174,7 +177,12 @@ pub async fn sync_account(
                         .machine_id
                         .as_ref()
                         .ok_or("Enterprise account missing machine_id")?;
-                    match get_enterprise_usage_with_region_probe(&refreshed.access_token, machine_id).await {
+                    match get_enterprise_usage_with_region_probe(
+                        &refreshed.access_token,
+                        machine_id,
+                    )
+                    .await
+                    {
                         Ok((result, region)) => {
                             detected_region = Some(region);
                             Ok(result)
@@ -242,7 +250,10 @@ pub async fn sync_account(
             a.sso_session_id = result.sso_session_id.clone();
             a.expires_at = Some(calc_expires_at(result.expires_in));
 
-            log::info!("Token refreshed successfully for account: {}", email_display);
+            log::info!(
+                "Token refreshed successfully for account: {}",
+                email_display
+            );
         }
         // 如果探测到了新的区域，更新账户的 region 字段
         if let Some(region) = detected_region {
@@ -428,7 +439,7 @@ pub async fn verify_account(
             // 更新 token
             account.access_token = Some(new_access_token.clone()); // ✅ 这里必须 clone，因为后面还要用
             account.refresh_token = Some(new_refresh_token.clone()); // ✅ 这里必须 clone，因为后面还要用
-            // 更新 usage_data 和状态（检测封禁）
+                                                                     // 更新 usage_data 和状态（检测封禁）
             account.usage_data = Some(usage_result.usage_data);
             update_account_status(account, usage_result.is_banned, usage_result.is_auth_error);
             save_store(&store)?;
@@ -545,7 +556,11 @@ pub async fn add_account_by_social(
         account.auth_method = Some("social".to_string());
         account.user_id = user_id;
         account.usage_data = Some(usage_result.usage_data);
-        update_account_status(&mut account, usage_result.is_banned, usage_result.is_auth_error);
+        update_account_status(
+            &mut account,
+            usage_result.is_banned,
+            usage_result.is_auth_error,
+        );
         // 使用传入的 machine_id，没有则自动生成
         account.machine_id =
             machine_id.or_else(|| Some(uuid::Uuid::new_v4().to_string().to_lowercase())); // ✅ 避免 clone
@@ -826,7 +841,9 @@ async fn add_account_by_idc_internal(
 
         // 企业账号使用多区域探测
         let usage_result = if is_enterprise {
-            let (result, detected_region) = get_enterprise_usage_with_region_probe(&auth_result.access_token, &machine_id).await?;
+            let (result, detected_region) =
+                get_enterprise_usage_with_region_probe(&auth_result.access_token, &machine_id)
+                    .await?;
             region = detected_region;
             result
         } else {
@@ -844,46 +861,46 @@ async fn add_account_by_idc_internal(
         )
     } else if let Some(at) = params.access_token {
         // BuilderId 且有 access_token 时，先尝试使用
-            // BuilderId 使用原有逻辑
-            match get_usage_by_provider(&params.provider_id, &at).await {
-                Ok(result) if result.is_auth_error => {
-                    // 401 了，刷新 token
-                    let metadata = RefreshMetadata {
-                        client_id: Some(params.client_id.clone()),
-                        client_secret: Some(params.client_secret.clone()),
-                        region: Some(region.clone()),
-                        ..Default::default()
-                    };
-                    let idc_provider =
-                        IdcProvider::new(&params.provider_id, &region, start_url.clone());
-                    let auth_result = idc_provider
-                        .refresh_token(&params.refresh_token, metadata)
-                        .await?;
-                    let new_usage =
-                        get_usage_by_provider(&params.provider_id, &auth_result.access_token).await?;
-                    let expires_at = calc_expires_at(auth_result.expires_in);
-                    (
-                        auth_result.access_token,
-                        auth_result.refresh_token,
-                        new_usage,
-                        expires_at,
-                        auth_result.id_token,
-                        auth_result.sso_session_id,
-                    )
-                }
-                Ok(result) => {
-                    // access_token 有效，不需要刷新
-                    (
-                        at,
-                        params.refresh_token.clone(),
-                        result,
-                        String::new(),
-                        None,
-                        None,
-                    )
-                }
-                Err(e) => return Err(e),
+        // BuilderId 使用原有逻辑
+        match get_usage_by_provider(&params.provider_id, &at).await {
+            Ok(result) if result.is_auth_error => {
+                // 401 了，刷新 token
+                let metadata = RefreshMetadata {
+                    client_id: Some(params.client_id.clone()),
+                    client_secret: Some(params.client_secret.clone()),
+                    region: Some(region.clone()),
+                    ..Default::default()
+                };
+                let idc_provider =
+                    IdcProvider::new(&params.provider_id, &region, start_url.clone());
+                let auth_result = idc_provider
+                    .refresh_token(&params.refresh_token, metadata)
+                    .await?;
+                let new_usage =
+                    get_usage_by_provider(&params.provider_id, &auth_result.access_token).await?;
+                let expires_at = calc_expires_at(auth_result.expires_in);
+                (
+                    auth_result.access_token,
+                    auth_result.refresh_token,
+                    new_usage,
+                    expires_at,
+                    auth_result.id_token,
+                    auth_result.sso_session_id,
+                )
             }
+            Ok(result) => {
+                // access_token 有效，不需要刷新
+                (
+                    at,
+                    params.refresh_token.clone(),
+                    result,
+                    String::new(),
+                    None,
+                    None,
+                )
+            }
+            Err(e) => return Err(e),
+        }
     } else {
         // 没有 access_token，直接刷新
         let metadata = RefreshMetadata {
@@ -899,7 +916,9 @@ async fn add_account_by_idc_internal(
 
         // 企业账号使用多区域探测
         let usage_result = if is_enterprise {
-            let (result, detected_region) = get_enterprise_usage_with_region_probe(&auth_result.access_token, &machine_id).await?;
+            let (result, detected_region) =
+                get_enterprise_usage_with_region_probe(&auth_result.access_token, &machine_id)
+                    .await?;
             region = detected_region;
             result
         } else {
@@ -997,7 +1016,11 @@ async fn add_account_by_idc_internal(
             account.id_token = id_token;
             account.sso_session_id = sso_session_id;
             account.usage_data = Some(usage_result.usage_data);
-            update_account_status(&mut account, usage_result.is_banned, usage_result.is_auth_error);
+            update_account_status(
+                &mut account,
+                usage_result.is_banned,
+                usage_result.is_auth_error,
+            );
             account.machine_id = Some(
                 params
                     .machine_id
@@ -1081,7 +1104,11 @@ async fn add_account_by_idc_internal(
             account.id_token = id_token;
             account.sso_session_id = sso_session_id;
             account.usage_data = Some(usage_result.usage_data);
-            update_account_status(&mut account, usage_result.is_banned, usage_result.is_auth_error);
+            update_account_status(
+                &mut account,
+                usage_result.is_banned,
+                usage_result.is_auth_error,
+            );
             account.machine_id = Some(
                 params
                     .machine_id
@@ -1131,6 +1158,20 @@ pub fn update_account(
         // 机器码
         if let Some(mid) = params.machine_id {
             store.accounts[idx].machine_id = Some(mid);
+        }
+        if let Some(added_at) = params.added_at {
+            let trimmed = added_at.trim();
+            if !trimmed.is_empty() {
+                store.accounts[idx].added_at = trimmed.to_string();
+            }
+        }
+        if let Some(expires_at) = params.expires_at {
+            let trimmed = expires_at.trim();
+            store.accounts[idx].expires_at = if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            };
         }
         // 启用/禁用
         if let Some(enabled) = params.enabled {
@@ -1257,16 +1298,13 @@ pub async fn list_available_models(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
     id: String,
-    model_provider: Option<String>,
     force_refresh: Option<bool>,
 ) -> Result<ListAvailableModelsResponse, String> {
     let mut account = find_account_by_id(&state, &id)?;
 
-    if let Some(cached_response) = read_available_models_cache(
-        &account,
-        model_provider.as_deref(),
-        force_refresh.unwrap_or(false),
-    ) {
+    if let Some(cached_response) =
+        read_available_models_cache(&account, force_refresh.unwrap_or(false))
+    {
         return Ok(cached_response);
     }
 
@@ -1275,16 +1313,17 @@ pub async fn list_available_models(
         .clone()
         .ok_or("账号缺少 access_token，请先刷新 Token")?;
 
-    match fetch_all_available_models(&account, &initial_access_token, model_provider.as_deref())
-        .await
-    {
-        Ok(response) => {
+    match fetch_all_available_models(&account, &initial_access_token).await {
+        Ok(result) => {
             let mut store = lock_store(&state.store, "store")?;
             if let Some(stored_account) = store.accounts.iter_mut().find(|item| item.id == id) {
-                write_available_models_cache(stored_account, model_provider.as_deref(), &response)?;
+                if stored_account.profile_arn.as_deref().map(str::trim).filter(|value| !value.is_empty()).is_none() {
+                    stored_account.profile_arn = result.resolved_profile_arn.clone();
+                }
+                write_available_models_cache(stored_account, &result.response)?;
                 save_store(&store)?;
             }
-            Ok(response)
+            Ok(result.response)
         }
         Err(error) if is_auth_error_message(&error) => {
             let refresh = refresh_token_by_provider(&account).await?;
@@ -1300,24 +1339,24 @@ pub async fn list_available_models(
                 apply_refreshed_account_tokens(stored_account, &refresh);
                 save_store(&store)?;
             }
-            let response = fetch_all_available_models(
-                &account,
-                &refresh.access_token,
-                model_provider.as_deref(),
-            )
-            .await?;
+            let result = fetch_all_available_models(&account, &refresh.access_token).await?;
             {
                 let mut store = lock_store(&state.store, "store")?;
                 if let Some(stored_account) = store.accounts.iter_mut().find(|item| item.id == id) {
-                    write_available_models_cache(
-                        stored_account,
-                        model_provider.as_deref(),
-                        &response,
-                    )?;
+                    if stored_account
+                        .profile_arn
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .is_none()
+                    {
+                        stored_account.profile_arn = result.resolved_profile_arn.clone();
+                    }
+                    write_available_models_cache(stored_account, &result.response)?;
                     save_store(&store)?;
                 }
             }
-            Ok(response)
+            Ok(result.response)
         }
         Err(error) if error.starts_with("BANNED:") => {
             // 更新账号状态为封禁
@@ -1415,10 +1454,7 @@ pub fn check_token_status(
         .find(|a| a.id == id)
         .ok_or("Account not found")?;
 
-    let expires_at = account
-        .expires_at
-        .as_ref()
-        .ok_or("No expiration time")?;
+    let expires_at = account.expires_at.as_ref().ok_or("No expiration time")?;
 
     let status = if is_token_expired(expires_at) {
         "expired"
@@ -1490,8 +1526,8 @@ pub async fn refresh_all_expiring_tokens(
     only_expiring: Option<bool>,
     max_concurrent: Option<usize>,
 ) -> Result<RefreshAllResponse, String> {
-    use tokio::sync::Semaphore;
     use std::sync::Arc;
+    use tokio::sync::Semaphore;
 
     let only_expiring = only_expiring.unwrap_or(true);
     let max_concurrent = max_concurrent.unwrap_or(3);
@@ -1574,7 +1610,10 @@ pub async fn refresh_all_expiring_tokens(
                     save_store(&store)?;
                 }
 
-                log::info!("Batch refresh: successfully refreshed token for {}", email_display);
+                log::info!(
+                    "Batch refresh: successfully refreshed token for {}",
+                    email_display
+                );
                 successful += 1;
                 results.push(RefreshResultItem {
                     id: account.id,
@@ -1584,7 +1623,11 @@ pub async fn refresh_all_expiring_tokens(
                 });
             }
             Err(e) => {
-                log::error!("Batch refresh: failed to refresh token for {}: {}", email_display, e);
+                log::error!(
+                    "Batch refresh: failed to refresh token for {}: {}",
+                    email_display,
+                    e
+                );
                 failed += 1;
                 results.push(RefreshResultItem {
                     id: account.id,
@@ -1612,7 +1655,7 @@ pub async fn set_overage_status(
     id: String,
     enabled: bool,
 ) -> Result<(), String> {
-    use crate::clients::kiro_q_client::KiroQClient;
+    use crate::clients::kiro_client::KiroClient;
     use crate::core::usage::OverageCapability;
 
     // 1. 从 state 获取账号
@@ -1629,7 +1672,11 @@ pub async fn set_overage_status(
         }
     }
 
-    let access_token = account.access_token.as_ref().ok_or("No access token")?.clone();
+    let access_token = account
+        .access_token
+        .as_ref()
+        .ok_or("No access token")?
+        .clone();
 
     // 2. 检查 token 是否过期，如果过期则刷新
     let final_access_token = if let Some(expires_at) = &account.expires_at {
@@ -1654,7 +1701,7 @@ pub async fn set_overage_status(
 
     // 4. 调用 API（失败后刷新重试）
     let overage_status = if enabled { "ENABLED" } else { "DISABLED" };
-    let client = KiroQClient::new()?;
+    let client = KiroClient::new()?;
 
     let result = client
         .set_user_preference(

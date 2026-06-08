@@ -69,6 +69,41 @@ export interface TagLink {
     linkedAt?: string;
 }
 
+export interface AvailableModelTokenLimits {
+    maxInputTokens?: number | null;
+    maxOutputTokens?: number | null;
+}
+
+export interface AvailableModelPromptCaching {
+    maximumCacheCheckpointsPerRequest?: number | null;
+    minimumTokensPerCacheCheckpoint?: number | null;
+    supportsPromptCaching?: boolean | null;
+}
+
+export interface AvailableModel {
+    modelId: string;
+    modelName: string;
+    description: string;
+    provider?: string | null;
+    capabilities: string[];
+    contextWindow?: number | null;
+    isDefault?: boolean | null;
+    rateMultiplier?: number | null;
+    rateUnit?: string | null;
+    promptCaching?: AvailableModelPromptCaching | null;
+    supportedInputTypes: string[];
+    tokenLimits?: AvailableModelTokenLimits | null;
+    additionalModelRequestFieldsSchema?: unknown | null;
+    effortLevels?: string[];
+    effortSchemaPath?: string;
+}
+
+export interface ListAvailableModelsResponse {
+    availableModels: AvailableModel[];
+    nextToken?: string | null;
+    defaultModel?: AvailableModel | null;
+}
+
 export interface Account {
     id: string;
     email?: string;
@@ -82,17 +117,13 @@ export interface Account {
     usageData?: AccountUsageData;
     availableModelsCache?: {
         cachedAt: number;
-        models?: any[];
-        response?: any;
-        modelProvider?: any;
+        response?: ListAvailableModelsResponse;
     };
     expiresAt?: string;
     status?: string;
     lastError?: string;
     refreshing?: boolean;
     addedAt?: string;
-    quota?: number;
-    used?: number;
     // 扩展字段
     clientId?: string;
     clientSecret?: string;
