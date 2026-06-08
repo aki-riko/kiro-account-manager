@@ -1,9 +1,7 @@
 // 公共工具函数 - 提取重复逻辑
 
+use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata, SocialProvider};
 use crate::core::account::Account;
-use crate::auth::providers::{
-    AuthProvider, IdcProvider, RefreshMetadata, SocialProvider,
-};
 use crate::utils::client_id_hash::calculate_client_id_hash;
 use std::sync::{Mutex, MutexGuard};
 
@@ -33,15 +31,15 @@ pub const KIRO_BUILDER_ID_CLIENT_ID_HASH: &str = "e909a0580879b06ece1202964fbe9d
 /// 用于拦截 Enterprise 账号回退到 BuilderId 默认值的脏数据：Enterprise 必须用
 /// 自己的 `d-xxx` 域名，绝不能落到 `https://view.awsapps.com/start`。
 pub fn is_builder_id_start_url(start_url: &str) -> bool {
-    start_url.trim().trim_end_matches('/')
-        == KIRO_BUILDER_ID_START_URL.trim_end_matches('/')
+    start_url.trim().trim_end_matches('/') == KIRO_BUILDER_ID_START_URL.trim_end_matches('/')
 }
 
 /// 判断给定 clientIdHash 是否就是 BuilderId 的默认 hash（忽略大小写）。
 ///
 /// 同样用于拦截 Enterprise 误用 BuilderId 默认 hash（`e909a058...`）。
 pub fn is_builder_id_client_id_hash(hash: &str) -> bool {
-    hash.trim().eq_ignore_ascii_case(KIRO_BUILDER_ID_CLIENT_ID_HASH)
+    hash.trim()
+        .eq_ignore_ascii_case(KIRO_BUILDER_ID_CLIENT_ID_HASH)
 }
 
 /// 校验 Enterprise 账号解析出的 clientIdHash 合法：非空、且不是 BuilderId 默认值。
@@ -83,18 +81,12 @@ pub fn resolve_idc_client_id_hash(
     start_url: Option<&str>,
 ) -> Result<String, String> {
     // 1. 已存 hash 优先
-    let hash = if let Some(hash) = client_id_hash
-        .map(str::trim)
-        .filter(|h| !h.is_empty())
-    {
+    let hash = if let Some(hash) = client_id_hash.map(str::trim).filter(|h| !h.is_empty()) {
         hash.to_string()
     } else {
         // 2. 按 provider 兜底
         match provider {
-            "BuilderId" => match start_url
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            {
+            "BuilderId" => match start_url.map(str::trim).filter(|s| !s.is_empty()) {
                 Some(url) => calculate_client_id_hash(url),
                 None => KIRO_BUILDER_ID_CLIENT_ID_HASH.to_string(),
             },
@@ -116,11 +108,6 @@ pub fn resolve_idc_client_id_hash(
     Ok(hash)
 }
 
-/// 根据 provider 决定默认 profileArn（账号自身没设置时用）
-///
-/// 与参考项目 chaogei `resolveProfileArn` 行为一致：
-/// - Github / Google（Social 登录）→ Social ARN
-/// - 其他（包括 BuilderId、Enterprise、Internal、None）→ BuilderId ARN
 pub fn resolve_default_profile_arn(provider: Option<&str>) -> &'static str {
     match provider {
         Some("Github") | Some("Google") => KIRO_SOCIAL_PROFILE_ARN,
@@ -128,13 +115,55 @@ pub fn resolve_default_profile_arn(provider: Option<&str>) -> &'static str {
     }
 }
 
+/// 统一的 profileArn 解析逻辑（用于 ListAvailableModels 等 API 调用）
+///
+/// BuilderId 账号本地常见为 `profileArn=null`，但真实 IDE 抓包会带固定
+/// BuilderId profileArn；不带时上游会返回 `Invalid profileArn`。
+/// 因此这里对空 profileArn 降级到默认值（根据 provider）。
+///
+/// ## 降级策略
+/// - Enterprise: 保持 None（Enterprise 不需要 profileArn）
+/// - 其他 provider: 账号 profileArn → 默认 profileArn（根据 provider）
+pub fn resolve_profile_arn_with_fallback(
+    account_profile_arn: Option<&str>,
+    provider: Option<&str>,
+) -> Option<String> {
+    // 过滤空白字符串
+    let account_profile_arn = account_profile_arn
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    match provider {
+        Some("Enterprise") => None,
+        provider => account_profile_arn
+            .map(String::from)
+            .or_else(|| Some(resolve_default_profile_arn(provider).to_string())),
+    }
+}
+
+/// 统一解析带“优先候选”的 profileArn。
+///
+/// 用于 token refresh 之后的调用：上游刷新结果返回的 profileArn 优先，其次账号保存值，
+/// 最后按 provider 降级到默认 profileArn；Enterprise 始终返回 None。
+pub fn resolve_profile_arn_from_candidates(
+    preferred_profile_arn: Option<&str>,
+    account_profile_arn: Option<&str>,
+    provider: Option<&str>,
+) -> Option<String> {
+    let preferred_profile_arn = preferred_profile_arn
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let account_profile_arn = account_profile_arn
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    resolve_profile_arn_with_fallback(preferred_profile_arn.or(account_profile_arn), provider)
+}
+
 // ===== Mutex 锁辅助 =====
 
 /// 锁定 AppState 中任意 `Mutex<T>`，统一错误信息
-pub fn lock_store<'a, T>(
-    mutex: &'a Mutex<T>,
-    ctx: &str,
-) -> Result<MutexGuard<'a, T>, String> {
+pub fn lock_store<'a, T>(mutex: &'a Mutex<T>, ctx: &str) -> Result<MutexGuard<'a, T>, String> {
     mutex
         .lock()
         .map_err(|_| format!("Failed to acquire {ctx} lock"))
@@ -154,9 +183,9 @@ pub fn find_account_by_id(
         .ok_or_else(|| format!("账号未找到 (id={id})"))
 }
 
-// ===== 调用 Kiro Q API 时的上下文解析 =====
+// ===== 调用 Kiro Management API 时的上下文解析 =====
 
-/// 调用 Kiro Q API 需要的三件套：machine_id / region / profile_arn
+/// 调用 Kiro Management API 需要的三件套：machine_id / region / profile_arn
 ///
 /// 解析规则：
 /// - machine_id：账号自带（非空）→ 否则系统 machine_guid
@@ -168,24 +197,24 @@ pub struct KiroCallContext {
     pub profile_arn: Option<String>,
 }
 
-pub fn resolve_kiro_call_context(account: &Account, fallback_region: &str) -> KiroCallContext {
-    use crate::clients::http_client::resolve_kiro_upstream_region;
+/// 从账号 machine_id 解析出有效的 machine_id，空值时回退到系统机器码
+pub fn resolve_machine_id(account_machine_id: Option<String>) -> String {
     use crate::commands::machine_guid::get_machine_id;
 
-    let machine_id = account
-        .machine_id
-        .clone()
+    account_machine_id
         .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(get_machine_id);
+        .unwrap_or_else(get_machine_id)
+}
 
-    let profile_arn = match account.provider.as_deref() {
-        Some("Enterprise") => None,
-        provider => account
-            .profile_arn
-            .clone()
-            .filter(|s| !s.trim().is_empty())
-            .or_else(|| Some(resolve_default_profile_arn(provider).to_string())),
-    };
+pub fn resolve_kiro_call_context(account: &Account, fallback_region: &str) -> KiroCallContext {
+    use crate::clients::http_client::resolve_kiro_upstream_region;
+
+    let machine_id = resolve_machine_id(account.machine_id.clone());
+
+    let profile_arn = resolve_profile_arn_with_fallback(
+        account.profile_arn.as_deref(),
+        account.provider.as_deref(),
+    );
 
     let region = resolve_kiro_upstream_region(
         profile_arn.as_deref(),
@@ -193,7 +222,11 @@ pub fn resolve_kiro_call_context(account: &Account, fallback_region: &str) -> Ki
         fallback_region,
     );
 
-    KiroCallContext { machine_id, region, profile_arn }
+    KiroCallContext {
+        machine_id,
+        region,
+        profile_arn,
+    }
 }
 
 // ===== 时间常量（参考 Kiro IDE 源码）=====
@@ -221,14 +254,14 @@ pub const REFRESH_LOOP_INTERVAL_SECONDS: u64 = 60;
 // ===== Token 过期检查函数 =====
 
 /// 检查 token 是否即将过期（需要刷新）
-/// 
+///
 /// 在 token 过期前 10 分钟返回 true，用于触发提前刷新
 pub fn is_token_expiring_soon(expires_at: &str) -> bool {
     is_token_expired_within_seconds(expires_at, AUTH_TOKEN_REFRESH_BEFORE_EXPIRY_SECONDS)
 }
 
 /// 检查 token 是否已过期（带容错时间）
-/// 
+///
 /// 在 token 过期前 3 分钟返回 true，用于判断 token 是否真正不可用
 pub fn is_token_expired(expires_at: &str) -> bool {
     is_token_expired_within_seconds(expires_at, AUTH_TOKEN_INVALIDATION_OFFSET_SECONDS)
@@ -381,53 +414,17 @@ pub async fn get_usage_by_account(
     account: &crate::core::account::Account,
     access_token: &str,
 ) -> Result<UsageResult, String> {
-    use crate::clients::http_client::resolve_kiro_upstream_region;
-    use crate::clients::kiro_q_client::KiroQClient;
-    use crate::commands::machine_guid::get_machine_id;
+    use crate::clients::kiro_client::KiroClient;
 
-    let machine_id = account
-        .machine_id
-        .clone()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(get_machine_id);
+    let ctx = resolve_kiro_call_context(account, "us-east-1");
 
-    let region = resolve_kiro_upstream_region(
-        account.profile_arn.as_deref(),
-        account.region.as_deref(),
-        "us-east-1",
-    );
-
-    // 为 BuilderId 和 social 账号设置默认 profile_arn（参考 Kiro IDE 源码）
-    let provider = account.provider.as_deref().unwrap_or("Google");
-    let profile_arn = match provider {
-        "BuilderId" => {
-            // BuilderId 优先使用账号自带的，否则使用默认值
-            account
-                .profile_arn
-                .as_deref()
-                .or(Some(KIRO_BUILDER_ID_PROFILE_ARN))
-        }
-        "Github" | "Google" => {
-            // Social 账号优先使用账号自带的，否则使用默认值
-            account
-                .profile_arn
-                .as_deref()
-                .or(Some(KIRO_SOCIAL_PROFILE_ARN))
-        }
-        "Enterprise" => {
-            // Enterprise 账号不使用 profile_arn
-            None
-        }
-        _ => account.profile_arn.as_deref(),
-    };
-
-    let client = KiroQClient::new()?;
+    let client = KiroClient::new()?;
     let usage_call = client
         .get_usage_limits(
             access_token,
-            &machine_id,
-            &region,
-            profile_arn,
+            &ctx.machine_id,
+            &ctx.region,
+            ctx.profile_arn.as_deref(),
             account.auth_method.as_deref(),
             account.provider.as_deref(),
         )
@@ -437,20 +434,21 @@ pub async fn get_usage_by_account(
     // 因为某些封禁状态下 getUsageLimits 会正常返回，但 ListAvailableModels 会返回 403
     let mut result = parse_usage_result(usage_call)?;
 
-    if !result.is_banned && profile_arn.is_some() {
+    if !result.is_banned && ctx.profile_arn.is_some() {
         match client
             .list_available_models(
                 access_token,
-                &machine_id,
-                &region,
-                profile_arn,
-                None,
-                None,
+                &ctx.machine_id,
+                &ctx.region,
+                ctx.profile_arn.as_deref(),
             )
             .await
         {
             Err(e) if e.starts_with("BANNED:") => {
-                log::warn!("[get_usage_by_account] ListAvailableModels 检测到封禁: {}", e);
+                log::warn!(
+                    "[get_usage_by_account] ListAvailableModels 检测到封禁: {}",
+                    e
+                );
                 result.is_banned = true;
             }
             _ => {
@@ -470,10 +468,7 @@ pub async fn get_usage_by_provider(
     use crate::commands::machine_guid::get_machine_id;
 
     // 为了兼容旧调用，创建一个临时账号对象
-    let mut temp_account = crate::core::account::Account::new(
-        String::new(),
-        String::new(),
-    );
+    let mut temp_account = crate::core::account::Account::new(String::new(), String::new());
     temp_account.provider = Some(provider.to_string());
     temp_account.machine_id = Some(get_machine_id());
 
@@ -493,9 +488,9 @@ pub async fn get_enterprise_usage_with_region_probe(
     access_token: &str,
     machine_id: &str,
 ) -> Result<(UsageResult, String), String> {
-    use crate::clients::kiro_q_client::KiroQClient;
+    use crate::clients::kiro_client::KiroClient;
 
-    let client = KiroQClient::new()?;
+    let client = KiroClient::new()?;
     let result = client
         .get_usage_limits_with_region_probe(access_token, machine_id)
         .await;
@@ -568,7 +563,11 @@ pub fn calc_expires_at(expires_in: i64) -> String {
 }
 
 /// 根据 `usage_result` 计算账号状态
-pub fn calc_status(is_banned: bool, is_auth_error: bool, usage_data: Option<&serde_json::Value>) -> String {
+pub fn calc_status(
+    is_banned: bool,
+    is_auth_error: bool,
+    usage_data: Option<&serde_json::Value>,
+) -> String {
     if is_banned {
         "banned".to_string()
     } else if is_auth_error {
@@ -643,7 +642,10 @@ pub fn find_existing_account_idx(
     user_id: Option<&String>,
 ) -> Option<usize> {
     if let Some(uid) = user_id {
-        if let Some(idx) = accounts.iter().position(|a| a.user_id.as_ref() == Some(uid)) {
+        if let Some(idx) = accounts
+            .iter()
+            .position(|a| a.user_id.as_ref() == Some(uid))
+        {
             return Some(idx);
         }
     }
@@ -653,14 +655,14 @@ pub fn find_existing_account_idx(
         .position(|a| a.refresh_token.as_ref() == Some(&refresh_token.to_string()))
 }
 
-
-    
-
-
 #[cfg(test)]
 mod tests {
-    use super::{extract_user_info, find_existing_account_idx, parse_usage_result};
-    use super::{is_token_expiring_soon, is_token_expired, is_client_registration_expiring};
+    use super::{
+        extract_user_info, find_existing_account_idx, parse_usage_result,
+        resolve_kiro_call_context, resolve_profile_arn_from_candidates,
+        resolve_profile_arn_with_fallback,
+    };
+    use super::{is_client_registration_expiring, is_token_expired, is_token_expiring_soon};
     use crate::core::account::Account;
 
     #[test]
@@ -685,9 +687,13 @@ mod tests {
         // 默认值本身、带尾斜杠、带空白都应识别为 BuilderId 默认值
         assert!(is_builder_id_start_url("https://view.awsapps.com/start"));
         assert!(is_builder_id_start_url("https://view.awsapps.com/start/"));
-        assert!(is_builder_id_start_url("  https://view.awsapps.com/start  "));
+        assert!(is_builder_id_start_url(
+            "  https://view.awsapps.com/start  "
+        ));
         // 企业 d-xxx 域名不应被误判
-        assert!(!is_builder_id_start_url("https://d-90660ceab3.awsapps.com/start"));
+        assert!(!is_builder_id_start_url(
+            "https://d-90660ceab3.awsapps.com/start"
+        ));
     }
 
     #[test]
@@ -717,13 +723,11 @@ mod tests {
         assert!(ensure_enterprise_client_id_hash("   ").is_err());
         // BuilderId 默认 hash 拒绝（issue #119 根因）
         assert!(
-            ensure_enterprise_client_id_hash("e909a0580879b06ece1202964fbe9dda95ea4ce3")
-                .is_err()
+            ensure_enterprise_client_id_hash("e909a0580879b06ece1202964fbe9dda95ea4ce3").is_err()
         );
         // 企业自己的 d-xxx hash 通过
         assert!(
-            ensure_enterprise_client_id_hash("a96ec6ff09e0c558ceca191cdaa0ff2b0e4e3e35")
-                .is_ok()
+            ensure_enterprise_client_id_hash("a96ec6ff09e0c558ceca191cdaa0ff2b0e4e3e35").is_ok()
         );
     }
 
@@ -792,6 +796,100 @@ mod tests {
     }
 
     #[test]
+    fn resolve_profile_arn_with_fallback_prefers_trimmed_account_value() {
+        let resolved = resolve_profile_arn_with_fallback(
+            Some("  arn:aws:codewhisperer:us-west-2:123456789012:profile/CUSTOM  "),
+            Some("BuilderId"),
+        );
+
+        assert_eq!(
+            resolved.as_deref(),
+            Some("arn:aws:codewhisperer:us-west-2:123456789012:profile/CUSTOM")
+        );
+    }
+
+    #[test]
+    fn resolve_profile_arn_with_fallback_uses_provider_defaults() {
+        assert_eq!(
+            resolve_profile_arn_with_fallback(None, Some("BuilderId")).as_deref(),
+            Some(super::KIRO_BUILDER_ID_PROFILE_ARN)
+        );
+        assert_eq!(
+            resolve_profile_arn_with_fallback(Some("   "), Some("Google")).as_deref(),
+            Some(super::KIRO_SOCIAL_PROFILE_ARN)
+        );
+        assert_eq!(
+            resolve_profile_arn_with_fallback(None, Some("Github")).as_deref(),
+            Some(super::KIRO_SOCIAL_PROFILE_ARN)
+        );
+    }
+
+    #[test]
+    fn resolve_profile_arn_with_fallback_omits_enterprise_profile_arn() {
+        assert_eq!(
+            resolve_profile_arn_with_fallback(
+                Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/IGNORED"),
+                Some("Enterprise"),
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn resolve_profile_arn_from_candidates_prefers_refresh_then_account_then_default() {
+        assert_eq!(
+            resolve_profile_arn_from_candidates(
+                Some(" arn:aws:codewhisperer:us-west-2:123456789012:profile/REFRESHED "),
+                Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/ACCOUNT"),
+                Some("BuilderId"),
+            )
+            .as_deref(),
+            Some("arn:aws:codewhisperer:us-west-2:123456789012:profile/REFRESHED")
+        );
+        assert_eq!(
+            resolve_profile_arn_from_candidates(
+                Some("   "),
+                Some(" arn:aws:codewhisperer:us-east-1:123456789012:profile/ACCOUNT "),
+                Some("BuilderId"),
+            )
+            .as_deref(),
+            Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/ACCOUNT")
+        );
+        assert_eq!(
+            resolve_profile_arn_from_candidates(None, Some("   "), Some("Google")).as_deref(),
+            Some(super::KIRO_SOCIAL_PROFILE_ARN)
+        );
+    }
+
+    #[test]
+    fn resolve_profile_arn_from_candidates_omits_enterprise_even_with_candidates() {
+        assert_eq!(
+            resolve_profile_arn_from_candidates(
+                Some("arn:aws:codewhisperer:us-west-2:123456789012:profile/REFRESHED"),
+                Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/ACCOUNT"),
+                Some("Enterprise"),
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn resolve_kiro_call_context_uses_shared_profile_arn_fallback() {
+        let mut account = Account::new("builder@example.com".to_string(), "builder".to_string());
+        account.provider = Some("BuilderId".to_string());
+        account.machine_id = Some("machine-123".to_string());
+        account.profile_arn = None;
+
+        let ctx = resolve_kiro_call_context(&account, "us-east-1");
+
+        assert_eq!(ctx.machine_id, "machine-123");
+        assert_eq!(
+            ctx.profile_arn.as_deref(),
+            Some(super::KIRO_BUILDER_ID_PROFILE_ARN)
+        );
+    }
+
+    #[test]
     fn parse_usage_result_maps_banned_and_auth_errors_without_failing() {
         let banned = parse_usage_result(Err("BANNED: blocked".to_string())).unwrap();
         assert!(banned.is_banned);
@@ -810,22 +908,34 @@ mod tests {
         let expires_at = (chrono::Local::now() + chrono::Duration::minutes(9))
             .format("%Y/%m/%d %H:%M:%S")
             .to_string();
-        assert!(is_token_expiring_soon(&expires_at), "Token expiring in 9 minutes should return true");
+        assert!(
+            is_token_expiring_soon(&expires_at),
+            "Token expiring in 9 minutes should return true"
+        );
 
         // 测试还有效的 token（11分钟后）
         let expires_at = (chrono::Local::now() + chrono::Duration::minutes(11))
             .format("%Y/%m/%d %H:%M:%S")
             .to_string();
-        assert!(!is_token_expiring_soon(&expires_at), "Token expiring in 11 minutes should return false");
+        assert!(
+            !is_token_expiring_soon(&expires_at),
+            "Token expiring in 11 minutes should return false"
+        );
 
         // 测试已过期的 token
         let expires_at = (chrono::Local::now() - chrono::Duration::minutes(5))
             .format("%Y/%m/%d %H:%M:%S")
             .to_string();
-        assert!(is_token_expiring_soon(&expires_at), "Expired token should return true");
+        assert!(
+            is_token_expiring_soon(&expires_at),
+            "Expired token should return true"
+        );
 
         // 测试无效的时间格式
-        assert!(is_token_expiring_soon("invalid-date"), "Invalid date should return true");
+        assert!(
+            is_token_expiring_soon("invalid-date"),
+            "Invalid date should return true"
+        );
     }
 
     #[test]
@@ -834,22 +944,34 @@ mod tests {
         let expires_at = (chrono::Local::now() - chrono::Duration::minutes(2))
             .format("%Y/%m/%d %H:%M:%S")
             .to_string();
-        assert!(is_token_expired(&expires_at), "Token expired 2 minutes ago should return true");
+        assert!(
+            is_token_expired(&expires_at),
+            "Token expired 2 minutes ago should return true"
+        );
 
         // 测试即将过期的 token（2分钟后，在3分钟容错范围内）
         let expires_at = (chrono::Local::now() + chrono::Duration::minutes(2))
             .format("%Y/%m/%d %H:%M:%S")
             .to_string();
-        assert!(is_token_expired(&expires_at), "Token expiring in 2 minutes should return true (within 3min threshold)");
+        assert!(
+            is_token_expired(&expires_at),
+            "Token expiring in 2 minutes should return true (within 3min threshold)"
+        );
 
         // 测试还有效的 token（5分钟后）
         let expires_at = (chrono::Local::now() + chrono::Duration::minutes(5))
             .format("%Y/%m/%d %H:%M:%S")
             .to_string();
-        assert!(!is_token_expired(&expires_at), "Token expiring in 5 minutes should return false");
+        assert!(
+            !is_token_expired(&expires_at),
+            "Token expiring in 5 minutes should return false"
+        );
 
         // 测试无效的时间格式
-        assert!(is_token_expired("invalid-date"), "Invalid date should return true");
+        assert!(
+            is_token_expired("invalid-date"),
+            "Invalid date should return true"
+        );
     }
 
     #[test]
@@ -858,19 +980,28 @@ mod tests {
         let expires_at = (chrono::Local::now() + chrono::Duration::minutes(10))
             .format("%Y/%m/%d %H:%M:%S")
             .to_string();
-        assert!(is_client_registration_expiring(&expires_at), "Client reg expiring in 10 minutes should return true");
+        assert!(
+            is_client_registration_expiring(&expires_at),
+            "Client reg expiring in 10 minutes should return true"
+        );
 
         // 测试还有效的 client registration（20分钟后）
         let expires_at = (chrono::Local::now() + chrono::Duration::minutes(20))
             .format("%Y/%m/%d %H:%M:%S")
             .to_string();
-        assert!(!is_client_registration_expiring(&expires_at), "Client reg expiring in 20 minutes should return false");
+        assert!(
+            !is_client_registration_expiring(&expires_at),
+            "Client reg expiring in 20 minutes should return false"
+        );
 
         // 测试已过期的 client registration
         let expires_at = (chrono::Local::now() - chrono::Duration::days(1))
             .format("%Y/%m/%d %H:%M:%S")
             .to_string();
-        assert!(is_client_registration_expiring(&expires_at), "Expired client reg should return true");
+        assert!(
+            is_client_registration_expiring(&expires_at),
+            "Expired client reg should return true"
+        );
     }
 
     #[test]

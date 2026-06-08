@@ -1,12 +1,85 @@
+use crate::commands::common::resolve_kiro_call_context;
 use crate::core::account::{Account, AvailableModelsCacheEntry};
-use crate::commands::machine_guid::get_machine_id;
-use crate::clients::http_client::{
-    build_http_client_with_user_agent, build_kiro_custom_user_agent,
-    build_q_service_url, resolve_kiro_upstream_region,
-};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 const AVAILABLE_MODELS_CACHE_TTL_SECONDS: i64 = 30 * 60;
+
+fn null_string_as_default<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+fn null_string_vec_as_default<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<Vec<Option<String>>>::deserialize(deserializer)?
+        .unwrap_or_default()
+        .into_iter()
+        .flatten()
+        .collect())
+}
+
+fn null_models_as_default<'de, D>(deserializer: D) -> Result<Vec<AvailableModel>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::<Vec<AvailableModel>>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+fn extract_string_enum(schema: &serde_json::Value, path: &[&str]) -> Vec<String> {
+    let mut current = schema;
+    for key in path {
+        current = match current.get(*key) {
+            Some(value) => value,
+            None => return Vec::new(),
+        };
+    }
+
+    current
+        .as_array()
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+const EFFORT_SCHEMA_PATHS: &[(&str, &[&str])] = &[
+    (
+        "output_config",
+        &[
+            "properties",
+            "output_config",
+            "properties",
+            "effort",
+            "enum",
+        ],
+    ),
+    (
+        "reasoning",
+        &["properties", "reasoning", "properties", "effort", "enum"],
+    ),
+];
+
+fn extract_effort_metadata(schema: &Option<serde_json::Value>) -> (Vec<String>, Option<String>) {
+    let Some(schema) = schema.as_ref().filter(|value| value.is_object()) else {
+        return (Vec::new(), None);
+    };
+
+    for (schema_path, enum_path) in EFFORT_SCHEMA_PATHS {
+        let levels = extract_string_enum(schema, enum_path);
+        if !levels.is_empty() {
+            return (levels, Some((*schema_path).to_string()));
+        }
+    }
+
+    (Vec::new(), None)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,95 +96,124 @@ pub struct AvailableModelPromptCaching {
     pub supports_prompt_caching: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AvailableModel {
+    #[serde(default, deserialize_with = "null_string_as_default")]
     pub model_id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_string_as_default")]
     pub model_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_string_as_default")]
     pub description: String,
     pub provider: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_string_vec_as_default")]
     pub capabilities: Vec<String>,
     pub context_window: Option<i64>,
     pub is_default: Option<bool>,
     pub rate_multiplier: Option<f64>,
+    #[serde(default)]
     pub rate_unit: Option<String>,
     pub prompt_caching: Option<AvailableModelPromptCaching>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_string_vec_as_default")]
     pub supported_input_types: Vec<String>,
     pub token_limits: Option<AvailableModelTokenLimits>,
+    #[serde(default)]
+    pub additional_model_request_fields_schema: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effort_levels: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort_schema_path: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for AvailableModel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct AvailableModelWire {
+            #[serde(default, deserialize_with = "null_string_as_default")]
+            model_id: String,
+            #[serde(default, deserialize_with = "null_string_as_default")]
+            model_name: String,
+            #[serde(default, deserialize_with = "null_string_as_default")]
+            description: String,
+            provider: Option<String>,
+            #[serde(default, deserialize_with = "null_string_vec_as_default")]
+            capabilities: Vec<String>,
+            context_window: Option<i64>,
+            is_default: Option<bool>,
+            rate_multiplier: Option<f64>,
+            #[serde(default)]
+            rate_unit: Option<String>,
+            prompt_caching: Option<AvailableModelPromptCaching>,
+            #[serde(default, deserialize_with = "null_string_vec_as_default")]
+            supported_input_types: Vec<String>,
+            token_limits: Option<AvailableModelTokenLimits>,
+            #[serde(default)]
+            additional_model_request_fields_schema: Option<serde_json::Value>,
+            #[serde(default)]
+            effort_levels: Vec<String>,
+            #[serde(default)]
+            effort_schema_path: Option<String>,
+        }
+
+        let wire = AvailableModelWire::deserialize(deserializer)?;
+        let (schema_effort_levels, schema_effort_path) =
+            extract_effort_metadata(&wire.additional_model_request_fields_schema);
+
+        Ok(Self {
+            model_id: wire.model_id,
+            model_name: wire.model_name,
+            description: wire.description,
+            provider: wire.provider,
+            capabilities: wire.capabilities,
+            context_window: wire.context_window,
+            is_default: wire.is_default,
+            rate_multiplier: wire.rate_multiplier,
+            rate_unit: wire.rate_unit,
+            prompt_caching: wire.prompt_caching,
+            supported_input_types: wire.supported_input_types,
+            token_limits: wire.token_limits,
+            additional_model_request_fields_schema: wire.additional_model_request_fields_schema,
+            effort_levels: if wire.effort_levels.is_empty() {
+                schema_effort_levels
+            } else {
+                wire.effort_levels
+            },
+            effort_schema_path: wire.effort_schema_path.or(schema_effort_path),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListAvailableModelsResponse {
-    #[serde(default, alias = "models")]
+    #[serde(default, alias = "models", deserialize_with = "null_models_as_default")]
     pub available_models: Vec<AvailableModel>,
     pub next_token: Option<String>,
     pub default_model: Option<AvailableModel>,
 }
 
-fn build_list_available_models_url(
-    base_url: &str,
-    profile_arn: Option<&str>,
-    model_provider: Option<&str>,
-    next_token: Option<&str>,
-) -> Result<String, String> {
-    let mut url = reqwest::Url::parse(base_url)
-        .map_err(|error| format!("ListAvailableModels base URL 无效: {error}"))?;
-    url.set_path("ListAvailableModels");
-
-    {
-        let mut pairs = url.query_pairs_mut();
-        pairs.append_pair("origin", "AI_EDITOR");
-        pairs.append_pair("maxResults", "50");
-        if let Some(profile_arn) = profile_arn.filter(|value| !value.trim().is_empty()) {
-            pairs.append_pair("profileArn", profile_arn);
-        }
-        if let Some(model_provider) = model_provider.filter(|value| !value.trim().is_empty()) {
-            pairs.append_pair("modelProvider", model_provider);
-        }
-        if let Some(next_token) = next_token.filter(|value| !value.trim().is_empty()) {
-            pairs.append_pair("nextToken", next_token);
-        }
-    }
-
-    Ok(url.into())
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AvailableProfile {
+    #[serde(default)]
+    arn: Option<String>,
 }
 
-fn build_kiro_models_user_agent(machine_id: &str) -> String {
-    build_kiro_custom_user_agent(machine_id)
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListAvailableProfilesResponse {
+    #[serde(default)]
+    profiles: Vec<AvailableProfile>,
 }
 
-fn build_list_available_models_runtime_request(
-    client: &reqwest::Client,
-    url: &str,
-    account: &Account,
-    access_token: &str,
-    user_agent: &str,
-) -> reqwest::RequestBuilder {
-    use uuid::Uuid;
-
-    let invocation_id = Uuid::new_v4().to_string();
-
-    // ListAvailableModels 不需要 tokentype header，手动构建
-    let mut builder = client
-        .get(url)
-        .header("Authorization", format!("Bearer {}", access_token))
-        .header("accept", "application/json")
-        .header("user-agent", user_agent)
-        .header("x-amz-user-agent", user_agent)
-        .header("amz-sdk-invocation-id", invocation_id)
-        .header("amz-sdk-request", "attempt=1; max=1");
-
-    // 只为 Internal provider 添加 redirect header
-    if account.provider.as_deref() == Some("Internal") {
-        builder = builder.header("redirect-for-internal", "true");
-    }
-
-    builder
+#[derive(Debug, Clone)]
+pub struct FetchAvailableModelsResult {
+    pub response: ListAvailableModelsResponse,
+    pub resolved_profile_arn: Option<String>,
 }
 
 fn now_unix_timestamp() -> i64 {
@@ -124,7 +226,6 @@ fn is_available_models_cache_fresh(cached_at: i64, now: i64) -> bool {
 
 pub fn read_available_models_cache(
     account: &Account,
-    model_provider: Option<&str>,
     force_refresh: bool,
 ) -> Option<ListAvailableModelsResponse> {
     if force_refresh {
@@ -134,15 +235,11 @@ pub fn read_available_models_cache(
     if !is_available_models_cache_fresh(cache.cached_at, now_unix_timestamp()) {
         return None;
     }
-    if cache.model_provider.as_deref() != model_provider {
-        return None;
-    }
     serde_json::from_value(cache.response.clone()).ok()
 }
 
 pub fn write_available_models_cache(
     account: &mut Account,
-    model_provider: Option<&str>,
     response: &ListAvailableModelsResponse,
 ) -> Result<(), String> {
     let response_value =
@@ -150,7 +247,6 @@ pub fn write_available_models_cache(
     account.available_models_cache = Some(AvailableModelsCacheEntry {
         response: response_value,
         cached_at: now_unix_timestamp(),
-        model_provider: model_provider.map(str::to_string),
     });
     Ok(())
 }
@@ -159,76 +255,108 @@ pub fn clear_available_models_cache(account: &mut Account) {
     account.available_models_cache = None;
 }
 
-async fn fetch_available_models_page(
+fn first_available_profile_arn(response: ListAvailableProfilesResponse) -> Option<String> {
+    response.profiles.into_iter().find_map(|profile| {
+        profile
+            .arn
+            .map(|arn| arn.trim().to_string())
+            .filter(|arn| !arn.is_empty())
+    })
+}
+
+/// 获取账号可用模型列表（直接使用 KiroClient，无需重复实现）
+pub async fn fetch_all_available_models(
     account: &Account,
     access_token: &str,
-    model_provider: Option<&str>,
-    next_token: Option<&str>,
-) -> Result<ListAvailableModelsResponse, String> {
-    let machine_id = account
-        .machine_id
-        .clone()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(get_machine_id);
-    let user_agent = build_kiro_models_user_agent(&machine_id);
-    let region = resolve_kiro_upstream_region(
-        account.profile_arn.as_deref(),
-        account.region.as_deref(),
-        "us-east-1",
+) -> Result<FetchAvailableModelsResult, String> {
+    use crate::clients::kiro_client::KiroClient;
+
+    let ctx = resolve_kiro_call_context(account, "us-east-1");
+    let client = KiroClient::new()?;
+
+    let resolved_profile_arn = if ctx.profile_arn.is_some() {
+        ctx.profile_arn.clone()
+    } else {
+        match client.list_available_profiles(access_token, &ctx.region).await {
+            Ok(value) => {
+                let profiles: ListAvailableProfilesResponse = serde_json::from_value(value)
+                    .map_err(|error| format!("解析 ListAvailableProfiles 响应失败: {error}"))?;
+                first_available_profile_arn(profiles)
+            }
+            Err(error) => {
+                log::warn!(
+                    "[ListAvailableModels] ListAvailableProfiles 兜底失败，继续使用现有 profileArn 解析结果: {}",
+                    error
+                );
+                ctx.profile_arn.clone()
+            }
+        }
+    };
+
+    log::info!(
+        "[ListAvailableModels] Account: {} | Provider: {:?} | ProfileArn (Original): {:?} | ProfileArn (Used): {:?}",
+        account.id,
+        account.provider,
+        account.profile_arn,
+        resolved_profile_arn
     );
-    let base_url = build_q_service_url(&region);
-    let url = build_list_available_models_url(
-        &base_url,
-        account.profile_arn.as_deref(),
-        model_provider,
-        next_token,
-    )?;
-    let client = build_http_client_with_user_agent(&user_agent)?;
-    let request =
-        build_list_available_models_runtime_request(&client, &url, account, access_token, &user_agent);
-    let response = request
-        .send()
-        .await
-        .map_err(|error| format!("ListAvailableModels 请求失败: {error}"))?;
 
-    let status = response.status();
-    if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
+    let response_value = client
+        .list_available_models(
+            access_token,
+            &ctx.machine_id,
+            &ctx.region,
+            resolved_profile_arn.as_deref(),
+        )
+        .await?;
 
-        // 401 → token 过期，可尝试刷新
-        if status.as_u16() == 401 {
-            return Err(format!(
-                "AUTH_ERROR: ListAvailableModels failed ({status}): {body}"
-            ));
+    let mut response: ListAvailableModelsResponse = serde_json::from_value(response_value)
+        .map_err(|error| format!("解析 ListAvailableModels 响应失败: {error}"))?;
+
+    normalize_list_available_models_response(&mut response);
+
+    Ok(FetchAvailableModelsResult {
+        response,
+        resolved_profile_arn,
+    })
+}
+
+fn normalize_list_available_models_response(response: &mut ListAvailableModelsResponse) {
+    response
+        .available_models
+        .retain(|model| !model.model_id.trim().is_empty());
+
+    let default_model_id = response
+        .default_model
+        .as_ref()
+        .map(|model| model.model_id.trim().to_string())
+        .filter(|model_id| !model_id.is_empty());
+
+    if let Some(default_id) = default_model_id.as_deref() {
+        mark_default_model(&mut response.available_models, Some(default_id));
+
+        if let Some(default_from_list) = response
+            .available_models
+            .iter()
+            .find(|model| model.model_id == default_id)
+            .cloned()
+        {
+            response.default_model = Some(default_from_list);
         }
-
-        // 403 → 检查是否为封禁（AccessDeniedException + TemporarilySuspended 或 suspended）
-        if status.as_u16() == 403 {
-            let body_lower = body.to_lowercase();
-            if body.contains("AccessDeniedException") && body.contains("TemporarilySuspended") {
-                return Err(format!("BANNED: ListAvailableModels 403 封禁: {body}"));
-            }
-            // 检查 "temporarily is suspended" 或 "suspended" 关键词
-            if body_lower.contains("suspended") {
-                return Err(format!("BANNED: ListAvailableModels 403 账号已暂停: {body}"));
-            }
-            // 其他 403 错误（如权限问题）不视为封禁
-            return Err(format!("AUTH_ERROR: ListAvailableModels 403: {body}"));
-        }
-
-        return Err(format!("ListAvailableModels failed ({status}): {body}"));
     }
 
-    response
-        .json::<ListAvailableModelsResponse>()
-        .await
-        .map_err(|error| format!("解析 ListAvailableModels 响应失败: {error}"))
+    if let Some(default_model) = response.default_model.as_mut() {
+        default_model.is_default = Some(true);
+    }
+
+    ensure_default_model_present(response);
+    sort_available_models_for_display(&mut response.available_models);
 }
 
 fn mark_default_model(models: &mut [AvailableModel], default_model_id: Option<&str>) {
     if let Some(default_id) = default_model_id {
         for model in models {
-            if model.model_id == default_id && model.is_default.is_none() {
+            if model.model_id == default_id {
                 model.is_default = Some(true);
             }
         }
@@ -237,63 +365,15 @@ fn mark_default_model(models: &mut [AvailableModel], default_model_id: Option<&s
 
 fn ensure_default_model_present(response: &mut ListAvailableModelsResponse) {
     if let Some(default_model) = response.default_model.clone() {
-        if response
-            .available_models
-            .iter()
-            .all(|model| model.model_id != default_model.model_id)
+        if !default_model.model_id.trim().is_empty()
+            && response
+                .available_models
+                .iter()
+                .all(|model| model.model_id != default_model.model_id)
         {
             response.available_models.insert(0, default_model);
         }
     }
-}
-
-pub async fn fetch_all_available_models(
-    account: &Account,
-    access_token: &str,
-    model_provider: Option<&str>,
-) -> Result<ListAvailableModelsResponse, String> {
-    let mut aggregated = ListAvailableModelsResponse {
-        available_models: Vec::new(),
-        next_token: None,
-        default_model: None,
-    };
-    let mut next_token: Option<String> = None;
-
-    loop {
-        let mut response = fetch_available_models_page(
-            account,
-            access_token,
-            model_provider,
-            next_token.as_deref(),
-        )
-        .await?;
-
-        if aggregated.default_model.is_none() {
-            aggregated.default_model = response.default_model.clone();
-        }
-
-        let default_model_id = aggregated
-            .default_model
-            .as_ref()
-            .map(|model| model.model_id.as_str());
-        mark_default_model(&mut response.available_models, default_model_id);
-
-        if let Some(default_model) = aggregated.default_model.as_mut() {
-            default_model.is_default = Some(true);
-        }
-
-        aggregated.available_models.extend(response.available_models);
-        next_token = response.next_token;
-        if next_token.is_none() {
-            break;
-        }
-    }
-
-    ensure_default_model_present(&mut aggregated);
-    sort_available_models_for_display(&mut aggregated.available_models);
-    aggregated.next_token = None;
-
-    Ok(aggregated)
 }
 
 fn sort_available_models_for_display(models: &mut [AvailableModel]) {
@@ -303,43 +383,13 @@ fn sort_available_models_for_display(models: &mut [AvailableModel]) {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_list_available_models_runtime_request, build_list_available_models_url,
-        clear_available_models_cache, ensure_default_model_present,
-        is_available_models_cache_fresh, mark_default_model, read_available_models_cache,
-        sort_available_models_for_display, write_available_models_cache, AvailableModel,
-        ListAvailableModelsResponse,
+        clear_available_models_cache, ensure_default_model_present, first_available_profile_arn,
+        is_available_models_cache_fresh, mark_default_model, normalize_list_available_models_response,
+        read_available_models_cache, sort_available_models_for_display, write_available_models_cache,
+        AvailableModel, ListAvailableModelsResponse, ListAvailableProfilesResponse,
         AVAILABLE_MODELS_CACHE_TTL_SECONDS,
     };
     use crate::core::account::Account;
-
-    #[test]
-    fn build_list_available_models_url_keeps_expected_query_shape() {
-        let url = build_list_available_models_url(
-            "https://q.us-east-1.amazonaws.com",
-            Some("arn:aws:codewhisperer:::profile/test"),
-            Some("anthropic"),
-            Some("next-token"),
-        )
-        .expect("url should build");
-        let parsed = reqwest::Url::parse(&url).expect("url should parse");
-        let params: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
-
-        assert_eq!(parsed.path(), "/ListAvailableModels");
-        assert_eq!(params.get("origin").map(String::as_str), Some("AI_EDITOR"));
-        assert_eq!(params.get("maxResults").map(String::as_str), Some("50"));
-        assert_eq!(
-            params.get("profileArn").map(String::as_str),
-            Some("arn:aws:codewhisperer:::profile/test")
-        );
-        assert_eq!(
-            params.get("modelProvider").map(String::as_str),
-            Some("qdev")
-        );
-        assert_eq!(
-            params.get("nextToken").map(String::as_str),
-            Some("next-token")
-        );
-    }
 
     #[test]
     fn deserialize_list_available_models_response_supports_known_fields() {
@@ -384,6 +434,72 @@ mod tests {
             Some(64000)
         );
         assert_eq!(response.next_token.as_deref(), Some("page-2"));
+    }
+
+    #[test]
+    fn deserialize_list_available_models_response_allows_null_next_token_and_nullable_display_fields(
+    ) {
+        let response: ListAvailableModelsResponse = serde_json::from_value(serde_json::json!({
+            "models": [
+                {
+                    "modelId": "claude-sonnet-4.5",
+                    "modelName": null,
+                    "description": null,
+                    "rateUnit": null
+                }
+            ],
+            "nextToken": null
+        }))
+        .expect("response should deserialize null optional fields");
+
+        assert_eq!(response.next_token, None);
+        assert_eq!(response.available_models.len(), 1);
+        assert_eq!(response.available_models[0].model_name, "");
+        assert_eq!(response.available_models[0].description, "");
+        assert_eq!(response.available_models[0].rate_unit, None);
+    }
+
+    #[test]
+    fn deserialize_list_available_models_response_extracts_effort_levels_from_model_schema() {
+        let response: ListAvailableModelsResponse = serde_json::from_value(serde_json::json!({
+            "availableModels": [
+                {
+                    "modelId": "reasoning-model",
+                    "modelName": "Reasoning Model",
+                    "additionalModelRequestFieldsSchema": {
+                        "type": "object",
+                        "properties": {
+                            "reasoning": {
+                                "type": "object",
+                                "properties": {
+                                    "effort": {
+                                        "type": "string",
+                                        "enum": ["low", "medium", "high", "xhigh", "max"]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "modelId": "plain-model",
+                    "modelName": "Plain Model"
+                }
+            ],
+            "nextToken": null
+        }))
+        .expect("response should deserialize effort metadata");
+
+        assert_eq!(
+            response.available_models[0].effort_levels,
+            vec!["low", "medium", "high", "xhigh", "max"]
+        );
+        assert_eq!(
+            response.available_models[0].effort_schema_path.as_deref(),
+            Some("reasoning")
+        );
+        assert!(response.available_models[1].effort_levels.is_empty());
+        assert_eq!(response.available_models[1].effort_schema_path, None);
     }
 
     #[test]
@@ -597,8 +713,78 @@ mod tests {
             .count();
         assert_eq!(auto_count, 1);
         assert_eq!(
-            response.available_models.first().map(|model| model.model_id.as_str()),
+            response
+                .available_models
+                .first()
+                .map(|model| model.model_id.as_str()),
             Some("auto")
+        );
+    }
+
+    #[test]
+    fn normalize_list_available_models_response_expands_default_model_from_models_list() {
+        let mut response: ListAvailableModelsResponse = serde_json::from_value(serde_json::json!({
+            "defaultModel": { "modelId": "deepseek-3.2" },
+            "models": [
+                {
+                    "description": "Experimental preview of DeepSeek V3.2",
+                    "modelId": "deepseek-3.2",
+                    "modelName": "Deepseek v3.2",
+                    "promptCaching": { "supportsPromptCaching": false },
+                    "rateMultiplier": 0.25,
+                    "rateUnit": "Credit",
+                    "supportedInputTypes": ["TEXT", "IMAGE"],
+                    "tokenLimits": {
+                        "maxInputTokens": 164000,
+                        "maxOutputTokens": 64000
+                    }
+                },
+                {
+                    "description": "The MiniMax M2.5 model",
+                    "modelId": "minimax-m2.5",
+                    "modelName": "MiniMax M2.5",
+                    "promptCaching": { "supportsPromptCaching": false },
+                    "rateMultiplier": 0.25,
+                    "rateUnit": "Credit",
+                    "supportedInputTypes": ["TEXT"],
+                    "tokenLimits": {
+                        "maxInputTokens": 196000,
+                        "maxOutputTokens": 64000
+                    }
+                }
+            ],
+            "nextToken": null
+        }))
+        .expect("captured response should deserialize");
+
+        normalize_list_available_models_response(&mut response);
+
+        assert_eq!(response.available_models.len(), 2);
+        assert_eq!(response.available_models[0].model_id, "deepseek-3.2");
+        assert_eq!(response.available_models[0].model_name, "Deepseek v3.2");
+        assert_eq!(response.available_models[0].is_default, Some(true));
+        assert_eq!(
+            response
+                .default_model
+                .as_ref()
+                .map(|model| model.model_name.as_str()),
+            Some("Deepseek v3.2")
+        );
+        assert_eq!(
+            response
+                .default_model
+                .as_ref()
+                .and_then(|model| model.token_limits.as_ref())
+                .and_then(|limits| limits.max_input_tokens),
+            Some(164000)
+        );
+        assert_eq!(
+            response
+                .default_model
+                .as_ref()
+                .and_then(|model| model.prompt_caching.as_ref())
+                .and_then(|prompt_caching| prompt_caching.supports_prompt_caching),
+            Some(false)
         );
     }
 
@@ -624,10 +810,9 @@ mod tests {
         }))
         .expect("response should deserialize");
 
-        write_available_models_cache(&mut account, Some("anthropic"), &response)
-            .expect("cache write should succeed");
-        let cached = read_available_models_cache(&account, Some("anthropic"), false)
-            .expect("cache should be readable");
+        write_available_models_cache(&mut account, &response).expect("cache write should succeed");
+        let cached =
+            read_available_models_cache(&account, false).expect("cache should be readable");
 
         assert_eq!(cached.available_models.len(), 2);
         assert_eq!(
@@ -636,6 +821,23 @@ mod tests {
                 .as_ref()
                 .map(|model| model.model_id.as_str()),
             Some("auto")
+        );
+    }
+
+    #[test]
+    fn first_available_profile_arn_skips_empty_profiles() {
+        let response: ListAvailableProfilesResponse = serde_json::from_value(serde_json::json!({
+            "profiles": [
+                { "arn": "   " },
+                { "arn": null },
+                { "arn": "arn:aws:codewhisperer:eu-central-1:123456789012:profile/REAL" }
+            ]
+        }))
+        .expect("profiles response should deserialize");
+
+        assert_eq!(
+            first_available_profile_arn(response).as_deref(),
+            Some("arn:aws:codewhisperer:eu-central-1:123456789012:profile/REAL")
         );
     }
 
@@ -664,32 +866,10 @@ mod tests {
         }))
         .expect("response should deserialize");
 
-        write_available_models_cache(&mut account, None, &response)
-            .expect("cache write should succeed");
+        write_available_models_cache(&mut account, &response).expect("cache write should succeed");
         clear_available_models_cache(&mut account);
 
-        assert!(read_available_models_cache(&account, None, false).is_none());
-    }
-
-    #[test]
-    fn available_models_cache_misses_when_model_provider_differs() {
-        let mut account = Account::new("cache@example.com".to_string(), "cache".to_string());
-        let response: ListAvailableModelsResponse = serde_json::from_value(serde_json::json!({
-            "defaultModel": {
-                "modelId": "auto",
-                "modelName": "Auto"
-            },
-            "models": [],
-            "nextToken": null
-        }))
-        .expect("response should deserialize");
-
-        write_available_models_cache(&mut account, Some("anthropic"), &response)
-            .expect("cache write should succeed");
-
-        assert!(read_available_models_cache(&account, Some("openai"), false).is_none());
-        assert!(read_available_models_cache(&account, None, false).is_none());
-        assert!(read_available_models_cache(&account, Some("anthropic"), false).is_some());
+        assert!(read_available_models_cache(&account, false).is_none());
     }
 
     #[test]
@@ -705,10 +885,9 @@ mod tests {
         }))
         .expect("response should deserialize");
 
-        write_available_models_cache(&mut account, None, &response)
-            .expect("cache write should succeed");
+        write_available_models_cache(&mut account, &response).expect("cache write should succeed");
 
-        assert!(read_available_models_cache(&account, None, true).is_none());
+        assert!(read_available_models_cache(&account, true).is_none());
     }
 
     #[test]
@@ -728,100 +907,21 @@ mod tests {
         assert_eq!(response_api.available_models[0].model_id, "auto");
 
         // 测试缓存格式（availableModels）
-        let response_cache: ListAvailableModelsResponse = serde_json::from_value(serde_json::json!({
-            "availableModels": [
-                {
-                    "modelId": "claude-sonnet-4.5",
-                    "modelName": "Claude Sonnet 4.5"
-                }
-            ],
-            "nextToken": null
-        }))
-        .expect("Cache format (availableModels) should deserialize");
+        let response_cache: ListAvailableModelsResponse =
+            serde_json::from_value(serde_json::json!({
+                "availableModels": [
+                    {
+                        "modelId": "claude-sonnet-4.5",
+                        "modelName": "Claude Sonnet 4.5"
+                    }
+                ],
+                "nextToken": null
+            }))
+            .expect("Cache format (availableModels) should deserialize");
         assert_eq!(response_cache.available_models.len(), 1);
-        assert_eq!(response_cache.available_models[0].model_id, "claude-sonnet-4.5");
-    }
-
-    #[test]
-    fn build_list_available_models_runtime_request_adds_runtime_headers_for_internal_external_idp() {
-        let client = reqwest::Client::new();
-        let mut account = Account::new("internal@example.com".to_string(), "internal".to_string());
-        account.provider = Some("Internal".to_string());
-        account.auth_method = Some("external_idp".to_string());
-        let request = build_list_available_models_runtime_request(
-            &client,
-            "https://q.us-east-1.amazonaws.com/ListAvailableModels?origin=AI_EDITOR",
-            &account,
-            "token-1",
-            "KiroIDE 0.11.34 machine-123",
-        )
-        .build()
-        .expect("request should build");
-
         assert_eq!(
-            request
-                .headers()
-                .get(reqwest::header::AUTHORIZATION)
-                .and_then(|value| value.to_str().ok()),
-            Some("Bearer token-1")
-        );
-        assert_eq!(
-            request
-                .headers()
-                .get(reqwest::header::USER_AGENT)
-                .and_then(|value| value.to_str().ok()),
-            Some("KiroIDE 0.11.34 machine-123")
-        );
-        assert_eq!(
-            request
-                .headers()
-                .get("x-amz-user-agent")
-                .and_then(|value| value.to_str().ok()),
-            Some("KiroIDE 0.11.34 machine-123")
-        );
-        assert_eq!(
-            request
-                .headers()
-                .get(reqwest::header::ACCEPT)
-                .and_then(|value| value.to_str().ok()),
-            Some("application/json")
-        );
-        // ListAvailableModels 不需要 TokenType header（会导致 403）
-        assert!(request.headers().get("TokenType").is_none());
-        assert_eq!(
-            request
-                .headers()
-                .get("redirect-for-internal")
-                .and_then(|value| value.to_str().ok()),
-            Some("true")
-        );
-        assert!(request.headers().get("x-amzn-codewhisperer-optout").is_none());
-        assert!(request.headers().get("x-amzn-kiro-agent-mode").is_none());
-        assert!(request.headers().get("x-amzn-kiro-profile-arn").is_none());
-    }
-
-    #[test]
-    fn build_list_available_models_runtime_request_omits_internal_redirect_for_non_internal_provider() {
-        let client = reqwest::Client::new();
-        let mut account = Account::new("builder@example.com".to_string(), "builder".to_string());
-        account.provider = Some("BuilderId".to_string());
-        account.auth_method = Some("external_idp".to_string());
-        let request = build_list_available_models_runtime_request(
-            &client,
-            "https://q.us-east-1.amazonaws.com/ListAvailableModels?origin=AI_EDITOR&profileArn=arn",
-            &account,
-            "token-2",
-            "KiroIDE 0.11.34 machine-456",
-        )
-        .build()
-        .expect("request should build");
-
-        assert!(request.headers().get("redirect-for-internal").is_none());
-        assert!(request.headers().get("x-amzn-kiro-profile-arn").is_none());
-        assert_eq!(
-            request.url().query(),
-            Some("origin=AI_EDITOR&profileArn=arn")
+            response_cache.available_models[0].model_id,
+            "claude-sonnet-4.5"
         );
     }
 }
-
