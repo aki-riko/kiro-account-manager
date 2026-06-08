@@ -23,6 +23,7 @@ interface SettingsKiroProps {
   httpProxy: string
   setHttpProxy: (value: string) => void
   originalProxy: string
+  appProxyMode: string
   savingProxy: boolean
   detectingProxy: boolean
   savingModel: boolean
@@ -42,6 +43,7 @@ interface SettingsKiroProps {
   handleConfigureMcpChange: (mode: string) => Promise<void>
   handleApplyProxy: () => Promise<void>
   handleDetectProxy: () => Promise<void>
+  handleAppProxyModeChange: (mode: string) => Promise<void>
   handleCodebaseIndexingChange: (checked: boolean) => Promise<void>
   handleTabAutocompleteChange: (checked: boolean) => Promise<void>
   handleUsageSummaryChange: (checked: boolean) => Promise<void>
@@ -62,6 +64,7 @@ function SettingsKiro({
   httpProxy,
   setHttpProxy,
   originalProxy,
+  appProxyMode,
   savingProxy,
   detectingProxy,
   savingModel,
@@ -79,6 +82,7 @@ function SettingsKiro({
   handleConfigureMcpChange,
   handleApplyProxy,
   handleDetectProxy,
+  handleAppProxyModeChange,
   handleCodebaseIndexingChange,
   handleTabAutocompleteChange,
   handleUsageSummaryChange,
@@ -228,7 +232,7 @@ function SettingsKiro({
         desc={t('settings.proxyTip')}
       >
         <div className="space-y-3">
-          {/* HTTP 代理输入 + 操作按钮 */}
+          {/* Kiro IDE 代理输入 + 操作按钮 */}
           <div>
             <Label className="block text-[11px] text-muted-foreground mb-1">{t('settings.httpProxy')}</Label>
             <div className="flex gap-1.5">
@@ -241,7 +245,7 @@ function SettingsKiro({
               <button
                 onClick={handleDetectProxy}
                 disabled={detectingProxy}
-                className="px-2.5 h-8 border rounded-md bg-card hover:bg-muted/50 border-border text-foreground transition-colors disabled:opacity-50 inline-flex items-center justify-center"
+                className="px-2.5 h-8 border rounded-md bg-card hover:bg-muted/50 border-border text-foreground transition-colors disabled:opacity-50 inline-flex items-center justify-center cursor-pointer"
                 title={t('settings.detectProxyTitle')}
               >
                 {detectingProxy ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
@@ -249,7 +253,7 @@ function SettingsKiro({
               <button
                 onClick={handleApplyProxy}
                 disabled={savingProxy || !proxyChanged}
-                className={`px-3 h-8 rounded-md inline-flex items-center gap-1 text-xs font-medium border transition-colors disabled:opacity-50 ${
+                className={`px-3 h-8 rounded-md inline-flex items-center gap-1 text-xs font-medium border transition-colors disabled:opacity-50 cursor-pointer ${
                   proxyChanged
                     ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90'
                     : 'bg-muted text-muted-foreground border-border'
@@ -259,6 +263,20 @@ function SettingsKiro({
                 <span className="hidden sm:inline">{savingProxy ? t('settings.saving') : t('settings.apply')}</span>
               </button>
             </div>
+          </div>
+
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-card">
+            <div className="min-w-0">
+              <span className="text-sm font-medium text-foreground whitespace-nowrap">{t('settings.appProxyMode')}</span>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{t('settings.appProxyModeDesc')}</p>
+            </div>
+            <Select value={appProxyMode} onValueChange={handleAppProxyModeChange}>
+              <SelectTrigger className="h-8 text-xs ml-auto w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="followKiro">{t('settings.appProxyFollowKiro')}</SelectItem>
+                <SelectItem value="disabled">{t('settings.appProxyDisabled')}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </SectionCard>

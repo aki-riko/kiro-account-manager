@@ -9,5 +9,5 @@ test('App startup does not gate the whole shell behind auth loading', async () =
   assert.doesNotMatch(source, /const \[loading, setLoading\] = useState\(true\)/)
 
   assert.doesNotMatch(source, /setLoading\(false\)/)
-  assert.match(source, /useEffect\(\(\) => \{\s*requestAnimationFrame\(\(\) => \{\s*dismissBootSplash\(\)\s*\}\)\s*\}, \[\]\)/)
+  assert.match(source, /requestAnimationFrame\(\(\) => \{\s*requestAnimationFrame\(\(\) => \{\s*dismissBootSplash\(\)\s*invoke\('show_main_window'\)/)
 })

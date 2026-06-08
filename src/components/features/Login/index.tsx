@@ -6,7 +6,15 @@ import { useApp } from '../../../hooks/useApp'
 import { Button } from '../../shared/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../ui/dialog'
+import {
+  DialogRoot,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogBody,
+  DialogFooter
+} from '../../shared/dialog'
 
 const DEFAULT_PROVIDER_ORDER = ['Google', 'Github', 'BuilderId', 'Enterprise']
 
@@ -283,13 +291,13 @@ function Login({ onLogin }: LoginProps) {
       </div>
 
       {/* Enterprise Start URL 输入弹窗 */}
-      <Dialog open={showEnterpriseModal} onOpenChange={setShowEnterpriseModal}>
-        <DialogContent className="max-w-[460px]">
+      <DialogRoot open={showEnterpriseModal} onOpenChange={setShowEnterpriseModal}>
+        <DialogContent maxWidth="460px">
           <DialogHeader>
             <DialogTitle>{t('login.idc')}</DialogTitle>
             <DialogDescription>{t('login.enterprisePrompt')}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <DialogBody className="space-y-3 py-2">
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">{t('login.startUrl')}</Label>
               <Input
@@ -315,7 +323,7 @@ function Login({ onLogin }: LoginProps) {
               />
               <p className="text-[11px] text-muted-foreground mt-1">{t('login.regionExample')}</p>
             </div>
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setShowEnterpriseModal(false)}>
               {t('login.cancel')}
@@ -323,11 +331,11 @@ function Login({ onLogin }: LoginProps) {
             <Button onClick={handleEnterpriseLogin}>{t('common.continue') || '继续'}</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </DialogRoot>
 
       {/* 等待授权弹窗 */}
-      <Dialog open={showWaitingModal} onOpenChange={(open: boolean) => !open && handleCancelLogin()}>
-        <DialogContent className="max-w-[400px]">
+      <DialogRoot open={showWaitingModal} onOpenChange={(open: boolean) => !open && handleCancelLogin()}>
+        <DialogContent maxWidth="400px">
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -336,20 +344,20 @@ function Login({ onLogin }: LoginProps) {
               <DialogTitle>{t('login.waitingTitle')}</DialogTitle>
             </div>
           </DialogHeader>
-          <div className="space-y-2 py-2">
+          <DialogBody className="space-y-2 py-2">
             <p className="text-sm text-foreground leading-relaxed">
               {t('login.waitingMessage', { provider: waitingProviderName })}
             </p>
             <p className="text-xs text-muted-foreground">{t('login.waitingHint')}</p>
             <p className="text-xs text-muted-foreground">{t('login.waitingCloseHint')}</p>
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button variant="secondary" onClick={handleCancelLogin} disabled={canceling}>
               {canceling ? t('login.cancelling') : t('login.cancel')}
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </DialogRoot>
     </div>
   )
 }

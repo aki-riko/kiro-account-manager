@@ -7,7 +7,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Loader2, Search, Trash2, Download, MessageSquare, ChevronRight, ChevronDown } from 'lucide-react'
+import {
+  Loader2,
+  Search,
+  Trash2,
+  Download,
+  MessageSquare,
+  ChevronRight,
+  ChevronDown
+} from 'lucide-react'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeTextFile } from '@tauri-apps/plugin-fs'
 import { useDialog } from '@/contexts/DialogContext'
@@ -301,30 +309,56 @@ export default function SessionManager() {
     return workspaceSessions.get(workspaceHash) || []
   }
 
+  const loadedSessionCount = Array.from(workspaceSessions.values()).reduce(
+    (total, sessions) => total + sessions.length,
+    0
+  )
+
+  const selectedSessionId = selectedSession?.sessionId
+
   return (
-    <div className="flex flex-col h-full glass-main">
-      {/* Header（紧凑）*/}
-      <div className="px-5 py-3 border-b border-border flex items-center gap-2.5">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center shadow-md ring-1 ring-primary/20">
-          <MessageSquare size={20} className="text-primary-foreground" />
-        </div>
-        <div className="flex flex-col">
-          <h1 className="text-lg font-semibold text-foreground leading-tight">会话管理</h1>
-          <p className="text-sm text-muted-foreground leading-tight">管理 Kiro IDE 的 chat sessions</p>
+    <div className="flex h-full flex-col overflow-hidden bg-gradient-to-br from-background via-background to-muted/40">
+      {/* Header */}
+      <div className="border-b border-border/70 bg-card/70 px-6 py-4 shadow-sm backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-primary/90 to-primary/70 shadow-lg shadow-primary/20 ring-1 ring-primary/25">
+              <div className="absolute inset-0 rounded-2xl bg-white/10" />
+              <MessageSquare size={21} className="relative text-primary-foreground" />
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">会话管理</h1>
+              <p className="text-sm text-muted-foreground">浏览、搜索和导出 Kiro IDE 的历史对话</p>
+            </div>
+          </div>
+
+          <div className="hidden items-center gap-2 md:flex">
+            <Badge variant="secondary" className="h-8 rounded-full px-3 font-normal">
+              {workspaces.length} 个工作区
+            </Badge>
+            <Badge variant="outline" className="h-8 rounded-full px-3 font-normal bg-background/70">
+              已加载 {loadedSessionCount} 个会话
+            </Badge>
+            {selectedWorkspaceHashes.size > 0 && (
+              <Badge variant="destructive" className="h-8 rounded-full px-3 font-normal">
+                已选 {selectedWorkspaceHashes.size}
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden p-4 gap-4">
         {/* Left Sidebar - Workspaces with expandable sessions */}
-        <div className="w-72 border-r border-border flex flex-col">
-          <div className="p-3 border-b border-border space-y-2">
+        <div className="w-80 shrink-0 overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-sm backdrop-blur-xl flex flex-col">
+          <div className="border-b border-border/70 bg-muted/20 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-semibold text-foreground">工作区与会话</h2>
+              <h2 className="text-sm font-semibold text-foreground">工作区与会话</h2>
               {selectedWorkspaceHashes.size > 0 && (
                 <Button
                   variant="destructive"
                   size="sm"
-                  className="h-6 text-[11px]"
+                  className="h-7 rounded-full px-3 text-[11px]"
                   onClick={handleBatchDeleteWorkspaces}
                 >
                   <Trash2 className="h-3 w-3 mr-1" />
@@ -332,13 +366,13 @@ export default function SessionManager() {
                 </Button>
               )}
             </div>
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <div className="flex items-center justify-between rounded-xl bg-background/70 px-3 py-2 text-[11px] text-muted-foreground ring-1 ring-border/50">
               <span>{workspaces.length} 个工作区</span>
               {workspaces.length > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-5 px-2 text-[11px]"
+                  className="h-6 rounded-full px-2 text-[11px] hover:bg-primary/10 hover:text-primary"
                   onClick={toggleSelectAllWorkspaces}
                 >
                   {selectedWorkspaceHashes.size === workspaces.length ? '取消全选' : '全选'}
@@ -352,42 +386,51 @@ export default function SessionManager() {
                 placeholder="搜索会话..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-8 pl-8 text-xs"
+                className="h-9 rounded-xl border-border/70 bg-background/80 pl-8 text-xs shadow-inner focus-visible:ring-primary/30"
               />
             </div>
           </div>
 
           <ScrollArea className="flex-1">
-            <div className="p-2 space-y-1">
+            <div className="p-3 space-y-2">
               {/* 搜索模式：显示所有匹配的会话 */}
               {searchQuery && (
                 <div className="space-y-2">
                   {filteredSessions.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
+                    <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
                       未找到匹配的会话
                     </div>
                   ) : (
-                    filteredSessions.map(session => (
+                    filteredSessions.map(session => {
+                      const isSelected = selectedSessionId === session.sessionId
+
+                      return (
                       <Card
                         key={session.sessionId}
-                        className={`p-3 cursor-pointer hover:bg-accent transition-colors ${selectedSession?.sessionId === session.sessionId ? 'bg-accent' : ''
-                          }`}
+                        className={`group relative cursor-pointer overflow-hidden rounded-2xl p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5 hover:shadow-md ${isSelected ? 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/25 ring-2 ring-primary/25' : 'border-border/70 bg-card'}
+                        `}
                         onClick={() => handleSelectSession(session.workspaceHash, session)}
                       >
-                        <div className="space-y-2">
+                        {isSelected && (
+                          <>
+                            <div className="absolute inset-y-2 left-0 w-1.5 rounded-r-full bg-primary-foreground/95 shadow-[0_0_18px_hsl(var(--primary-foreground)/0.45)]" />
+                            <div className="absolute right-2 top-2 rounded-full bg-primary-foreground/15 px-2 py-0.5 text-[10px] font-medium text-primary-foreground ring-1 ring-primary-foreground/30">当前</div>
+                          </>
+                        )}
+                        <div className="space-y-2 pl-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                              <h3 className="font-medium text-sm line-clamp-2">
+                              <h3 className={`line-clamp-2 text-sm font-semibold leading-snug ${isSelected ? 'pr-12 text-primary-foreground' : 'text-foreground'}`}>
                                 {session.title}
                               </h3>
-                              <p className="text-xs text-muted-foreground truncate mt-1">
+                              <p className={`mt-1 truncate text-xs ${isSelected ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>
                                 {decodeWorkspaceName(session.workspaceHash)}
                               </p>
                             </div>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 shrink-0 hover:bg-destructive hover:text-destructive-foreground"
+                              className={`h-7 w-7 shrink-0 rounded-lg transition-opacity ${isSelected ? 'text-primary-foreground/80 opacity-100 hover:bg-primary-foreground/20 hover:text-primary-foreground' : 'opacity-0 hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100'}`}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleDeleteSession(session.workspaceHash, session)
@@ -398,20 +441,21 @@ export default function SessionManager() {
                             </Button>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge variant={isSelected ? 'outline' : 'secondary'} className={`h-5 rounded-full px-2 text-[10px] font-normal ${isSelected ? 'border-primary-foreground/35 bg-primary-foreground/15 text-primary-foreground' : ''}`}>
                               {session.sessionType}
                             </Badge>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <span className={`flex items-center gap-1 text-xs ${isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
                               <MessageSquare className="h-3 w-3" />
                               {session.messageCount}
                             </span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className={`text-xs ${isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
                               {formatFileSize(session.fileSize)}
                             </span>
                           </div>
                         </div>
                       </Card>
-                    ))
+                      )
+                    })
                   )}
                 </div>
               )}
@@ -425,16 +469,16 @@ export default function SessionManager() {
                   <div key={workspace} className="space-y-1">
                     {/* Workspace Row */}
                     <div
-                      className={`group relative rounded-md transition-all ${selectedWorkspace === workspace
-                          ? 'bg-primary text-primary-foreground shadow-sm'
-                          : ''
+                      className={`group relative overflow-hidden rounded-xl border transition-all ${selectedWorkspace === workspace
+                          ? 'border-primary/50 bg-gradient-to-r from-primary/14 to-primary/5 shadow-sm ring-1 ring-primary/20'
+                          : 'border-transparent hover:border-border/70 hover:bg-muted/40'
                         }`}
                     >
-                      <div className="flex items-center gap-2 px-2 py-2">
+                      <div className="flex items-center gap-2 px-2.5 py-2.5">
                         {/* Expand/Collapse Icon */}
                         <button
                           onClick={() => toggleWorkspace(workspace)}
-                          className="shrink-0 hover:bg-accent rounded p-1"
+                          className="shrink-0 rounded-lg p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
                           title={isExpanded ? '折叠' : '展开'}
                         >
                           {isExpanded ? (
@@ -460,17 +504,14 @@ export default function SessionManager() {
                             setSelectedWorkspace(workspace)
                             toggleWorkspace(workspace)
                           }}
-                          className={`flex-1 text-left text-sm transition-all rounded-md px-2 py-1 ${selectedWorkspace === workspace
-                              ? ''
-                              : 'hover:bg-accent'
-                            }`}
+                          className="flex-1 rounded-lg px-2 py-1 text-left text-sm transition-colors hover:bg-background/70"
                           title={workspace}
                         >
-                          <div className="truncate font-medium">
+                          <div className="truncate font-medium text-foreground">
                             {decodeWorkspaceName(workspace)}
                           </div>
                           {isExpanded && sessions.length > 0 && (
-                            <div className="text-xs opacity-70 mt-0.5">
+                            <div className="mt-0.5 text-xs text-muted-foreground">
                               {sessions.length} 个会话
                             </div>
                           )}
@@ -480,10 +521,7 @@ export default function SessionManager() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-6 w-6 shrink-0 ${selectedWorkspace === workspace
-                              ? 'text-primary-foreground hover:bg-primary-foreground/20'
-                              : 'hover:bg-destructive hover:text-destructive-foreground'
-                            }`}
+                          className="h-7 w-7 shrink-0 rounded-lg text-muted-foreground opacity-0 transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100"
                           onClick={(e) => {
                             e.stopPropagation()
                             handleDeleteWorkspace(workspace)
@@ -497,32 +535,41 @@ export default function SessionManager() {
 
                     {/* Sessions under this workspace (when expanded) */}
                     {isExpanded && (
-                      <div className="ml-6 space-y-1">
+                      <div className="ml-7 space-y-1.5 border-l border-border/70 pl-3">
                         {loading && sessions.length === 0 ? (
                           <div className="flex items-center justify-center py-4">
                             <Loader2 className="h-4 w-4 animate-spin" />
                           </div>
                         ) : sessions.length === 0 ? (
-                          <div className="text-xs text-muted-foreground py-2 px-3">
+                          <div className="rounded-xl bg-muted/30 px-3 py-3 text-xs text-muted-foreground">
                             暂无会话
                           </div>
                         ) : (
-                          sessions.map(session => (
+                          sessions.map(session => {
+                            const isSelected = selectedSessionId === session.sessionId
+
+                            return (
                             <Card
                               key={session.sessionId}
-                              className={`p-2 cursor-pointer hover:bg-accent transition-colors ${selectedSession?.sessionId === session.sessionId ? 'bg-accent' : ''
-                                }`}
+                              className={`group relative cursor-pointer overflow-hidden rounded-2xl p-2.5 transition-all hover:border-primary/40 hover:bg-primary/5 ${isSelected ? 'border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25 ring-2 ring-primary/25' : 'border-border/60 bg-card'}
+                              `}
                               onClick={() => handleSelectSession(workspace, session)}
                             >
-                              <div className="space-y-1.5">
+                              {isSelected && (
+                                <>
+                                  <div className="absolute inset-y-1.5 left-0 w-1.5 rounded-r-full bg-primary-foreground/95 shadow-[0_0_16px_hsl(var(--primary-foreground)/0.45)]" />
+                                  <div className="absolute right-2 top-2 rounded-full bg-primary-foreground/15 px-1.5 py-0.5 text-[9px] font-medium text-primary-foreground ring-1 ring-primary-foreground/30">当前</div>
+                                </>
+                              )}
+                              <div className="space-y-1.5 pl-1">
                                 <div className="flex items-start justify-between gap-2">
-                                  <h3 className="font-medium text-xs line-clamp-2 flex-1">
+                                  <h3 className={`line-clamp-2 flex-1 text-xs font-semibold leading-snug ${isSelected ? 'pr-10 text-primary-foreground' : 'text-foreground'}`}>
                                     {session.title}
                                   </h3>
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-5 w-5 shrink-0 hover:bg-destructive hover:text-destructive-foreground"
+                                    className={`h-6 w-6 shrink-0 rounded-lg transition-opacity ${isSelected ? 'text-primary-foreground/80 opacity-100 hover:bg-primary-foreground/20 hover:text-primary-foreground' : 'opacity-0 hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100'}`}
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       handleDeleteSession(workspace, session)
@@ -533,17 +580,18 @@ export default function SessionManager() {
                                   </Button>
                                 </div>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge variant="secondary" className="text-xs h-4 px-1.5">
+                                  <Badge variant={isSelected ? 'outline' : 'secondary'} className={`h-4 rounded-full px-1.5 text-[10px] font-normal ${isSelected ? 'border-primary-foreground/35 bg-primary-foreground/15 text-primary-foreground' : ''}`}>
                                     {session.sessionType}
                                   </Badge>
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <span className={`flex items-center gap-1 text-xs ${isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
                                     <MessageSquare className="h-2.5 w-2.5" />
                                     {session.messageCount}
                                   </span>
                                 </div>
                               </div>
                             </Card>
-                          ))
+                            )
+                          })
                         )}
                       </div>
                     )}
@@ -555,16 +603,19 @@ export default function SessionManager() {
         </div>
 
         {/* Right Panel - Session Detail */}
-        <div className="flex-1 flex flex-col">
+        <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-border/70 bg-card/70 shadow-sm backdrop-blur-xl flex flex-col">
           {loading && selectedSession === null ? (
-            <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin" />
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-background/80 px-5 py-4 shadow-sm">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <span className="text-sm">正在加载会话...</span>
+              </div>
             </div>
           ) : selectedSession ? (
             <>
-              <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
+              <div className="border-b border-border/70 bg-background/75 px-5 py-3.5 shadow-sm flex items-center justify-between">
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-sm font-semibold text-foreground truncate">{selectedSession.title}</h2>
+                  <h2 className="truncate text-base font-semibold tracking-tight text-foreground">{selectedSession.title}</h2>
                   <p className="text-[11px] text-muted-foreground mt-0.5 truncate font-mono">
                     {selectedSession.workspaceDirectory}
                   </p>
@@ -573,7 +624,7 @@ export default function SessionManager() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 text-xs"
+                    className="h-8 rounded-full px-3 text-xs"
                     onClick={() => handleExportSession('json')}
                   >
                     <Download className="h-3.5 w-3.5 mr-1" />
@@ -582,7 +633,7 @@ export default function SessionManager() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 text-xs"
+                    className="h-8 rounded-full px-3 text-xs"
                     onClick={() => handleExportSession('markdown')}
                   >
                     <Download className="h-3.5 w-3.5 mr-1" />
@@ -592,7 +643,7 @@ export default function SessionManager() {
               </div>
 
               <ScrollArea className="flex-1">
-                <div className="p-4 space-y-4 max-w-4xl">
+                <div className="mx-auto max-w-5xl space-y-4 p-5">
                   {/* Conversation Summary - 从第一条消息中提取 */}
                   {selectedSession.history.length > 0 &&
                     selectedSession.history[0].message.role === 'user' &&
@@ -600,14 +651,14 @@ export default function SessionManager() {
                     (selectedSession.history[0].message.content[0].text.includes('CONTEXT TRANSFER') ||
                       selectedSession.history[0].message.content[0].text.includes('## TASK') ||
                       selectedSession.title.includes('(Continued)')) && (
-                      <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-                        <div className="flex items-start gap-3">
-                          <div className="text-2xl shrink-0">📝</div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium mb-2 text-blue-900 dark:text-blue-100">
+                      <Card className="overflow-hidden rounded-2xl border-blue-200/80 bg-gradient-to-br from-blue-50 to-cyan-50 p-0 shadow-sm dark:border-blue-800/70 dark:from-blue-950/70 dark:to-cyan-950/40">
+                        <div className="flex items-start gap-3 p-4">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-500/10 text-xl ring-1 ring-blue-500/20">📝</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
                               对话摘要（上下文压缩）
                             </div>
-                            <div className="text-sm text-blue-800 dark:text-blue-200 whitespace-pre-wrap break-words">
+                            <div className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-white/55 p-3 text-sm leading-6 text-blue-900 ring-1 ring-blue-200/60 dark:bg-black/20 dark:text-blue-100 dark:ring-blue-800/50">
                               {selectedSession.history[0].message.content[0].text}
                             </div>
                           </div>
@@ -617,7 +668,7 @@ export default function SessionManager() {
 
                   {/* Messages */}
                   {selectedSession.history.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
+                    <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 py-14 text-center text-sm text-muted-foreground">
                       此会话没有消息
                     </div>
                   ) : (
@@ -635,17 +686,22 @@ export default function SessionManager() {
                       }
 
                       return (
-                        <Card key={item.message.id} className="p-4">
-                          <div className="flex items-start gap-3">
-                            <div className="text-2xl shrink-0">
+                        <Card key={item.message.id} className={`overflow-hidden rounded-2xl border-border/70 p-0 shadow-sm ${item.message.role === 'user' ? 'bg-background' : 'bg-muted/25'}`}>
+                          <div className="flex items-start gap-3 p-4">
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-lg ring-1 ${item.message.role === 'user' ? 'bg-primary/10 ring-primary/20' : 'bg-emerald-500/10 ring-emerald-500/20'}`}>
                               {item.message.role === 'user' ? '👤' : '🤖'}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium mb-2">
-                                {item.message.role === 'user' ? 'User' : 'Assistant'}
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-2 flex items-center gap-2">
+                                <span className="text-sm font-semibold text-foreground">
+                                  {item.message.role === 'user' ? 'User' : 'Assistant'}
+                                </span>
+                                <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] font-normal">
+                                  #{index + 1}
+                                </Badge>
                               </div>
                               {item.message.content.map((content, i) => (
-                                <div key={i} className="whitespace-pre-wrap text-sm break-words">
+                                <div key={i} className="whitespace-pre-wrap break-words rounded-xl bg-background/70 p-3 text-sm leading-6 text-foreground/90 ring-1 ring-border/50">
                                   {content.text}
                                 </div>
                               ))}
@@ -659,10 +715,13 @@ export default function SessionManager() {
               </ScrollArea>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">选择一个会话查看详情</p>
+            <div className="flex-1 flex items-center justify-center p-8">
+              <div className="max-w-sm rounded-3xl border border-dashed border-border/80 bg-background/70 px-8 py-10 text-center shadow-sm">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                  <MessageSquare className="h-7 w-7 text-primary" />
+                </div>
+                <p className="font-medium text-foreground">选择一个会话查看详情</p>
+                <p className="mt-2 text-sm text-muted-foreground">从左侧工作区树或搜索结果中选择历史对话。</p>
               </div>
             </div>
           )}

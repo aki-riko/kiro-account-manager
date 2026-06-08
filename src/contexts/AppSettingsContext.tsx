@@ -30,6 +30,7 @@ export interface AppSettings {
   telemetryUsageAnalytics: boolean;
   telemetryEditStats: boolean;
   telemetryFeedback: boolean;
+  appProxyMode: 'followKiro' | 'disabled' | string;
 }
 
 interface AppSettingsContextValue {
@@ -69,7 +70,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   telemetryContentCollection: false,
   telemetryUsageAnalytics: false,
   telemetryEditStats: false,
-  telemetryFeedback: false
+  telemetryFeedback: false,
+  appProxyMode: 'followKiro'
 }
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {

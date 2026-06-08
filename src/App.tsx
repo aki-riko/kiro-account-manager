@@ -33,7 +33,7 @@ function App() {
   const [activeMenu, setActiveMenu] = useState<string>(() => {
     return localStorage.getItem('activeMenu') || 'home'
   })
-  const [mountedRouteIds, setMountedRouteIds] = useState<string[]>(() => 
+  const [mountedRouteIds, setMountedRouteIds] = useState<string[]>(() =>
     getMountedRouteIds([], localStorage.getItem('activeMenu') || 'home')
   )
   const { t } = useApp()
@@ -52,7 +52,14 @@ function App() {
   }, [activeMenu])
 
   useEffect(() => {
-    dismissBootSplash()
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        dismissBootSplash()
+        invoke('show_main_window').catch((e) => {
+          console.error('Failed to show main window:', e)
+        })
+      })
+    })
   }, [])
 
   useEffect(() => {
@@ -76,9 +83,9 @@ function App() {
         checkAuth()
         setActiveMenu('accounts')
       })
-      
+
       // 后端自动运行，前端无需监听 settings-changed 和 app-settings-changed
-      
+
       unlistenBanned = await listen<{ email: string }>('account-banned', (event) => {
         if (!mounted) return
         showError('账号已封禁', `账号 ${event.payload.email} 已被封禁，无法继续使用`)
@@ -96,8 +103,8 @@ function App() {
     }
 
     setupListeners()
-    
-    return () => { 
+
+    return () => {
       mounted = false
       if (unlisten) unlisten()
       if (unlistenBanned) unlistenBanned()
@@ -157,8 +164,8 @@ function App() {
     <PrivacyProvider>
       <AccountProvider>
         <div className="flex h-screen w-full bg-transparent overflow-hidden">
-          <Sidebar 
-            activeMenu={activeMenu} 
+          <Sidebar
+            activeMenu={activeMenu}
             onMenuChange={setActiveMenu}
             onLogout={handleLogout}
           />
@@ -169,10 +176,10 @@ function App() {
               </Suspense>
             </div>
           </main>
-          
+
           <UpdateChecker />
           <WelcomeModal />
-          <Toaster 
+          <Toaster
             position="top-center"
             toastOptions={{
               style: {

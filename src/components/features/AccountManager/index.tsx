@@ -9,7 +9,7 @@ import { getTags, getGroups } from '../../../api/groupTag'
 import { applyFilters } from './utils/filterUtils'
 import { cn } from '../../../utils/cn'
 import { showSuccess, showError } from '../../../utils/toast'
-import { getAccountDisplayName } from '../../../utils/accountStats'
+import { getAccountDisplayName, calcAccountUsagePercent } from '../../../utils/accountStats'
 import { normalizeAccountStatus } from '../../../utils/accountStatus'
 import { normalizeAccountForUi } from './utils/accountRuntime'
 import AccountHeader from './AccountHeader'
@@ -22,6 +22,7 @@ import BatchEditModal from './BatchEditModal'
 import ConfirmModal from './ConfirmModal'
 import { AccountListSkeleton, AccountTableSkeleton } from '../../shared/Skeleton'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
+import { ListAvailableModelsResponse } from '../../../types/account'
 import React from 'react'
 
 interface AccountManagerProps {
@@ -32,10 +33,10 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   const { t, theme } = useApp()
   const accent = useMemo(() => getThemeAccent(theme), [theme])
   const { showConfirm } = useDialog()
-  
+
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  
+
   // 优化：将 selectedIds 转为 Set，提升查找性能（O(1) vs O(n)）
   const selectedIdsSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const [editingAccount, setEditingAccount] = useState<any>(null)
@@ -64,10 +65,10 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
 
   // 当前登录的本地 token
   const [localToken, setLocalToken] = useState<any>(null)
-  
+
   // 用于管理复制提示的timer
   const copiedTimerRef = useRef<NodeJS.Timeout | null>(null)
-  
+
   // 切换账号 hook
   const {
     switchingId,
@@ -77,7 +78,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     handleLogoutAccount,
     confirmSwitch,
     closeSwitchDialog} = useSwitchAccount(setLocalToken)
-  
+
   useEffect(() => {
     invoke<any>('get_kiro_local_token').then(setLocalToken).catch(() => setLocalToken(null))
   }, [])
@@ -170,8 +171,8 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     })
 
     try {
-      const response = await invoke<any>('list_available_models', { id, forceRefresh })
-      const models = Array.isArray(response?.availableModels) ? response.availableModels : []
+      const response = await invoke<ListAvailableModelsResponse>('list_available_models', { id, forceRefresh })
+      const models = response.availableModels
       setAvailableModelsById(prev => ({ ...prev, [id]: models }))
       setAccounts(prev => prev.map(account => (
         account.id === id
@@ -179,8 +180,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
               ...account,
               availableModelsCache: {
                 response,
-                cachedAt: Math.floor(Date.now() / 1000),
-                modelProvider: "qdev"}}
+                cachedAt: Math.floor(Date.now() / 1000)}}
           : account
       )))
       return response
@@ -295,20 +295,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   }, [])
 
   const getUsagePercent = useCallback((account: any) => {
-    const breakdown = account.usageData?.usageBreakdownList?.[0]
-    if (!breakdown) return 0
-
-    const mainUsed = Number(breakdown.currentUsage || 0)
-    const mainLimit = Number(breakdown.usageLimit || 0)
-    const trialUsed = Number(breakdown.freeTrialInfo?.currentUsage || 0)
-    const trialLimit = Number(breakdown.freeTrialInfo?.usageLimit || 0)
-    const bonusTotals = (breakdown.bonuses || []).reduce((sum: any, bonus: any) => ({
-      used: sum.used + Number(bonus.currentUsage || 0),
-      limit: sum.limit + Number(bonus.usageLimit || 0)}), { used: 0, limit: 0 })
-
-    const used = mainUsed + trialUsed + bonusTotals.used
-    const limit = mainLimit + trialLimit + bonusTotals.limit
-    return limit > 0 ? (used / limit) * 100 : 0
+    return calcAccountUsagePercent(account)
   }, [])
 
   const filteredAccounts = useMemo(() => {
@@ -399,7 +386,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   const handleSelectOne = useCallback((id: string, checked: boolean) => {
     setSelectedIds(prev => checked ? [...prev, id] : prev.filter(i => i !== id))
   }, [])
-  const handleCopy = useCallback((text: string, id: string) => { 
+  const handleCopy = useCallback((text: string, id: string) => {
     navigator.clipboard.writeText(text).catch(e => console.error('Copy failed:', e))
     setCopiedId(id)
     if (copiedTimerRef.current) {
@@ -407,7 +394,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     }
     copiedTimerRef.current = setTimeout(() => setCopiedId(null), 1500)
   }, [])
-  
+
   // 切换账号启用/禁用
   const handleToggleEnabled = useCallback(async (account: any, enabled: boolean) => {
     // 乐观更新：立即更新本地状态
@@ -471,7 +458,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     // 防呆：检查是否是当前账号
     const account = accounts.find(a => a.id === id)
     const isCurrent = localToken?.refreshToken && account?.refreshToken === localToken.refreshToken
-    
+
     if (isCurrent) {
       const confirmed = await showConfirm(
         '⚠️ 删除当前账号',
@@ -482,7 +469,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
       const confirmed = await showConfirm(t('accounts.delete'), t('accounts.confirmDelete'))
       if (!confirmed) return
     }
-    
+
     await invoke('delete_account', { id })
     removeAccountsLocally([id])
   }, [accounts, localToken, removeAccountsLocally, showConfirm, t])
@@ -717,8 +704,8 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
               const nextTagLinks = Array.isArray(selectedTagIds)
                 ? selectedTagIds.map(tagId => ({ tagId }))
                 : account.tagLinks
-              return { 
-                ...account, 
+              return {
+                ...account,
                 tagLinks: nextTagLinks,
                 groupId: selectedGroupId
               }
@@ -729,7 +716,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
         />
       )}
 
-      
+
       {/* 切换账号弹窗 */}
       {switchDialog && (
         <ConfirmModal

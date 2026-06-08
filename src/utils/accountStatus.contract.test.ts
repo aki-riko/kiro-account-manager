@@ -28,15 +28,17 @@ const cappedAccount = {
 
 assert.equal(normalizeAccountStatus(cappedAccount), 'capped')
 assert.equal(isActiveStatus(cappedAccount), false)
-assert.equal(isUnavailableStatus(cappedAccount), true)
+assert.equal(isUnavailableStatus(cappedAccount), false)
 assert.deepEqual(getAccountStatusMeta(cappedAccount), {
   key: 'capped',
   label: '封顶',
   tone: 'warning'
 })
 
-assert.match(autoRefresh, /isUnavailableStatus/)
+assert.match(autoRefresh, /export function useAutoRefresh\(\)/)
+assert.match(autoRefresh, /return \{\}/)
 assert.doesNotMatch(autoRefresh, /status !== 'banned'/)
+assert.doesNotMatch(autoRefresh, /invoke\(/)
 
 assert.match(useAccounts, /isUnavailableStatus/)
 assert.doesNotMatch(useAccounts, /status === 'banned'/)

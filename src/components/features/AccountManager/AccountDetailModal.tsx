@@ -171,10 +171,13 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
     }
   }, [])
 
-  // 初始化时获取模型
-  useEffect(() => {
-    fetchModels()
-  }, [account.id])
+  const handleToggleModelsExpanded = () => {
+    const nextExpanded = !modelsExpanded
+    setModelsExpanded(nextExpanded)
+    if (nextExpanded && models.length === 0 && !modelsLoading) {
+      fetchModels()
+    }
+  }
 
   useEffect(() => {
     setCurrentAccount(account)
@@ -206,6 +209,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
       const quota = isBanned ? 0 : (updated.usageData?.usageBreakdownList?.[0]?.usageLimit ?? 0)
       const used = updated.usageData?.usageBreakdownList?.[0]?.currentUsage ?? 0
       setForm(prev => ({ ...prev, quota, used, status: updated.status }))
+      void onRefresh?.()
     } catch (e) {
       const errorMsg = String(e)
       let status = '刷新失败'
@@ -634,7 +638,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
           <div className={`px-6 py-4`}>
             <div
               className="flex items-center gap-2 cursor-pointer select-none"
-              onClick={() => setModelsExpanded(!modelsExpanded)}
+              onClick={handleToggleModelsExpanded}
             >
               <div className={`p-1.5 rounded-lg bg-muted/30`}>
                 <Cpu size={18} className={"text-muted-foreground"} />

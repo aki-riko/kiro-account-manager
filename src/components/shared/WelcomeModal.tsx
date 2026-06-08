@@ -1,11 +1,12 @@
+
 import { useState, useEffect } from 'react'
-import { Coffee, X } from 'lucide-react'
+import { Coffee, X, Users, ExternalLink } from 'lucide-react'
 import { useApp } from '../../hooks/useApp'
 import alipayQR from '../../assets/donate/alipay.jpg'
 import wechatQR from '../../assets/donate/wechat.jpg'
 
 function WelcomeModal() {
-  
+  const { t } = useApp()
   const [open, setOpen] = useState(false)
   const [previewImg, setPreviewImg] = useState(null)
 
@@ -13,7 +14,7 @@ function WelcomeModal() {
     // 检查今天是否已显示过
     const lastShown = localStorage.getItem('welcome_last_shown')
     const today = new Date().toDateString()
-    
+
     if (lastShown !== today) {
       // 今天还没显示过，显示弹窗
       setOpen(true)
@@ -34,7 +35,7 @@ function WelcomeModal() {
       <div className={`glass-card rounded-2xl w-full max-w-[520px] shadow-2xl border border-border relative overflow-hidden`}>
         {/* 背景装饰 - 简化 */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        
+
         {/* 关闭按钮 */}
         <button
           onClick={handleClose}
@@ -50,17 +51,17 @@ function WelcomeModal() {
             <div className="relative flex-shrink-0">
               <div className="w-16 h-16 bg-gradient-to-br from-[#4361ee] to-[#7c3aed] rounded-2xl flex items-center justify-center shadow-lg">
                 <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
-                  <path d="M20 4C12 4 6 10 6 18C6 22 8 25 8 25C8 25 7 28 7 30C7 32 8 34 10 34C11 34 12 33 13 32C14 33 16 34 20 34C24 34 26 33 27 32C28 33 29 34 30 34C32 34 33 32 33 30C33 28 32 25 32 25C32 25 34 22 34 18C34 10 28 4 20 4ZM14 20C12.5 20 11 18.5 11 17C11 15.5 12.5 14 14 14C15.5 14 17 15.5 17 17C17 18.5 15.5 20 14 20ZM26 20C24.5 20 23 18.5 23 17C23 15.5 24.5 14 26 14C27.5 14 29 15.5 29 17C29 18.5 27.5 20 26 20Z" fill="white"/>
+                  <path d="M20 4C12 4 6 10 6 18C6 22 8 25 8 25C8 25 7 28 7 30C7 32 8 34 10 34C11 34 12 33 13 32C14 33 16 34 20 34C24 34 26 33 27 32C28 33 29 34 30 34C32 34 33 32 33 30C33 28 32 25 32 25C32 25 34 22 34 18C34 10 28 4 20 4ZM14 20C12.5 20 11 18.5 11 17C11 15.5 12.5 14 14 14C15.5 14 17 15.5 17 17C17 18.5 15.5 20 14 20ZM26 20C24.5 20 23 18.5 23 17C23 15.5 24.5 14 26 14C27.5 14 29 15.5 29 17C29 18.5 27.5 20 26 20Z" fill="white" />
                 </svg>
               </div>
             </div>
 
             <div className="flex-1">
               <h2 className={`text-xl font-bold text-foreground mb-1`}>
-                ⚠️ 重要提示
+                {t('welcome.importantNotice')}
               </h2>
               <p className={`text-sm text-muted-foreground`}>
-                本软件永久免费
+                {t('welcome.permanentlyFree')}
               </p>
             </div>
           </div>
@@ -76,12 +77,12 @@ function WelcomeModal() {
               </div>
               <div className="flex-1">
                 <p className={`text-sm font-semibold text-foreground mb-2`}>
-                  重要提示：本软件永久免费
+                  {t('welcome.importantNoticeSoftwareFree')}
                 </p>
                 <div className={`text-xs text-muted-foreground space-y-1.5 leading-relaxed`}>
-                  <p>• 本软件完全开源免费，任何人不得以任何形式收费</p>
-                  <p>• 所有功能完全开放，无任何限制</p>
-                  <p>• 如有人向您收费，请立即举报</p>
+                  <p>{t('welcome.openSourceFree')}</p>
+                  <p>{t('welcome.allFeaturesOpen')}</p>
+                  <p>{t('welcome.reportIfCharged')}</p>
                 </div>
               </div>
             </div>
@@ -89,73 +90,80 @@ function WelcomeModal() {
 
           {/* 赞助信息 */}
           <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Coffee size={18} className="text-amber-500" />
-                <p className={`text-base font-semibold text-foreground`}>
-                  💖 请作者喝杯咖啡
-                </p>
-              </div>
-              
-              <div className={`bg-muted/30 rounded-xl p-4 space-y-3`}>
-                <p className={`text-sm text-muted-foreground`}>
-                  如果这个工具帮到了你，欢迎请我喝杯咖啡，你的支持是我持续更新的动力 ❤️
-                </p>
-                
-                {/* 赞助福利 */}
-                <div className={`bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-3 space-y-2`}>
-                  <p className={`text-xs font-medium text-foreground`}>赞助用户福利：</p>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">⚡</span>
-                      <p className={`text-sm text-foreground`}>问题反馈优先处理</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🎯</span>
-                      <p className={`text-sm text-foreground`}>功能建议优先实现</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🔧</span>
-                      <p className={`text-sm text-foreground`}>一对一技术支持</p>
-                    </div>
-                  </div>
-                  <p className={`text-xs text-muted-foreground pt-1 border-t border-border/50`}>
-                    💡 提示：赞助时请备注你的 GitHub 用户名或邮箱，方便联系
-                  </p>
-                </div>
-                
-                {/* 二维码 - 简化 */}
-                <div className="flex justify-center gap-8 pt-2">
-                  <div 
-                    className="flex flex-col items-center gap-2 cursor-pointer group"
-                    onClick={() => setPreviewImg(alipayQR)}
-                  >
-                    <div className="bg-white p-2 rounded-xl shadow-lg group-hover:shadow-xl transition-shadow">
-                      <img 
-                        src={alipayQR} 
-                        alt="支付宝" 
-                        className="w-24 h-24 rounded-lg"
-                      />
-                    </div>
-                    <p className={`text-sm font-medium text-foreground`}>支付宝</p>
-                  </div>
-                  <div 
-                    className="flex flex-col items-center gap-2 cursor-pointer group"
-                    onClick={() => setPreviewImg(wechatQR)}
-                  >
-                    <div className="bg-white p-2 rounded-xl shadow-lg group-hover:shadow-xl transition-shadow">
-                      <img 
-                        src={wechatQR} 
-                        alt="微信支付" 
-                        className="w-24 h-24 rounded-lg"
-                      />
-                    </div>
-                    <p className={`text-sm font-medium text-foreground`}>微信支付</p>
-                  </div>
-                </div>
-                <p className={`text-xs text-muted-foreground text-center`}>点击图片可放大查看</p>
-              </div>
+            <div className="flex items-center gap-2 mb-3">
+              <Coffee size={18} className="text-amber-500" />
+              <p className={`text-base font-semibold text-foreground`}>
+                {t('welcome.buyMeCoffee')}
+              </p>
             </div>
-          
+
+            <div className={`bg-muted/30 rounded-xl p-4 space-y-3`}>
+              <p className={`text-sm text-muted-foreground`}>
+                {t('welcome.supportMessage')}
+              </p>
+
+
+
+
+
+
+              {/* 二维码 - 简化 */}
+              <div className="flex justify-center gap-8 pt-2">
+                <div
+                  className="flex flex-col items-center gap-2 cursor-pointer group"
+                  onClick={() => setPreviewImg(alipayQR)}
+                >
+                  <div className="bg-white p-2 rounded-xl shadow-lg group-hover:shadow-xl transition-shadow">
+                    <img
+                      src={alipayQR}
+                      alt="支付宝"
+                      className="w-24 h-24 rounded-lg"
+                    />
+                  </div>
+                  <p className={`text-sm font-medium text-foreground`}>{t('welcome.alipay')}</p>
+                </div>
+                <div
+                  className="flex flex-col items-center gap-2 cursor-pointer group"
+                  onClick={() => setPreviewImg(wechatQR)}
+                >
+                  <div className="bg-white p-2 rounded-xl shadow-lg group-hover:shadow-xl transition-shadow">
+                    <img
+                      src={wechatQR}
+                      alt="WeChat Pay"
+                      className="w-24 h-24 rounded-lg"
+                    />
+                  </div>
+                  <p className={`text-sm font-medium text-foreground`}>{t('welcome.wechatPay')}</p>
+                </div>
+              </div>
+              <p className={`text-xs text-muted-foreground text-center`}>{t('welcome.clickToEnlarge')}</p>
+              {/* 赞助用户群 */}
+              <div className={`rounded-lg border border-purple-500/20 bg-purple-500/5 p-3`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Users size={14} className="text-purple-500" />
+                  <p className={`text-xs font-medium text-foreground`}>{t('welcome.sponsorBenefits')}</p>
+                </div>
+                <p className={`text-xs text-muted-foreground mb-2`}>{t('welcome.priorityFeedback')}</p>
+                <div className="mb-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-foreground">
+                  {t('welcome.sponsorHint')}
+                </div>
+                <a
+                  href="https://qm.qq.com/q/xzWxJsSUD0"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium transition-colors"
+                >
+                  <Users size={12} />
+                  QQ 群: 644918166
+                  <ExternalLink size={11} />
+                </a>
+              </div>
+
+            </div>
+
+
+          </div>
+
         </div>
 
         {/* 底部按钮 - 简化 */}
@@ -164,24 +172,24 @@ function WelcomeModal() {
             onClick={handleClose}
             className="px-6 py-3 text-sm font-semibold rounded-xl text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 active:scale-[0.98]"
           >
-            我知道了
+            {t('welcome.iUnderstand')}
           </button>
         </div>
       </div>
 
       {/* 图片预览弹窗 */}
       {previewImg && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
           onClick={() => setPreviewImg(null)}
         >
           <div className="relative" onClick={(e) => e.stopPropagation()}>
-            <img 
-              src={previewImg} 
-              alt="预览" 
+            <img
+              src={previewImg}
+              alt="预览"
               className="max-w-[360px] max-h-[360px] rounded-2xl shadow-2xl"
             />
-            <button 
+            <button
               className={`absolute -top-3 -right-3 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-colors duration-200 cursor-pointer focus:ring-2 focus:ring-blue-500/30 glass-card border border-border`}
               onClick={() => setPreviewImg(null)}
             >

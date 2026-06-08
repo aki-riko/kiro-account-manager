@@ -29,6 +29,7 @@ function Settings() {
     const [machineIdMode, setMachineIdMode] = useState<'random' | 'bind'>('bind') // 'random' | 'bind'
     const [httpProxy, setHttpProxy] = useState('')
     const [originalProxy, setOriginalProxy] = useState('') // 原始代理值，用于判断是否修改
+    const [appProxyMode, setAppProxyMode] = useState('followKiro')
     const [savingProxy, setSavingProxy] = useState(false)
     const [savingModel, setSavingModel] = useState(false)
     const [browserPath, setBrowserPath] = useState('')
@@ -124,6 +125,7 @@ function Settings() {
                 setAutoSwitchInterval(appSettings.autoSwitchInterval ?? 5)
                 // 关闭窗口行为
                 setCloseToTray(appSettings.closeToTray ?? false)
+                setAppProxyMode(appSettings.appProxyMode || 'followKiro')
             }
         } catch (err) {
             console.error('Failed to load settings:', err)
@@ -170,6 +172,11 @@ function Settings() {
         } finally {
             setSavingProxy(false)
         }
+    }
+
+    const handleAppProxyModeChange = async (mode: string) => {
+        setAppProxyMode(mode)
+        await saveAppSettings({ appProxyMode: mode })
     }
 
     const handleApplyModel = async (model: string) => {
@@ -479,6 +486,7 @@ function Settings() {
                             httpProxy={httpProxy}
                             setHttpProxy={setHttpProxy}
                             originalProxy={originalProxy}
+                            appProxyMode={appProxyMode}
                             savingProxy={savingProxy}
                             detectingProxy={detectingProxy}
                             savingModel={savingModel}
@@ -496,6 +504,7 @@ function Settings() {
                             handleConfigureMcpChange={handleConfigureMcpChange}
                             handleApplyProxy={handleApplyProxy}
                             handleDetectProxy={handleDetectProxy}
+                            handleAppProxyModeChange={handleAppProxyModeChange}
                             handleCodebaseIndexingChange={handleCodebaseIndexingChange}
                             handleTabAutocompleteChange={handleTabAutocompleteChange}
                             handleUsageSummaryChange={handleUsageSummaryChange}

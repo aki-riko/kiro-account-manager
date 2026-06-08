@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
-const source = await readFile(new URL('./useAutoSwitch.js', import.meta.url), 'utf8')
+const source = await readFile(new URL('./useAutoSwitch.ts', import.meta.url), 'utf8')
 
-assert.match(source, /invoke\('get_kiro_local_token'\)/)
-assert.doesNotMatch(source, /invoke\('get_local_token'\)/)
-assert.match(source, /invoke\('switch_kiro_account',\s*\{\s*params\s*\}\)/)
-assert.doesNotMatch(source, /invoke\('switch_account'/)
-assert.doesNotMatch(source, /updates:\s*\{\s*status:\s*'banned'\s*\}/)
-assert.match(source, /invoke\('update_account',\s*\{\s*id:\s*currentAccount\.id,\s*status:\s*'banned'\s*\}\)/)
+assert.match(source, /export function useAutoSwitch\(\)/)
+assert.match(source, /return \{\}/)
+assert.doesNotMatch(source, /invoke\(/)
+assert.doesNotMatch(source, /get_kiro_local_token/)
+assert.doesNotMatch(source, /switch_kiro_account/)
+assert.doesNotMatch(source, /update_account/)
 
-console.log('useAutoSwitch command wiring looks correct')
+console.log('useAutoSwitch is a backend-driven frontend stub')

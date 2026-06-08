@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { X, Download, RefreshCw, Sparkles, CheckCircle2, FileText, AlertCircle } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog'
+import { DialogRoot, DialogContent } from './dialog'
 import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
 import { useApp } from '../../hooks/useApp'
@@ -79,8 +79,8 @@ function UpdateDialog({ updateInfo, update, onClose }) {
   }
 
   return (
-    <Dialog open={true} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+    <DialogRoot open={true} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent maxWidth="512px" showClose={false} className="gap-0 overflow-hidden">
         {/* 顶部横幅 */}
         <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-5 relative">
           <div className="flex items-center gap-4">
@@ -173,7 +173,7 @@ function UpdateDialog({ updateInfo, update, onClose }) {
           )}
         </div>
       </DialogContent>
-    </Dialog>
+    </DialogRoot>
   )
 }
 

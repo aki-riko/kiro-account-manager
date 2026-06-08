@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Github, Heart, Coffee, ExternalLink, Code2, Palette, Cpu, RefreshCw, X, Link2, Gift, Sparkles, Info } from 'lucide-react'
+import { Github, Heart, Coffee, ExternalLink, Code2, Palette, Cpu, RefreshCw, X, Link2, Gift, Sparkles, Info, Users } from 'lucide-react'
 import { getVersion } from '@tauri-apps/api/app'
 import { invoke } from '@tauri-apps/api/core'
 import { check } from '@tauri-apps/plugin-updater'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { DialogRoot, DialogContent } from '@/components/shared/dialog'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import alipayQR from '../../../assets/donate/alipay.jpg'
@@ -23,12 +23,13 @@ const LINKS = {
   kiroGo: 'https://github.com/hj01857655/Kiro-Go',
   tgChannel: 'https://t.me/kiro520',
   tgGroup: 'https://t.me/ide520',
+  qqGroup: 'https://qm.qq.com/q/xzWxJsSUD0',
 }
 
 // Telegram 图标
 const TelegramIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.692-1.653-1.123-2.678-1.799-1.185-.781-.417-1.21.258-1.911.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.442-.752-.244-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.099.155.232.171.326.016.094.036.308.02.475z"/>
+    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.692-1.653-1.123-2.678-1.799-1.185-.781-.417-1.21.258-1.911.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.442-.752-.244-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.099.155.232.171.326.016.094.036.308.02.475z" />
   </svg>
 )
 
@@ -243,18 +244,8 @@ function About() {
           icon={<Coffee size={14} className="text-amber-500" />}
           desc={t('about.donateDesc')}
         >
-          {/* 福利列表 */}
-          <div className="rounded-lg border border-border bg-muted/20 p-3">
-            <div className="flex items-center gap-1.5 mb-2">
-              <Gift size={13} className="text-amber-500" />
-              <span className="text-xs font-medium text-foreground">{t('about.sponsorBenefits')}</span>
-            </div>
-            <ul className="space-y-1">
-              {sponsorBenefits.map((b, i) => (
-                <li key={i} className="text-xs text-muted-foreground leading-relaxed">{b}</li>
-              ))}
-            </ul>
-          </div>
+
+
 
           {/* 提示条 */}
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-blue-500/20 bg-blue-500/5">
@@ -268,6 +259,25 @@ function About() {
             <QRCodeCard src={wechatQR} label={t('about.wechat')} onClick={() => setPreviewImg(wechatQR)} />
           </div>
           <p className="text-[11px] text-center text-muted-foreground">{t('about.clickToEnlarge')}</p>
+
+          {/* 赞助用户群 */}
+          <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Users size={13} className="text-purple-500" />
+              <span className="text-xs font-medium text-foreground">{t('about.sponsorGroup')}</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-2">{t('about.sponsorGroupDesc')}</p>
+            <a
+              href={LINKS.qqGroup}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-purple-500 hover:bg-purple-600 text-white text-xs font-medium transition-colors"
+            >
+              <Users size={12} />
+              {t('about.qqGroup')}: 644918166
+              <ExternalLink size={11} />
+            </a>
+          </div>
         </SectionCard>
 
         {/* === 4. 底部署名 === */}
@@ -282,8 +292,8 @@ function About() {
       </div>
 
       {/* 二维码预览弹窗 */}
-      <Dialog open={!!previewImg} onOpenChange={(open) => !open && setPreviewImg(null)}>
-        <DialogContent className="max-w-fit p-0 bg-transparent border-none shadow-none">
+      <DialogRoot open={!!previewImg} onOpenChange={(open) => !open && setPreviewImg(null)}>
+        <DialogContent maxWidth="fit-content" showClose={false} className="bg-transparent border-none shadow-none">
           <div className="relative">
             {previewImg && <img src={previewImg} alt="预览" className="max-w-[320px] max-h-[320px] rounded-xl shadow-xl" />}
             <button
@@ -295,7 +305,7 @@ function About() {
             </button>
           </div>
         </DialogContent>
-      </Dialog>
+      </DialogRoot>
     </div>
   )
 }

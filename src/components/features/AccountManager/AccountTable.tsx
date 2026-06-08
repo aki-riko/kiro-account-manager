@@ -190,7 +190,7 @@ function AccountTable({
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 220,
+    estimateSize: () => 320,
     overscan: 1})
 
   // 将 selectedIds 转为 Set 提高查找性能
@@ -228,8 +228,8 @@ function AccountTable({
           </button>
         </div>
       ) : (
-        <div 
-          ref={scrollRef} 
+        <div
+          ref={scrollRef}
           className="flex-1 overflow-auto"
         >
           <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
@@ -242,8 +242,8 @@ function AccountTable({
                 transform: `translateY(${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px)`}}
             >
               {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-                <div 
-                  key={virtualRow.key} 
+                <div
+                  key={virtualRow.key}
                   data-index={virtualRow.index}
                 >
                   <VirtualRow
@@ -278,7 +278,7 @@ function AccountTable({
           </div>
         </div>
       )}
-      
+
       {/* 全局右键菜单 */}
       {contextMenuState && (
         <ContextMenu
