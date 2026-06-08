@@ -1,22 +1,23 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传参
-
 use tauri::{AppHandle, State};
 
+use crate::core::account::Account;
 use crate::gateway::{
     clear_gateway_request_logs as clear_gateway_request_logs_inner,
     get_gateway_config as get_gateway_config_inner,
+    get_gateway_endpoint_stats as get_gateway_endpoint_stats_inner,
     get_gateway_log_dir as get_gateway_log_dir_inner,
+    get_gateway_model_stats as get_gateway_model_stats_inner,
     get_gateway_request_logs as get_gateway_request_logs_inner,
     get_gateway_request_stats as get_gateway_request_stats_inner,
-    get_gateway_model_stats as get_gateway_model_stats_inner,
-    get_gateway_endpoint_stats as get_gateway_endpoint_stats_inner,
-    get_gateway_status as get_gateway_status_inner,
+    get_gateway_status as get_gateway_status_inner, load_balancer, log_store,
     open_gateway_log_dir as open_gateway_log_dir_inner,
     save_gateway_config as save_gateway_config_inner, start_gateway as start_gateway_inner,
-    stop_gateway as stop_gateway_inner, GatewayConfig, GatewayRequestLogEntry, GatewayRequestStats, GatewayStatus,
-    log_store,
+    stop_gateway as stop_gateway_inner, GatewayConfig, GatewayRequestLogEntry, GatewayRequestStats,
+    GatewayStatus,
 };
 use crate::state::AppState;
+use std::collections::HashMap;
 
 fn config_for_manual_start(config: &GatewayConfig) -> GatewayConfig {
     config.clone()
@@ -95,9 +96,7 @@ pub async fn open_gateway_log_dir(app: AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn clear_gateway_request_logs(
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn clear_gateway_request_logs(state: State<'_, AppState>) -> Result<(), String> {
     clear_gateway_request_logs_inner(&state).await
 }
 
@@ -148,8 +147,12 @@ fn configure_claude_code(proxy_origin: &str, api_key: &str) -> Result<Vec<String
         .or_else(|_| std::env::var("HOME"))
         .map_err(|_| "无法获取用户主目录".to_string())?;
 
-    let settings_path = std::path::Path::new(&home).join(".claude").join("settings.json");
-    let legacy_path = std::path::Path::new(&home).join(".claude").join("claude.json");
+    let settings_path = std::path::Path::new(&home)
+        .join(".claude")
+        .join("settings.json");
+    let legacy_path = std::path::Path::new(&home)
+        .join(".claude")
+        .join("claude.json");
 
     // 选择正确的配置文件路径
     let path = if settings_path.exists() || !legacy_path.exists() {
@@ -160,23 +163,24 @@ fn configure_claude_code(proxy_origin: &str, api_key: &str) -> Result<Vec<String
 
     // 确保目录存在
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("创建目录失败: {}", e))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
     }
 
     // 备份原文件
     let mut written_paths = Vec::new();
     if path.exists() {
-        let backup_path = format!("{}.kiro-backup-{}", path.display(), chrono::Local::now().format("%Y%m%d%H%M%S"));
-        std::fs::copy(path, &backup_path)
-            .map_err(|e| format!("备份失败: {}", e))?;
+        let backup_path = format!(
+            "{}.kiro-backup-{}",
+            path.display(),
+            chrono::Local::now().format("%Y%m%d%H%M%S")
+        );
+        std::fs::copy(path, &backup_path).map_err(|e| format!("备份失败: {}", e))?;
         written_paths.push(backup_path);
     }
 
     // 读取或创建配置
     let mut config: serde_json::Value = if path.exists() {
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| format!("读取配置失败: {}", e))?;
+        let content = std::fs::read_to_string(path).map_err(|e| format!("读取配置失败: {}", e))?;
         serde_json::from_str(&content).unwrap_or(serde_json::json!({}))
     } else {
         serde_json::json!({})
@@ -187,18 +191,24 @@ fn configure_claude_code(proxy_origin: &str, api_key: &str) -> Result<Vec<String
         config["env"] = serde_json::json!({});
     }
 
-    let env = config["env"].as_object_mut()
+    let env = config["env"]
+        .as_object_mut()
         .ok_or("env 字段不是对象".to_string())?;
 
     // 写入反代配置
-    env.insert("ANTHROPIC_BASE_URL".to_string(), serde_json::Value::String(proxy_origin.to_string()));
-    env.insert("ANTHROPIC_API_KEY".to_string(), serde_json::Value::String(api_key.to_string()));
+    env.insert(
+        "ANTHROPIC_BASE_URL".to_string(),
+        serde_json::Value::String(proxy_origin.to_string()),
+    );
+    env.insert(
+        "ANTHROPIC_API_KEY".to_string(),
+        serde_json::Value::String(api_key.to_string()),
+    );
 
     // 写入文件
-    let content = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("序列化失败: {}", e))?;
-    std::fs::write(path, &content)
-        .map_err(|e| format!("写入失败: {}", e))?;
+    let content =
+        serde_json::to_string_pretty(&config).map_err(|e| format!("序列化失败: {}", e))?;
+    std::fs::write(path, &content).map_err(|e| format!("写入失败: {}", e))?;
 
     written_paths.insert(0, path.display().to_string());
     Ok(written_paths)
@@ -215,8 +225,7 @@ fn configure_codex(openai_base_url: &str, api_key: &str) -> Result<Vec<String>, 
     let config_path = codex_dir.join("config.toml");
 
     // 确保目录存在
-    std::fs::create_dir_all(&codex_dir)
-        .map_err(|e| format!("创建 .codex 目录失败: {}", e))?;
+    std::fs::create_dir_all(&codex_dir).map_err(|e| format!("创建 .codex 目录失败: {}", e))?;
 
     let mut written_paths = Vec::new();
     let timestamp = chrono::Local::now().format("%Y%m%d%H%M%S");
@@ -224,8 +233,7 @@ fn configure_codex(openai_base_url: &str, api_key: &str) -> Result<Vec<String>, 
     // 1. 写入 auth.json
     if auth_path.exists() {
         let backup = format!("{}.kiro-backup-{}", auth_path.display(), timestamp);
-        std::fs::copy(&auth_path, &backup)
-            .map_err(|e| format!("备份 auth.json 失败: {}", e))?;
+        std::fs::copy(&auth_path, &backup).map_err(|e| format!("备份 auth.json 失败: {}", e))?;
     }
 
     let mut auth: serde_json::Value = if auth_path.exists() {
@@ -236,13 +244,15 @@ fn configure_codex(openai_base_url: &str, api_key: &str) -> Result<Vec<String>, 
     };
 
     if let Some(obj) = auth.as_object_mut() {
-        obj.insert("OPENAI_API_KEY".to_string(), serde_json::Value::String(api_key.to_string()));
+        obj.insert(
+            "OPENAI_API_KEY".to_string(),
+            serde_json::Value::String(api_key.to_string()),
+        );
     }
 
-    let auth_content = serde_json::to_string_pretty(&auth)
-        .map_err(|e| format!("序列化 auth.json 失败: {}", e))?;
-    std::fs::write(&auth_path, &auth_content)
-        .map_err(|e| format!("写入 auth.json 失败: {}", e))?;
+    let auth_content =
+        serde_json::to_string_pretty(&auth).map_err(|e| format!("序列化 auth.json 失败: {}", e))?;
+    std::fs::write(&auth_path, &auth_content).map_err(|e| format!("写入 auth.json 失败: {}", e))?;
     written_paths.push(auth_path.display().to_string());
 
     // 2. 写入 config.toml
@@ -260,8 +270,7 @@ fn configure_codex(openai_base_url: &str, api_key: &str) -> Result<Vec<String>, 
 
     // 构建新的 config.toml 内容
     let new_toml = build_codex_config_toml(&existing_toml, openai_base_url);
-    std::fs::write(&config_path, &new_toml)
-        .map_err(|e| format!("写入 config.toml 失败: {}", e))?;
+    std::fs::write(&config_path, &new_toml).map_err(|e| format!("写入 config.toml 失败: {}", e))?;
     written_paths.push(config_path.display().to_string());
 
     Ok(written_paths)
@@ -269,7 +278,11 @@ fn configure_codex(openai_base_url: &str, api_key: &str) -> Result<Vec<String>, 
 
 /// 构建 Codex config.toml 内容
 fn build_codex_config_toml(existing: &str, openai_base_url: &str) -> String {
-    let newline = if existing.contains("\r\n") { "\r\n" } else { "\n" };
+    let newline = if existing.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
     let lines: Vec<&str> = existing.lines().collect();
     let mut result: Vec<String> = Vec::new();
     let mut in_custom_section = false;
@@ -346,4 +359,212 @@ mod tests {
             "manual stop should not clear auto-start preference"
         );
     }
+}
+
+/// 获取所有被速率限制的账号
+#[tauri::command]
+pub async fn get_rate_limited_accounts(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let balancer = {
+        let gateway = state.gateway.lock().unwrap();
+        gateway.as_ref().map(|g| g.load_balancer.clone())
+    };
+
+    if let Some(lb) = balancer {
+        Ok(lb.get_rate_limited_accounts().await)
+    } else {
+        Err("Gateway not initialized".to_string())
+    }
+}
+
+/// 获取所有被封禁的账号
+#[tauri::command]
+pub async fn get_banned_accounts(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let balancer = {
+        let gateway = state.gateway.lock().unwrap();
+        gateway.as_ref().map(|g| g.load_balancer.clone())
+    };
+
+    if let Some(lb) = balancer {
+        Ok(lb.get_banned_accounts().await)
+    } else {
+        Err("Gateway not initialized".to_string())
+    }
+}
+
+/// 清除账号的封禁标记
+#[tauri::command]
+pub async fn clear_banned_account(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> Result<(), String> {
+    let balancer = {
+        let gateway = state.gateway.lock().unwrap();
+        gateway.as_ref().map(|g| g.load_balancer.clone())
+    };
+
+    if let Some(lb) = balancer {
+        lb.clear_banned(&account_id).await;
+        Ok(())
+    } else {
+        Err("Gateway not initialized".to_string())
+    }
+}
+
+/// 清除账号的速率限制标记
+#[tauri::command]
+pub async fn clear_rate_limit_account(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> Result<(), String> {
+    let balancer = {
+        let gateway = state.gateway.lock().unwrap();
+        gateway.as_ref().map(|g| g.load_balancer.clone())
+    };
+
+    if let Some(lb) = balancer {
+        lb.clear_rate_limit(&account_id).await;
+        Ok(())
+    } else {
+        Err("Gateway not initialized".to_string())
+    }
+}
+
+/// 获取所有账号的健康状态
+#[tauri::command]
+pub async fn get_all_account_health(
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let balancer = {
+        let gateway = state.gateway.lock().unwrap();
+        gateway.as_ref().map(|g| g.load_balancer.clone())
+    };
+
+    if let Some(lb) = balancer {
+        let health_map = lb.get_all_health().await;
+        // 转换为可序列化的格式
+        let serializable: HashMap<String, load_balancer::SerializableAccountHealth> = health_map
+            .iter()
+            .map(|(k, v)| (k.clone(), v.into()))
+            .collect();
+        Ok(serde_json::to_value(serializable).unwrap_or(serde_json::Value::Null))
+    } else {
+        Err("Gateway not initialized".to_string())
+    }
+}
+
+/// 重置账号健康状态
+#[tauri::command]
+pub async fn reset_account_health(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> Result<(), String> {
+    let balancer = {
+        let gateway = state.gateway.lock().unwrap();
+        gateway.as_ref().map(|g| g.load_balancer.clone())
+    };
+
+    if let Some(lb) = balancer {
+        lb.reset_health(&account_id).await;
+        Ok(())
+    } else {
+        Err("Gateway not initialized".to_string())
+    }
+}
+
+/// 清理过期的健康状态数据
+#[tauri::command]
+pub async fn cleanup_stale_health(state: State<'_, AppState>) -> Result<(), String> {
+    let balancer = {
+        let gateway = state.gateway.lock().unwrap();
+        gateway.as_ref().map(|g| g.load_balancer.clone())
+    };
+
+    if let Some(lb) = balancer {
+        lb.cleanup_stale_health().await;
+        Ok(())
+    } else {
+        Err("Gateway not initialized".to_string())
+    }
+}
+
+/// 测试路由结果
+#[derive(serde::Serialize)]
+pub struct RouteTestResult {
+    pub matched_accounts: Vec<String>,
+    pub selected_account: Option<String>,
+    pub error: Option<String>,
+}
+
+/// 测试路由配置
+#[tauri::command]
+pub async fn test_route_config(
+    state: State<'_, AppState>,
+    config: GatewayConfig,
+) -> Result<RouteTestResult, String> {
+    // 导入 AccountStore
+    use crate::core::account::AccountStore;
+
+    let mut store = AccountStore::new();
+    store.reload();
+
+    // 根据配置筛选账号
+    let matched_accounts = match config.account_mode.as_str() {
+        "single" => store
+            .accounts
+            .iter()
+            .filter(|account| config.account_id.as_deref() == Some(account.id.as_str()))
+            .cloned()
+            .collect::<Vec<_>>(),
+        "group" => store
+            .accounts
+            .iter()
+            .filter(|account| {
+                config.group_id.as_deref() == account.group_id.as_deref()
+                    && account.is_available()
+                    && account.enabled
+            })
+            .cloned()
+            .collect::<Vec<_>>(),
+        "pool" => store
+            .accounts
+            .iter()
+            .filter(|account| {
+                config.pool_account_ids.contains(&account.id)
+                    && account.is_available()
+                    && account.enabled
+            })
+            .cloned()
+            .collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+
+    if matched_accounts.is_empty() {
+        return Ok(RouteTestResult {
+            matched_accounts: Vec::new(),
+            selected_account: None,
+            error: Some("未找到符合反代配置的可用账号".to_string()),
+        });
+    }
+
+    // 使用负载均衡器选择账号
+    let balancer = {
+        let gateway = state.gateway.lock().unwrap();
+        gateway.as_ref().map(|g| g.load_balancer.clone())
+    };
+
+    let selected_account: Option<Account> = if let Some(lb) = balancer {
+        lb.select_account(&matched_accounts).await
+    } else {
+        // Gateway 未初始化时使用默认策略（轮询）
+        matched_accounts.first().cloned()
+    };
+
+    Ok(RouteTestResult {
+        matched_accounts: matched_accounts
+            .iter()
+            .map(|acc| format!("{} ({})", acc.label, acc.id))
+            .collect(),
+        selected_account: selected_account.map(|acc| format!("{} ({})", acc.label, acc.id)),
+        error: None,
+    })
 }

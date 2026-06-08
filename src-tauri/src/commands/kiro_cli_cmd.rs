@@ -1,7 +1,7 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
 
-use crate::core::account::Account;
 use crate::commands::common::{extract_user_info, get_usage_by_provider};
+use crate::core::account::Account;
 use crate::kiro::cli::read_kiro_cli_accounts;
 use crate::state::AppState;
 use crate::utils::client_id_hash::{extract_start_url_from_client_secret, normalize_start_url};
@@ -42,9 +42,7 @@ fn determine_provider(cli_account: &crate::kiro::cli::KiroCliAccount) -> String 
 
     // IdC：用 start_url 区分 BuilderId / Enterprise
     match cli_account.start_url.as_deref().map(str::trim) {
-        Some(url)
-            if !url.is_empty() && !crate::commands::common::is_builder_id_start_url(url) =>
-        {
+        Some(url) if !url.is_empty() && !crate::commands::common::is_builder_id_start_url(url) => {
             "Enterprise".to_string()
         }
         _ => "BuilderId".to_string(),
@@ -182,7 +180,13 @@ pub async fn import_from_kiro_cli(
     let (email, user_id, usage_data, is_banned, is_auth_error) = match usage_result {
         Ok(result) => {
             let (email, user_id) = extract_user_info(&result.usage_data);
-            (email, user_id, Some(result.usage_data), result.is_banned, result.is_auth_error)
+            (
+                email,
+                user_id,
+                Some(result.usage_data),
+                result.is_banned,
+                result.is_auth_error,
+            )
         }
         Err(e) => {
             eprintln!("[Kiro CLI Import] 获取配额失败: {e}");
@@ -365,7 +369,8 @@ pub async fn switch_to_cli_account(
                 updated.access_token = Some(refresh_result.access_token);
                 updated.refresh_token = refresh_result.refresh_token;
                 // 根据 expires_in 计算 expires_at
-                let expires_at = chrono::Utc::now() + chrono::Duration::seconds(refresh_result.expires_in);
+                let expires_at =
+                    chrono::Utc::now() + chrono::Duration::seconds(refresh_result.expires_in);
                 updated.expires_at = Some(expires_at.to_rfc3339());
                 updated
             }
@@ -379,9 +384,13 @@ pub async fn switch_to_cli_account(
     };
 
     // 3. 切号后立即获取配额检测封禁状态
-    let provider = refreshed_account.provider.as_ref()
+    let provider = refreshed_account
+        .provider
+        .as_ref()
         .ok_or("账号缺少 provider 字段")?;
-    let access_token = refreshed_account.access_token.as_ref()
+    let access_token = refreshed_account
+        .access_token
+        .as_ref()
         .ok_or("账号缺少 access_token")?;
 
     log::info!("[CLI Switch] 切号后检测账号状态...");
@@ -391,7 +400,11 @@ pub async fn switch_to_cli_account(
             let mut store = lock_account_store(&state.store)?;
             if let Some(a) = store.accounts.iter_mut().find(|a| a.id == account_id) {
                 a.usage_data = Some(usage_result.usage_data);
-                crate::commands::common::update_account_status(a, usage_result.is_banned, usage_result.is_auth_error);
+                crate::commands::common::update_account_status(
+                    a,
+                    usage_result.is_banned,
+                    usage_result.is_auth_error,
+                );
                 let _ = crate::commands::common::save_store(&store);
 
                 // 通知前端刷新账号列表
@@ -513,11 +526,9 @@ fn build_switch_payload(
                          不能为空",
                     )?;
                 if crate::commands::common::is_builder_id_start_url(&url) {
-                    return Err(
-                        "Enterprise 账号的 start_url 不能是 BuilderId 默认值\
+                    return Err("Enterprise 账号的 start_url 不能是 BuilderId 默认值\
                          （https://view.awsapps.com/start），请填入企业自己的 d-xxx 域名"
-                            .to_string(),
-                    );
+                        .to_string());
                 }
                 url
             }
@@ -535,8 +546,8 @@ fn build_switch_payload(
         token_data["profile_arn"] = serde_json::json!(profile_arn);
     }
 
-    let token_value = serde_json::to_string(&token_data)
-        .map_err(|e| format!("序列化 token 失败: {e}"))?;
+    let token_value =
+        serde_json::to_string(&token_data).map_err(|e| format!("序列化 token 失败: {e}"))?;
 
     // device-registration：真实 CLI 含 client_secret_expires_at / oauth_flow / scopes。
     // 本地未持久化 client_secret 过期时间，按 90 天兜底（AWS SSO client_secret 默认有效期，

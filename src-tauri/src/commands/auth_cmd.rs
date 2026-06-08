@@ -2,19 +2,19 @@
 // Auth 相关命令 - 直接存储 usage_data
 
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递 State
-use crate::core::account::Account;
-use crate::core::protocol_registry;
-use crate::auth::User;
 use crate::auth::auth_social;
-use crate::commands::common::{
-    extract_user_info, find_existing_account_idx, get_usage_by_provider, lock_store,
-    save_store, update_account_status,
-};
-use crate::commands::machine_guid::get_machine_id;
-use crate::clients::kiro_auth_client::KiroAuthServiceClient;
 use crate::auth::providers::{
     cancel_pending_idc_login, create_idc_provider, get_provider_config, AuthMethod, AuthProvider,
 };
+use crate::auth::User;
+use crate::clients::kiro_auth_client::KiroAuthServiceClient;
+use crate::commands::common::{
+    extract_user_info, find_existing_account_idx, get_usage_by_provider, lock_store, save_store,
+    update_account_status,
+};
+use crate::commands::machine_guid::get_machine_id;
+use crate::core::account::Account;
+use crate::core::protocol_registry;
 use crate::state::AppState;
 use tauri::{Emitter, State};
 
@@ -33,7 +33,9 @@ fn resolve_idc_login_email(
             .ok_or_else(|| format!("{} 账号缺少 userId 或 email", provider_id))
     } else if provider_id == "BuilderId" {
         // BuilderId 允许没有 email/userId
-        Ok(email.or(user_id).unwrap_or_else(|| "builderid_unknown".to_string()))
+        Ok(email
+            .or(user_id)
+            .unwrap_or_else(|| "builderid_unknown".to_string()))
     } else {
         require_login_email(email)
     }
@@ -175,9 +177,13 @@ async fn login_social(
     }
 
     let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
-    let final_email = new_email
-        .or(user_id.clone())
-        .unwrap_or_else(|| format!("{}_{}", provider_id.to_lowercase(), &token_result.refresh_token[..8]));
+    let final_email = new_email.or(user_id.clone()).unwrap_or_else(|| {
+        format!(
+            "{}_{}",
+            provider_id.to_lowercase(),
+            &token_result.refresh_token[..8]
+        )
+    });
 
     // 6. 保存账号
     let mut store = lock_store(&state.store, "store")?;
@@ -207,7 +213,11 @@ async fn login_social(
         account.auth_method = Some("social".to_string());
         account.user_id = user_id;
         account.usage_data = Some(usage_result.usage_data);
-        update_account_status(&mut account, usage_result.is_banned, usage_result.is_auth_error);
+        update_account_status(
+            &mut account,
+            usage_result.is_banned,
+            usage_result.is_auth_error,
+        );
         account.machine_id = Some(uuid::Uuid::new_v4().to_string().to_lowercase());
         store.accounts.insert(0, account.clone());
         account
@@ -230,7 +240,8 @@ async fn login_social(
         provider: provider_id.clone(),
     };
     let _ = lock_store(&state.auth.user, "auth user").map(|mut u| *u = Some(user));
-    let _ = lock_store(&state.auth.access_token, "auth access_token").map(|mut t| *t = Some(token_result.access_token));
+    let _ = lock_store(&state.auth.access_token, "auth access_token")
+        .map(|mut t| *t = Some(token_result.access_token));
 
     *lock_store(&state.pending_login, "pending_login")? = None;
 
@@ -308,13 +319,17 @@ async fn login_idc(
         account.id_token = auth_result.id_token;
         account.profile_arn = auth_result.profile_arn;
         account.usage_data = Some(usage_result.usage_data);
-        update_account_status(&mut account, usage_result.is_banned, usage_result.is_auth_error);
+        update_account_status(
+            &mut account,
+            usage_result.is_banned,
+            usage_result.is_auth_error,
+        );
 
         // 为所有新账号生成 machine_id
         use crate::commands::machine_guid::get_machine_id;
         account.machine_id = Some(get_machine_id());
         log::info!("Generated machine_id for new {} account", provider_id);
-        
+
         store.accounts.insert(0, account.clone());
         account
     };
@@ -424,13 +439,17 @@ pub async fn handle_kiro_social_callback(
         account.auth_method = Some("social".to_string());
         account.user_id = user_id;
         account.usage_data = Some(usage_result.usage_data);
-        update_account_status(&mut account, usage_result.is_banned, usage_result.is_auth_error);
+        update_account_status(
+            &mut account,
+            usage_result.is_banned,
+            usage_result.is_auth_error,
+        );
 
         // 为所有新账号生成 machine_id
         use crate::commands::machine_guid::get_machine_id;
         account.machine_id = Some(get_machine_id());
         log::info!("Generated machine_id for new {} account", pending.provider);
-        
+
         store.accounts.insert(0, account.clone());
         account
     };
@@ -458,10 +477,7 @@ pub fn get_supported_providers() -> Vec<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        clear_auth_state, require_login_email,
-        resolve_idc_login_email,
-    };
+    use super::{clear_auth_state, require_login_email, resolve_idc_login_email};
     use crate::auth::AuthState;
     use crate::auth::User;
 
@@ -485,8 +501,7 @@ mod tests {
             "enterprise-user".to_string()
         );
         assert_eq!(
-            resolve_idc_login_email("BuilderId", None, Some("builder-user".to_string()))
-                .unwrap(),
+            resolve_idc_login_email("BuilderId", None, Some("builder-user".to_string())).unwrap(),
             "builder-user".to_string()
         );
         assert_eq!(

@@ -59,5 +59,3 @@ pub fn format_as_uuid(hex: &str) -> String {
         &c[20..32]
     )
 }
-
-

@@ -2,7 +2,7 @@
 
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
 
-use reqwest::Proxy;
+use crate::clients::http_client::build_http_client;
 use serde::{Deserialize, Serialize};
 
 const UPDATE_URL_DEFAULT: &str =
@@ -68,71 +68,6 @@ pub struct UpdateCheckResult {
     pub latest_version: Option<String>,
     pub notes: Option<String>,
     pub download_url: Option<String>,
-}
-
-fn extract_http_proxy_from_json(json: &serde_json::Value) -> Option<String> {
-    json.get("http.proxy")
-        .and_then(serde_json::Value::as_str)
-        .filter(|value| !value.is_empty())
-        .map(std::string::ToString::to_string)
-}
-
-/// 获取 Kiro IDE 设置中的代理
-fn get_proxy_from_kiro_settings() -> Option<String> {
-    #[cfg(target_os = "windows")]
-    let path = std::env::var("APPDATA").ok().map(|appdata| {
-        std::path::PathBuf::from(appdata)
-            .join("Kiro")
-            .join("User")
-            .join("settings.json")
-    });
-
-    #[cfg(target_os = "macos")]
-    let path = std::env::var("HOME").ok().map(|home| {
-        std::path::PathBuf::from(home)
-            .join("Library")
-            .join("Application Support")
-            .join("Kiro")
-            .join("User")
-            .join("settings.json")
-    });
-
-    #[cfg(target_os = "linux")]
-    let path = std::env::var("HOME").ok().map(|home| {
-        std::path::PathBuf::from(home)
-            .join(".config")
-            .join("Kiro")
-            .join("User")
-            .join("settings.json")
-    });
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let path: Option<std::path::PathBuf> = None;
-
-    path.and_then(|p| {
-        if p.exists() {
-            std::fs::read_to_string(&p).ok()
-        } else {
-            None
-        }
-    })
-    .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
-    .and_then(|json| extract_http_proxy_from_json(&json))
-}
-
-/// 构建 HTTP 客户端（支持代理）
-fn build_http_client() -> Result<reqwest::Client, String> {
-    let mut builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30));
-
-    // 尝试从 Kiro 设置获取代理
-    if let Some(proxy_url) = get_proxy_from_kiro_settings() {
-        let proxy = Proxy::all(&proxy_url).map_err(|e| format!("代理配置错误: {e}"))?;
-        builder = builder.proxy(proxy);
-    }
-
-    builder
-        .build()
-        .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))
 }
 
 /// 获取当前平台的下载 URL
@@ -238,10 +173,7 @@ fn compare_versions(current: &str, latest: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        compare_versions, extract_http_proxy_from_json, get_download_url_for_platform,
-        parse_version_parts,
-    };
+    use super::{compare_versions, get_download_url_for_platform, parse_version_parts};
 
     #[test]
     fn parse_version_parts_ignores_prefix_and_invalid_segments() {
@@ -255,23 +187,6 @@ mod tests {
         assert!(!compare_versions("1.2.3", "v1.2.3"));
         assert!(!compare_versions("1.2.3", "1.2.3.0"));
         assert!(compare_versions("1.2", "1.2.0.1"));
-    }
-
-    #[test]
-    fn extract_http_proxy_from_json_reads_non_empty_proxy_only() {
-        let json = serde_json::json!({
-            "http.proxy": "http://127.0.0.1:7890"
-        });
-        let empty = serde_json::json!({
-            "http.proxy": ""
-        });
-
-        assert_eq!(
-            extract_http_proxy_from_json(&json),
-            Some("http://127.0.0.1:7890".to_string())
-        );
-        assert_eq!(extract_http_proxy_from_json(&empty), None);
-        assert_eq!(extract_http_proxy_from_json(&serde_json::json!({})), None);
     }
 
     #[test]

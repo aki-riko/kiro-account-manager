@@ -9,7 +9,7 @@ pub fn get_app_data_dir(_app: AppHandle) -> Result<String, String> {
     let app_data_dir = dirs::data_dir()
         .ok_or_else(|| "Failed to get data directory".to_string())?
         .join(".kiro-account-manager");
-    
+
     Ok(app_data_dir.to_string_lossy().to_string())
 }
 
@@ -22,13 +22,13 @@ pub fn open_app_data_dir(_app: AppHandle) -> Result<(), String> {
     let app_data_dir = dirs::data_dir()
         .ok_or_else(|| "Failed to get data directory".to_string())?
         .join(".kiro-account-manager");
-    
+
     // 确保目录存在
     if !app_data_dir.exists() {
         std::fs::create_dir_all(&app_data_dir)
             .map_err(|e| format!("Failed to create app data dir: {}", e))?;
     }
-    
+
     // 使用系统默认文件管理器打开目录
     #[cfg(target_os = "windows")]
     {
@@ -37,7 +37,7 @@ pub fn open_app_data_dir(_app: AppHandle) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Failed to open directory: {}", e))?;
     }
-    
+
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
@@ -45,7 +45,7 @@ pub fn open_app_data_dir(_app: AppHandle) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Failed to open directory: {}", e))?;
     }
-    
+
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
@@ -53,6 +53,6 @@ pub fn open_app_data_dir(_app: AppHandle) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Failed to open directory: {}", e))?;
     }
-    
+
     Ok(())
 }

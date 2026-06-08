@@ -10,4 +10,3 @@ pub struct SystemMachineInfo {
     pub can_modify: bool,
     pub requires_admin: bool,
 }
-

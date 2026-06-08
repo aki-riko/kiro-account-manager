@@ -43,6 +43,8 @@ pub struct AppSettings {
     pub custom_kiro_path: Option<String>,
     // 关闭窗口时的行为
     pub close_to_tray: Option<bool>, // true=最小化到托盘, false=直接退出
+    // 软件自身接口代理：followKiro=跟随 Kiro IDE 代理, disabled=强制直连
+    pub app_proxy_mode: Option<String>,
 }
 
 // 兼容旧配置文件中的 redeem_server 字段（已废弃）
@@ -83,6 +85,7 @@ impl Default for AppSettings {
             telemetry_feedback: Some(false),
             custom_kiro_path: None,
             close_to_tray: Some(false), // 默认直接退出，由用户主动开启最小化到托盘
+            app_proxy_mode: Some("followKiro".to_string()),
         }
     }
 }
@@ -126,6 +129,7 @@ impl AppSettings {
         apply_if_some!(telemetry_feedback);
         apply_if_some!(custom_kiro_path);
         apply_if_some!(close_to_tray);
+        apply_if_some!(app_proxy_mode);
     }
 }
 
@@ -316,10 +320,7 @@ pub async fn save_usage_history_entry(entry: UsageHistoryEntry) -> Result<(), St
 
 #[tauri::command]
 pub async fn get_custom_kiro_path() -> Result<Option<String>, String> {
-    run_blocking_io(|| {
-        get_app_settings_inner()
-            .map(|s| s.custom_kiro_path)
-    }).await
+    run_blocking_io(|| get_app_settings_inner().map(|s| s.custom_kiro_path)).await
 }
 
 #[tauri::command]
@@ -329,7 +330,8 @@ pub async fn set_custom_kiro_path(path: String) -> Result<(), String> {
             custom_kiro_path: Some(path),
             ..Default::default()
         })
-    }).await
+    })
+    .await
 }
 
 #[tauri::command]
@@ -339,7 +341,6 @@ pub async fn clear_custom_kiro_path() -> Result<(), String> {
             custom_kiro_path: Some(String::new()),
             ..Default::default()
         })
-    }).await
+    })
+    .await
 }
-
-

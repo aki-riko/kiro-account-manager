@@ -32,14 +32,14 @@ fn read_or_empty_json(path: &Path) -> Result<Value, String> {
     }
 
     // 安全检查：文件大小限制
-    let metadata = fs::metadata(path)
-        .map_err(|e| format!("读取 {} 元数据失败: {e}", path.display()))?;
+    let metadata =
+        fs::metadata(path).map_err(|e| format!("读取 {} 元数据失败: {e}", path.display()))?;
     if metadata.len() > MAX_CONFIG_FILE_SIZE {
         return Err(format!("配置文件过大: {} bytes", metadata.len()));
     }
 
-    let content = fs::read_to_string(path)
-        .map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
     serde_json::from_str(&content).map_err(|e| format!("解析 {} 失败: {e}", path.display()))
 }
 
@@ -172,8 +172,7 @@ pub async fn write_codex_cli_config(
     custom.insert("wire_api", value("responses"));
     custom.insert("requires_openai_auth", value(true));
 
-    fs::write(&config_path, doc.to_string())
-        .map_err(|e| format!("写入 config.toml 失败: {e}"))?;
+    fs::write(&config_path, doc.to_string()).map_err(|e| format!("写入 config.toml 失败: {e}"))?;
 
     // 2. auth.json：写 OPENAI_API_KEY（保留其他字段）
     let mut auth = read_or_empty_json(&auth_path)?;

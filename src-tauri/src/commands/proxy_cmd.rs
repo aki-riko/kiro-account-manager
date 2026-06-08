@@ -20,25 +20,45 @@ pub struct SystemProxyInfo {
 // Windows: 从注册表读取系统代理
 // ============================================================
 
-#[cfg(target_os = "windows")]
-fn extract_windows_http_proxy(enabled: bool, proxy_server: &str) -> Option<String> {
-    if !enabled || proxy_server.is_empty() {
+fn normalize_proxy_url(proxy: &str, default_scheme: &str) -> Option<String> {
+    let proxy = proxy.trim();
+    if proxy.is_empty() {
         return None;
     }
 
-    let proxy = if proxy_server.contains('=') {
-        proxy_server
-            .split(';')
-            .find(|segment| segment.starts_with("http="))
-            .map_or_else(
-                || proxy_server.to_string(),
-                |segment| segment.trim_start_matches("http=").to_string(),
-            )
+    if proxy.contains("://") {
+        Some(proxy.to_string())
     } else {
-        proxy_server.to_string()
-    };
+        Some(format!("{default_scheme}://{proxy}"))
+    }
+}
 
-    Some(proxy)
+#[cfg(target_os = "windows")]
+const WINDOWS_PROXY_PROTOCOL_PRIORITY: &[(&str, &str)] =
+    &[("http", "http"), ("https", "http"), ("socks", "socks5")];
+
+#[cfg(target_os = "windows")]
+fn select_windows_proxy_endpoint(proxy_server: &str) -> (&str, &str) {
+    WINDOWS_PROXY_PROTOCOL_PRIORITY
+        .iter()
+        .find_map(|(protocol, default_scheme)| {
+            proxy_server
+                .split(';')
+                .filter_map(|segment| segment.trim().split_once('='))
+                .find(|(key, _)| key.eq_ignore_ascii_case(protocol))
+                .map(|(_, value)| (value, *default_scheme))
+        })
+        .unwrap_or((proxy_server, "http"))
+}
+
+#[cfg(target_os = "windows")]
+fn extract_windows_http_proxy(enabled: bool, proxy_server: &str) -> Option<String> {
+    if !enabled {
+        return None;
+    }
+
+    let (proxy, default_scheme) = select_windows_proxy_endpoint(proxy_server);
+    normalize_proxy_url(proxy, default_scheme)
 }
 
 #[cfg(target_os = "windows")]
@@ -224,18 +244,15 @@ fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
         }
     }
 
-    let http_proxy = if enabled && !server.is_empty() && server != "0" {
-        // 保留原始格式，不自动添加协议前缀
-        Some(format!("{}:{}", server, port))
-    } else {
-        None
-    };
-
     let proxy_server = if !server.is_empty() && server != "0" {
         Some(format!("{}:{}", server, port))
     } else {
         None
     };
+    let http_proxy = proxy_server
+        .as_deref()
+        .filter(|_| enabled)
+        .and_then(|proxy| normalize_proxy_url(proxy, "http"));
 
     let (tun_mode, tun_interface) = detect_tun_mode();
 
@@ -320,15 +337,18 @@ fn detect_tun_mode() -> (bool, Option<String>) {
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn detect_system_proxy_inner() -> Result<SystemProxyInfo, String> {
     // Linux: 尝试读取环境变量
-    let http_proxy = std::env::var("http_proxy")
+    let proxy_server = std::env::var("http_proxy")
         .or_else(|_| std::env::var("HTTP_PROXY"))
         .ok();
+    let http_proxy = proxy_server
+        .as_deref()
+        .and_then(|proxy| normalize_proxy_url(proxy, "http"));
 
     let (tun_mode, tun_interface) = detect_tun_mode();
 
     Ok(SystemProxyInfo {
         enabled: http_proxy.is_some(),
-        proxy_server: http_proxy.clone(),
+        proxy_server,
         http_proxy,
         tun_mode,
         tun_interface,
@@ -346,29 +366,51 @@ pub async fn detect_system_proxy() -> Result<SystemProxyInfo, String> {
         .map_err(|e| format!("Task failed: {e}"))?
 }
 
-#[cfg(all(test, target_os = "windows"))]
+#[cfg(test)]
 mod tests {
-    use super::extract_windows_http_proxy;
+    use super::normalize_proxy_url;
 
     #[test]
-    fn extract_windows_http_proxy_supports_simple_and_multi_protocol_values() {
+    fn normalize_proxy_url_adds_default_scheme_only_when_missing() {
         assert_eq!(
-            extract_windows_http_proxy(true, "127.0.0.1:7890"),
-            Some("127.0.0.1:7890".to_string())
+            normalize_proxy_url("127.0.0.1:7890", "http"),
+            Some("http://127.0.0.1:7890".to_string())
         );
         assert_eq!(
-            extract_windows_http_proxy(true, "http=127.0.0.1:7890;https=127.0.0.1:7891"),
-            Some("127.0.0.1:7890".to_string())
+            normalize_proxy_url("socks5://127.0.0.1:1080", "http"),
+            Some("socks5://127.0.0.1:1080".to_string())
         );
-        assert_eq!(
-            extract_windows_http_proxy(true, "https=127.0.0.1:7891;socks=127.0.0.1:1080"),
-            Some("https=127.0.0.1:7891;socks=127.0.0.1:1080".to_string())
-        );
+        assert_eq!(normalize_proxy_url("", "http"), None);
     }
 
-    #[test]
-    fn extract_windows_http_proxy_returns_none_when_disabled_or_empty() {
-        assert_eq!(extract_windows_http_proxy(false, "127.0.0.1:7890"), None);
-        assert_eq!(extract_windows_http_proxy(true, ""), None);
+    #[cfg(target_os = "windows")]
+    mod windows {
+        use super::super::extract_windows_http_proxy;
+
+        #[test]
+        fn extract_windows_http_proxy_supports_simple_and_multi_protocol_values() {
+            assert_eq!(
+                extract_windows_http_proxy(true, "127.0.0.1:7890"),
+                Some("http://127.0.0.1:7890".to_string())
+            );
+            assert_eq!(
+                extract_windows_http_proxy(true, "http=127.0.0.1:7890;https=127.0.0.1:7891"),
+                Some("http://127.0.0.1:7890".to_string())
+            );
+            assert_eq!(
+                extract_windows_http_proxy(true, "https=127.0.0.1:7891;socks=127.0.0.1:1080"),
+                Some("http://127.0.0.1:7891".to_string())
+            );
+            assert_eq!(
+                extract_windows_http_proxy(true, "socks=127.0.0.1:1080"),
+                Some("socks5://127.0.0.1:1080".to_string())
+            );
+        }
+
+        #[test]
+        fn extract_windows_http_proxy_returns_none_when_disabled_or_empty() {
+            assert_eq!(extract_windows_http_proxy(false, "127.0.0.1:7890"), None);
+            assert_eq!(extract_windows_http_proxy(true, ""), None);
+        }
     }
 }
