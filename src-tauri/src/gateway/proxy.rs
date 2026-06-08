@@ -5845,6 +5845,7 @@ mod tests {
             user_agent: "KiroIDE 0.11.34 account-machine-id".to_string(),
             auth_method: Some("IdC".to_string()),
             send_opt_out: true,
+            http: reqwest::Client::new(),
         };
 
         let (machine_id, profile_arn) = available_models_call_context(&upstream);
@@ -5870,6 +5871,7 @@ mod tests {
             user_agent: "KiroIDE 0.11.34 machine-123".to_string(),
             auth_method: Some("external_idp".to_string()),
             send_opt_out: true,
+            http: reqwest::Client::new(),
         };
 
         let request = with_kiro_upstream_headers(
@@ -5939,6 +5941,7 @@ mod tests {
             user_agent: "KiroIDE 0.11.34 machine-456".to_string(),
             auth_method: Some("social".to_string()),
             send_opt_out: true,
+            http: reqwest::Client::new(),
         };
 
         let request = with_kiro_upstream_headers(
@@ -5988,6 +5991,7 @@ mod tests {
             user_agent: "KiroIDE 0.11.34 machine-789".to_string(),
             auth_method: Some("social".to_string()),
             send_opt_out: true,
+            http: reqwest::Client::new(),
         };
 
         let request = with_kiro_upstream_headers(
@@ -6025,6 +6029,7 @@ mod tests {
             user_agent: "KiroIDE 0.11.34 machine-999".to_string(),
             auth_method: Some("IdC".to_string()),
             send_opt_out: true,
+            http: reqwest::Client::new(),
         };
 
         let request = with_kiro_upstream_headers(
@@ -6063,6 +6068,7 @@ mod tests {
                 user_agent: "KiroIDE 0.11.34 machine-1000".to_string(),
                 auth_method: Some("IdC".to_string()),
                 send_opt_out: true,
+                http: reqwest::Client::new(),
             };
 
             let request = with_kiro_upstream_headers(

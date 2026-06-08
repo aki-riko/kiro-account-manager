@@ -587,6 +587,7 @@ mod tests {
                 disabled_reason: None,
                 success_count: 0,
                 enabled: true,
+                proxy_config: None,
             },
             Account {
                 id: "2".to_string(),
@@ -619,6 +620,7 @@ mod tests {
                 disabled_reason: None,
                 success_count: 0,
                 enabled: true,
+                proxy_config: None,
             },
         ];
 

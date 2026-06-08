@@ -1179,7 +1179,25 @@ pub fn update_account(
             store.accounts[idx].enabled = enabled;
         }
         if let Some(proxy_config) = params.proxy_config {
-            store.accounts[idx].proxy_config = Some(proxy_config);
+            let has_proxy_values = !proxy_config.host.trim().is_empty()
+                || proxy_config.port > 0
+                || proxy_config
+                    .username
+                    .as_deref()
+                    .is_some_and(|value| !value.trim().is_empty())
+                || proxy_config
+                    .password
+                    .as_deref()
+                    .is_some_and(|value| !value.is_empty());
+            let next_proxy_config = if proxy_config.enabled || has_proxy_values {
+                Some(proxy_config)
+            } else {
+                None
+            };
+            if store.accounts[idx].proxy_config != next_proxy_config {
+                store.accounts[idx].proxy_config = next_proxy_config;
+                clear_available_models_cache(&mut store.accounts[idx]);
+            }
         }
         let result = store.accounts[idx].clone();
         save_store(&store)?;

@@ -163,13 +163,17 @@ const parseProxyUrl = (value: string): AccountProxyConfig => {
   const raw = value.trim()
   const url = new URL(raw.includes('://') ? raw : `http://${raw}`)
   const protocol: AccountProxyProtocol = url.protocol.startsWith('socks') ? 'socks5' : 'http'
-  const fallbackPort = protocol === 'socks5' ? 1080 : 80
+  const port = Number(url.port)
+
+  if (!url.hostname || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('invalid proxy')
+  }
 
   return {
     enabled: true,
     protocol,
     host: url.hostname,
-    port: Number(url.port || fallbackPort),
+    port,
     username: url.username ? decodeURIComponent(url.username) : null,
     password: url.password ? decodeURIComponent(url.password) : null
   }
@@ -202,6 +206,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
   const [verifying, setVerifying] = useState(false)
   const [testingProxy, setTestingProxy] = useState(false)
   const [proxyQuickInput, setProxyQuickInput] = useState('')
+  const [proxyQuickInputError, setProxyQuickInputError] = useState('')
   const [proxyConfig, setProxyConfig] = useState<AccountProxyConfig>(() => normalizeProxyConfig(account.proxyConfig))
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
@@ -256,25 +261,54 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
     setProxyConfig(prev => ({ ...prev, ...patch }))
   }
 
+  const handleProxyQuickInputChange = (value: string) => {
+    setProxyQuickInput(value)
+    if (!value.trim()) {
+      setProxyQuickInputError('')
+      return
+    }
+
+    try {
+      setProxyConfig(parseProxyUrl(value))
+      setProxyQuickInputError('')
+    } catch {
+      setProxyQuickInputError(t('editAccount.proxyQuickInputInvalid'))
+    }
+  }
+
+  const validateProxyConfig = async (config: AccountProxyConfig) => {
+    if (!config.enabled) return true
+    if (!config.host.trim()) {
+      await showError(t('editAccount.proxyInvalid'), t('editAccount.proxyHostRequired'))
+      return false
+    }
+    if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
+      await showError(t('editAccount.proxyInvalid'), t('editAccount.proxyPortRequired'))
+      return false
+    }
+    if (config.password && !config.username?.trim()) {
+      await showError(t('editAccount.proxyInvalid'), t('editAccount.proxyUsernameRequired'))
+      return false
+    }
+    return true
+  }
+
   const handlePasteProxyUrl = async () => {
     if (!proxyQuickInput.trim()) {
-      await showError('代理格式错误', '请粘贴代理地址，例如 http://user:pass@127.0.0.1:7890 或 socks5://127.0.0.1:1080')
+      await showError(t('editAccount.proxyInvalid'), t('editAccount.proxyQuickInputInvalid'))
       return
     }
 
     try {
       setProxyConfig(parseProxyUrl(proxyQuickInput))
-    } catch (error) {
-      await showError('代理格式错误', String(error))
+    } catch {
+      await showError(t('editAccount.proxyInvalid'), t('editAccount.proxyQuickInputInvalid'))
     }
   }
 
   const handleTestProxy = async () => {
     const config = normalizeProxyForSave({ ...proxyConfig, enabled: true })
-    if (!config.host || !config.port) {
-      await showError('代理测试失败', '请先填写代理主机和端口')
-      return
-    }
+    if (!(await validateProxyConfig(config))) return
 
     setTestingProxy(true)
     try {
@@ -282,12 +316,12 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
         proxyConfig: config
       })
       if (result.success) {
-        await showSuccess('代理测试成功', result.message)
+        await showSuccess(t('editAccount.proxyTestSuccess'), result.message)
       } else {
-        await showError('代理测试失败', result.message)
+        await showError(t('editAccount.proxyTestFailed'), result.message)
       }
     } catch (error) {
-      await showError('代理测试失败', String(error))
+      await showError(t('editAccount.proxyTestFailed'), String(error))
     } finally {
       setTestingProxy(false)
     }
@@ -295,11 +329,11 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
 
   const handleVerifyAndRefresh = async () => {
     if (!form.refreshToken) {
-      await showError(t('editAccount.verifyFailed'), '请填写 Refresh Token')
+      await showError(t('editAccount.verifyFailed'), t('editAccount.pleaseFillRefreshToken'))
       return
     }
     if (isIdCAccount && (!form.clientId || !form.clientSecret)) {
-      await showError(t('editAccount.verifyFailed'), '请填写 Client ID 和 Client Secret')
+      await showError(t('editAccount.verifyFailed'), t('editAccount.pleaseFillClientIdAndSecret'))
       return
     }
 
@@ -347,6 +381,9 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
   }
 
   const handleSave = async () => {
+    const nextProxyConfig = normalizeProxyForSave(proxyConfig)
+    if (!(await validateProxyConfig(nextProxyConfig))) return
+
     setSaving(true)
     try {
       const params: any = {
@@ -357,7 +394,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
         machineId: form.machineId || null,
         addedAt: form.addedAt || null,
         expiresAt: form.expiresAt,
-        proxyConfig: normalizeProxyForSave(proxyConfig)}
+        proxyConfig: nextProxyConfig}
       if (isIdCAccount) {
         params.clientId = form.clientId || null
         params.clientSecret = form.clientSecret || null
@@ -617,9 +654,9 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
                   <Network size={18} className={accent.text} />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-foreground">账号专属代理</div>
+                  <div className="text-sm font-semibold text-foreground">{t('editAccount.proxyTitle')}</div>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    仅反代请求、刷新 Token 和 usage 检测会使用此代理；关闭后继续跟随应用代理设置。
+                    {t('editAccount.proxyDescription')}
                   </p>
                 </div>
               </div>
@@ -630,20 +667,23 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
                   onChange={(event) => updateProxyConfig({ enabled: event.target.checked })}
                   className="h-4 w-4 accent-primary cursor-pointer"
                 />
-                启用
+                {t('editAccount.proxyEnabled')}
               </label>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">快速粘贴代理地址</label>
+                <label className="block text-sm font-medium text-foreground mb-2">{t('editAccount.proxyQuickInput')}</label>
                 <input
                   type="text"
                   value={proxyQuickInput}
-                  onChange={(event) => setProxyQuickInput(event.target.value)}
-                  placeholder="http://user:pass@127.0.0.1:7890 或 socks5://127.0.0.1:1080"
+                  onChange={(event) => handleProxyQuickInputChange(event.target.value)}
+                  placeholder={t('editAccount.proxyQuickInputPlaceholder')}
                   className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none font-mono`}
                 />
+                <div className={`mt-1 text-[11px] ${proxyQuickInputError ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {proxyQuickInputError || t('editAccount.proxyQuickInputHint')}
+                </div>
               </div>
               <div className="flex items-end">
                 <Button
@@ -651,14 +691,14 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
                   className="h-11 rounded-xl font-medium"
                   onClick={handlePasteProxyUrl}
                 >
-                  解析填充
+                  {t('editAccount.proxyApplyQuickInput')}
                 </Button>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">协议</label>
+                <label className="block text-sm font-medium text-foreground mb-2">{t('editAccount.proxyProtocol')}</label>
                 <select
                   value={proxyConfig.protocol}
                   onChange={(event) => updateProxyConfig({ protocol: event.target.value as AccountProxyProtocol })}
@@ -669,7 +709,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
                 </select>
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-foreground mb-2">主机</label>
+                <label className="block text-sm font-medium text-foreground mb-2">{t('editAccount.proxyHost')}</label>
                 <input
                   type="text"
                   value={proxyConfig.host}
@@ -679,7 +719,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">端口</label>
+                <label className="block text-sm font-medium text-foreground mb-2">{t('editAccount.proxyPort')}</label>
                 <input
                   type="number"
                   min={0}
@@ -694,7 +734,9 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">用户名（可选）</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  {t('editAccount.proxyUsername')} ({t('editAccount.proxyOptional')})
+                </label>
                 <input
                   type="text"
                   value={proxyConfig.username || ''}
@@ -704,7 +746,9 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">密码（可选）</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  {t('editAccount.proxyPassword')} ({t('editAccount.proxyOptional')})
+                </label>
                 <input
                   type="password"
                   value={proxyConfig.password || ''}
@@ -726,12 +770,12 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
                 {testingProxy ? (
                   <>
                     <Loader2 size={16} className="mr-2 animate-spin" />
-                    测试中...
+                    {t('editAccount.proxyTesting')}
                   </>
                 ) : (
                   <>
                     <PlugZap size={16} className="mr-2" />
-                    测试代理
+                    {t('editAccount.proxyTest')}
                   </>
                 )}
               </Button>

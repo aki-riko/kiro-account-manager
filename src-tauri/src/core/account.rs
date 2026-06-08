@@ -1004,7 +1004,7 @@ impl GroupTagStore {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_accounts, Account, AccountStore};
+    use super::{normalize_accounts, Account, AccountProxyConfig, AccountProxyProtocol, AccountStore};
     use crate::core::usage::is_usage_capped;
     use std::path::PathBuf;
 
@@ -1088,6 +1088,37 @@ mod tests {
         for candidate in history_backups {
             let _ = std::fs::remove_file(candidate);
         }
+    }
+
+    #[test]
+    fn account_proxy_config_uses_remote_dns_for_socks5() {
+        let proxy = AccountProxyConfig {
+            enabled: true,
+            protocol: AccountProxyProtocol::Socks5,
+            host: "127.0.0.1".to_string(),
+            port: 1080,
+            username: None,
+            password: None,
+        };
+
+        assert_eq!(proxy.to_proxy_url().unwrap(), "socks5h://127.0.0.1:1080");
+    }
+
+    #[test]
+    fn account_proxy_config_includes_auth_when_configured() {
+        let proxy = AccountProxyConfig {
+            enabled: true,
+            protocol: AccountProxyProtocol::Http,
+            host: "proxy.example.test".to_string(),
+            port: 8080,
+            username: Some("user".to_string()),
+            password: Some("pass".to_string()),
+        };
+
+        assert_eq!(
+            proxy.to_proxy_url().unwrap(),
+            "http://user:pass@proxy.example.test:8080/"
+        );
     }
 
     #[test]
