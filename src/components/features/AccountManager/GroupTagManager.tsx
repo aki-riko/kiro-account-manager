@@ -21,7 +21,6 @@ export function TagSelector({ selectedTagIds, onChange, allTags = null }) {
     inputFocus: 'focus:ring-primary/20 focus:border-primary'
   }), [])
 
-
   const [newTagName, setNewTagName] = useState('')
   const [tags, setTags] = useState(allTags || [])
   const [showDropdown, setShowDropdown] = useState(false)
@@ -83,32 +82,27 @@ export function TagSelector({ selectedTagIds, onChange, allTags = null }) {
 
   return (
     <div ref={containerRef}>
-      <label className={`block text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5`}>
-        <Tag size={14} />
-        {t('tags.title')}
-      </label>
-      {/* 已选标签 */}
-      <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
-        {selectedTagIds.map(tagId => {
-          const tag = getTagById(tagId)
-          if (!tag) return null
-          return (
-            <span
-              key={tagId}
-              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full text-white"
-              style={{ backgroundColor: tag.color || '#8b5cf6' }}
-            >
-              {tag.name}
-              <button type="button" onClick={() => handleRemoveTag(tagId)} className="hover:opacity-70">
-                <X size={12} />
-              </button>
-            </span>
-          )
-        })}
-        {selectedTagIds.length === 0 && (
-          <span className={`text-xs text-muted-foreground`}>{t('tags.noTags')}</span>
-        )}
-      </div>
+      {/* 已选标签：空态不渲染占位，避免把搜索框顶到下一行 */}
+      {selectedTagIds.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {selectedTagIds.map(tagId => {
+            const tag = getTagById(tagId)
+            if (!tag) return null
+            return (
+              <span
+                key={tagId}
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full text-white"
+                style={{ backgroundColor: tag.color || '#8b5cf6' }}
+              >
+                {tag.name}
+                <button type="button" onClick={() => handleRemoveTag(tagId)} className="hover:opacity-70">
+                  <X size={12} />
+                </button>
+              </span>
+            )
+          })}
+        </div>
+      )}
       {/* 搜索/添加标签 - 合并输入框 */}
       <div className="flex gap-2">
         <div className="flex-1 relative">
@@ -119,7 +113,7 @@ export function TagSelector({ selectedTagIds, onChange, allTags = null }) {
             onFocus={() => setShowDropdown(true)}
             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
             placeholder={t('tags.searchOrCreate') || '搜索或输入新标签...'}
-            className={`w-full px-3 py-1.5 text-sm border rounded-lg bg-background border-input text-foreground ${colors.inputFocus} focus:ring-2`}
+            className={`w-full px-4 py-2.5 border rounded-xl text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
           />
           {/* 搜索建议下拉 - 聚焦就显示 */}
           {showDropdown && unselectedTags.length > 0 && (
@@ -147,13 +141,12 @@ export function TagSelector({ selectedTagIds, onChange, allTags = null }) {
           type="button"
           onClick={handleAddTag}
           disabled={!newTagName.trim()}
-          className={`px-3 py-1.5 ${accent.solidBg} text-white rounded-lg text-sm ${accent.solidHoverBg} disabled:opacity-50 flex items-center gap-1`}
+          className={`p-2.5 ${accent.solidBg} text-white rounded-xl ${accent.solidHoverBg} disabled:opacity-50 flex items-center gap-1`}
           title={t('tags.addTag')}
         >
           <Plus size={14} />
         </button>
       </div>
-      <p className={`text-xs text-muted-foreground mt-1.5`}>{t('tags.hint') || '输入搜索已有标签，或直接输入创建新标签'}</p>
     </div>
   )
 }
