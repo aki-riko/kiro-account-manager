@@ -1,10 +1,10 @@
+use crate::clients::http_client::apply_app_proxy;
 use crate::gateway::models::{
     AnthropicMessagesRequest, ConversationState, CurrentMessage, HistoryAssistantMessage,
-    HistoryItem, HistoryUserMessage, ImageBlock, ImageSource, KiroInputSchema,
-    KiroPayload, KiroTool, KiroToolResult, KiroToolResultContent, KiroToolSpec, KiroToolUse,
-    ModelInfo, NormalizedMessage, NormalizedRequest, OpenAIChatRequest,
-    Tool, ToolCall, ToolCallFunction, ToolFunction, UserInputMessage,
-    UserInputMessageContext,
+    HistoryItem, HistoryUserMessage, ImageBlock, ImageSource, KiroInputSchema, KiroPayload,
+    KiroTool, KiroToolResult, KiroToolResultContent, KiroToolSpec, KiroToolUse, ModelInfo,
+    NormalizedMessage, NormalizedRequest, OpenAIChatRequest, Tool, ToolCall, ToolCallFunction,
+    ToolFunction, UserInputMessage, UserInputMessageContext,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use reqwest::Client;
@@ -100,7 +100,7 @@ pub fn normalize_anthropic_request(request: &AnthropicMessagesRequest) -> Normal
     normalized
 }
 
-pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest, String> {
+pub fn normalize_openai_responses_request(payload: &Value) -> Result<NormalizedRequest, String> {
     let model = payload
         .get("model")
         .and_then(Value::as_str)
@@ -140,7 +140,7 @@ pub fn normalize_responses_request(payload: &Value) -> Result<NormalizedRequest,
     ))
 }
 
-fn normalize_openai_chat_payload(payload: &Value) -> Result<NormalizedRequest, String> {
+pub fn normalize_openai_chat_payload(payload: &Value) -> Result<NormalizedRequest, String> {
     let model = payload
         .get("model")
         .and_then(Value::as_str)
@@ -297,7 +297,7 @@ fn build_normalized_request_from_payload(
         stream: payload
             .get("stream")
             .and_then(Value::as_bool)
-            .unwrap_or(true),  // 默认使用流式响应
+            .unwrap_or(true), // 默认使用流式响应
         max_tokens: payload
             .get("max_output_tokens")
             .or_else(|| payload.get("max_tokens"))
@@ -335,7 +335,7 @@ fn build_normalized_request_from_payload(
     }
 }
 
-fn convert_openai_chat_messages(messages: Option<&Value>) -> Vec<NormalizedMessage> {
+pub fn convert_openai_chat_messages(messages: Option<&Value>) -> Vec<NormalizedMessage> {
     let Some(Value::Array(items)) = messages else {
         return Vec::new();
     };
@@ -414,7 +414,9 @@ fn convert_openai_chat_content(content: &Value) -> Value {
     }
 }
 
-fn convert_openai_chat_tools(tools: Option<&Value>) -> (Option<Vec<Tool>>, std::collections::HashMap<String, String>) {
+pub fn convert_openai_chat_tools(
+    tools: Option<&Value>,
+) -> (Option<Vec<Tool>>, std::collections::HashMap<String, String>) {
     convert_responses_tools(tools)
 }
 
@@ -489,7 +491,9 @@ fn shorten_tool_name(name: &str) -> String {
 }
 
 /// 转换 Anthropic 工具定义，返回 (Tool, Option<(sanitized_name, original_name)>)
-fn convert_anthropic_tool(tool: &crate::gateway::models::AnthropicTool) -> (Tool, Option<(String, String)>) {
+fn convert_anthropic_tool(
+    tool: &crate::gateway::models::AnthropicTool,
+) -> (Tool, Option<(String, String)>) {
     let sanitized = shorten_tool_name(&sanitize_tool_name(&tool.name));
 
     // 截断超长描述（和 Kiro-Go 保持一致）
@@ -537,7 +541,10 @@ pub fn get_internal_model_id(external_model: &str) -> Result<String, String> {
         "haiku" | "haiku-4-5" => return Ok("claude-haiku-4.5".to_string()),
         "claude-sonnet-latest" => return Ok("claude-sonnet-4.5".to_string()),
         // Claude 3.x 旧版兜底到 Claude 4.x
-        "claude-3-5-sonnet" | "claude-3-5-sonnet-latest" | "claude-3-opus" | "claude-3-opus-latest" => {
+        "claude-3-5-sonnet"
+        | "claude-3-5-sonnet-latest"
+        | "claude-3-opus"
+        | "claude-3-opus-latest" => {
             return Ok("claude-sonnet-4.5".to_string());
         }
         "claude-3-sonnet" => return Ok("claude-sonnet-4".to_string()),
@@ -551,7 +558,9 @@ pub fn get_internal_model_id(external_model: &str) -> Result<String, String> {
         "minimax-m2-5" | "minimax-m2.5" | "minimax" => return Ok("minimax-m2.5".to_string()),
         "minimax-m2-1" | "minimax-m2.1" => return Ok("minimax-m2.1".to_string()),
         "glm-5" | "glm5" => return Ok("glm-5".to_string()),
-        "qwen3-coder-next" | "qwen3-coder" | "qwen3" | "qwen" => return Ok("qwen3-coder-next".to_string()),
+        "qwen3-coder-next" | "qwen3-coder" | "qwen3" | "qwen" => {
+            return Ok("qwen3-coder-next".to_string())
+        }
         _ => &normalized,
     };
 
@@ -610,7 +619,10 @@ fn normalize_claude_model_format(model: &str) -> String {
     // 去掉日期后缀（-20xxxxxx，8位数字）
     if s.len() > 9 {
         let tail = &s[s.len() - 9..];
-        if tail.starts_with('-') && tail[1..].chars().all(|c| c.is_ascii_digit()) && tail[1..].starts_with("20") {
+        if tail.starts_with('-')
+            && tail[1..].chars().all(|c| c.is_ascii_digit())
+            && tail[1..].starts_with("20")
+        {
             s.truncate(s.len() - 9);
         }
     }
@@ -812,11 +824,15 @@ pub async fn build_kiro_payload(
                 keep_from_index = idx;
 
                 // 检查这个 user 消息是否有 toolResults
-                let has_tool_results = msg.content.as_ref()
+                let has_tool_results = msg
+                    .content
+                    .as_ref()
                     .and_then(|c| c.as_array())
-                    .map(|arr| arr.iter().any(|item| {
-                        item.get("type").and_then(|t| t.as_str()) == Some("tool_result")
-                    }))
+                    .map(|arr| {
+                        arr.iter().any(|item| {
+                            item.get("type").and_then(|t| t.as_str()) == Some("tool_result")
+                        })
+                    })
                     .unwrap_or(false)
                     || msg.tool_call_id.is_some();
 
@@ -873,7 +889,9 @@ pub async fn build_kiro_payload(
 
         if keep_from_index >= end_index {
             // 极端情况：裁剪后没有有效消息，只保留最后一条 user
-            if let Some(last_user_idx) = conversation_messages.iter().rposition(|m| m.role == "user") {
+            if let Some(last_user_idx) =
+                conversation_messages.iter().rposition(|m| m.role == "user")
+            {
                 conversation_messages = vec![conversation_messages[last_user_idx].clone()];
             } else {
                 return Err("No user message found in conversation".into());
@@ -905,9 +923,17 @@ pub async fn build_kiro_payload(
             conversation_messages.len(),
             history_len_after_trim,
             first_role_after_trim,
-            if first_has_tool_results_after_trim { "(toolResults)" } else { "" },
+            if first_has_tool_results_after_trim {
+                "(toolResults)"
+            } else {
+                ""
+            },
             last_role_after_trim,
-            if current_has_tool_results_after_trim { "(toolResults)" } else { "" }
+            if current_has_tool_results_after_trim {
+                "(toolResults)"
+            } else {
+                ""
+            }
         );
     }
 
@@ -924,8 +950,16 @@ pub async fn build_kiro_payload(
     log::info!(
         "[网关] 消息格式验证通过：总计 {} 条消息（system: {}, 对话: {}）",
         request.messages.len(),
-        request.messages.iter().filter(|m| m.role == "system").count(),
-        request.messages.iter().filter(|m| m.role != "system").count()
+        request
+            .messages
+            .iter()
+            .filter(|m| m.role == "system")
+            .count(),
+        request
+            .messages
+            .iter()
+            .filter(|m| m.role != "system")
+            .count()
     );
 
     let model_id = if let Some(models) = available_models {
@@ -983,7 +1017,10 @@ pub async fn build_kiro_payload(
 
     // 用边界标记包裹整个系统提示（包括 thinking 标签）
     if !system_prompt.is_empty() {
-        system_prompt = format!("--- SYSTEM PROMPT ---\n{}\n--- END SYSTEM PROMPT ---", system_prompt);
+        system_prompt = format!(
+            "--- SYSTEM PROMPT ---\n{}\n--- END SYSTEM PROMPT ---",
+            system_prompt
+        );
     }
 
     if other_messages.is_empty() {
@@ -1006,36 +1043,33 @@ pub async fn build_kiro_payload(
             match message.role.as_str() {
                 "assistant" => {
                     let assistant_msg = build_history_assistant_message(message);
-                    
+
                     history_items.push(HistoryItem::Assistant {
                         assistant_response_message: assistant_msg,
                     });
                 }
                 "user" => {
                     let mut content = extract_text_content(message.content.as_ref());
-                    
+
                     // Prompt Caching 策略 1：缓存系统提示
                     // 在第一条用户消息中添加系统提示，并标记缓存点
-                    let should_add_cache_point = Some(index) == first_user_index 
+                    let should_add_cache_point = Some(index) == first_user_index
                         && !system_prompt.is_empty()
-                        && processed_tools.is_some();  // 只有在有工具定义时才缓存系统提示
-                    
+                        && processed_tools.is_some(); // 只有在有工具定义时才缓存系统提示
+
                     if Some(index) == first_user_index && !system_prompt.is_empty() {
                         content = join_with_double_newline(&system_prompt, &content);
                     }
-                    
+
                     let images = extract_images(client, message.content.as_ref()).await;
                     let tool_results = extract_tool_results(message.content.as_ref());
-                    let user_context = build_user_context(
-                        None,
-                        tool_results.clone(),
-                    );
-                    
+                    let user_context = build_user_context(None, tool_results.clone());
+
                     // 规则 7：user 消息必须有 content 或 toolResults
                     if content.trim().is_empty() && tool_results.is_empty() {
                         content = "Continue".to_string();
                     }
-                    
+
                     // 如果需要缓存系统提示，在用户上下文中添加缓存点
                     if should_add_cache_point {
                         if let Some(ref _ctx) = user_context {
@@ -1043,7 +1077,7 @@ pub async fn build_kiro_payload(
                             // 但由于 Kiro API 的限制，我们只能在消息级别添加缓存点
                         }
                     }
-                    
+
                     history_items.push(HistoryItem::User {
                         user_input_message: HistoryUserMessage {
                             content,
@@ -1086,7 +1120,9 @@ pub async fn build_kiro_payload(
         let current_content_for_history = extract_text_content(current_msg.content.as_ref());
         history_items.push(HistoryItem::User {
             user_input_message: HistoryUserMessage {
-                content: if current_content_for_history.trim().is_empty() && current_tool_results_for_history.is_empty() {
+                content: if current_content_for_history.trim().is_empty()
+                    && current_tool_results_for_history.is_empty()
+                {
                     "Continue".to_string()
                 } else {
                     current_content_for_history
@@ -1121,13 +1157,17 @@ pub async fn build_kiro_payload(
         if all_sanitized.len() <= 1 {
             (None, all_sanitized.into_iter().last())
         } else {
-            let mut history_part: Vec<HistoryItem> = all_sanitized[..all_sanitized.len() - 1].to_vec();
+            let mut history_part: Vec<HistoryItem> =
+                all_sanitized[..all_sanitized.len() - 1].to_vec();
             // 剥掉 history 中签名为空/缺失的 reasoningContent
             // Kiro API 后端会校验 reasoningContent 的 SHA-256 签名：
             //   - opus-4.7 原生 thinking 会产生有效签名 → 保留可让模型记得上一轮思考
             //   - 其他模型靠 <thinking_mode> 提示词强制思考时签名为空 → 必须剥掉，否则 400 THINKING_SIGNATURE_INVALID
             for item in &mut history_part {
-                if let HistoryItem::Assistant { assistant_response_message } = item {
+                if let HistoryItem::Assistant {
+                    assistant_response_message,
+                } = item
+                {
                     if has_empty_thinking_signature(&assistant_response_message.reasoning_content) {
                         assistant_response_message.reasoning_content = None;
                     }
@@ -1145,11 +1185,12 @@ pub async fn build_kiro_payload(
         .last()
         .ok_or_else(|| "没有当前消息".to_string())?;
 
-    let mut current_content = if let Some(HistoryItem::User { user_input_message }) = &sanitized_current {
-        user_input_message.content.clone()
-    } else {
-        extract_text_content(current_message.content.as_ref())
-    };
+    let mut current_content =
+        if let Some(HistoryItem::User { user_input_message }) = &sanitized_current {
+            user_input_message.content.clone()
+        } else {
+            extract_text_content(current_message.content.as_ref())
+        };
 
     if history.is_none() && !system_prompt.is_empty() {
         current_content = join_with_double_newline(&system_prompt, &current_content);
@@ -1162,17 +1203,19 @@ pub async fn build_kiro_payload(
     }
 
     // toolResults 从 sanitized item 中获取（如果有的话）
-    let mut current_tool_results = if let Some(HistoryItem::User { user_input_message }) = &sanitized_current {
-        user_input_message.user_input_message_context
-            .as_ref()
-            .and_then(|ctx| ctx.tool_results.clone())
-            .unwrap_or_default()
-    } else {
-        match current_message.role.as_str() {
-            "tool" => extract_tool_results_from_tool_message(current_message),
-            _ => extract_tool_results(current_message.content.as_ref()),
-        }
-    };
+    let mut current_tool_results =
+        if let Some(HistoryItem::User { user_input_message }) = &sanitized_current {
+            user_input_message
+                .user_input_message_context
+                .as_ref()
+                .and_then(|ctx| ctx.tool_results.clone())
+                .unwrap_or_default()
+        } else {
+            match current_message.role.as_str() {
+                "tool" => extract_tool_results_from_tool_message(current_message),
+                _ => extract_tool_results(current_message.content.as_ref()),
+            }
+        };
     order_tool_results_like_previous_tool_uses(&mut current_tool_results, &history);
 
     // 最终保护：如果 content 和 toolResults 都为空，设置默认 content
@@ -1182,9 +1225,9 @@ pub async fn build_kiro_payload(
     // 如果有 toolResults，content 必须为空（Kiro API 要求）
     // 同时检查原始消息中是否有 tool_result 内容
     let original_has_tool_results = match current_message.content.as_ref() {
-        Some(Value::Array(arr)) => arr.iter().any(|item| {
-            item.get("type").and_then(|t| t.as_str()) == Some("tool_result")
-        }),
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .any(|item| item.get("type").and_then(|t| t.as_str()) == Some("tool_result")),
         _ => false,
     } || current_message.tool_call_id.is_some();
 
@@ -1514,7 +1557,9 @@ fn extract_anthropic_message_metadata(
     }
 }
 
-fn convert_responses_tools(tools: Option<&Value>) -> (Option<Vec<Tool>>, std::collections::HashMap<String, String>) {
+fn convert_responses_tools(
+    tools: Option<&Value>,
+) -> (Option<Vec<Tool>>, std::collections::HashMap<String, String>) {
     let mut tool_name_map = std::collections::HashMap::new();
 
     let Some(items) = tools.and_then(Value::as_array) else {
@@ -1684,9 +1729,6 @@ fn extract_anthropic_tool_result_id(content: &Value) -> Option<String> {
     })
 }
 
-
-
-
 /// 修复 history 使其符合 Kiro API 的 7 条验证规则
 /// 参考 Kiro IDE 源码中的 v10 函数，按顺序执行修复步骤：
 /// 1. 确保以 user 开始
@@ -1701,43 +1743,53 @@ fn sanitize_history(mut items: Vec<HistoryItem>) -> Vec<HistoryItem> {
 
     // 步骤 1：确保以 user 开始
     if !matches!(items.first(), Some(HistoryItem::User { .. })) {
-        items.insert(0, HistoryItem::User {
-            user_input_message: HistoryUserMessage {
-                content: "Hello".to_string(),
-                model_id: String::new(),
-                origin: "AI_EDITOR".to_string(),
-                images: None,
-                user_input_message_context: None,
+        items.insert(
+            0,
+            HistoryItem::User {
+                user_input_message: HistoryUserMessage {
+                    content: "Hello".to_string(),
+                    model_id: String::new(),
+                    origin: "AI_EDITOR".to_string(),
+                    images: None,
+                    user_input_message_context: None,
+                },
             },
-        });
+        );
     }
 
     // 步骤 2：过滤空 user 消息（保留第一个 user 和有 content/toolResults 的 user）
-    let first_user_idx = items.iter().position(|item| matches!(item, HistoryItem::User { .. }));
-    items = items.into_iter().enumerate().filter(|(idx, item)| {
-        match item {
-            HistoryItem::User { user_input_message } => {
-                // 保留第一个 user
-                if Some(*idx) == first_user_idx {
-                    return true;
-                }
-                // 保留有 content 的 user
-                if !user_input_message.content.trim().is_empty() {
-                    return true;
-                }
-                // 保留有 toolResults 的 user
-                if let Some(ctx) = &user_input_message.user_input_message_context {
-                    if let Some(results) = &ctx.tool_results {
-                        if !results.is_empty() {
-                            return true;
+    let first_user_idx = items
+        .iter()
+        .position(|item| matches!(item, HistoryItem::User { .. }));
+    items = items
+        .into_iter()
+        .enumerate()
+        .filter(|(idx, item)| {
+            match item {
+                HistoryItem::User { user_input_message } => {
+                    // 保留第一个 user
+                    if Some(*idx) == first_user_idx {
+                        return true;
+                    }
+                    // 保留有 content 的 user
+                    if !user_input_message.content.trim().is_empty() {
+                        return true;
+                    }
+                    // 保留有 toolResults 的 user
+                    if let Some(ctx) = &user_input_message.user_input_message_context {
+                        if let Some(results) = &ctx.tool_results {
+                            if !results.is_empty() {
+                                return true;
+                            }
                         }
                     }
+                    false
                 }
-                false
+                _ => true,
             }
-            _ => true,
-        }
-    }).map(|(_, item)| item).collect();
+        })
+        .map(|(_, item)| item)
+        .collect();
 
     // 步骤 3：补充缺失的 toolResults
     // 如果 assistant 有 toolUses 但下一条 user 没有对应 toolResults，插入错误占位
@@ -1745,33 +1797,36 @@ fn sanitize_history(mut items: Vec<HistoryItem>) -> Vec<HistoryItem> {
     for (idx, item) in items.iter().enumerate() {
         patched.push(item.clone());
 
-        if let HistoryItem::Assistant { assistant_response_message } = item {
+        if let HistoryItem::Assistant {
+            assistant_response_message,
+        } = item
+        {
             if let Some(tool_uses) = &assistant_response_message.tool_uses {
                 if !tool_uses.is_empty() {
                     // 检查下一条是否是带 toolResults 的 user
                     let next = items.get(idx + 1);
                     let next_has_results = match next {
-                        Some(HistoryItem::User { user_input_message }) => {
-                            user_input_message.user_input_message_context
-                                .as_ref()
-                                .and_then(|ctx| ctx.tool_results.as_ref())
-                                .map(|r| !r.is_empty())
-                                .unwrap_or(false)
-                        }
+                        Some(HistoryItem::User { user_input_message }) => user_input_message
+                            .user_input_message_context
+                            .as_ref()
+                            .and_then(|ctx| ctx.tool_results.as_ref())
+                            .map(|r| !r.is_empty())
+                            .unwrap_or(false),
                         _ => false,
                     };
 
                     if !next_has_results {
                         // 插入错误占位的 toolResults
-                        let error_results: Vec<KiroToolResult> = tool_uses.iter().map(|tu| {
-                            KiroToolResult {
+                        let error_results: Vec<KiroToolResult> = tool_uses
+                            .iter()
+                            .map(|tu| KiroToolResult {
                                 tool_use_id: tu.tool_use_id.clone(),
                                 content: vec![KiroToolResultContent::Text {
                                     text: "Tool execution failed".to_string(),
                                 }],
                                 status: "error".to_string(),
-                            }
-                        }).collect();
+                            })
+                            .collect();
 
                         patched.push(HistoryItem::User {
                             user_input_message: HistoryUserMessage {
@@ -1805,22 +1860,18 @@ fn sanitize_history(mut items: Vec<HistoryItem>) -> Vec<HistoryItem> {
     let mut alternated: Vec<HistoryItem> = Vec::new();
     for item in items {
         if let Some(last) = alternated.last() {
-            let both_user = matches!(last, HistoryItem::User { .. }) && matches!(&item, HistoryItem::User { .. });
-            let both_assistant = matches!(last, HistoryItem::Assistant { .. }) && matches!(&item, HistoryItem::Assistant { .. });
+            let both_user = matches!(last, HistoryItem::User { .. })
+                && matches!(&item, HistoryItem::User { .. });
+            let both_assistant = matches!(last, HistoryItem::Assistant { .. })
+                && matches!(&item, HistoryItem::Assistant { .. });
 
             if both_user {
                 // 插入占位 assistant
                 alternated.push(HistoryItem::Assistant {
-                    assistant_response_message: HistoryAssistantMessage {
-                        content: "understood".to_string(),
-                        tool_uses: None,
-                        reasoning_content: None,
-                        references: None,
-                        supplementary_web_links: None,
-                        followup_prompt: None,
-                        message_id: None,
-                        cache_point: None,
-                    },
+                    assistant_response_message: history_assistant_message_from_response_content(
+                        "understood",
+                        &[],
+                    ),
                 });
             } else if both_assistant {
                 // 插入占位 user
@@ -1841,7 +1892,6 @@ fn sanitize_history(mut items: Vec<HistoryItem>) -> Vec<HistoryItem> {
 
     items
 }
-
 
 fn merge_adjacent_messages(messages: &[&NormalizedMessage]) -> Vec<NormalizedMessage> {
     let mut merged: Vec<NormalizedMessage> = Vec::new();
@@ -1882,9 +1932,9 @@ fn normalized_message_has_tool_results(message: &NormalizedMessage) -> bool {
         .as_ref()
         .and_then(Value::as_array)
         .map(|items| {
-            items.iter().any(|item| {
-                item.get("type").and_then(Value::as_str) == Some("tool_result")
-            })
+            items
+                .iter()
+                .any(|item| item.get("type").and_then(Value::as_str) == Some("tool_result"))
         })
         .unwrap_or(false)
 }
@@ -1977,29 +2027,6 @@ fn extract_text_content(content: Option<&Value>) -> String {
     }
 }
 
-#[allow(dead_code)]
-pub fn normalized_user_message_from_text(text: &str) -> NormalizedMessage {
-    NormalizedMessage {
-        role: "user".to_string(),
-        content: Some(Value::String(text.to_string())),
-        tool_calls: None,
-        tool_call_id: None,
-        metadata: None,
-    }
-}
-
-#[allow(dead_code)]
-pub fn normalized_tool_message_from_output(tool_call_id: &str, output: &str) -> NormalizedMessage {
-    NormalizedMessage {
-        role: "tool".to_string(),
-        content: Some(Value::String(output.to_string())),
-        tool_calls: None,
-        tool_call_id: Some(tool_call_id.to_string()),
-        metadata: None,
-    }
-}
-
-#[allow(dead_code)]
 pub fn history_assistant_message_from_response_content(
     content: &str,
     tool_calls: &[(String, String, String)],
@@ -2108,9 +2135,9 @@ fn has_empty_thinking_signature(reasoning_content: &Option<Value>) -> bool {
         .and_then(|rt| rt.get("signature"))
         .and_then(|s| s.as_str());
     match signature {
-        None => true,           // 缺 signature 字段
-        Some("") => true,       // 空字符串
-        Some(_) => false,       // 有值，保留
+        None => true,     // 缺 signature 字段
+        Some("") => true, // 空字符串
+        Some(_) => false, // 有值，保留
     }
 }
 
@@ -2403,9 +2430,7 @@ async fn extract_image_block(client: &Client, item: &Value) -> Option<ImageBlock
                 .unwrap_or("image/png");
             Some(ImageBlock {
                 format: media_type_to_format(media_type)?,
-                source: ImageSource::Bytes {
-                    bytes,
-                },
+                source: ImageSource::Bytes { bytes },
             })
         }
         "image_url" => {
@@ -2416,9 +2441,7 @@ async fn extract_image_block(client: &Client, item: &Value) -> Option<ImageBlock
             let (format, bytes) = resolve_image_source(client, url).await?;
             Some(ImageBlock {
                 format,
-                source: ImageSource::Bytes {
-                    bytes,
-                },
+                source: ImageSource::Bytes { bytes },
             })
         }
         "input_image" => {
@@ -2429,9 +2452,7 @@ async fn extract_image_block(client: &Client, item: &Value) -> Option<ImageBlock
             let (format, bytes) = resolve_image_source(client, url).await?;
             Some(ImageBlock {
                 format,
-                source: ImageSource::Bytes {
-                    bytes,
-                },
+                source: ImageSource::Bytes { bytes },
             })
         }
         _ => None,
@@ -2464,11 +2485,14 @@ async fn resolve_image_source(client: &Client, url: &str) -> Option<(String, Str
         return Some(parsed);
     }
 
-    let image_client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(IMAGE_FETCH_TIMEOUT_SECONDS))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .ok()?;
+    let image_client = apply_app_proxy(
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(IMAGE_FETCH_TIMEOUT_SECONDS))
+            .redirect(reqwest::redirect::Policy::none()),
+    )
+    .ok()?
+    .build()
+    .ok()?;
     let mut current_url = validate_remote_image_url(url).await?;
 
     for _ in 0..=MAX_IMAGE_REDIRECTS {
@@ -2679,7 +2703,6 @@ fn normalize_tool_choice(
         other => Err(format!("暂不支持的 tool_choice.type: {other}")),
     }
 }
-
 
 fn convert_tools(tools: &Option<Vec<Tool>>) -> Option<Vec<KiroTool>> {
     tools.as_ref().map(|items| {
@@ -3193,7 +3216,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_responses_request_preserves_message_content_items() {
+    fn normalize_openai_responses_request_preserves_message_content_items() {
         let payload = json!({
             "model": "claude-3-7-sonnet-20250219",
             "stream": true,
@@ -3210,7 +3233,7 @@ mod tests {
         });
 
         let converted =
-            normalize_responses_request(&payload).expect("responses payload should convert");
+            normalize_openai_responses_request(&payload).expect("responses payload should convert");
         assert!(converted.stream);
         assert_eq!(converted.messages.len(), 1);
         assert_eq!(converted.messages[0].role, "user");
@@ -3236,7 +3259,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_responses_request_defaults_to_claude_sonnet_45() {
+    fn normalize_openai_responses_request_defaults_to_claude_sonnet_45() {
         let payload = json!({
             "input": [
                 {
@@ -3247,12 +3270,12 @@ mod tests {
         });
 
         let converted =
-            normalize_responses_request(&payload).expect("responses payload should convert");
+            normalize_openai_responses_request(&payload).expect("responses payload should convert");
         assert_eq!(converted.model, "claude-sonnet-4-5-20250929");
     }
 
     #[test]
-    fn normalize_responses_request_keeps_tools_tool_choice_and_function_call_items() {
+    fn normalize_openai_responses_request_keeps_tools_tool_choice_and_function_call_items() {
         let payload = json!({
             "model": "claude-3-7-sonnet-20250219",
             "tool_choice": { "type": "function", "name": "search_docs" },
@@ -3293,7 +3316,7 @@ mod tests {
         });
 
         let converted =
-            normalize_responses_request(&payload).expect("responses payload should convert");
+            normalize_openai_responses_request(&payload).expect("responses payload should convert");
 
         assert_eq!(
             converted.tool_choice,
@@ -3333,7 +3356,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_responses_request_preserves_assistant_message_metadata() {
+    fn normalize_openai_responses_request_preserves_assistant_message_metadata() {
         let payload = json!({
             "model": "claude-3-7-sonnet-20250219",
             "input": [
@@ -3356,7 +3379,7 @@ mod tests {
         });
 
         let converted =
-            normalize_responses_request(&payload).expect("responses payload should convert");
+            normalize_openai_responses_request(&payload).expect("responses payload should convert");
 
         assert_eq!(converted.messages.len(), 2);
         assert_eq!(converted.messages[0].role, "assistant");
@@ -3373,7 +3396,6 @@ mod tests {
             }))
         );
     }
-
 
     #[tokio::test]
     async fn build_kiro_payload_preserves_responses_tool_choice() {
@@ -3486,7 +3508,11 @@ mod tests {
                 .is_empty(),
             "tool result continuation content must be empty"
         );
-        assert_eq!(context.tools.as_ref().map(Vec::len), Some(1), "Kiro IDE includes tools with current toolResults");
+        assert_eq!(
+            context.tools.as_ref().map(Vec::len),
+            Some(1),
+            "Kiro IDE includes tools with current toolResults"
+        );
         assert_eq!(context.tool_results.as_ref().map(Vec::len), Some(1));
     }
 
@@ -3692,7 +3718,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             previous_response_id: None,
-        thinking: None,
+            thinking: None,
             tool_name_map: Default::default(),
         };
 
@@ -4038,6 +4064,32 @@ mod tests {
     }
 
     #[test]
+    fn get_internal_model_id_with_fallback_caps_to_sonnet_45_when_it_is_highest_available() {
+        let available_models = vec![
+            "auto".to_string(),
+            "claude-sonnet-4.5".to_string(),
+            "claude-sonnet-4".to_string(),
+            "claude-haiku-4.5".to_string(),
+            "deepseek-3.2".to_string(),
+        ];
+
+        for requested in [
+            "claude-opus-4.8",
+            "claude-opus-4.7",
+            "claude-opus-4.6",
+            "claude-opus-4.5",
+            "claude-sonnet-4.6",
+        ] {
+            assert_eq!(
+                get_internal_model_id_with_fallback(requested, &available_models)
+                    .expect("model should fallback"),
+                "claude-sonnet-4.5",
+                "{requested} should be capped to highest available Claude model"
+            );
+        }
+    }
+
+    #[test]
     fn normalize_anthropic_request_preserves_image_content() {
         // 测试：包含图片的 content 应该保留为数组，不应该被转换为字符串
         let request = AnthropicMessagesRequest {
@@ -4080,14 +4132,24 @@ mod tests {
 
         // 验证 content 仍然是数组（而不是被转换成字符串）
         assert_eq!(converted.messages.len(), 1);
-        let content = converted.messages[0].content.as_ref().expect("content should exist");
-        
+        let content = converted.messages[0]
+            .content
+            .as_ref()
+            .expect("content should exist");
+
         // 关键断言：content 应该是 Array，不是 String
-        assert!(content.is_array(), "content should be an array to preserve image data");
-        
+        assert!(
+            content.is_array(),
+            "content should be an array to preserve image data"
+        );
+
         let content_array = content.as_array().expect("content should be array");
-        assert_eq!(content_array.len(), 2, "should have 2 items: text and image");
-        
+        assert_eq!(
+            content_array.len(),
+            2,
+            "should have 2 items: text and image"
+        );
+
         // 验证图片 block 仍然存在
         let image_block = &content_array[1];
         assert_eq!(
@@ -4121,11 +4183,11 @@ mod tests {
 
         let client = Client::new();
         let images = extract_images(&client, Some(&content)).await;
-        
+
         // 验证成功提取了图片
         assert_eq!(images.len(), 1, "should extract 1 image");
         assert_eq!(images[0].format, "png", "image format should be png");
-        
+
         // 验证图片数据
         match &images[0].source {
             ImageSource::Bytes { bytes } => {
@@ -4143,7 +4205,7 @@ mod tests {
     }
 
     #[test]
-    fn normalize_responses_request_preserves_compaction_items() {
+    fn normalize_openai_responses_request_preserves_compaction_items() {
         // 测试：Responses API 的 compaction item 应该被保留
         let payload = json!({
             "model": "gpt-5",
@@ -4170,21 +4232,27 @@ mod tests {
             ]
         });
 
-        let normalized = normalize_responses_request(&payload).expect("should normalize successfully");
-        
+        let normalized =
+            normalize_openai_responses_request(&payload).expect("should normalize successfully");
+
         // 验证消息数量：user + assistant + compaction + user = 4
         assert_eq!(normalized.messages.len(), 4, "should have 4 messages");
-        
+
         // 验证 compaction item 被保留为 system 消息
-        assert_eq!(normalized.messages[2].role, "system", "compaction should be system role");
+        assert_eq!(
+            normalized.messages[2].role, "system",
+            "compaction should be system role"
+        );
         assert!(
-            normalized.messages[2].metadata.as_ref()
+            normalized.messages[2]
+                .metadata
+                .as_ref()
                 .and_then(|m| m.get("is_compaction"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
             "compaction should have is_compaction metadata"
         );
-        
+
         // 验证 compaction 内容被原样保留
         let compaction_content = normalized.messages[2].content.as_ref().unwrap();
         assert_eq!(

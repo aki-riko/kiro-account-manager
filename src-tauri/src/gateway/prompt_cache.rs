@@ -131,13 +131,20 @@ impl PromptCacheTracker {
         let mut last_tokens = last.cumulative_tokens.min(profile.total_input_tokens);
         let now = Instant::now();
 
-        let mut entries_map = self.entries_by_account.lock().unwrap_or_else(|e| e.into_inner());
+        let mut entries_map = self
+            .entries_by_account
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         self.prune_expired(&mut entries_map, now);
 
         let entries = entries_map.get_mut(account_id);
         if entries.is_none() || entries.as_ref().unwrap().is_empty() {
             // 首次请求：全部是 creation
-            let effective_creation = if last_tokens >= min_tokens { last_tokens } else { 0 };
+            let effective_creation = if last_tokens >= min_tokens {
+                last_tokens
+            } else {
+                0
+            };
             return CacheUsage {
                 cache_creation_input_tokens: effective_creation,
                 cache_read_input_tokens: 0,
@@ -187,17 +194,23 @@ impl PromptCacheTracker {
         let min_tokens = self.min_cacheable_tokens(&profile.model);
         let now = Instant::now();
 
-        let mut entries_map = self.entries_by_account.lock().unwrap_or_else(|e| e.into_inner());
+        let mut entries_map = self
+            .entries_by_account
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let entries = entries_map.entry(account_id.to_string()).or_default();
 
         for bp in &profile.breakpoints {
             if bp.cumulative_tokens < min_tokens {
                 continue;
             }
-            entries.insert(bp.fingerprint, CacheEntry {
-                expires_at: now + bp.ttl,
-                ttl: bp.ttl,
-            });
+            entries.insert(
+                bp.fingerprint,
+                CacheEntry {
+                    expires_at: now + bp.ttl,
+                    ttl: bp.ttl,
+                },
+            );
         }
 
         // 限制条目数
@@ -228,7 +241,16 @@ impl PromptCacheTracker {
                 let value = self.canonicalize(tool);
                 let tokens = estimate_tokens(&value);
                 let ttl = self.extract_ttl(tool);
-                blocks.push(CacheableBlock { value, tokens, ttl: if ttl > Duration::ZERO { ttl } else { default_ttl }, is_message_end: false });
+                blocks.push(CacheableBlock {
+                    value,
+                    tokens,
+                    ttl: if ttl > Duration::ZERO {
+                        ttl
+                    } else {
+                        default_ttl
+                    },
+                    is_message_end: false,
+                });
             }
         }
 
@@ -249,7 +271,16 @@ impl PromptCacheTracker {
                         let value = self.canonicalize(block);
                         let tokens = estimate_tokens(&value);
                         let ttl = self.extract_ttl(block);
-                        blocks.push(CacheableBlock { value, tokens, ttl: if ttl > Duration::ZERO { ttl } else { default_ttl }, is_message_end: false });
+                        blocks.push(CacheableBlock {
+                            value,
+                            tokens,
+                            ttl: if ttl > Duration::ZERO {
+                                ttl
+                            } else {
+                                default_ttl
+                            },
+                            is_message_end: false,
+                        });
                     }
                 }
                 _ => {}
@@ -266,7 +297,12 @@ impl PromptCacheTracker {
                     let value = self.canonicalize(msg);
                     let tokens = estimate_tokens(s);
                     let ttl = self.extract_ttl(msg);
-                    blocks.push(CacheableBlock { value, tokens, ttl, is_message_end: true });
+                    blocks.push(CacheableBlock {
+                        value,
+                        tokens,
+                        ttl,
+                        is_message_end: true,
+                    });
                 }
                 Some(serde_json::Value::Array(arr)) => {
                     let last_idx = arr.len().saturating_sub(1);
@@ -292,8 +328,12 @@ impl PromptCacheTracker {
 
     fn extract_ttl(&self, value: &serde_json::Value) -> Duration {
         let cache_control = value.get("cache_control");
-        let Some(cc) = cache_control else { return Duration::ZERO };
-        let Some(cc_type) = cc.get("type").and_then(|t| t.as_str()) else { return Duration::ZERO };
+        let Some(cc) = cache_control else {
+            return Duration::ZERO;
+        };
+        let Some(cc_type) = cc.get("type").and_then(|t| t.as_str()) else {
+            return Duration::ZERO;
+        };
         if !cc_type.eq_ignore_ascii_case("ephemeral") {
             return Duration::ZERO;
         }
@@ -317,7 +357,8 @@ impl PromptCacheTracker {
         // 排除 cache_control 字段后序列化
         match value {
             serde_json::Value::Object(map) => {
-                let mut sorted: Vec<_> = map.iter()
+                let mut sorted: Vec<_> = map
+                    .iter()
                     .filter(|(k, _)| k.as_str() != "cache_control")
                     .collect();
                 sorted.sort_by_key(|(k, _)| k.as_str());
@@ -346,7 +387,11 @@ impl PromptCacheTracker {
         }
     }
 
-    fn prune_expired(&self, entries_map: &mut HashMap<String, HashMap<[u8; 32], CacheEntry>>, now: Instant) {
+    fn prune_expired(
+        &self,
+        entries_map: &mut HashMap<String, HashMap<[u8; 32], CacheEntry>>,
+        now: Instant,
+    ) {
         entries_map.retain(|_, entries| {
             entries.retain(|_, entry| entry.expires_at > now);
             !entries.is_empty()

@@ -4,7 +4,6 @@
 /// 1. 增量内存缓存（Delta Cache）- 检测消息增量，小变化直接复用
 /// 2. LRU 内存缓存 - 快速访问热点数据
 /// 3. 持久化缓存（文件系统）- 跨会话保存
-
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -73,7 +72,12 @@ impl CacheEntry {
     }
 
     /// 检查是否可以复用（增量检查）
-    pub fn can_reuse(&self, new_message_count: usize, new_total_chars: usize, config: &CacheConfig) -> bool {
+    pub fn can_reuse(
+        &self,
+        new_message_count: usize,
+        new_total_chars: usize,
+        config: &CacheConfig,
+    ) -> bool {
         if self.is_expired() {
             return false;
         }
@@ -140,7 +144,8 @@ impl ResponseCache {
         if let Some(entry) = self.lru_cache.get(&key) {
             if !entry.is_expired() {
                 // 更新增量缓存
-                self.delta_cache.insert(session_id.to_string(), entry.clone());
+                self.delta_cache
+                    .insert(session_id.to_string(), entry.clone());
                 return Some(entry.clone());
             } else {
                 // 移除过期条目
@@ -154,7 +159,8 @@ impl ResponseCache {
                 if !entry.is_expired() {
                     // 回填到内存缓存
                     self.lru_cache.put(key.clone(), entry.clone());
-                    self.delta_cache.insert(session_id.to_string(), entry.clone());
+                    self.delta_cache
+                        .insert(session_id.to_string(), entry.clone());
                     return Some(entry);
                 } else {
                     // 删除过期的磁盘缓存
@@ -194,7 +200,8 @@ impl ResponseCache {
         };
 
         // 写入增量缓存
-        self.delta_cache.insert(session_id.to_string(), entry.clone());
+        self.delta_cache
+            .insert(session_id.to_string(), entry.clone());
 
         // 写入 LRU 缓存
         self.lru_cache.put(key.clone(), entry.clone());
@@ -246,9 +253,10 @@ impl ResponseCache {
 
     /// 保存缓存到磁盘
     fn save_to_disk(&self, key: &str, entry: &CacheEntry) -> Result<(), std::io::Error> {
-        let cache_dir = self.cache_dir.as_ref().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "缓存目录未设置")
-        })?;
+        let cache_dir = self
+            .cache_dir
+            .as_ref()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "缓存目录未设置"))?;
 
         fs::create_dir_all(cache_dir)?;
 
@@ -261,9 +269,10 @@ impl ResponseCache {
 
     /// 从磁盘删除缓存
     fn delete_from_disk(&self, key: &str) -> Result<(), std::io::Error> {
-        let cache_dir = self.cache_dir.as_ref().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "缓存目录未设置")
-        })?;
+        let cache_dir = self
+            .cache_dir
+            .as_ref()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "缓存目录未设置"))?;
 
         let file_path = cache_dir.join(format!("{}.json", Self::sanitize_key(key)));
         if file_path.exists() {
@@ -275,9 +284,10 @@ impl ResponseCache {
 
     /// 清理过期的磁盘缓存
     pub fn cleanup_expired(&mut self) -> Result<usize, std::io::Error> {
-        let cache_dir = self.cache_dir.as_ref().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "缓存目录未设置")
-        })?;
+        let cache_dir = self
+            .cache_dir
+            .as_ref()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "缓存目录未设置"))?;
 
         if !cache_dir.exists() {
             return Ok(0);
@@ -316,9 +326,16 @@ impl ResponseCache {
     /// 清理键名（移除不安全字符并限制长度）
     fn sanitize_key(key: &str) -> String {
         const MAX_KEY_LENGTH: usize = 255;
-        let sanitized: String = key.chars()
+        let sanitized: String = key
+            .chars()
             .take(MAX_KEY_LENGTH)
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         sanitized
     }

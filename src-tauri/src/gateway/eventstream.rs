@@ -63,7 +63,8 @@ pub fn decode_message(buffer: &[u8]) -> Result<Option<(EventStreamMessage, usize
 
     // 验证前导 CRC
     let prelude = &msg_bytes[0..8];
-    let prelude_crc = u32::from_be_bytes([msg_bytes[8], msg_bytes[9], msg_bytes[10], msg_bytes[11]]);
+    let prelude_crc =
+        u32::from_be_bytes([msg_bytes[8], msg_bytes[9], msg_bytes[10], msg_bytes[11]]);
 
     let calculated_prelude_crc = crc32(prelude);
     if calculated_prelude_crc != prelude_crc {

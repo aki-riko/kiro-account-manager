@@ -61,6 +61,32 @@ pub struct AccountHealth {
     pub avg_response_time_ms: u64,
 }
 
+/// 可序列化的健康状态（用于API响应）
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SerializableAccountHealth {
+    pub account_id: String,
+    pub active_connections: usize,
+    pub recent_failures: usize,
+    pub recent_successes: usize,
+    pub is_healthy: bool,
+    pub avg_response_time_ms: u64,
+    pub health_score: u32,
+}
+
+impl From<&AccountHealth> for SerializableAccountHealth {
+    fn from(health: &AccountHealth) -> Self {
+        Self {
+            account_id: health.account_id.clone(),
+            active_connections: health.active_connections,
+            recent_failures: health.recent_failures,
+            recent_successes: health.recent_successes,
+            is_healthy: health.is_healthy,
+            avg_response_time_ms: health.avg_response_time_ms,
+            health_score: health.health_score(),
+        }
+    }
+}
+
 impl AccountHealth {
     pub fn new(account_id: String) -> Self {
         Self {
@@ -94,7 +120,9 @@ impl AccountHealth {
         // 响应时间惩罚（每 1000ms 减 10 分）
         let response_penalty = (self.avg_response_time_ms / 1000) as u32 * 10;
 
-        success_rate.saturating_sub(connection_penalty).saturating_sub(response_penalty)
+        success_rate
+            .saturating_sub(connection_penalty)
+            .saturating_sub(response_penalty)
     }
 
     /// 记录成功
@@ -146,6 +174,7 @@ impl AccountHealth {
 }
 
 /// 负载均衡器
+#[derive(Debug)]
 pub struct LoadBalancer {
     /// 负载均衡策略
     strategy: LoadBalancerStrategy,
@@ -158,6 +187,8 @@ pub struct LoadBalancer {
     health_check_interval: Duration,
     /// 速率限制的账号（临时屏蔽）
     rate_limited_accounts: Arc<RwLock<HashMap<String, Instant>>>,
+    /// 已封禁的账号（永久屏蔽，直到手动重置）
+    banned_accounts: Arc<RwLock<HashMap<String, Instant>>>,
 }
 
 impl LoadBalancer {
@@ -168,6 +199,7 @@ impl LoadBalancer {
             health_map: Arc::new(RwLock::new(HashMap::new())),
             health_check_interval: Duration::from_secs(30),
             rate_limited_accounts: Arc::new(RwLock::new(HashMap::new())),
+            banned_accounts: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -187,9 +219,7 @@ impl LoadBalancer {
         }
 
         match self.strategy {
-            LoadBalancerStrategy::RoundRobin => {
-                self.select_round_robin(&healthy_accounts).await
-            }
+            LoadBalancerStrategy::RoundRobin => self.select_round_robin(&healthy_accounts).await,
             LoadBalancerStrategy::Random => self.select_random(&healthy_accounts),
             LoadBalancerStrategy::Balanced => self.select_balanced(&healthy_accounts),
             LoadBalancerStrategy::MostQuota => self.select_most_quota(&healthy_accounts),
@@ -202,14 +232,21 @@ impl LoadBalancer {
         }
     }
 
-    /// 过滤健康的账号（排除速率限制的账号）
+    /// 过滤健康的账号（排除速率限制和已封禁的账号）
     async fn filter_healthy_accounts(&self, accounts: &[Account]) -> Vec<Account> {
         let health_map = self.health_map.read().await;
         let rate_limited = self.rate_limited_accounts.read().await;
+        let banned = self.banned_accounts.read().await;
 
         accounts
             .iter()
             .filter(|acc| {
+                // 检查是否被封禁（永久屏蔽）
+                if banned.contains_key(&acc.id) {
+                    log::debug!("[LoadBalancer] 跳过已封禁的账号: {}", acc.label);
+                    return false;
+                }
+
                 // 检查是否被速率限制
                 if let Some(blocked_at) = rate_limited.get(&acc.id) {
                     if blocked_at.elapsed().as_secs() < 60 {
@@ -217,7 +254,7 @@ impl LoadBalancer {
                         return false;
                     }
                 }
-                
+
                 // 检查健康状态
                 health_map
                     .get(&acc.id)
@@ -266,10 +303,7 @@ impl LoadBalancer {
 
     /// 均衡选择（优先使用成功次数最少的账号）
     fn select_balanced(&self, accounts: &[Account]) -> Option<Account> {
-        accounts
-            .iter()
-            .min_by_key(|acc| acc.success_count)
-            .cloned()
+        accounts.iter().min_by_key(|acc| acc.success_count).cloned()
     }
 
     /// 最多配额选择
@@ -279,7 +313,9 @@ impl LoadBalancer {
             .max_by(|a, b| {
                 let quota_a = remaining_quota(a);
                 let quota_b = remaining_quota(b);
-                quota_a.partial_cmp(&quota_b).unwrap_or(std::cmp::Ordering::Equal)
+                quota_a
+                    .partial_cmp(&quota_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .cloned()
     }
@@ -372,41 +408,33 @@ impl LoadBalancer {
     pub async fn mark_rate_limited(&self, account_id: &str) {
         let mut rate_limited = self.rate_limited_accounts.write().await;
         rate_limited.insert(account_id.to_string(), Instant::now());
-        log::info!("[LoadBalancer] 账号 {} 被标记为速率限制，将屏蔽 60 秒", account_id);
+        log::info!(
+            "[LoadBalancer] 账号 {} 被标记为速率限制，将屏蔽 60 秒",
+            account_id
+        );
     }
 
-    /// 检查账号是否被速率限制
-    #[allow(dead_code)]
-    pub async fn is_rate_limited(&self, account_id: &str) -> bool {
-        let mut rate_limited = self.rate_limited_accounts.write().await;
-        
-        if let Some(blocked_at) = rate_limited.get(account_id) {
-            if blocked_at.elapsed().as_secs() < 60 {
-                return true;
-            } else {
-                // 60 秒后自动解除屏蔽
-                rate_limited.remove(account_id);
-                log::info!("[LoadBalancer] 账号 {} 速率限制已解除", account_id);
-            }
-        }
-        
-        false
-    }
+    /// 标记账号为已封禁（永久屏蔽，直到手动重置）
+    pub async fn mark_account_banned(&self, account_id: &str) {
+        let mut banned = self.banned_accounts.write().await;
+        banned.insert(account_id.to_string(), Instant::now());
+        log::warn!(
+            "[LoadBalancer] 账号 {} 被标记为已封禁，永久屏蔽（需手动重置）",
+            account_id
+        );
 
-    /// 清除账号的速率限制标记
-    #[allow(dead_code)]
-    pub async fn clear_rate_limit(&self, account_id: &str) {
-        let mut rate_limited = self.rate_limited_accounts.write().await;
-        if rate_limited.remove(account_id).is_some() {
-            log::info!("[LoadBalancer] 手动清除账号 {} 的速率限制", account_id);
+        // 同时标记为不健康
+        let mut health_map = self.health_map.write().await;
+        if let Some(health) = health_map.get_mut(account_id) {
+            health.is_healthy = false;
+            health.recent_failures = 999; // 设置高失败次数
         }
     }
 
     /// 获取所有被速率限制的账号
-    #[allow(dead_code)]
     pub async fn get_rate_limited_accounts(&self) -> Vec<String> {
         let mut rate_limited = self.rate_limited_accounts.write().await;
-        
+
         // 清理过期的屏蔽
         rate_limited.retain(|account_id, blocked_at| {
             if blocked_at.elapsed().as_secs() >= 60 {
@@ -416,26 +444,46 @@ impl LoadBalancer {
                 true
             }
         });
-        
+
         rate_limited.keys().cloned().collect()
     }
 
-    /// 获取账号健康状态
-    #[allow(dead_code)]
-    pub async fn get_health(&self, account_id: &str) -> Option<AccountHealth> {
-        let health_map = self.health_map.read().await;
-        health_map.get(account_id).cloned()
+    /// 获取所有被封禁的账号
+    pub async fn get_banned_accounts(&self) -> Vec<String> {
+        let banned = self.banned_accounts.read().await;
+        banned.keys().cloned().collect()
+    }
+
+    /// 清除账号的封禁标记（手动重置）
+    pub async fn clear_banned(&self, account_id: &str) {
+        let mut banned = self.banned_accounts.write().await;
+        if banned.remove(account_id).is_some() {
+            log::info!("[LoadBalancer] 手动解除账号 {} 的封禁状态", account_id);
+
+            // 重置健康状态
+            let mut health_map = self.health_map.write().await;
+            if let Some(health) = health_map.get_mut(account_id) {
+                health.is_healthy = true;
+                health.recent_failures = 0;
+            }
+        }
+    }
+
+    /// 清除账号的速率限制标记
+    pub async fn clear_rate_limit(&self, account_id: &str) {
+        let mut rate_limited = self.rate_limited_accounts.write().await;
+        if rate_limited.remove(account_id).is_some() {
+            log::info!("[LoadBalancer] 手动清除账号 {} 的速率限制", account_id);
+        }
     }
 
     /// 获取所有账号的健康状态
-    #[allow(dead_code)]
     pub async fn get_all_health(&self) -> HashMap<String, AccountHealth> {
         let health_map = self.health_map.read().await;
         health_map.clone()
     }
 
     /// 重置账号健康状态
-    #[allow(dead_code)]
     pub async fn reset_health(&self, account_id: &str) {
         let mut health_map = self.health_map.write().await;
         if let Some(health) = health_map.get_mut(account_id) {
@@ -446,15 +494,12 @@ impl LoadBalancer {
     }
 
     /// 清理过期的健康状态（超过 1 小时未使用）
-    #[allow(dead_code)]
     pub async fn cleanup_stale_health(&self) {
         let mut health_map = self.health_map.write().await;
         let now = Instant::now();
         let stale_duration = Duration::from_secs(3600); // 1 小时
 
-        health_map.retain(|_, health| {
-            now.duration_since(health.last_check) < stale_duration
-        });
+        health_map.retain(|_, health| now.duration_since(health.last_check) < stale_duration);
     }
 }
 

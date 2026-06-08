@@ -1,5 +1,3 @@
-
-
 use axum::{
     body::{Body, Bytes},
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -20,20 +18,20 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::{
-    core::account::{Account, AccountStore},
-    commands::common::{
-        get_usage_by_provider, is_token_expiring_soon,
-        refresh_token_by_provider, resolve_default_profile_arn, update_account_status, RefreshResult,
-    },
-    commands::machine_guid::get_machine_id,
     clients::{
         http_client::{
-            build_kiro_custom_user_agent, build_q_service_url,
+            build_kiro_custom_user_agent, build_kiro_x_amz_user_agent,
             resolve_kiro_upstream_region, should_add_redirect_for_internal,
             should_send_codewhisperer_optout,
         },
-        kiro_q_client::KiroQClient,
+        kiro_client::{build_generate_assistant_response_url, build_kiro_runtime_host, KiroClient},
     },
+    commands::common::{
+        get_usage_by_provider, is_token_expiring_soon, refresh_token_by_provider,
+        resolve_machine_id, resolve_profile_arn_from_candidates, update_account_status,
+        RefreshResult,
+    },
+    core::account::{Account, AccountStore},
 };
 
 const MAX_FAILURES_PER_ACCOUNT: u32 = 3;
@@ -47,11 +45,11 @@ const COUNT_TOKENS_SAFETY_MULTIPLIER: f64 = 1.15;
 use super::{
     append_gateway_request_log,
     converter::{
-        build_kiro_payload, get_available_models,
-        normalize_anthropic_request, normalize_responses_request,
+        build_kiro_payload, get_available_models, normalize_anthropic_request,
+        normalize_openai_chat_payload, normalize_openai_responses_request,
     },
-    eventstream::decode_message,
     effective_client_api_keys,
+    eventstream::decode_message,
     models::{
         AnthropicContentBlock, AnthropicMessagesRequest, AnthropicMessagesResponse, AnthropicUsage,
         ModelsResponse, NormalizedMessage, NormalizedRequest, OpenAIChatRequest, Tool, ToolCall,
@@ -65,8 +63,18 @@ use super::{
 
 #[derive(Debug, Clone)]
 struct UpstreamCredentials {
+    account_id: String,
     access_token: String,
+    machine_id: String,
+    /// 发送正式 Kiro 请求时使用的 profileArn；BuilderId/Social 会按 provider 兜底。
     profile_arn: Option<String>,
+    /// ListAvailableModels 探测使用的 profileArn。
+    ///
+    /// BuilderId 账号本地常见为 `profileArn=null`，但真实 IDE 抓包会带固定
+    /// BuilderId profileArn；不带时上游会返回 `Invalid profileArn`。
+    /// 因此这里使用有效 profileArn（账号/刷新返回值优先，否则 provider 默认值），
+    /// 但 machineId 必须仍使用账号自己的 machineId。
+    available_models_profile_arn: Option<String>,
     provider: Option<String>,
     region: String,
     source_label: String,
@@ -146,7 +154,11 @@ async fn restore_responses_session_messages(
                             call_type: "function".to_string(),
                             function: ToolCallFunction {
                                 name: name.clone(),
-                                arguments: if arguments.is_empty() { "{}".to_string() } else { arguments.clone() },
+                                arguments: if arguments.is_empty() {
+                                    "{}".to_string()
+                                } else {
+                                    arguments.clone()
+                                },
                             },
                         })
                         .collect(),
@@ -239,9 +251,12 @@ struct RequestLogContext<'a> {
     client_addr: SocketAddr,
     request: Option<&'a NormalizedRequest>,
     upstream: Option<&'a UpstreamCredentials>,
+    upstream_source_hint: Option<String>,
+    region_hint: Option<String>,
     started_at: Instant,
     #[allow(dead_code)]
     request_body: Option<&'a str>,
+    request_body_hint: Option<String>,
     /// 从原始请求体提取的 model（用于错误日志）
     model_hint: Option<String>,
     /// 是否流式请求（避免 request 为 None 时丢失信息）
@@ -274,8 +289,6 @@ fn build_openai_tokens_response(payload: &Value) -> Value {
     })
 }
 
-
-
 fn estimate_count_tokens_payload(payload: &Value) -> usize {
     let model_id = payload
         .get("model")
@@ -293,20 +306,19 @@ fn build_health_response() -> Value {
 
 /// 获取账号可用模型列表
 ///
-/// 调用 Kiro Q API 的 ListAvailableModels 接口获取账号权限内的模型
+/// 调用 Kiro Management API 的 ListAvailableModels 接口获取账号权限内的模型
 async fn get_available_models_for_upstream(
     upstream: &UpstreamCredentials,
 ) -> Result<Vec<String>, String> {
-    let client = KiroQClient::new()?;
+    let client = KiroClient::new()?;
+    let (machine_id, profile_arn) = available_models_call_context(upstream);
 
     let response = client
         .list_available_models(
             &upstream.access_token,
-            &get_machine_id(),
+            machine_id,
             &upstream.region,
-            upstream.profile_arn.as_deref(),
-            None, // model_provider
-            None, // next_token
+            profile_arn,
         )
         .await?;
 
@@ -316,37 +328,49 @@ async fn get_available_models_for_upstream(
         .and_then(|v| v.as_array())
         .ok_or("Invalid response: missing models array")?
         .iter()
-        .filter_map(|m| m.get("modelId").and_then(|id| id.as_str()).map(String::from))
+        .filter_map(|m| {
+            m.get("modelId")
+                .and_then(|id| id.as_str())
+                .map(String::from)
+        })
         .collect();
 
     Ok(models)
 }
 
+fn available_models_call_context(upstream: &UpstreamCredentials) -> (&str, Option<&str>) {
+    (
+        upstream.machine_id.as_str(),
+        upstream.available_models_profile_arn.as_deref(),
+    )
+}
+
 fn check_payload_size(payload: &Value) -> usize {
-    serde_json::to_string(payload)
-        .map(|s| s.len())
-        .unwrap_or(0)
+    serde_json::to_string(payload).map(|s| s.len()).unwrap_or(0)
 }
 
 /// Token 估算器类型（根据模型选择不同的估算方法）
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 enum TokenizerType {
-    Claude,   // Anthropic Claude 模型
-    OpenAI,   // OpenAI GPT 模型（使用 tiktoken）
-    Llama,    // Meta Llama 模型
-    Generic,  // 通用估算（未知模型）
+    Claude,  // Anthropic Claude 模型
+    OpenAI,  // OpenAI GPT 模型（使用 tiktoken）
+    Llama,   // Meta Llama 模型
+    Generic, // 通用估算（未知模型）
 }
 
 impl TokenizerType {
     /// 根据模型 ID 判断使用哪种估算方法
     fn from_model_id(model_id: &str) -> Self {
         let model_lower = model_id.to_lowercase();
-        
+
         // Claude 系列：4.5, 4.6, 4.7 ,4.8及所有变体
         if model_lower.contains("claude") {
             TokenizerType::Claude
-        } else if model_lower.contains("gpt") || model_lower.contains("o1") || model_lower.contains("o3") {
+        } else if model_lower.contains("gpt")
+            || model_lower.contains("o1")
+            || model_lower.contains("o3")
+        {
             TokenizerType::OpenAI
         } else if model_lower.contains("llama") {
             TokenizerType::Llama
@@ -371,7 +395,7 @@ impl TokenizerType {
 #[allow(dead_code)]
 fn estimate_request_tokens(messages: &[NormalizedMessage], model_id: &str) -> usize {
     let tokenizer_type = TokenizerType::from_model_id(model_id);
-    
+
     messages
         .iter()
         .map(|msg| {
@@ -391,8 +415,8 @@ fn estimate_request_tokens(messages: &[NormalizedMessage], model_id: &str) -> us
                 }
             }
             tokens
-})
-.sum()
+        })
+        .sum()
 }
 
 /// 智能裁剪消息列表到目标 token 数
@@ -406,132 +430,141 @@ fn estimate_request_tokens(messages: &[NormalizedMessage], model_id: &str) -> us
 /// 返回：是否成功裁剪
 #[allow(dead_code)]
 fn trim_messages_by_tokens(
-            messages: &mut Vec<NormalizedMessage>,
-            target_tokens: usize,
-            model_id: &str,
+    messages: &mut Vec<NormalizedMessage>,
+    target_tokens: usize,
+    model_id: &str,
 ) -> bool {
-            let current_tokens = estimate_request_tokens(messages, model_id);
-            if current_tokens <= target_tokens {
-                return true;
-            }
+    let current_tokens = estimate_request_tokens(messages, model_id);
+    if current_tokens <= target_tokens {
+        return true;
+    }
 
-            log::info!("[网关] 开始裁剪消息：当前 {} tokens，目标 {} tokens", current_tokens, target_tokens);
+    log::info!(
+        "[网关] 开始裁剪消息：当前 {} tokens，目标 {} tokens",
+        current_tokens,
+        target_tokens
+    );
 
-            // 分离 system 消息和对话消息
-            let mut system_messages: Vec<NormalizedMessage> = Vec::new();
-            let mut conversation_messages: Vec<NormalizedMessage> = Vec::new();
+    // 分离 system 消息和对话消息
+    let mut system_messages: Vec<NormalizedMessage> = Vec::new();
+    let mut conversation_messages: Vec<NormalizedMessage> = Vec::new();
 
-            for msg in messages.iter() {
-                if msg.role == "system" {
-                    system_messages.push(msg.clone());
-                } else {
-                    conversation_messages.push(msg.clone());
+    for msg in messages.iter() {
+        if msg.role == "system" {
+            system_messages.push(msg.clone());
+        } else {
+            conversation_messages.push(msg.clone());
+        }
+    }
+
+    if conversation_messages.is_empty() {
+        log::warn!("[网关] 没有对话消息可裁剪");
+        return false;
+    }
+
+    // 确保最后一条是 user 消息（Claude API 要求）
+    let last_msg = conversation_messages.last().unwrap();
+    if last_msg.role != "user" {
+        log::warn!("[网关] 最后一条消息不是 user，无法裁剪");
+        return false;
+    }
+
+    // 策略1: 从后往前保留尽可能多的消息
+    let mut kept_messages = Vec::new();
+
+    // 从后往前遍历
+    for msg in conversation_messages.iter().rev() {
+        let mut test_messages = system_messages.clone();
+        // 注意：kept_messages 是反向的，需要反转后添加
+        let mut temp_kept = kept_messages.clone();
+        temp_kept.reverse();
+        temp_kept.insert(0, msg.clone());
+        test_messages.extend(temp_kept);
+
+        let test_tokens = estimate_request_tokens(&test_messages, model_id);
+        if test_tokens <= target_tokens {
+            kept_messages.push(msg.clone());
+        } else {
+            // 超过限制，停止添加
+            break;
+        }
+    }
+
+    // 反转回正确的顺序
+    kept_messages.reverse();
+
+    // 如果一条都保留不了，尝试截断最后一条 user 消息
+    if kept_messages.is_empty() {
+        log::warn!("[网关] 无法保留任何消息，尝试截断最后一条 user 消息");
+        let mut last_user = conversation_messages.last().unwrap().clone();
+
+        // 尝试截断消息内容
+        if let Some(content) = &last_user.content {
+            let content_str = match content {
+                Value::String(s) => s.clone(),
+                Value::Array(arr) => {
+                    // 提取文本内容
+                    arr.iter()
+                        .filter_map(|item| {
+                            item.get("text")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
                 }
-            }
+                _ => content.to_string(),
+            };
 
-            if conversation_messages.is_empty() {
-                log::warn!("[网关] 没有对话消息可裁剪");
-                return false;
-            }
+            // 逐步减少内容长度，直到满足 token 限制
+            let mut truncated_content = content_str;
+            let mut ratio = 0.8;
 
-            // 确保最后一条是 user 消息（Claude API 要求）
-            let last_msg = conversation_messages.last().unwrap();
-            if last_msg.role != "user" {
-                log::warn!("[网关] 最后一条消息不是 user，无法裁剪");
-                return false;
-            }
+            while ratio > 0.1 {
+                let target_len = (truncated_content.len() as f64 * ratio) as usize;
+                truncated_content = truncated_content
+                    .chars()
+                    .take(target_len)
+                    .collect::<String>();
+                truncated_content.push_str("...[内容已截断]");
 
-            // 策略1: 从后往前保留尽可能多的消息
-            let mut kept_messages = Vec::new();
+                last_user.content = Some(Value::String(truncated_content.clone()));
 
-            // 从后往前遍历
-            for msg in conversation_messages.iter().rev() {
                 let mut test_messages = system_messages.clone();
-                // 注意：kept_messages 是反向的，需要反转后添加
-                let mut temp_kept = kept_messages.clone();
-                temp_kept.reverse();
-                temp_kept.insert(0, msg.clone());
-                test_messages.extend(temp_kept);
+                test_messages.push(last_user.clone());
 
                 let test_tokens = estimate_request_tokens(&test_messages, model_id);
                 if test_tokens <= target_tokens {
-                    kept_messages.push(msg.clone());
-                } else {
-                    // 超过限制，停止添加
+                    kept_messages.push(last_user);
+                    log::info!("[网关] 成功截断消息内容到 {} 字符", truncated_content.len());
                     break;
                 }
+
+                ratio -= 0.1;
             }
+        }
+    }
 
-            // 反转回正确的顺序
-            kept_messages.reverse();
+    if kept_messages.is_empty() {
+        log::error!("[网关] 裁剪失败：无法保留任何消息");
+        return false;
+    }
 
-            // 如果一条都保留不了，尝试截断最后一条 user 消息
-            if kept_messages.is_empty() {
-                log::warn!("[网关] 无法保留任何消息，尝试截断最后一条 user 消息");
-                let mut last_user = conversation_messages.last().unwrap().clone();
+    // 重建消息列表
+    let mut final_messages = system_messages;
+    final_messages.extend(kept_messages);
 
-                // 尝试截断消息内容
-                if let Some(content) = &last_user.content {
-                    let content_str = match content {
-                        Value::String(s) => s.clone(),
-                        Value::Array(arr) => {
-                            // 提取文本内容
-                            arr.iter()
-                                .filter_map(|item| {
-                                    item.get("text").and_then(|v| v.as_str()).map(|s| s.to_string())
-                                })
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        }
-                        _ => content.to_string()
-                    };
+    let final_tokens = estimate_request_tokens(&final_messages, model_id);
+    log::info!(
+        "[网关] 裁剪成功：{} → {} 条消息，{} → {} tokens",
+        messages.len(),
+        final_messages.len(),
+        current_tokens,
+        final_tokens
+    );
 
-                    // 逐步减少内容长度，直到满足 token 限制
-                    let mut truncated_content = content_str;
-                    let mut ratio = 0.8;
-
-                    while ratio > 0.1 {
-                        let target_len = (truncated_content.len() as f64 * ratio) as usize;
-                        truncated_content = truncated_content.chars().take(target_len).collect::<String>();
-                        truncated_content.push_str("...[内容已截断]");
-
-                        last_user.content = Some(Value::String(truncated_content.clone()));
-
-                        let mut test_messages = system_messages.clone();
-                        test_messages.push(last_user.clone());
-
-                        let test_tokens = estimate_request_tokens(&test_messages, model_id);
-                        if test_tokens <= target_tokens {
-                            kept_messages.push(last_user);
-                            log::info!("[网关] 成功截断消息内容到 {} 字符", truncated_content.len());
-                            break;
-                        }
-
-                        ratio -= 0.1;
-                    }
-                }
-            }
-
-            if kept_messages.is_empty() {
-                log::error!("[网关] 裁剪失败：无法保留任何消息");
-                return false;
-            }
-
-            // 重建消息列表
-            let mut final_messages = system_messages;
-            final_messages.extend(kept_messages);
-
-            let final_tokens = estimate_request_tokens(&final_messages, model_id);
-            log::info!(
-                "[网关] 裁剪成功：{} → {} 条消息，{} → {} tokens",
-                messages.len(),
-                final_messages.len(),
-                current_tokens,
-                final_tokens
-            );
-
-            *messages = final_messages;
-            true
+    *messages = final_messages;
+    true
 }
 
 fn extract_plain_text(value: Option<&Value>) -> String {
@@ -607,9 +640,7 @@ fn estimate_text_tokens(text: &str, tokenizer_type: TokenizerType) -> usize {
             // Llama: length / 3.5 (向上取整)
             ((text.len() as f64 / 3.5).ceil() as usize).max(1)
         }
-        TokenizerType::Generic => {
-            estimate_generic_tokens(text)
-        }
+        TokenizerType::Generic => estimate_generic_tokens(text),
     }
 }
 
@@ -648,7 +679,7 @@ fn estimate_generic_tokens(text: &str) -> usize {
 #[allow(dead_code)]
 async fn get_model_max_input_tokens(model_id: &str) -> usize {
     let model_lower = model_id.to_lowercase();
-    
+
     // 根据模型 ID 返回对应的 token 限制
     if model_lower == "auto" {
         1_000_000 // auto 模型支持 1M tokens
@@ -800,8 +831,11 @@ async fn guarded_local_response(
         client_addr,
         request: None,
         upstream: None,
+        upstream_source_hint: None,
+        region_hint: None,
         started_at,
         request_body,
+        request_body_hint: None,
         model_hint: None,
         is_stream: None,
     };
@@ -904,7 +938,7 @@ pub async fn models_handler(
     .await
 }
 
-pub async fn count_tokens_handler(
+pub async fn anthropic_count_tokens_handler(
     state: RouterState,
     client_addr: SocketAddr,
     headers: HeaderMap,
@@ -936,6 +970,69 @@ pub async fn openai_tokens_handler(
         "tokens",
         Some(request_body.as_str()),
         build_openai_tokens_response(&payload),
+    )
+    .await
+}
+
+pub async fn openai_chat_handler(
+    state: RouterState,
+    client_addr: SocketAddr,
+    headers: HeaderMap,
+    payload: Value,
+) -> Response {
+    // Convert OpenAI Chat format to Anthropic Messages format
+    let converted_payload = match normalize_openai_chat_payload(&payload) {
+        Ok(p) => p,
+        Err(e) => {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .header("content-type", "application/json")
+                .body(
+                    json!({
+                        "error": {
+                            "message": format!("Invalid OpenAI Chat request: {}", e),
+                            "type": "invalid_request_error"
+                        }
+                    })
+                    .to_string()
+                    .into(),
+                )
+                .unwrap();
+        }
+    };
+
+    // Convert NormalizedRequest back to Value for proxy_handler
+    let payload_value = match serde_json::to_value(&converted_payload) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("[网关] 序列化转换后的请求失败: {}", e);
+            let error_body = json!({
+                "error": {
+                    "message": format!("Failed to serialize converted request: {}", e),
+                    "type": "internal_error"
+                }
+            })
+            .to_string();
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .header("content-type", "application/json")
+                .body(Body::from(error_body))
+                .unwrap_or_else(|_| {
+                    Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::from("Internal Server Error"))
+                        .unwrap()
+                });
+        }
+    };
+
+    // Call proxy_handler with the converted payload
+    proxy_handler(
+        state,
+        client_addr,
+        headers,
+        payload_value,
+        ResponseFormat::OpenAI,
     )
     .await
 }
@@ -1041,16 +1138,20 @@ fn write_request_log(
         RequestSummary {
             message_count: req.messages.len(),
             tool_count: req.tools.as_ref().map(|t| t.len()).unwrap_or(0),
-            total_content_length: req.messages.iter()
+            total_content_length: req
+                .messages
+                .iter()
                 .filter_map(|m| m.content.as_ref())
                 .map(|c| c.to_string().len())
                 .sum(),
             has_images: req.messages.iter().any(|m| {
-                m.content.as_ref()
+                m.content
+                    .as_ref()
                     .and_then(|c| c.as_array())
-                    .map(|arr| arr.iter().any(|item| {
-                        item.get("type").and_then(|t| t.as_str()) == Some("image")
-                    }))
+                    .map(|arr| {
+                        arr.iter()
+                            .any(|item| item.get("type").and_then(|t| t.as_str()) == Some("image"))
+                    })
                     .unwrap_or(false)
             }),
         }
@@ -1059,31 +1160,46 @@ fn write_request_log(
     // 生成响应摘要
     let response_summary = _response_body.and_then(|body| {
         use crate::gateway::ResponseSummary;
-        serde_json::from_str::<serde_json::Value>(body).ok().map(|v| {
-            ResponseSummary {
+        serde_json::from_str::<serde_json::Value>(body)
+            .ok()
+            .map(|v| ResponseSummary {
                 content_length: body.len(),
-                tool_calls_count: v.get("content")
+                tool_calls_count: v
+                    .get("content")
                     .and_then(|c| c.as_array())
-                    .map(|arr| arr.iter().filter(|item| {
-                        item.get("type").and_then(|t| t.as_str()) == Some("tool_use")
-                    }).count())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter(|item| {
+                                item.get("type").and_then(|t| t.as_str()) == Some("tool_use")
+                            })
+                            .count()
+                    })
                     .unwrap_or(0),
-                stop_reason: v.get("stop_reason")
+                stop_reason: v
+                    .get("stop_reason")
                     .and_then(|s| s.as_str())
                     .map(|s| s.to_string()),
-            }
-        })
+            })
     });
 
     // 流式响应信息
     let stream_info = if context.is_stream.unwrap_or(false) {
         Some(crate::gateway::StreamInfo {
-            chunk_count: 0, // 需要在流式处理中累计
+            chunk_count: 0,    // 需要在流式处理中累计
             first_chunk_ms: 0, // 需要在流式处理中记录
         })
     } else {
         None
     };
+
+    let upstream_source = context
+        .upstream
+        .map(|item| item.source_label.clone())
+        .or_else(|| context.upstream_source_hint.clone());
+    let region = context
+        .upstream
+        .map(|item| item.region.clone())
+        .or_else(|| context.region_hint.clone());
 
     let entry = GatewayRequestLogEntry {
         occurred_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
@@ -1095,16 +1211,20 @@ fn write_request_log(
             .request
             .map(|item| item.model.clone())
             .or_else(|| context.model_hint.clone()),
-        stream: context.is_stream
+        stream: context
+            .is_stream
             .or_else(|| context.request.map(|item| item.stream))
             .unwrap_or(false),
-        upstream_source: context.upstream.map(|item| item.source_label.clone()),
-        region: context.upstream.map(|item| item.region.clone()),
+        upstream_source,
+        region,
         status_code: status.as_u16(),
         outcome: outcome.to_string(),
         duration_ms,
         error: error.map(str::to_string),
-        request_body: context.request_body.map(str::to_string),
+        request_body: context
+            .request_body
+            .map(str::to_string)
+            .or_else(|| context.request_body_hint.clone()),
         response_body: _response_body.map(str::to_string),
         input_tokens,
         output_tokens,
@@ -1169,22 +1289,52 @@ async fn gateway_error_with_log(
     context: &RequestLogContext<'_>,
     error: GatewayErrorDetails<'_>,
 ) -> Response {
-    *state.last_error.lock().await = Some(error.message.to_string());
+    // 如果有 response_body，尝试从中提取 message 用于 last_error
+    let error_message = if error.message.is_empty() {
+        error
+            .response_body
+            .and_then(|body| serde_json::from_str::<serde_json::Value>(body).ok())
+            .and_then(|json| {
+                json.pointer("/message")
+                    .or_else(|| json.pointer("/error/message"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "上游错误".to_string())
+    } else {
+        error.message.to_string()
+    };
+
+    *state.last_error.lock().await = Some(error_message.clone());
 
     // 尝试从错误响应体中提取token信息
-    let (input_tokens, output_tokens, cache_read, cache_creation) = error.response_body
+    let (input_tokens, output_tokens, cache_read, cache_creation) = error
+        .response_body
         .and_then(|body| serde_json::from_str::<serde_json::Value>(body).ok())
         .and_then(|json| {
             let usage = json.get("usage")?;
             Some((
-                usage.get("input_tokens").and_then(|v| v.as_i64()).map(|v| v as i32),
-                usage.get("output_tokens").and_then(|v| v.as_i64()).map(|v| v as i32),
-                usage.get("cache_read_input_tokens").and_then(|v| v.as_i64()).map(|v| v as i32),
-                usage.get("cache_creation_input_tokens").and_then(|v| v.as_i64()).map(|v| v as i32),
+                usage
+                    .get("input_tokens")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as i32),
+                usage
+                    .get("output_tokens")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as i32),
+                usage
+                    .get("cache_read_input_tokens")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as i32),
+                usage
+                    .get("cache_creation_input_tokens")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as i32),
             ))
         })
         .unwrap_or((None, None, None, None));
 
+    // 日志中记录的响应体：优先使用原始响应，否则构造
     let logged_response_body = error.response_body.map(str::to_string).or_else(|| {
         Some(serialize_logged_value(&build_gateway_error_body(
             format,
@@ -1193,11 +1343,16 @@ async fn gateway_error_with_log(
             error.message,
         )))
     });
+
     write_request_log(
         context,
         error.status,
         "error",
-        Some(error.message),
+        if error.message.is_empty() {
+            None
+        } else {
+            Some(error.message)
+        },
         Some(error.error_type),
         logged_response_body.as_deref(),
         input_tokens,
@@ -1206,7 +1361,13 @@ async fn gateway_error_with_log(
         cache_creation,
         state,
     );
-    gateway_error_response(format, error.status, error.error_type, error.message, error.response_body)
+    gateway_error_response(
+        format,
+        error.status,
+        error.error_type,
+        error.message,
+        error.response_body,
+    )
 }
 
 pub async fn proxy_handler(
@@ -1232,7 +1393,8 @@ pub async fn proxy_handler(
             .join("logs");
         let _ = std::fs::create_dir_all(&log_dir);
         let body_end = safe_truncate(&raw_request_body, 50000);
-        let entry = format!("[{}] kind=client_request idx={} endpoint={} bytes={} truncated={} body={}\n",
+        let entry = format!(
+            "[{}] kind=client_request idx={} endpoint={} bytes={} truncated={} body={}\n",
             chrono::Local::now().format("%H:%M:%S"),
             request_index,
             endpoint,
@@ -1254,8 +1416,11 @@ pub async fn proxy_handler(
         client_addr,
         request: None,
         upstream: None,
+        upstream_source_hint: None,
+        region_hint: None,
         started_at,
         request_body: Some(raw_request_body.as_str()),
+        request_body_hint: None,
         model_hint,
         is_stream: None,
     };
@@ -1340,7 +1505,9 @@ pub async fn proxy_handler(
     let messages_count = request.messages.len();
     let tools_count = request.tools.as_ref().map(|t| t.len()).unwrap_or(0);
     let has_tool_choice = request.tool_choice.is_some();
-    let content_length: usize = request.messages.iter()
+    let content_length: usize = request
+        .messages
+        .iter()
         .filter_map(|m| m.content.as_ref())
         .map(|c| c.to_string().len())
         .sum();
@@ -1395,7 +1562,7 @@ pub async fn proxy_handler(
     // 仅对非流式请求尝试缓存命中
     let cache_session_id = extract_session_id_from_request(&request).unwrap_or_default();
     let messages_hash = {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(request.model.as_bytes());
         for msg in &request.messages {
@@ -1410,7 +1577,9 @@ pub async fn proxy_handler(
         format!("{:x}", hasher.finalize())
     };
     let cache_message_count = request.messages.len();
-    let cache_total_chars: usize = request.messages.iter()
+    let cache_total_chars: usize = request
+        .messages
+        .iter()
         .filter_map(|m| m.content.as_ref())
         .map(|c| c.to_string().len())
         .sum();
@@ -1485,18 +1654,18 @@ pub async fn proxy_handler(
             };
 
             let sanitized = sanitize_error(display_message);
-                return gateway_error_with_log(
-                    &state,
-                    format,
-                    &request_log_context,
-                    GatewayErrorDetails {
-                        status,
-                        error_type,
-                        message: &sanitized,
-                        response_body: None,
-                    },
-                )
-                .await;
+            return gateway_error_with_log(
+                &state,
+                format,
+                &request_log_context,
+                GatewayErrorDetails {
+                    status,
+                    error_type,
+                    message: &sanitized,
+                    response_body: None,
+                },
+            )
+            .await;
         }
     };
     let response_id = format!("resp_{}", short_uuid());
@@ -1553,11 +1722,10 @@ pub async fn proxy_handler(
             .await;
         }
     };
-    
+
     // 【第二层防护】Payload 大小裁剪（硬限制 - 615KB）
     // 如果 payload 超过 Kiro API 的 HTTP 请求大小限制，自动裁剪历史记录
-    let mut payload_value = serde_json::to_value(&upstream_payload)
-        .unwrap_or_else(|_| json!({}));
+    let mut payload_value = serde_json::to_value(&upstream_payload).unwrap_or_else(|_| json!({}));
 
     let original_size = check_payload_size(&payload_value);
     if original_size > MAX_KIRO_PAYLOAD_SIZE {
@@ -1578,8 +1746,7 @@ pub async fn proxy_handler(
     }
 
     // 方案 3：二次检查 payload 大小，确保裁剪后仍然符合限制
-    let mut payload_json = serde_json::to_string(&payload_value)
-        .unwrap_or_else(|_| String::new());
+    let mut payload_json = serde_json::to_string(&payload_value).unwrap_or_else(|_| String::new());
     let mut payload_size = payload_json.len();
 
     if payload_size > MAX_KIRO_PAYLOAD_SIZE {
@@ -1605,8 +1772,7 @@ pub async fn proxy_handler(
                 break;
             }
 
-            payload_json = serde_json::to_string(&payload_value)
-                .unwrap_or_else(|_| String::new());
+            payload_json = serde_json::to_string(&payload_value).unwrap_or_else(|_| String::new());
             let new_size = payload_json.len();
 
             log::info!(
@@ -1654,14 +1820,17 @@ pub async fn proxy_handler(
     const MAX_ACCOUNT_RETRIES: u32 = 3;
     let mut account_attempt = 0;
     let mut tried_account_ids: HashSet<String> = HashSet::new();
-    let mut last_rate_limit_error: Option<(StatusCode, String, String, Option<String>)> = None;
-    
-    let upstream_resp = loop {
+    let mut token_refreshed_account_ids: HashSet<String> = HashSet::new();
+    let mut next_upstream_override: Option<UpstreamCredentials> = None;
+    let mut last_retriable_error: Option<(StatusCode, String, String, Option<String>)> = None;
+
+    let (upstream_resp, successful_upstream) = loop {
         account_attempt += 1;
-        
+
         if account_attempt > MAX_ACCOUNT_RETRIES {
-            // 所有账号都尝试过了，透传最后一个 429 错误
-            if let Some((status, error_type, message, response_body)) = last_rate_limit_error.take() {
+            // 所有账号都尝试过了，透传最后一个可重试错误的原始响应体
+            if let Some((status, error_type, message, response_body)) = last_retriable_error.take()
+            {
                 return gateway_error_with_log(
                     &state,
                     format,
@@ -1670,12 +1839,14 @@ pub async fn proxy_handler(
                         status,
                         error_type: Box::leak(error_type.into_boxed_str()),
                         message: Box::leak(message.into_boxed_str()),
-                        response_body: response_body.as_ref().map(|s| Box::leak(s.clone().into_boxed_str()) as &str),
+                        response_body: response_body
+                            .as_ref()
+                            .map(|s| Box::leak(s.clone().into_boxed_str()) as &str),
                     },
                 )
                 .await;
             }
-            // 如果没有保存 429 错误（不应该发生），返回默认错误
+            // 如果没有保存可重试错误（不应该发生），返回默认错误
             return gateway_error_with_log(
                 &state,
                 format,
@@ -1689,9 +1860,12 @@ pub async fn proxy_handler(
             )
             .await;
         }
-        
+
         // 如果不是第一次尝试，需要重新选择账号
-        let current_upstream = if account_attempt > 1 {
+        let current_upstream = if let Some(creds) = next_upstream_override.take() {
+            tried_account_ids.insert(extract_account_id_from_upstream(&creds));
+            creds
+        } else if account_attempt > 1 {
             match resolve_upstream_credentials(&state.config, &state).await {
                 Ok(creds) => {
                     // 检查是否已经尝试过这个账号
@@ -1742,17 +1916,24 @@ pub async fn proxy_handler(
             tried_account_ids.insert(account_id);
             upstream.clone()
         };
-        
+
         // 发送请求
-        match send_generate_request(&state.http, &current_upstream, &payload_value, upstream_payload_log_context.request_index as usize).await {
-            Ok(resp) => break resp,
+        match send_generate_request(
+            &state.http,
+            &current_upstream,
+            &payload_value,
+            upstream_payload_log_context.request_index as usize,
+        )
+        .await
+        {
+            Ok(resp) => break (resp, current_upstream),
             Err((status, error_type, message, upstream_response_body)) => {
                 // 检查是否是 429 错误
                 if status == StatusCode::TOO_MANY_REQUESTS {
                     let account_id = extract_account_id_from_upstream(&current_upstream);
 
                     // 保存最后一个 429 错误详情，以便最终透传
-                    last_rate_limit_error = Some((
+                    last_retriable_error = Some((
                         status,
                         error_type.to_string(),
                         message.clone(),
@@ -1773,7 +1954,86 @@ pub async fn proxy_handler(
                     // 继续尝试下一个账号
                     continue;
                 }
-                
+
+                // 403 + bearer token invalid/expired：先刷新当前账号 token，再用同一账号重试一次。
+                if status == StatusCode::FORBIDDEN && error_type == "token_expired_error" {
+                    let account_id = extract_account_id_from_upstream(&current_upstream);
+
+                    // 保存原始上游错误；如果刷新/重试失败，最终仍按用户要求透传原始响应体。
+                    last_retriable_error = Some((
+                        status,
+                        error_type.to_string(),
+                        message.clone(),
+                        upstream_response_body.clone(),
+                    ));
+
+                    if token_refreshed_account_ids.insert(account_id.clone()) {
+                        log::warn!(
+                            "[Gateway] 账号 {} 返回 token 失效，刷新 token 后重试同一账号 (尝试: {}/{})",
+                            current_upstream.source_label,
+                            account_attempt,
+                            MAX_ACCOUNT_RETRIES
+                        );
+
+                        match force_refresh_upstream_credentials(
+                            &state.config,
+                            &state,
+                            &current_upstream,
+                        )
+                        .await
+                        {
+                            Ok(refreshed_upstream) => {
+                                next_upstream_override = Some(refreshed_upstream);
+                                continue;
+                            }
+                            Err(error) => {
+                                state.load_balancer.record_failure(&account_id).await;
+                                log::warn!(
+                                    "[Gateway] 账号 {} token 刷新失败，切换账号: {}",
+                                    current_upstream.source_label,
+                                    sanitize_error(&error)
+                                );
+                                continue;
+                            }
+                        }
+                    }
+
+                    state.load_balancer.record_failure(&account_id).await;
+                    log::warn!(
+                        "[Gateway] 账号 {} 刷新后仍返回 token 失效，切换账号 (尝试: {}/{})",
+                        current_upstream.source_label,
+                        account_attempt,
+                        MAX_ACCOUNT_RETRIES
+                    );
+                    continue;
+                }
+
+                // 检查是否是账户封禁错误 (403 + BANNED: 前缀)
+                if status == StatusCode::FORBIDDEN && error_type == "account_banned_error" {
+                    let account_id = extract_account_id_from_upstream(&current_upstream);
+
+                    // 保存最后一个封禁错误详情
+                    last_retriable_error = Some((
+                        status,
+                        error_type.to_string(),
+                        message.clone(),
+                        upstream_response_body.clone(),
+                    ));
+
+                    // 标记账号为封禁（永久不可用）
+                    state.load_balancer.mark_account_banned(&account_id).await;
+
+                    log::warn!(
+                        "[Gateway] 账号 {} 被封禁，标记为不可用并切换账号 (尝试: {}/{})",
+                        current_upstream.source_label,
+                        account_attempt,
+                        MAX_ACCOUNT_RETRIES
+                    );
+
+                    // 继续尝试下一个账号
+                    continue;
+                }
+
                 // 其他错误直接返回
                 return gateway_error_with_log(
                     &state,
@@ -1796,12 +2056,22 @@ pub async fn proxy_handler(
         // 将 log_context 转换为 'static 生命周期
         let static_log_context = RequestLogContext {
             request_index: upstream_payload_log_context.request_index,
-            endpoint: Box::leak(upstream_payload_log_context.endpoint.to_string().into_boxed_str()),
+            endpoint: Box::leak(
+                upstream_payload_log_context
+                    .endpoint
+                    .to_string()
+                    .into_boxed_str(),
+            ),
             client_addr: upstream_payload_log_context.client_addr,
-            request: None, // 不持有引用
+            request: None,  // 不持有引用
             upstream: None, // 不持有引用
+            upstream_source_hint: Some(successful_upstream.source_label.clone()),
+            region_hint: Some(successful_upstream.region.clone()),
             started_at: upstream_payload_log_context.started_at,
             request_body: None,
+            request_body_hint: upstream_payload_log_context
+                .request_body
+                .map(str::to_string),
             model_hint: upstream_payload_log_context.model_hint.clone(),
             is_stream: Some(true),
         };
@@ -1840,11 +2110,8 @@ pub async fn proxy_handler(
         }
     };
 
-    // 添加调试日志：记录原始响应体大小和前几个字节
-    log::debug!(
-        "[非流式响应] 原始字节大小: {} 字节",
-        raw_bytes.len(),
-    );
+    // 添加调试日志：只记录原始响应体大小，不打印响应内容
+    log::debug!("[非流式响应] 原始字节大小: {} 字节", raw_bytes.len(),);
 
     // 解码 EventStream 消息并提取所有 JSON payload
     let mut buffer = raw_bytes.to_vec();
@@ -1869,14 +2136,20 @@ pub async fn proxy_handler(
                 // 检查错误消息
                 if matches!(message_type, Some("error") | Some("exception")) {
                     let error_text = String::from_utf8_lossy(&msg.payload);
+                    let detected_error = detect_upstream_error_body(&error_text);
+                    let parsed_error_type = detected_error
+                        .as_ref()
+                        .map(|(_, error_type, _)| *error_type)
+                        .unwrap_or("unknown");
                     log::error!(
-                        "EventStream 上游错误: message_type={:?}, event_type={:?}, payload={}",
+                        "EventStream 上游错误: message_type={:?}, event_type={:?}, payload_bytes={}, parsed_error_type={}",
                         message_type,
                         event_type,
-                        error_text
+                        msg.payload.len(),
+                        parsed_error_type
                     );
 
-                    if let Some((status, error_type, message)) = detect_upstream_error_body(&error_text) {
+                    if let Some((status, error_type, message)) = detected_error {
                         return gateway_error_with_log(
                             &state,
                             format,
@@ -1895,9 +2168,19 @@ pub async fn proxy_handler(
                 // 只处理事件类型的消息
                 if matches!(message_type, Some("event")) {
                     let json_text = String::from_utf8_lossy(&msg.payload);
+                    let event_name = serde_json::from_str::<Value>(&json_text)
+                        .ok()
+                        .and_then(|value| {
+                            value
+                                .as_object()
+                                .and_then(|object| object.keys().next().cloned())
+                        })
+                        .unwrap_or_else(|| "unknown".to_string());
                     log::info!(
-                        "[Non-Stream Response] Event payload: {}",
-                        json_text.chars().take(500).collect::<String>()
+                        "[Non-Stream Response] Event payload: event={}, payload_bytes={}, payload_chars={}",
+                        event_name,
+                        msg.payload.len(),
+                        json_text.chars().count()
                     );
                     json_payloads.push(json_text.to_string());
                 }
@@ -1907,11 +2190,17 @@ pub async fn proxy_handler(
             Ok(None) => {
                 // 缓冲区数据不足，已处理完所有消息
                 log::info!(
-                    "[非流式响应] EventStream 解码完成，剩余缓冲区: {} 字节", buffer.len());
+                    "[非流式响应] EventStream 解码完成，剩余缓冲区: {} 字节",
+                    buffer.len()
+                );
                 break;
             }
             Err(e) => {
-                log::error!("EventStream 解码失败: {}, 剩余缓冲区: {} 字节", e, buffer.len());
+                log::error!(
+                    "EventStream 解码失败: {}, 剩余缓冲区: {} 字节",
+                    e,
+                    buffer.len()
+                );
                 break;
             }
         }
@@ -1920,12 +2209,11 @@ pub async fn proxy_handler(
     // 用于调试日志的拼接字符串
     let body = json_payloads.join("");
 
-    // 添加调试日志：记录解码后的 JSON 数量和预览
+    // 添加调试日志：只记录解码后的 JSON 数量和长度，不打印内容
     log::info!(
-        "[非流式响应] 解码了 {} 条 EventStream 消息, 总 body 长度: {} 字符, body 预览: {}",
+        "[非流式响应] 解码了 {} 条 EventStream 消息, 总 body 长度: {} 字符",
         json_payloads.len(),
-        body.len(),
-        body.chars().take(1000).collect::<String>()
+        body.len()
     );
 
     let mut aggregated = stream::aggregate_kiro_response_from_payloads(&json_payloads);
@@ -1935,11 +2223,13 @@ pub async fn proxy_handler(
 
     // 估算输入 tokens（从请求消息中）
     let request_text = serde_json::to_string(&request.messages).unwrap_or_default();
-    aggregated.input_tokens = super::token_estimator::estimate_tokens(&request_text, &request.model);
+    aggregated.input_tokens =
+        super::token_estimator::estimate_tokens(&request_text, &request.model);
 
     // 估算输出 tokens（从响应文本中）
     let response_text = format!("{}{}", aggregated.text, aggregated.thinking);
-    aggregated.output_tokens = super::token_estimator::estimate_tokens(&response_text, &request.model);
+    aggregated.output_tokens =
+        super::token_estimator::estimate_tokens(&response_text, &request.model);
 
     log::info!(
         "[非流式响应] 估算的 tokens: input={}, output={} (model={})",
@@ -1958,16 +2248,25 @@ pub async fn proxy_handler(
     );
 
     // Prompt Cache 模拟：如果响应中没有缓存信息，用模拟器填充
-    if aggregated.cache_read_input_tokens.is_none() && aggregated.cache_creation_input_tokens.is_none() {
+    if aggregated.cache_read_input_tokens.is_none()
+        && aggregated.cache_creation_input_tokens.is_none()
+    {
         let tracker = super::prompt_cache::global_prompt_cache_tracker();
-        let messages_json: Vec<serde_json::Value> = request.messages.iter().map(|m| {
-            serde_json::json!({
-                "role": m.role,
-                "content": m.content
+        let messages_json: Vec<serde_json::Value> = request
+            .messages
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "role": m.role,
+                    "content": m.content
+                })
             })
-        }).collect();
+            .collect();
         let tools_json: Option<Vec<serde_json::Value>> = request.tools.as_ref().map(|tools| {
-            tools.iter().map(|t| serde_json::to_value(t).unwrap_or_default()).collect()
+            tools
+                .iter()
+                .map(|t| serde_json::to_value(t).unwrap_or_default())
+                .collect()
         });
 
         if let Some(profile) = tracker.build_profile(
@@ -1981,10 +2280,12 @@ pub async fn proxy_handler(
             tracker.update(&request.model, &profile);
 
             if cache_usage.cache_read_input_tokens > 0 {
-                aggregated.cache_read_input_tokens = Some(cache_usage.cache_read_input_tokens as i32);
+                aggregated.cache_read_input_tokens =
+                    Some(cache_usage.cache_read_input_tokens as i32);
             }
             if cache_usage.cache_creation_input_tokens > 0 {
-                aggregated.cache_creation_input_tokens = Some(cache_usage.cache_creation_input_tokens as i32);
+                aggregated.cache_creation_input_tokens =
+                    Some(cache_usage.cache_creation_input_tokens as i32);
             }
 
             log::info!(
@@ -2095,10 +2396,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
     upstream_payload: &T,
     request_index: usize,
 ) -> Result<reqwest::Response, UpstreamRequestError> {
-    let upstream_url = format!(
-        "{}/generateAssistantResponse",
-        build_q_service_url(&upstream.region)
-    );
+    let upstream_url = build_generate_assistant_response_url(&upstream.region);
 
     // 追加最新请求到日志文件
     if let Ok(payload_json) = serde_json::to_string(upstream_payload) {
@@ -2180,34 +2478,34 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
                 .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
         }
 
-        // 402 配额不足错误不重试，直接返回
-        if status == StatusCode::PAYMENT_REQUIRED {
-            let (mapped_status, error_type, message) = map_upstream_error(status, &body);
+        // 既保留原始响应体透传，也必须先识别上游语义：
+        // 403 bearer token invalid/expired 需要触发账号 token 刷新后重试。
+        let (mapped_status, error_type, message) = map_upstream_error(status, &body);
+
+        // 402 配额不足错误不重试，直接返回原始响应
+        if mapped_status == StatusCode::PAYMENT_REQUIRED {
             return Err((mapped_status, error_type, message, Some(body)));
         }
 
-        // 429 限流错误不重试，直接返回
-        if status == StatusCode::TOO_MANY_REQUESTS {
-            let (mapped_status, error_type, message) = map_upstream_error(status, &body);
+        // 429 限流错误不重试，直接返回原始响应
+        if mapped_status == StatusCode::TOO_MANY_REQUESTS {
             return Err((mapped_status, error_type, message, Some(body)));
         }
 
-        // 403 认证错误：直接返回，不在这里重试
-        // 外层会通过LoadBalancer切换账号或刷新token
-        if status == StatusCode::FORBIDDEN {
-            log::warn!("[网关] 上游认证失败 (403)，返回错误");
-            let (mapped_status, error_type, message) = map_upstream_error(status, &body);
+        // 403 认证错误不在 HTTP 层重试；交给外层刷新当前账号 token 或切换账号。
+        if mapped_status == StatusCode::FORBIDDEN {
+            log::warn!("[网关] 上游 403 错误，type={}，交给外层处理", error_type);
             return Err((mapped_status, error_type, message, Some(body)));
         }
 
         // 5xx 服务器错误才重试
-        let should_retry = attempt < MAX_RETRIES && status.is_server_error();
+        let should_retry = attempt < MAX_RETRIES && mapped_status.is_server_error();
 
         if should_retry {
             let backoff_ms = 1000 * 2u64.pow(attempt - 1);
             log::warn!(
                 "上游请求失败 (状态: {}, 尝试: {}/{}), {}ms 后重试",
-                status,
+                mapped_status,
                 attempt,
                 MAX_RETRIES,
                 backoff_ms
@@ -2216,7 +2514,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
             continue;
         }
 
-        let (mapped_status, error_type, message) = map_upstream_error(status, &body);
+        // 其他错误也直接返回原始响应（不提取 message，直接透传 JSON）
         return Err((mapped_status, error_type, message, Some(body)));
     }
 }
@@ -2230,14 +2528,15 @@ fn with_kiro_upstream_headers(
     include_profile_arn_header: bool,
 ) -> reqwest::RequestBuilder {
     let invocation_id = uuid::Uuid::new_v4().to_string();
+    let x_amz_user_agent = build_kiro_x_amz_user_agent(&upstream.machine_id);
 
     let mut builder = builder
         .header("Authorization", format!("Bearer {}", upstream.access_token))
         .header("Content-Type", "application/json")
         .header("Accept", accept)
-        .header("host", format!("q.{}.amazonaws.com", upstream.region))
+        .header("host", build_kiro_runtime_host(&upstream.region))
         .header(header::USER_AGENT, upstream.user_agent.clone())
-        .header("x-amz-user-agent", upstream.user_agent.clone())
+        .header("x-amz-user-agent", x_amz_user_agent)
         .header("amz-sdk-invocation-id", invocation_id)
         .header("amz-sdk-request", "attempt=1; max=3");
 
@@ -2284,13 +2583,13 @@ fn normalize_request(format: ResponseFormat, payload: &Value) -> Result<Normaliz
                 .map_err(|error| format!("Anthropic 请求解析失败: {error}"))?;
             Ok(normalize_anthropic_request(&request))
         }
-        ResponseFormat::Responses => {
-            normalize_responses_request(payload)
-        }
+        ResponseFormat::Responses => normalize_openai_responses_request(payload),
         ResponseFormat::OpenAI => {
             let request: OpenAIChatRequest = serde_json::from_value(payload.clone())
                 .map_err(|error| format!("OpenAI 请求解析失败: {error}"))?;
-            Ok(crate::gateway::converter::normalize_openai_chat_request(&request))
+            Ok(crate::gateway::converter::normalize_openai_chat_request(
+                &request,
+            ))
         }
     }
 }
@@ -2312,10 +2611,9 @@ fn verify_client_auth(headers: &HeaderMap, config: &GatewayConfig) -> Result<(),
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
 
-    if expected_keys
-        .iter()
-        .any(|expected| authorization == Some(expected.as_str()) || api_key == Some(expected.as_str()))
-    {
+    if expected_keys.iter().any(|expected| {
+        authorization == Some(expected.as_str()) || api_key == Some(expected.as_str())
+    }) {
         Ok(())
     } else {
         Err("客户端 API Key 无效".to_string())
@@ -2342,15 +2640,11 @@ async fn resolve_managed_account_credentials(
 
     // 自愈机制：检查是否所有账号都因 "TooManyFailures" 被禁用
     let all_disabled_by_failures = match config.account_mode.as_str() {
-        "single" => {
-            store
-                .accounts
-                .iter()
-                .filter(|account| config.account_id.as_deref() == Some(account.id.as_str()))
-                .all(|account| {
-                    account.disabled_reason.as_deref() == Some("TooManyFailures")
-                })
-        }
+        "single" => store
+            .accounts
+            .iter()
+            .filter(|account| config.account_id.as_deref() == Some(account.id.as_str()))
+            .all(|account| account.disabled_reason.as_deref() == Some("TooManyFailures")),
         "group" => {
             let group_accounts: Vec<_> = store
                 .accounts
@@ -2359,21 +2653,21 @@ async fn resolve_managed_account_credentials(
                 .collect();
 
             !group_accounts.is_empty()
-                && group_accounts.iter().all(|account| {
-                    account.disabled_reason.as_deref() == Some("TooManyFailures")
-                })
+                && group_accounts
+                    .iter()
+                    .all(|account| account.disabled_reason.as_deref() == Some("TooManyFailures"))
         }
         "pool" => {
             let pool_accounts: Vec<_> = store
                 .accounts
                 .iter()
-                .filter(|account| account.is_available())
+                .filter(|account| config.pool_account_ids.contains(&account.id))
                 .collect();
 
             !pool_accounts.is_empty()
-                && pool_accounts.iter().all(|account| {
-                    account.disabled_reason.as_deref() == Some("TooManyFailures")
-                })
+                && pool_accounts
+                    .iter()
+                    .all(|account| account.disabled_reason.as_deref() == Some("TooManyFailures"))
         }
         _ => false,
     };
@@ -2400,14 +2694,20 @@ async fn resolve_managed_account_credentials(
             .accounts
             .iter()
             .filter(|account| {
-                config.group_id.as_deref() == account.group_id.as_deref() && account.is_available() && account.enabled
+                config.group_id.as_deref() == account.group_id.as_deref()
+                    && account.is_available()
+                    && account.enabled
             })
             .cloned()
             .collect::<Vec<_>>(),
         "pool" => store
             .accounts
             .iter()
-            .filter(|account| account.is_available() && account.enabled)
+            .filter(|account| {
+                config.pool_account_ids.contains(&account.id)
+                    && account.is_available()
+                    && account.enabled
+            })
             .cloned()
             .collect::<Vec<_>>(),
         _ => Vec::new(),
@@ -2442,9 +2742,13 @@ async fn resolve_managed_account_credentials(
                     &account,
                     &state.config.region,
                 );
+                let available_models_profile_arn = ctx.profile_arn.clone();
                 return Ok(UpstreamCredentials {
+                    account_id: account.id.clone(),
                     access_token: access_token.clone(),
+                    machine_id: ctx.machine_id.clone(),
                     profile_arn: ctx.profile_arn,
+                    available_models_profile_arn,
                     provider: account.provider.clone(),
                     region: ctx.region,
                     source_label: format_managed_upstream_source(&state.config, &account),
@@ -2496,15 +2800,11 @@ async fn resolve_managed_account_credentials(
                     // 配额超阈值，直接禁用账号
                     state.load_balancer.record_failure(&account.id).await;
                     disable_account_by_id(&account.id, "配额已满");
-                    return Err(format!(
-                        "账号 {} 配额已满，已自动禁用",
-                        account.label
-                    ));
+                    return Err(format!("账号 {} 配额已满，已自动禁用", account.label));
                 } else {
                     // 配额已恢复，检查是否需要自动启用账号
                     // 仅当账号因配额满被自动禁用时才自动启用
-                    if !account.enabled
-                        && account.disabled_reason.as_deref() == Some("配额已满")
+                    if !account.enabled && account.disabled_reason.as_deref() == Some("配额已满")
                     {
                         enable_account_by_id(&account.id);
                     }
@@ -2513,34 +2813,14 @@ async fn resolve_managed_account_credentials(
 
             // 记录成功
             let response_time_ms = request_start.elapsed().as_millis() as u64;
-            state.load_balancer.record_success(&account.id, response_time_ms).await;
+            state
+                .load_balancer
+                .record_success(&account.id, response_time_ms)
+                .await;
 
-            let machine_id = account
-                .machine_id
-                .clone()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(get_machine_id);
-            let profile_arn = match account.provider.as_deref() {
-                Some("Enterprise") => None,
-                provider => refresh.profile_arn.or_else(|| account.profile_arn.clone())
-                    .or_else(|| Some(resolve_default_profile_arn(provider).to_string())),
-            };
-            let region = resolve_kiro_upstream_region(
-                profile_arn.as_deref(),
-                account.region.as_deref(),
-                &config.region,
-            );
-
-            Ok(UpstreamCredentials {
-                access_token: refresh.access_token,
-                profile_arn,
-                provider: account.provider.clone(),
-                region,
-                source_label: format_managed_upstream_source(config, &account),
-                user_agent: build_kiro_custom_user_agent(&machine_id),
-                auth_method: account.auth_method.clone(),
-                send_opt_out: should_send_codewhisperer_optout(),
-            })
+            Ok(build_upstream_credentials_from_refresh(
+                config, &account, refresh,
+            ))
         }
         Err(error) => {
             // 减少连接计数
@@ -2556,26 +2836,111 @@ async fn resolve_managed_account_credentials(
         }
     }
 }
+
+async fn force_refresh_upstream_credentials(
+    config: &GatewayConfig,
+    state: &RouterState,
+    upstream: &UpstreamCredentials,
+) -> Result<UpstreamCredentials, String> {
+    let mut store = AccountStore::new();
+    store.reload();
+
+    let account = store
+        .accounts
+        .iter()
+        .find(|candidate| candidate.id == upstream.account_id)
+        .cloned()
+        .ok_or_else(|| format!("账号 {} 不存在，无法刷新 Token", upstream.source_label))?;
+
+    let refresh = refresh_token_by_provider(&account).await.map_err(|error| {
+        format!(
+            "刷新账号 {} 失败: {}",
+            account.label,
+            sanitize_error(&error)
+        )
+    })?;
+
+    let provider = account.provider.as_deref().unwrap_or("Google").to_string();
+    let usage_result = get_usage_by_provider(&provider, &refresh.access_token).await;
+    let mut usage_data = None;
+    let mut is_banned = false;
+    let mut is_auth_error = false;
+
+    if let Ok(usage) = usage_result {
+        usage_data = Some(usage.usage_data);
+        is_banned = usage.is_banned;
+        is_auth_error = usage.is_auth_error;
+    }
+
+    persist_account_refresh(
+        &account,
+        &refresh,
+        usage_data.clone(),
+        is_banned,
+        is_auth_error,
+        is_banned || is_auth_error,
+    );
+
+    if is_banned || is_auth_error {
+        state.load_balancer.record_failure(&account.id).await;
+        return Err(format!("账号 {} 刷新后仍不可用", account.label));
+    }
+
+    if let Some(usage_data) = &usage_data {
+        if usage_exceeds_threshold(usage_data, config.threshold) {
+            state.load_balancer.record_failure(&account.id).await;
+            disable_account_by_id(&account.id, "配额已满");
+            return Err(format!("账号 {} 配额已满，已自动禁用", account.label));
+        }
+    }
+
+    Ok(build_upstream_credentials_from_refresh(
+        config, &account, refresh,
+    ))
+}
+
+fn build_upstream_credentials_from_refresh(
+    config: &GatewayConfig,
+    account: &Account,
+    refresh: RefreshResult,
+) -> UpstreamCredentials {
+    let machine_id = resolve_machine_id(account.machine_id.clone());
+    let profile_arn = resolve_profile_arn_from_candidates(
+        refresh.profile_arn.as_deref(),
+        account.profile_arn.as_deref(),
+        account.provider.as_deref(),
+    );
+    let region = resolve_kiro_upstream_region(
+        profile_arn.as_deref(),
+        account.region.as_deref(),
+        &config.region,
+    );
+
+    UpstreamCredentials {
+        account_id: account.id.clone(),
+        access_token: refresh.access_token,
+        machine_id: machine_id.clone(),
+        profile_arn: profile_arn.clone(),
+        available_models_profile_arn: profile_arn,
+        provider: account.provider.clone(),
+        region,
+        source_label: format_managed_upstream_source(config, account),
+        user_agent: build_kiro_custom_user_agent(&machine_id),
+        auth_method: account.auth_method.clone(),
+        send_opt_out: should_send_codewhisperer_optout(),
+    }
+}
 /// 根据账号 provider 返回默认的 profileArn
 /// BuilderId 账号和 Social 账号（Github/Google）使用不同的 profileArn
 
 fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> String {
-    // 只使用 email 或 user_id，都没有则返回 "unknown"
-    let account_label = if let Some(email) = account
+    let account_label = account
         .email
-        .as_ref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        email.trim().to_string()
-    } else if let Some(user_id) = account
-        .user_id
-        .as_ref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        user_id.trim().to_string()
-    } else {
-        "unknown".to_string()
-    };
+        .as_deref()
+        .or(account.user_id.as_deref())
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.trim())
+        .unwrap_or("unknown");
 
     match config.account_mode.as_str() {
         "single" => format!("single:{account_label}"),
@@ -2584,7 +2949,7 @@ fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> 
             config.group_id.as_deref().unwrap_or("unknown")
         ),
         "pool" => format!("pool:{account_label}"),
-        _ => account_label,
+        _ => account_label.to_string(),
     }
 }
 
@@ -2642,7 +3007,8 @@ fn persist_account_refresh(
                 target.disabled_reason = Some("TooManyFailures".to_string());
                 log::warn!(
                     "[Gateway] 账号 {} 失败次数达到 {}，自动禁用",
-                    target.label, MAX_FAILURES_PER_ACCOUNT
+                    target.label,
+                    MAX_FAILURES_PER_ACCOUNT
                 );
             }
         } else {
@@ -2667,8 +3033,6 @@ fn persist_account_refresh(
 fn usage_exceeds_threshold(usage_data: &Value, threshold: i32) -> bool {
     crate::core::usage::usage_exceeds_threshold(Some(usage_data), f64::from(threshold))
 }
-
-
 
 fn slice_text_by_char_range(text: &str, start: usize, end: usize) -> Option<String> {
     if end < start {
@@ -2813,10 +3177,7 @@ fn build_anthropic_content_blocks(
     content
 }
 
-fn build_anthropic_response(
-    model: &str,
-    aggregated: &stream::AggregatedKiroResponse,
-) -> Value {
+fn build_anthropic_response(model: &str, aggregated: &stream::AggregatedKiroResponse) -> Value {
     let content = build_anthropic_content_blocks(aggregated);
     serde_json::to_value(AnthropicMessagesResponse {
         id: format!("msg_{}", short_uuid()),
@@ -2885,18 +3246,14 @@ fn build_responses_annotation_added_event(
     })
 }
 
-fn build_responses_output_text(
-    aggregated: &stream::AggregatedKiroResponse,
-) -> ResponsesOutputText {
+fn build_responses_output_text(aggregated: &stream::AggregatedKiroResponse) -> ResponsesOutputText {
     let text = aggregated.text.clone();
     let annotations = build_responses_citation_annotations(&aggregated.citations);
 
     ResponsesOutputText { text, annotations }
 }
 
-fn build_responses_message_content(
-    aggregated: &stream::AggregatedKiroResponse,
-) -> Vec<Value> {
+fn build_responses_message_content(aggregated: &stream::AggregatedKiroResponse) -> Vec<Value> {
     let output_text = build_responses_output_text(aggregated);
     let mut content = Vec::new();
     if !output_text.text.is_empty() {
@@ -3010,10 +3367,7 @@ fn build_stream_responses_function_call_arguments_done_event(
     })
 }
 
-fn build_stream_responses_output_text_done_event(
-    response_id: &str,
-    text: &str,
-) -> Value {
+fn build_stream_responses_output_text_done_event(response_id: &str, text: &str) -> Value {
     json!({
         "type": "response.output_text.done",
         "response_id": response_id,
@@ -3021,10 +3375,7 @@ fn build_stream_responses_output_text_done_event(
     })
 }
 
-fn build_stream_responses_reasoning_done_event(
-    response_id: &str,
-    text: &str,
-) -> Value {
+fn build_stream_responses_reasoning_done_event(response_id: &str, text: &str) -> Value {
     json!({
         "type": "response.reasoning.done",
         "response_id": response_id,
@@ -3091,13 +3442,14 @@ fn map_upstream_error(status: StatusCode, body: &str) -> (StatusCode, &'static s
     } else {
         status
     };
-    // 根据检测结果返回特殊的error_type
-    let error_type = if is_banned {
-        "account_banned_error"
+    // 根据检测结果返回特殊的error_type和message
+    let (error_type, message) = if is_banned {
+        // 对于封禁错误，返回以 BANNED: 开头的消息，以便前端可以识别
+        ("account_banned_error", format!("BANNED: {}", sanitized))
     } else if is_token_invalid {
-        "token_expired_error"
+        ("token_expired_error", sanitized)
     } else {
-        explicit_error_type.unwrap_or(match mapped_status {
+        let error_type = explicit_error_type.unwrap_or(match mapped_status {
             StatusCode::UNAUTHORIZED => "authentication_error",
             StatusCode::FORBIDDEN => "permission_error",
             StatusCode::PAYMENT_REQUIRED => "insufficient_quota",
@@ -3106,10 +3458,11 @@ fn map_upstream_error(status: StatusCode, body: &str) -> (StatusCode, &'static s
                 "invalid_request_error"
             }
             _ => "api_error",
-        })
+        });
+        (error_type, sanitized)
     };
 
-    (mapped_status, error_type, sanitized)
+    (mapped_status, error_type, message)
 }
 fn extract_error_type(body: &str) -> Option<&'static str> {
     let value = serde_json::from_str::<Value>(body).ok()?;
@@ -3208,13 +3561,7 @@ fn short_uuid() -> String {
 }
 
 fn extract_account_id_from_upstream(upstream: &UpstreamCredentials) -> String {
-    // 从 source_label 提取账号标识
-    // 格式：single:email@example.com 或 group:group_name:email@example.com
-    upstream.source_label
-        .split(':')
-        .last()
-        .unwrap_or(&upstream.source_label)
-        .to_string()
+    upstream.account_id.clone()
 }
 
 fn stream_proxy_response(
@@ -3233,7 +3580,10 @@ fn stream_proxy_response(
     tokio::spawn(async move {
         // 辅助函数：还原工具名称（sanitized -> original）
         let restore_tool_name = |sanitized: &str| -> String {
-            tool_name_map.get(sanitized).cloned().unwrap_or_else(|| sanitized.to_string())
+            tool_name_map
+                .get(sanitized)
+                .cloned()
+                .unwrap_or_else(|| sanitized.to_string())
         };
         let mut upstream_stream = upstream_resp.bytes_stream();
         let mut raw_buffer = Vec::new();
@@ -3298,14 +3648,8 @@ fn stream_proxy_response(
                 content: Some("".to_string()),
                 tool_calls: None,
             };
-            let chunk = stream::build_openai_chunk(
-                &completion_id,
-                created,
-                &model,
-                delta,
-                None,
-                None,
-            );
+            let chunk =
+                stream::build_openai_chunk(&completion_id, created, &model, delta, None, None);
             if let Ok(chunk_json) = serde_json::to_string(&chunk) {
                 if !send_data(&tx, &chunk_json).await {
                     return;
@@ -3313,28 +3657,23 @@ fn stream_proxy_response(
             }
         }
 
-        const STALLED_STREAM_TIMEOUT: tokio::time::Duration =
-            tokio::time::Duration::from_secs(300);
+        const STALLED_STREAM_TIMEOUT: tokio::time::Duration = tokio::time::Duration::from_secs(300);
 
         loop {
-            let chunk_result = match tokio::time::timeout(
-                STALLED_STREAM_TIMEOUT,
-                upstream_stream.next(),
-            )
-            .await
-            {
-                Ok(Some(result)) => result,
-                Ok(None) => break,
-                Err(_) => {
-                    log::error!("流式响应超时: 5分钟内未收到数据");
-                    let data = json!({
-                        "type": "error",
-                        "message": "流式响应超时: 5分钟内未收到数据"
-                    });
-                    send_data(&tx, &data.to_string()).await;
-                    break;
-                }
-            };
+            let chunk_result =
+                match tokio::time::timeout(STALLED_STREAM_TIMEOUT, upstream_stream.next()).await {
+                    Ok(Some(result)) => result,
+                    Ok(None) => break,
+                    Err(_) => {
+                        log::error!("流式响应超时: 5分钟内未收到数据");
+                        let data = json!({
+                            "type": "error",
+                            "message": "流式响应超时: 5分钟内未收到数据"
+                        });
+                        send_data(&tx, &data.to_string()).await;
+                        break;
+                    }
+                };
 
             match chunk_result {
                 Ok(bytes) => {
@@ -3345,16 +3684,17 @@ fn stream_proxy_response(
                         match decode_message(&raw_buffer) {
                             Ok(Some((msg, consumed_bytes))) => {
                                 // 成功解码一个消息
-                                let message_type = msg.headers.get(":message-type").map(String::as_str);
+                                let message_type =
+                                    msg.headers.get(":message-type").map(String::as_str);
                                 let event_type = msg.headers.get(":event-type").map(String::as_str);
 
                                 if matches!(message_type, Some("error") | Some("exception")) {
                                     let error_text = String::from_utf8_lossy(&msg.payload);
                                     log::error!(
-                                        "EventStream 上游错误: message_type={:?}, event_type={:?}, payload={}",
+                                        "EventStream 上游错误: message_type={:?}, event_type={:?}, payload_bytes={}",
                                         message_type,
                                         event_type,
-                                        error_text
+                                        msg.payload.len()
                                     );
                                     let data = json!({
                                         "type": "error",
@@ -3379,25 +3719,44 @@ fn stream_proxy_response(
                                         .unwrap_or_default()
                                         .join(".kiro-account-manager")
                                         .join("logs");
-                                    let entry = format!("[{}] kind=kiro_event idx={} event={} bytes={} payload={}\n",
+                                    let entry = format!(
+                                        "[{}] kind=kiro_event idx={} event={} bytes={} chars={}\n",
                                         chrono::Local::now().format("%H:%M:%S%.3f"),
                                         log_context.request_index,
                                         event_type.unwrap_or("unknown"),
                                         json_text.len(),
-                                        json_text
+                                        json_text.chars().count()
                                     );
                                     let _ = std::fs::OpenOptions::new()
                                         .create(true)
                                         .append(true)
                                         .open(log_dir.join("kiro-response-eventstream.log"))
-                                        .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
+                                        .and_then(|mut f| {
+                                            std::io::Write::write_all(&mut f, entry.as_bytes())
+                                        });
                                 }
-
-                                // 记录每个 Kiro API 事件（trace 级别，避免刷屏）
-                                log::trace!("[Kiro API 响应事件] {}", json_text);
 
                                 // 解析 JSON 事件
                                 if let Some(event) = parse_kiro_event_full(&json_text) {
+                                    let event_name = match &event {
+                                        KiroEvent::Text(_) => "Text",
+                                        KiroEvent::Thinking(_) => "Thinking",
+                                        KiroEvent::ThinkingSignature(_) => "ThinkingSignature",
+                                        KiroEvent::ToolUseStart { .. } => "ToolUseStart",
+                                        KiroEvent::ToolUseInputDelta { .. } => "ToolUseInputDelta",
+                                        KiroEvent::ToolUseStop { .. } => "ToolUseStop",
+                                        KiroEvent::Usage { .. } => "Usage",
+                                        KiroEvent::ContextUsage { .. } => "ContextUsage",
+                                        KiroEvent::Metering { .. } => "Metering",
+                                        KiroEvent::Citation { .. } => "Citation",
+                                    };
+                                    // 记录每个 Kiro API 事件（trace 级别），只打印元信息
+                                    log::trace!(
+                                        "[Kiro API 响应事件] event={}, bytes={}, chars={}",
+                                        event_name,
+                                        msg.payload.len(),
+                                        json_text.chars().count()
+                                    );
                                     match event {
                                         KiroEvent::Usage {
                                             input_tokens: input,
@@ -3416,14 +3775,15 @@ fn stream_proxy_response(
                                             output_tokens = output;
                                             aggregated.input_tokens = input;
                                             aggregated.output_tokens = output;
-                                            aggregated.cache_read_input_tokens = cache_read_input_tokens;
-                                            aggregated.cache_creation_input_tokens = cache_creation_input_tokens;
+                                            aggregated.cache_read_input_tokens =
+                                                cache_read_input_tokens;
+                                            aggregated.cache_creation_input_tokens =
+                                                cache_creation_input_tokens;
                                         }
                                         KiroEvent::ContextUsage { percentage } => {
                                             aggregated.context_usage_percentage = Some(percentage);
                                             if matches!(format, ResponseFormat::Anthropic) {
-                                                let data =
-                                                    json!({"type":"context_usage","percentage":percentage});
+                                                let data = json!({"type":"context_usage","percentage":percentage});
                                                 send_event(
                                                     &tx,
                                                     Some("context_usage"),
@@ -3556,8 +3916,9 @@ fn stream_proxy_response(
                                                     // OpenAI Chat Completions: 发送工具调用开始 chunk
                                                     let tool_index = openai_next_tool_index;
                                                     openai_next_tool_index += 1;
-                                                    openai_tool_call_indexes.insert(id.clone(), tool_index);
-                                                    
+                                                    openai_tool_call_indexes
+                                                        .insert(id.clone(), tool_index);
+
                                                     let chunk = stream::build_openai_chunk(
                                                         &completion_id,
                                                         created_at,
@@ -3580,13 +3941,19 @@ fn stream_proxy_response(
                                                         None,
                                                         None,
                                                     );
-                                                    if let Ok(chunk_json) = serde_json::to_string(&chunk) {
+                                                    if let Ok(chunk_json) =
+                                                        serde_json::to_string(&chunk)
+                                                    {
                                                         send_data(&tx, &chunk_json).await;
                                                     }
                                                 }
                                             }
                                         }
-                                        KiroEvent::ToolUseInputDelta { id, name, input_delta } => {
+                                        KiroEvent::ToolUseInputDelta {
+                                            id,
+                                            name,
+                                            input_delta,
+                                        } => {
                                             // 当 input delta 先于 start 到达时（Kiro 流可能乱序），
                                             // 用 delta 中携带的 name 主动发起 start 事件，避免客户端卡死
                                             let mut started_from_delta = false;
@@ -3618,7 +3985,8 @@ fn stream_proxy_response(
                                                     saw_tool_calls = true;
                                                     match format {
                                                         ResponseFormat::Anthropic => {
-                                                            if !tool_block_indexes.contains_key(&id) {
+                                                            if !tool_block_indexes.contains_key(&id)
+                                                            {
                                                                 ensure_anthropic_message_start(
                                                                     &tx,
                                                                     &mut message_started,
@@ -3670,7 +4038,10 @@ fn stream_proxy_response(
                                                                     responses_next_output_index;
                                                                 responses_next_output_index += 1;
                                                                 responses_tool_output_indexes
-                                                                    .insert(id.clone(), output_index);
+                                                                    .insert(
+                                                                        id.clone(),
+                                                                        output_index,
+                                                                    );
                                                                 let data = json!({
                                                                     "type": "response.output_item.added",
                                                                     "response_id": response_id,
@@ -3684,14 +4055,16 @@ fn stream_proxy_response(
                                                                         "arguments": ""
                                                                     }
                                                                 });
-                                                                send_data(&tx, &data.to_string()).await;
+                                                                send_data(&tx, &data.to_string())
+                                                                    .await;
                                                             }
                                                         }
                                                         ResponseFormat::OpenAI => {
                                                             if !openai_tool_call_indexes
                                                                 .contains_key(&id)
                                                             {
-                                                                let tool_index = openai_next_tool_index;
+                                                                let tool_index =
+                                                                    openai_next_tool_index;
                                                                 openai_next_tool_index += 1;
                                                                 openai_tool_call_indexes
                                                                     .insert(id.clone(), tool_index);
@@ -3720,7 +4093,8 @@ fn stream_proxy_response(
                                                                 if let Ok(chunk_json) =
                                                                     serde_json::to_string(&chunk)
                                                                 {
-                                                                    send_data(&tx, &chunk_json).await;
+                                                                    send_data(&tx, &chunk_json)
+                                                                        .await;
                                                                 }
                                                             }
                                                         }
@@ -3735,10 +4109,16 @@ fn stream_proxy_response(
                                                 if let Some((name, input)) =
                                                     tool_accumulators.remove(&id)
                                                 {
-                                                    aggregated.tool_calls.push((id.clone(), name, input.clone()));
+                                                    aggregated.tool_calls.push((
+                                                        id.clone(),
+                                                        name,
+                                                        input.clone(),
+                                                    ));
 
                                                     // 发送完整的 input_json_delta
-                                                    if let Some(index) = tool_block_indexes.get(&id).copied() {
+                                                    if let Some(index) =
+                                                        tool_block_indexes.get(&id).copied()
+                                                    {
                                                         if !input.is_empty() {
                                                             let data = json!({
                                                                 "type": "content_block_delta",
@@ -3757,7 +4137,8 @@ fn stream_proxy_response(
                                                         }
                                                     }
                                                 }
-                                                if let Some(index) = tool_block_indexes.remove(&id) {
+                                                if let Some(index) = tool_block_indexes.remove(&id)
+                                                {
                                                     let data = json!({
                                                         "type": "content_block_stop",
                                                         "index": index
@@ -3785,13 +4166,15 @@ fn stream_proxy_response(
                                                         &input,
                                                     );
                                                     send_data(&tx, &done.to_string()).await;
-                                                    let output_index = responses_tool_output_indexes
-                                                        .remove(&id)
-                                                        .unwrap_or_else(|| {
-                                                            let idx = responses_next_output_index;
-                                                            responses_next_output_index += 1;
-                                                            idx
-                                                        });
+                                                    let output_index =
+                                                        responses_tool_output_indexes
+                                                            .remove(&id)
+                                                            .unwrap_or_else(|| {
+                                                                let idx =
+                                                                    responses_next_output_index;
+                                                                responses_next_output_index += 1;
+                                                                idx
+                                                            });
                                                     let data = json!({
                                                         "type": "response.output_item.done",
                                                         "response_id": response_id,
@@ -3819,7 +4202,9 @@ fn stream_proxy_response(
                                                     ));
 
                                                     // OpenAI 格式：在 ToolUseStop 时发送完整的 arguments
-                                                    if let Some(&tool_index) = openai_tool_call_indexes.get(&id) {
+                                                    if let Some(&tool_index) =
+                                                        openai_tool_call_indexes.get(&id)
+                                                    {
                                                         let chunk = stream::build_openai_chunk(
                                                             &completion_id,
                                                             created_at,
@@ -3842,7 +4227,9 @@ fn stream_proxy_response(
                                                             None,
                                                             None,
                                                         );
-                                                        if let Ok(chunk_json) = serde_json::to_string(&chunk) {
+                                                        if let Ok(chunk_json) =
+                                                            serde_json::to_string(&chunk)
+                                                        {
                                                             send_data(&tx, &chunk_json).await;
                                                         }
                                                     }
@@ -3916,13 +4303,14 @@ fn stream_proxy_response(
                                                         .into_iter()
                                                         .next()
                                                     {
-                                                        let data = build_responses_annotation_added_event(
-                                                            &response_id,
-                                                            &message_id,
-                                                            annotation,
-                                                            aggregated.citations.len() - 1,
-                                                            responses_sequence_number,
-                                                        );
+                                                        let data =
+                                                            build_responses_annotation_added_event(
+                                                                &response_id,
+                                                                &message_id,
+                                                                annotation,
+                                                                aggregated.citations.len() - 1,
+                                                                responses_sequence_number,
+                                                            );
                                                         responses_sequence_number += 1;
                                                         send_data(&tx, &data.to_string()).await;
                                                     }
@@ -3934,10 +4322,14 @@ fn stream_proxy_response(
                                                 }
                                             }
                                         }
-                                        KiroEvent::Metering { unit, unit_plural, usage } => {
+                                        KiroEvent::Metering {
+                                            unit,
+                                            unit_plural,
+                                            usage,
+                                        } => {
                                             // 记录 metering 信息到聚合响应
                                             aggregated.metering_usage = Some(usage);
-                                            
+
                                             // 如果是 Anthropic 格式，发送 metering 事件
                                             if matches!(format, ResponseFormat::Anthropic) {
                                                 let data = json!({
@@ -3946,10 +4338,21 @@ fn stream_proxy_response(
                                                     "unitPlural": unit_plural,
                                                     "usage": usage
                                                 });
-                                                send_event(&tx, Some("metering"), &data.to_string()).await;
+                                                send_event(
+                                                    &tx,
+                                                    Some("metering"),
+                                                    &data.to_string(),
+                                                )
+                                                .await;
                                             }
                                         }
                                     }
+                                } else {
+                                    log::trace!(
+                                        "[Kiro API 响应事件] event=unparsed, bytes={}, chars={}",
+                                        msg.payload.len(),
+                                        json_text.chars().count()
+                                    );
                                 }
 
                                 // 清理已处理的字节
@@ -4016,29 +4419,17 @@ fn stream_proxy_response(
         }
         aggregated.tool_calls = stream::deduplicate_tool_calls(aggregated.tool_calls);
 
-        // 流结束后打印完整聚合响应
-        log::debug!(
-            "[流式响应完成] model={}, text_len={}, thinking_len={}, tool_calls={}, input_tokens={}, output_tokens={}, text_preview={:.200}",
-            model,
-            aggregated.text.len(),
-            aggregated.thinking.len(),
-            aggregated.tool_calls.len(),
-            aggregated.input_tokens,
-            aggregated.output_tokens,
-            aggregated.text
-        );
-
         // 流式结束后，使用本地估算 token（在发送响应之前）
-        if aggregated.input_tokens == 0 || aggregated.output_tokens == 0 {
-            log::info!("[流式] 响应中没有 token 信息，使用本地估算");
-
+        let token_source = if aggregated.input_tokens == 0 || aggregated.output_tokens == 0 {
             // 估算输入 tokens（从请求消息中）
             let request_text = serde_json::to_string(&request_messages).unwrap_or_default();
-            aggregated.input_tokens = super::token_estimator::estimate_tokens(&request_text, &model);
+            aggregated.input_tokens =
+                super::token_estimator::estimate_tokens(&request_text, &model);
 
             // 估算输出 tokens（从响应文本中）
             let response_text = format!("{}{}", aggregated.text, aggregated.thinking);
-            aggregated.output_tokens = super::token_estimator::estimate_tokens(&response_text, &model);
+            aggregated.output_tokens =
+                super::token_estimator::estimate_tokens(&response_text, &model);
 
             log::info!(
                 "[流式] 估算的 tokens: input={}, output={} (model={})",
@@ -4046,25 +4437,35 @@ fn stream_proxy_response(
                 aggregated.output_tokens,
                 model
             );
+            "estimated"
         } else {
             log::info!(
                 "[流式] 使用响应中的 token 信息: input={}, output={}",
                 aggregated.input_tokens,
                 aggregated.output_tokens
             );
-        }
+            "upstream"
+        };
 
         // Prompt Cache 模拟：如果响应中没有缓存信息，用模拟器填充
-        if aggregated.cache_read_input_tokens.is_none() && aggregated.cache_creation_input_tokens.is_none() {
+        if aggregated.cache_read_input_tokens.is_none()
+            && aggregated.cache_creation_input_tokens.is_none()
+        {
             let tracker = super::prompt_cache::global_prompt_cache_tracker();
-            let messages_json: Vec<serde_json::Value> = request_messages.iter().map(|m| {
-                serde_json::json!({
-                    "role": m.role,
-                    "content": m.content
+            let messages_json: Vec<serde_json::Value> = request_messages
+                .iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": m.content
+                    })
                 })
-            }).collect();
+                .collect();
             let tools_json: Option<Vec<serde_json::Value>> = request_tools.as_ref().map(|tools| {
-                tools.iter().map(|t| serde_json::to_value(t).unwrap_or_default()).collect()
+                tools
+                    .iter()
+                    .map(|t| serde_json::to_value(t).unwrap_or_default())
+                    .collect()
             });
 
             if let Some(profile) = tracker.build_profile(
@@ -4079,10 +4480,12 @@ fn stream_proxy_response(
                 tracker.update(account_id, &profile);
 
                 if cache_usage.cache_read_input_tokens > 0 {
-                    aggregated.cache_read_input_tokens = Some(cache_usage.cache_read_input_tokens as i32);
+                    aggregated.cache_read_input_tokens =
+                        Some(cache_usage.cache_read_input_tokens as i32);
                 }
                 if cache_usage.cache_creation_input_tokens > 0 {
-                    aggregated.cache_creation_input_tokens = Some(cache_usage.cache_creation_input_tokens as i32);
+                    aggregated.cache_creation_input_tokens =
+                        Some(cache_usage.cache_creation_input_tokens as i32);
                 }
 
                 log::info!(
@@ -4092,6 +4495,25 @@ fn stream_proxy_response(
                 );
             }
         }
+
+        log::info!(
+            "[流式响应完成] model={}, text_len={}, thinking_len={}, tool_calls={}, input_tokens={}, output_tokens={}, cache_read_input_tokens={}, cache_creation_input_tokens={}, token_source={}",
+            model,
+            aggregated.text.len(),
+            aggregated.thinking.len(),
+            aggregated.tool_calls.len(),
+            aggregated.input_tokens,
+            aggregated.output_tokens,
+            aggregated
+                .cache_read_input_tokens
+                .map(|item| item.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            aggregated
+                .cache_creation_input_tokens
+                .map(|item| item.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            token_source
+        );
 
         match format {
             ResponseFormat::Anthropic => {
@@ -4119,7 +4541,8 @@ fn stream_proxy_response(
                         send_event(&tx, Some("content_block_start"), &start.to_string()).await;
                         idx
                     };
-                    let parsed_input: Value = serde_json::from_str(input).unwrap_or_else(|_| json!({}));
+                    let parsed_input: Value =
+                        serde_json::from_str(input).unwrap_or_else(|_| json!({}));
                     let delta = json!({
                         "type": "content_block_delta",
                         "index": block_index,
@@ -4266,10 +4689,8 @@ fn stream_proxy_response(
             // 构建完整的响应体（根据格式）
             let response_body = match format {
                 ResponseFormat::Anthropic => {
-                    serde_json::to_string(&build_anthropic_response(
-                        &model,
-                        &aggregated,
-                    )).unwrap_or_default()
+                    serde_json::to_string(&build_anthropic_response(&model, &aggregated))
+                        .unwrap_or_default()
                 }
                 ResponseFormat::Responses => {
                     serde_json::to_string(&build_responses_response_with_ids(
@@ -4279,18 +4700,18 @@ fn stream_proxy_response(
                         &message_id,
                         created_at,
                         previous_response_id.as_deref(),
-                    )).unwrap_or_default()
+                    ))
+                    .unwrap_or_default()
                 }
                 ResponseFormat::OpenAI => {
-                    serde_json::to_string(&stream::build_openai_response(
-                        &model,
-                        &aggregated,
-                    )).unwrap_or_default()
+                    serde_json::to_string(&stream::build_openai_response(&model, &aggregated))
+                        .unwrap_or_default()
                 }
             };
 
             let body_end = safe_truncate(&response_body, 50000);
-            let entry = format!("[{}] kind=client_response idx={} endpoint={} stream=true status=200 bytes={} truncated={} body={}\n",
+            let entry = format!(
+                "[{}] kind=client_response idx={} endpoint={} stream=true status=200 bytes={} truncated={} body={}\n",
                 chrono::Local::now().format("%H:%M:%S"),
                 log_context.request_index,
                 log_context.endpoint,
@@ -4308,12 +4729,22 @@ fn stream_proxy_response(
                 .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
 
             // 也写入 upstream 成功响应
-            let upstream_entry = format!("[{}] kind=kiro_response_summary idx={} status=200 text_len={} thinking_len={} tool_calls={:?} input={} output={}\n",
+            let upstream_entry = format!(
+                "[{}] kind=kiro_response_summary idx={} status=200 text_len={} thinking_len={} tool_calls={:?} input={} output={}\n",
                 chrono::Local::now().format("%H:%M:%S"),
                 log_context.request_index,
                 aggregated.text.len(),
                 aggregated.thinking.len(),
-                aggregated.tool_calls.iter().map(|(id, name, args)| format!("{}({})={}", name, id, &args[..safe_truncate(args, 100)])).collect::<Vec<_>>(),
+                aggregated
+                    .tool_calls
+                    .iter()
+                    .map(|(id, name, args)| format!(
+                        "{}({})={}",
+                        name,
+                        id,
+                        &args[..safe_truncate(args, 100)]
+                    ))
+                    .collect::<Vec<_>>(),
                 aggregated.input_tokens,
                 aggregated.output_tokens,
             );
@@ -4615,10 +5046,7 @@ mod tests {
     use super::*;
     use crate::gateway::token_cache::TokenCache;
     use serde_json::json;
-    use std::sync::{
-        atomic::AtomicU64,
-        Arc,
-    };
+    use std::sync::{atomic::AtomicU64, Arc};
     use tokio::sync::Mutex as AsyncMutex;
 
     fn proxy_test_state() -> RouterState {
@@ -4676,6 +5104,21 @@ mod tests {
         let e = safe_truncate(&emoji, 10); // 10 不是 4 的倍数 → 回退到 8
         assert_eq!(e, 8);
         let _ = &emoji[..e];
+    }
+
+    #[test]
+    fn map_upstream_error_detects_invalid_bearer_token() {
+        let body =
+            r#"{"message":"The bearer token included in the request is invalid.","reason":null}"#;
+
+        let (status, error_type, message) = map_upstream_error(StatusCode::FORBIDDEN, body);
+
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(error_type, "token_expired_error");
+        assert_eq!(
+            message,
+            "The bearer token included in the request is invalid."
+        );
     }
 
     #[test]
@@ -4811,7 +5254,10 @@ mod tests {
         assert_eq!(chat_request.stream, responses_request.stream);
         assert_eq!(chat_request.tool_choice, responses_request.tool_choice);
         assert_eq!(chat_request.tools.as_ref().map(Vec::len), Some(1));
-        assert_eq!(chat_request.messages.len(), responses_request.messages.len());
+        assert_eq!(
+            chat_request.messages.len(),
+            responses_request.messages.len()
+        );
         assert_eq!(
             chat_request.messages[1]
                 .tool_calls
@@ -5015,7 +5461,10 @@ mod tests {
     #[tokio::test]
     async fn test_get_model_max_input_tokens() {
         assert_eq!(get_model_max_input_tokens("auto").await, 1_000_000);
-        assert_eq!(get_model_max_input_tokens("claude-3-7-sonnet-20250219").await, 200_000);
+        assert_eq!(
+            get_model_max_input_tokens("claude-3-7-sonnet-20250219").await,
+            200_000
+        );
         assert_eq!(get_model_max_input_tokens("gpt-4").await, 200_000);
         assert_eq!(get_model_max_input_tokens("deepseek-chat").await, 128_000);
         assert_eq!(get_model_max_input_tokens("llama-3-70b").await, 128_000);
@@ -5339,7 +5788,10 @@ mod tests {
         let text_done = build_stream_responses_output_text_done_event("resp_test", "Hello Rust");
         let reasoning_done = build_stream_responses_reasoning_done_event("resp_test", "Think");
 
-        assert_eq!(function_done["type"], "response.function_call_arguments.done");
+        assert_eq!(
+            function_done["type"],
+            "response.function_call_arguments.done"
+        );
         assert_eq!(function_done["response_id"], "resp_test");
         assert_eq!(function_done["call_id"], "call_1");
         assert_eq!(function_done["arguments"], "{\"q\":\"rust\"}");
@@ -5354,10 +5806,42 @@ mod tests {
     }
 
     #[test]
+    fn available_models_call_context_uses_account_machine_id_and_effective_profile_arn() {
+        let upstream = UpstreamCredentials {
+            account_id: "test-account".to_string(),
+            access_token: "token-models".to_string(),
+            machine_id: "account-machine-id".to_string(),
+            profile_arn: Some(
+                "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX".to_string(),
+            ),
+            available_models_profile_arn: Some(
+                "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX".to_string(),
+            ),
+            provider: Some("BuilderId".to_string()),
+            region: "us-east-1".to_string(),
+            source_label: "single:test".to_string(),
+            user_agent: "KiroIDE 0.11.34 account-machine-id".to_string(),
+            auth_method: Some("IdC".to_string()),
+            send_opt_out: true,
+        };
+
+        let (machine_id, profile_arn) = available_models_call_context(&upstream);
+
+        assert_eq!(machine_id, "account-machine-id");
+        assert_eq!(
+            profile_arn,
+            Some("arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX")
+        );
+    }
+
+    #[test]
     fn with_kiro_upstream_headers_adds_generate_request_headers() {
         let upstream = UpstreamCredentials {
+            account_id: "test-account".to_string(),
             access_token: "token-1".to_string(),
+            machine_id: "machine-123".to_string(),
             profile_arn: None,
+            available_models_profile_arn: None,
             provider: None,
             region: "us-east-1".to_string(),
             source_label: "single:test".to_string(),
@@ -5368,7 +5852,7 @@ mod tests {
 
         let request = with_kiro_upstream_headers(
             reqwest::Client::new()
-                .post("https://q.us-east-1.amazonaws.com/generateAssistantResponse"),
+                .post("https://runtime.us-east-1.kiro.dev/generateAssistantResponse"),
             &upstream,
             "application/vnd.amazon.eventstream",
             true,
@@ -5392,13 +5876,13 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("KiroIDE 0.11.34 machine-123")
         );
-        assert_eq!(
-            request
-                .headers()
-                .get("x-amz-user-agent")
-                .and_then(|value| value.to_str().ok()),
-            Some("KiroIDE 0.11.34 machine-123")
-        );
+        let x_amz_user_agent = request
+            .headers()
+            .get("x-amz-user-agent")
+            .and_then(|value| value.to_str().ok())
+            .expect("x-amz-user-agent header");
+        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.0 KiroIDE-"));
+        assert!(x_amz_user_agent.ends_with("-machine-123"));
         assert_eq!(
             request
                 .headers()
@@ -5422,8 +5906,11 @@ mod tests {
     #[test]
     fn with_kiro_upstream_headers_keeps_runtime_requests_minimal() {
         let upstream = UpstreamCredentials {
+            account_id: "test-account".to_string(),
             access_token: "token-2".to_string(),
+            machine_id: "machine-456".to_string(),
             profile_arn: None,
+            available_models_profile_arn: None,
             provider: None,
             region: "us-east-1".to_string(),
             source_label: "single:test".to_string(),
@@ -5434,7 +5921,7 @@ mod tests {
 
         let request = with_kiro_upstream_headers(
             reqwest::Client::new()
-                .get("https://q.us-east-1.amazonaws.com/ListAvailableModels?origin=AI_EDITOR"),
+                .get("https://runtime.us-east-1.kiro.dev/ListAvailableModels?origin=AI_EDITOR"),
             &upstream,
             "application/json",
             false,
@@ -5444,13 +5931,13 @@ mod tests {
         .build()
         .expect("request should build");
 
-        assert_eq!(
-            request
-                .headers()
-                .get("x-amz-user-agent")
-                .and_then(|value| value.to_str().ok()),
-            Some("KiroIDE 0.11.34 machine-456")
-        );
+        let x_amz_user_agent = request
+            .headers()
+            .get("x-amz-user-agent")
+            .and_then(|value| value.to_str().ok())
+            .expect("x-amz-user-agent header");
+        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.0 KiroIDE-"));
+        assert!(x_amz_user_agent.ends_with("-machine-456"));
         assert!(request
             .headers()
             .get("x-amzn-codewhisperer-optout")
@@ -5464,8 +5951,13 @@ mod tests {
     #[test]
     fn with_kiro_upstream_headers_adds_mcp_profile_arn_header() {
         let upstream = UpstreamCredentials {
+            account_id: "test-account".to_string(),
             access_token: "token-3".to_string(),
+            machine_id: "machine-789".to_string(),
             profile_arn: Some(
+                "arn:aws:codewhisperer:us-east-1:123456789012:profile/test".to_string(),
+            ),
+            available_models_profile_arn: Some(
                 "arn:aws:codewhisperer:us-east-1:123456789012:profile/test".to_string(),
             ),
             provider: None,
@@ -5477,7 +5969,7 @@ mod tests {
         };
 
         let request = with_kiro_upstream_headers(
-            reqwest::Client::new().post("https://q.us-east-1.amazonaws.com/mcp"),
+            reqwest::Client::new().post(crate::clients::kiro_client::build_mcp_url("us-east-1")),
             &upstream,
             "application/json",
             false,
@@ -5500,8 +5992,11 @@ mod tests {
     #[test]
     fn with_kiro_upstream_headers_adds_redirect_for_internal_only_for_internal_provider() {
         let upstream = UpstreamCredentials {
+            account_id: "test-account".to_string(),
             access_token: "token-4".to_string(),
+            machine_id: "machine-999".to_string(),
             profile_arn: None,
+            available_models_profile_arn: None,
             provider: Some("Internal".to_string()),
             region: "us-east-1".to_string(),
             source_label: "single:test".to_string(),
@@ -5512,7 +6007,7 @@ mod tests {
 
         let request = with_kiro_upstream_headers(
             reqwest::Client::new()
-                .post("https://q.us-east-1.amazonaws.com/generateAssistantResponse"),
+                .post("https://runtime.us-east-1.kiro.dev/generateAssistantResponse"),
             &upstream,
             "application/vnd.amazon.eventstream",
             true,
@@ -5535,8 +6030,11 @@ mod tests {
     fn with_kiro_upstream_headers_does_not_add_redirect_for_enterprise_or_builderid() {
         for provider in ["Enterprise", "BuilderId"] {
             let upstream = UpstreamCredentials {
+                account_id: "test-account".to_string(),
                 access_token: "token-5".to_string(),
+                machine_id: "machine-1000".to_string(),
                 profile_arn: None,
+                available_models_profile_arn: None,
                 provider: Some(provider.to_string()),
                 region: "us-east-1".to_string(),
                 source_label: "single:test".to_string(),
@@ -5547,7 +6045,7 @@ mod tests {
 
             let request = with_kiro_upstream_headers(
                 reqwest::Client::new()
-                    .post("https://q.us-east-1.amazonaws.com/generateAssistantResponse"),
+                    .post("https://runtime.us-east-1.kiro.dev/generateAssistantResponse"),
                 &upstream,
                 "application/vnd.amazon.eventstream",
                 true,

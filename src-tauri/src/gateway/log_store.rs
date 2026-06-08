@@ -1,13 +1,8 @@
+use crate::gateway::GatewayRequestLogEntry;
 /// 内存日志存储模块
 ///
-/// 参考 chaogei/Kiro-account-manager 的设计，提供：
-/// 1. 内存中保存最近的请求日志（用于 UI 实时显示）
-/// 2. 支持日志监听器（实时推送到前端）
-/// 3. 自动限制日志数量（避免内存溢出）
-
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::gateway::GatewayRequestLogEntry;
 
 /// 内存日志存储
 #[derive(Debug, Clone)]
@@ -17,14 +12,11 @@ pub struct LogStore {
 
 #[derive(Debug)]
 struct LogStoreInner {
-    /// 存储的日志条目
+    /// 日志列表（按请求索引排序，最新的在后面）
     logs: Vec<GatewayRequestLogEntry>,
     /// 最大保存条数
     max_logs: usize,
-    /// 日志监听器（用于实时推送到前端）
-    listeners: Vec<tokio::sync::mpsc::UnboundedSender<GatewayRequestLogEntry>>,
 }
-
 impl LogStore {
     /// 创建新的日志存储
     ///
@@ -35,7 +27,6 @@ impl LogStore {
             inner: Arc::new(RwLock::new(LogStoreInner {
                 logs: Vec::with_capacity(max_logs.min(1000)),
                 max_logs,
-                listeners: Vec::new(),
             })),
         }
     }
@@ -53,15 +44,9 @@ impl LogStore {
             let drain_count = inner.logs.len() - inner.max_logs;
             inner.logs.drain(0..drain_count);
         }
-
-        // 通知所有监听器
-        inner.listeners.retain(|sender| {
-            sender.send(entry.clone()).is_ok()
-        });
     }
 
     /// 获取所有日志
-    #[allow(dead_code)]
     pub async fn get_all(&self) -> Vec<GatewayRequestLogEntry> {
         let inner = self.inner.read().await;
         inner.logs.clone()
@@ -74,28 +59,10 @@ impl LogStore {
         inner.logs[start..].to_vec()
     }
 
-    /// 获取日志总数
-    #[allow(dead_code)]
-    pub async fn count(&self) -> usize {
-        let inner = self.inner.read().await;
-        inner.logs.len()
-    }
-
     /// 清空所有日志
     pub async fn clear(&self) {
         let mut inner = self.inner.write().await;
         inner.logs.clear();
-    }
-
-    /// 添加日志监听器（用于实时推送到前端）
-    ///
-    /// 返回一个接收器，可以用来接收新的日志条目
-    #[allow(dead_code)]
-    pub async fn subscribe(&self) -> tokio::sync::mpsc::UnboundedReceiver<GatewayRequestLogEntry> {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut inner = self.inner.write().await;
-        inner.listeners.push(tx);
-        rx
     }
 
     /// 获取日志统计信息
@@ -122,11 +89,14 @@ impl LogStore {
         let mut total_duration: u64 = 0;
 
         for log in &inner.logs {
-            match log.outcome.as_str() {
-                "success" => stats.success += 1,
-                "error" => stats.error += 1,
-                "streaming" => stats.streaming += 1,
-                _ => {}
+            if log.status_code < 400 {
+                stats.success += 1;
+            } else {
+                stats.error += 1;
+            }
+
+            if log.stream {
+                stats.streaming += 1;
             }
 
             stats.total_input_tokens += log.input_tokens.unwrap_or(0);
@@ -135,7 +105,8 @@ impl LogStore {
             stats.total_cache_creation_tokens += log.cache_creation_input_tokens.unwrap_or(0);
 
             if log.cache_read_input_tokens.unwrap_or(0) > 0
-                || log.cache_creation_input_tokens.unwrap_or(0) > 0 {
+                || log.cache_creation_input_tokens.unwrap_or(0) > 0
+            {
                 stats.requests_with_cache += 1;
             }
 
@@ -151,7 +122,8 @@ impl LogStore {
     pub async fn get_model_stats(&self) -> Vec<ModelStat> {
         let inner = self.inner.read().await;
 
-        let mut model_map: std::collections::HashMap<String, ModelStat> = std::collections::HashMap::new();
+        let mut model_map: std::collections::HashMap<String, ModelStat> =
+            std::collections::HashMap::new();
 
         for log in &inner.logs {
             let model = log.model.clone().unwrap_or_else(|| "unknown".to_string());
@@ -183,15 +155,18 @@ impl LogStore {
     pub async fn get_endpoint_stats(&self) -> Vec<EndpointStat> {
         let inner = self.inner.read().await;
 
-        let mut endpoint_map: std::collections::HashMap<String, EndpointStat> = std::collections::HashMap::new();
+        let mut endpoint_map: std::collections::HashMap<String, EndpointStat> =
+            std::collections::HashMap::new();
 
         for log in &inner.logs {
-            let stat = endpoint_map.entry(log.endpoint.clone()).or_insert(EndpointStat {
-                endpoint: log.endpoint.clone(),
-                count: 0,
-                success: 0,
-                error: 0,
-            });
+            let stat = endpoint_map
+                .entry(log.endpoint.clone())
+                .or_insert(EndpointStat {
+                    endpoint: log.endpoint.clone(),
+                    count: 0,
+                    success: 0,
+                    error: 0,
+                });
 
             stat.count += 1;
             if log.outcome == "success" {
@@ -269,7 +244,11 @@ mod tests {
             status_code: if outcome == "success" { 200 } else { 500 },
             outcome: outcome.to_string(),
             duration_ms: 1000,
-            error: if outcome == "error" { Some("test error".to_string()) } else { None },
+            error: if outcome == "error" {
+                Some("test error".to_string())
+            } else {
+                None
+            },
             request_body: None,
             response_body: None,
             input_tokens: Some(100),
@@ -305,7 +284,9 @@ mod tests {
 
         // 添加 10 条日志
         for i in 0..10 {
-            store.add(create_test_log(i, "success", "claude-sonnet-4.5")).await;
+            store
+                .add(create_test_log(i, "success", "claude-sonnet-4.5"))
+                .await;
         }
 
         let all_logs = store.get_all().await;
@@ -319,7 +300,9 @@ mod tests {
         let store = LogStore::new(100);
 
         for i in 0..10 {
-            store.add(create_test_log(i, "success", "claude-sonnet-4.5")).await;
+            store
+                .add(create_test_log(i, "success", "claude-sonnet-4.5"))
+                .await;
         }
 
         let last_3 = store.get_last(3).await;
@@ -332,9 +315,15 @@ mod tests {
     async fn test_log_store_stats() {
         let store = LogStore::new(100);
 
-        store.add(create_test_log(1, "success", "claude-sonnet-4.5")).await;
-        store.add(create_test_log(2, "success", "claude-sonnet-4.5")).await;
-        store.add(create_test_log(3, "error", "claude-opus-4")).await;
+        store
+            .add(create_test_log(1, "success", "claude-sonnet-4.5"))
+            .await;
+        store
+            .add(create_test_log(2, "success", "claude-sonnet-4.5"))
+            .await;
+        store
+            .add(create_test_log(3, "error", "claude-opus-4"))
+            .await;
 
         let stats = store.get_stats().await;
         assert_eq!(stats.total, 3);
@@ -345,12 +334,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_log_store_stats_counts_http_successes_and_stream_flag() {
+        let store = LogStore::new(100);
+
+        let mut stream_log = create_test_log(1, "stream", "claude-sonnet-4.5");
+        stream_log.status_code = 200;
+        stream_log.stream = true;
+
+        let mut cached_log = create_test_log(2, "success (cached)", "claude-sonnet-4.5");
+        cached_log.status_code = 200;
+
+        store.add(stream_log).await;
+        store.add(cached_log).await;
+        store
+            .add(create_test_log(3, "error", "claude-opus-4"))
+            .await;
+
+        let stats = store.get_stats().await;
+        assert_eq!(stats.total, 3);
+        assert_eq!(stats.success, 2);
+        assert_eq!(stats.error, 1);
+        assert_eq!(stats.streaming, 1);
+    }
+
+    #[tokio::test]
     async fn test_log_store_model_stats() {
         let store = LogStore::new(100);
 
-        store.add(create_test_log(1, "success", "claude-sonnet-4.5")).await;
-        store.add(create_test_log(2, "success", "claude-sonnet-4.5")).await;
-        store.add(create_test_log(3, "error", "claude-opus-4")).await;
+        store
+            .add(create_test_log(1, "success", "claude-sonnet-4.5"))
+            .await;
+        store
+            .add(create_test_log(2, "success", "claude-sonnet-4.5"))
+            .await;
+        store
+            .add(create_test_log(3, "error", "claude-opus-4"))
+            .await;
 
         let model_stats = store.get_model_stats().await;
         assert_eq!(model_stats.len(), 2);
@@ -369,37 +388,17 @@ mod tests {
     async fn test_log_store_clear() {
         let store = LogStore::new(100);
 
-        store.add(create_test_log(1, "success", "claude-sonnet-4.5")).await;
-        store.add(create_test_log(2, "success", "claude-sonnet-4.5")).await;
+        store
+            .add(create_test_log(1, "success", "claude-sonnet-4.5"))
+            .await;
+        store
+            .add(create_test_log(2, "success", "claude-sonnet-4.5"))
+            .await;
 
-        assert_eq!(store.count().await, 2);
+        assert_eq!(store.get_all().await.len(), 2);
 
         store.clear().await;
 
-        assert_eq!(store.count().await, 0);
-    }
-
-    #[tokio::test]
-    async fn test_log_store_subscribe() {
-        let store = LogStore::new(100);
-
-        let mut rx = store.subscribe().await;
-
-        // 在另一个任务中添加日志
-        let store_clone = store.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-            store_clone.add(create_test_log(1, "success", "claude-sonnet-4.5")).await;
-        });
-
-        // 接收日志
-        let received = tokio::time::timeout(
-            tokio::time::Duration::from_secs(1),
-            rx.recv()
-        ).await;
-
-        assert!(received.is_ok());
-        let log = received.unwrap().unwrap();
-        assert_eq!(log.request_index, 1);
+        assert_eq!(store.get_all().await.len(), 0);
     }
 }

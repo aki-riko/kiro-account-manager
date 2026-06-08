@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
+use crate::clients::kiro_client::build_generate_assistant_response_url;
 use crate::gateway::converter::build_kiro_payload;
 use crate::gateway::eventstream::decode_message;
 use crate::gateway::models::NormalizedMessage;
 use crate::gateway::response_cache::ResponseCache;
-use crate::clients::http_client::build_q_service_url;
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -45,7 +45,11 @@ pub async fn compress_conversation_history(
     }
 
     // 找出非系统消息
-    let non_system: Vec<_> = messages.iter().filter(|m| m.role != "system").cloned().collect();
+    let non_system: Vec<_> = messages
+        .iter()
+        .filter(|m| m.role != "system")
+        .cloned()
+        .collect();
 
     if non_system.len() < 5 {
         log::info!("[压缩] 非系统消息不足 5 条，跳过压缩");
@@ -69,7 +73,8 @@ pub async fn compress_conversation_history(
     // 计算待压缩消息的哈希值（用于缓存键）
     let messages_hash = calculate_messages_hash(&to_compress);
     let message_count = to_compress.len();
-    let total_chars: usize = to_compress.iter()
+    let total_chars: usize = to_compress
+        .iter()
         .filter_map(|m| m.content.as_ref())
         .map(|c| c.to_string().len())
         .sum();
@@ -77,14 +82,18 @@ pub async fn compress_conversation_history(
     // 尝试从缓存获取摘要
     let summary = if let (Some(cache_ref), Some(sid)) = (cache.as_mut(), session_id) {
         if let Some(cached_entry) = cache_ref.get(sid, &messages_hash, message_count, total_chars) {
-            log::info!("[压缩] 命中缓存！使用缓存的摘要（节省 {} 输入 tokens，{} 输出 tokens）",
-                cached_entry.input_tokens, cached_entry.output_tokens);
+            log::info!(
+                "[压缩] 命中缓存！使用缓存的摘要（节省 {} 输入 tokens，{} 输出 tokens）",
+                cached_entry.input_tokens,
+                cached_entry.output_tokens
+            );
             cached_entry.response
         } else {
             // 缓存未命中，生成新摘要
             log::info!("[压缩] 缓存未命中，调用 LLM 生成摘要...");
             let (summary, input_tokens, output_tokens) =
-                generate_summary_with_tokens(http, access_token, region, &to_compress, model_id).await?;
+                generate_summary_with_tokens(http, access_token, region, &to_compress, model_id)
+                    .await?;
 
             // 保存到缓存
             if let Some(cache_ref) = cache.as_mut() {
@@ -97,8 +106,11 @@ pub async fn compress_conversation_history(
                     message_count,
                     total_chars,
                 );
-                log::info!("[压缩] 摘要已保存到缓存（输入 {} tokens，输出 {} tokens）",
-                    input_tokens, output_tokens);
+                log::info!(
+                    "[压缩] 摘要已保存到缓存（输入 {} tokens，输出 {} tokens）",
+                    input_tokens,
+                    output_tokens
+                );
             }
 
             summary
@@ -106,7 +118,9 @@ pub async fn compress_conversation_history(
     } else {
         // 没有缓存，直接生成摘要
         log::info!("[压缩] 未启用缓存，调用 LLM 生成摘要...");
-        let (summary, _, _) = generate_summary_with_tokens(http, access_token, region, &to_compress, model_id).await?;
+        let (summary, _, _) =
+            generate_summary_with_tokens(http, access_token, region, &to_compress, model_id)
+                .await?;
         summary
     };
 
@@ -118,10 +132,7 @@ pub async fn compress_conversation_history(
     // 添加摘要消息
     new_messages.push(NormalizedMessage {
         role: "assistant".to_string(),
-        content: Some(Value::String(format!(
-            "[对话历史摘要]\n\n{}",
-            summary
-        ))),
+        content: Some(Value::String(format!("[对话历史摘要]\n\n{}", summary))),
         tool_calls: None,
         tool_call_id: None,
         metadata: None,
@@ -187,7 +198,10 @@ async fn generate_summary_with_tokens(
         tokens
     } else {
         let estimated = estimate_tokens_for_messages(messages);
-        log::info!("[压缩] API 未返回 token，使用本地估算输入 token: {}", estimated);
+        log::info!(
+            "[压缩] API 未返回 token，使用本地估算输入 token: {}",
+            estimated
+        );
         estimated
     };
 
@@ -196,7 +210,10 @@ async fn generate_summary_with_tokens(
         tokens
     } else {
         let estimated = (summary.len() / 4) as i32; // 粗略估算：4 字符 ≈ 1 token
-        log::info!("[压缩] API 未返回 token，使用本地估算输出 token: {}", estimated);
+        log::info!(
+            "[压缩] API 未返回 token，使用本地估算输出 token: {}",
+            estimated
+        );
         estimated
     };
 
@@ -205,7 +222,8 @@ async fn generate_summary_with_tokens(
 
 /// 估算消息的 token 数量
 fn estimate_tokens_for_messages(messages: &[NormalizedMessage]) -> i32 {
-    let total_chars: usize = messages.iter()
+    let total_chars: usize = messages
+        .iter()
         .filter_map(|m| m.content.as_ref())
         .map(|c| c.to_string().len())
         .sum();
@@ -296,10 +314,7 @@ async fn generate_summary(
     .map_err(|e| format!("构建摘要请求失败: {}", e))?;
 
     // 发送请求
-    let upstream_url = format!(
-        "{}/generateAssistantResponse",
-        build_q_service_url(region)
-    );
+    let upstream_url = build_generate_assistant_response_url(region);
 
     let response = http
         .post(&upstream_url)
@@ -346,16 +361,15 @@ fn format_messages_for_summary(messages: &[NormalizedMessage]) -> String {
         if let Some(content) = &msg.content {
             let text = match content {
                 Value::String(s) => s.clone(),
-                Value::Array(arr) => {
-                    arr.iter()
-                        .filter_map(|v| {
-                            v.get("text")
-                                .and_then(|t| t.as_str())
-                                .map(|s| s.to_string())
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                }
+                Value::Array(arr) => arr
+                    .iter()
+                    .filter_map(|v| {
+                        v.get("text")
+                            .and_then(|t| t.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
                 _ => content.to_string(),
             };
 
@@ -379,8 +393,7 @@ fn format_messages_for_summary(messages: &[NormalizedMessage]) -> String {
             for tc in tool_calls {
                 result.push_str(&format!(
                     "  [工具调用] {}: {}\n",
-                    tc.function.name,
-                    tc.function.arguments
+                    tc.function.name, tc.function.arguments
                 ));
             }
         }
@@ -461,13 +474,16 @@ fn ensure_valid_message_sequence(messages: Vec<NormalizedMessage>) -> Vec<Normal
     if let Some(first) = result.first() {
         if first.role != "system" && first.role != "user" {
             log::warn!("[压缩] 消息不以 user 开始，插入占位符");
-            result.insert(0, NormalizedMessage {
-                role: "user".to_string(),
-                content: Some(Value::String("你好。".to_string())),
-                tool_calls: None,
-                tool_call_id: None,
-                metadata: None,
-            });
+            result.insert(
+                0,
+                NormalizedMessage {
+                    role: "user".to_string(),
+                    content: Some(Value::String("你好。".to_string())),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    metadata: None,
+                },
+            );
         }
     }
 
@@ -490,7 +506,9 @@ fn ensure_valid_message_sequence(messages: Vec<NormalizedMessage>) -> Vec<Normal
 }
 
 /// 从 EventStream 响应中解析摘要（尝试提取 token 信息）
-fn parse_summary_from_eventstream(body: &[u8]) -> Result<(String, Option<i32>, Option<i32>), String> {
+fn parse_summary_from_eventstream(
+    body: &[u8],
+) -> Result<(String, Option<i32>, Option<i32>), String> {
     let mut summary = String::new();
     let mut input_tokens: Option<i32> = None;
     let mut output_tokens: Option<i32> = None;
@@ -528,8 +546,11 @@ fn parse_summary_from_eventstream(body: &[u8]) -> Result<(String, Option<i32>, O
                                 .and_then(|v| v.as_i64())
                                 .map(|v| v as i32);
 
-                            log::info!("[压缩] ✅ 从 metadataEvent 提取到 token: 输入={:?}, 输出={:?}",
-                                input_tokens, output_tokens);
+                            log::info!(
+                                "[压缩] ✅ 从 metadataEvent 提取到 token: 输入={:?}, 输出={:?}",
+                                input_tokens,
+                                output_tokens
+                            );
                         }
                     }
 
@@ -548,8 +569,11 @@ fn parse_summary_from_eventstream(body: &[u8]) -> Result<(String, Option<i32>, O
                                 .map(|v| v as i32);
 
                             if input_tokens.is_some() || output_tokens.is_some() {
-                                log::info!("[压缩] ✅ 从 usage 提取到 token: 输入={:?}, 输出={:?}",
-                                    input_tokens, output_tokens);
+                                log::info!(
+                                    "[压缩] ✅ 从 usage 提取到 token: 输入={:?}, 输出={:?}",
+                                    input_tokens,
+                                    output_tokens
+                                );
                             }
                         }
                     }

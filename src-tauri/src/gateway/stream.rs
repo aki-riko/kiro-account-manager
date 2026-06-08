@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum KiroEvent {
     Text(String),
@@ -37,6 +36,17 @@ pub enum KiroEvent {
     },
 }
 
+fn json_value_kind(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "bool",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct AggregatedCitation {
     pub text: Option<String>,
@@ -59,7 +69,6 @@ pub struct AggregatedKiroResponse {
     pub citations: Vec<AggregatedCitation>,
 }
 
-
 pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
     let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
 
@@ -71,26 +80,29 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
         || (json_lower.contains("\"usage\"") && json_lower.contains("\"inputtokens\""));
 
     if is_metering_or_usage_event {
-        log::debug!("[Token 解析] 发现 token/usage 事件: {}",
-            if json_str.len() > 500 {
-                // 回退到最近的字符边界，避免在多字节字符（中文/emoji）中间切断导致 panic
-                let mut end = 500;
-                while end > 0 && !json_str.is_char_boundary(end) {
-                    end -= 1;
-                }
-                format!("{}...", &json_str[..end])
-            } else {
-                json_str.to_string()
-            }
+        log::debug!(
+            "[Token 解析] 发现 token/usage 事件: bytes={}, chars={}, top_keys={:?}",
+            json_str.len(),
+            json_str.chars().count(),
+            value
+                .as_object()
+                .map(|object| object.keys().cloned().collect::<Vec<_>>())
+                .unwrap_or_default()
         );
     }
 
     // 解析 metadataEvent 中的 tokenUsage
     // Kiro IDE 的 token 信息在 metadataEvent.tokenUsage 中
     if let Some(metadata_event) = value.get("metadataEvent").and_then(|item| item.as_object()) {
-        log::debug!("[Token 解析] 发现 metadataEvent: {:?}", metadata_event.keys().collect::<Vec<_>>());
+        log::debug!(
+            "[Token 解析] 发现 metadataEvent: {:?}",
+            metadata_event.keys().collect::<Vec<_>>()
+        );
 
-        if let Some(token_usage) = metadata_event.get("tokenUsage").and_then(|item| item.as_object()) {
+        if let Some(token_usage) = metadata_event
+            .get("tokenUsage")
+            .and_then(|item| item.as_object())
+        {
             // Kiro IDE 的字段名：
             // - uncachedInputTokens (未缓存的输入 tokens)
             // - cacheReadInputTokens (缓存读取 tokens)
@@ -120,10 +132,13 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
             // 参考：chaogei/Kiro-account-manager v1.6.6 修复
             let input_tokens = uncached_input_tokens;
 
-            // 添加调试日志：记录原始 tokenUsage JSON
             log::info!(
-                "[Token 解析] ✅ 发现 metadataEvent.tokenUsage: {}",
-                serde_json::to_string(token_usage).unwrap_or_else(|_| "invalid".to_string())
+                "[Token 解析] ✅ 发现 metadataEvent.tokenUsage: keys={:?}, 未缓存输入={}, 缓存读取={:?}, 缓存写入={:?}, 输出={}",
+                token_usage.keys().cloned().collect::<Vec<_>>(),
+                uncached_input_tokens,
+                cache_read_input_tokens,
+                cache_creation_input_tokens,
+                output_tokens
             );
             log::info!(
                 "[Token 解析] 已解析: 未缓存输入={}, 缓存读取={:?}, 缓存写入={:?}, 输出={}, 总输入={}",
@@ -176,11 +191,19 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
             .map(|v| v as i32);
 
         log::info!(
-            "[Token 解析] 原始 usage JSON (旧格式): {}",
-            serde_json::to_string(usage).unwrap_or_else(|_| "invalid".to_string())
+            "[Token 解析] 发现旧格式 usage: keys={:?}, input={}, output={}, cache_read={:?}, cache_creation={:?}",
+            usage.keys().cloned().collect::<Vec<_>>(),
+            input_tokens,
+            output_tokens,
+            cache_read_input_tokens,
+            cache_creation_input_tokens
         );
 
-        if input_tokens > 0 || output_tokens > 0 || cache_read_input_tokens.is_some() || cache_creation_input_tokens.is_some() {
+        if input_tokens > 0
+            || output_tokens > 0
+            || cache_read_input_tokens.is_some()
+            || cache_creation_input_tokens.is_some()
+        {
             return Some(KiroEvent::Usage {
                 input_tokens,
                 output_tokens,
@@ -191,8 +214,14 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
     }
 
     // 解析 contextUsageEvent
-    if let Some(context_event) = value.get("contextUsageEvent").and_then(|item| item.as_object()) {
-        if let Some(percentage) = context_event.get("contextUsagePercentage").and_then(|item| item.as_f64()) {
+    if let Some(context_event) = value
+        .get("contextUsageEvent")
+        .and_then(|item| item.as_object())
+    {
+        if let Some(percentage) = context_event
+            .get("contextUsagePercentage")
+            .and_then(|item| item.as_f64())
+        {
             return Some(KiroEvent::ContextUsage {
                 percentage: percentage as f32,
             });
@@ -265,8 +294,15 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
         });
     }
 
-    if let Some(tool_use_id) = value.get("toolUseId").and_then(|item| item.as_str())
-        .or_else(|| value.get("toolUseEvent").and_then(|e| e.get("toolUseId")).and_then(|item| item.as_str()))
+    if let Some(tool_use_id) = value
+        .get("toolUseId")
+        .and_then(|item| item.as_str())
+        .or_else(|| {
+            value
+                .get("toolUseEvent")
+                .and_then(|e| e.get("toolUseId"))
+                .and_then(|item| item.as_str())
+        })
     {
         // 支持 toolUseEvent 包装格式
         let tool_data = value.get("toolUseEvent").unwrap_or(&value);
@@ -285,18 +321,33 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
 
         if let Some(input) = tool_data.get("input") {
             let input_delta = if let Some(text) = input.as_str() {
-                log::debug!("[Tool Use] input 是字符串: {}", text.chars().take(100).collect::<String>());
+                log::trace!(
+                    "[Tool Use] 收到 input 字符串分片: id={tool_use_id}, byte_len={}, char_len={}",
+                    text.len(),
+                    text.chars().count()
+                );
                 text.to_string()
             } else if input.is_object() || input.is_array() {
                 let serialized = serde_json::to_string(input).unwrap_or_default();
-                log::debug!("[Tool Use] input 是对象/数组，序列化后: {}", serialized.chars().take(100).collect::<String>());
+                log::trace!(
+                    "[Tool Use] 收到 input 对象/数组分片: id={tool_use_id}, value_type={}, byte_len={}, char_len={}",
+                    json_value_kind(input),
+                    serialized.len(),
+                    serialized.chars().count()
+                );
                 serialized
             } else {
-                log::warn!("[Tool Use] input 类型未知: {:?}", input);
+                log::warn!(
+                    "[Tool Use] input 类型未知: value_type={}",
+                    json_value_kind(input)
+                );
                 String::new()
             };
             if !input_delta.is_empty() {
-                log::debug!("[Tool Use] 发送 ToolUseInputDelta: id={}, delta_len={}", tool_use_id, input_delta.len());
+                log::trace!(
+                    "[Tool Use] 解析 ToolUseInputDelta: id={tool_use_id}, byte_len={}",
+                    input_delta.len()
+                );
                 return Some(KiroEvent::ToolUseInputDelta {
                     id: tool_use_id.to_string(),
                     name: if name.is_empty() { None } else { Some(name) },
@@ -306,7 +357,11 @@ pub fn parse_kiro_event_full(json_str: &str) -> Option<KiroEvent> {
         }
 
         if !name.is_empty() {
-            log::debug!("[Tool Use] 发送 ToolUseStart: id={}, name={}", tool_use_id, name);
+            log::debug!(
+                "[Tool Use] 发送 ToolUseStart: id={}, name={}",
+                tool_use_id,
+                name
+            );
             return Some(KiroEvent::ToolUseStart {
                 id: tool_use_id.to_string(),
                 name,
@@ -382,7 +437,12 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
         }
         json_count += 1;
 
-        log::debug!("[聚合] JSON #{}: {}", json_count, json_str.chars().take(200).collect::<String>());
+        log::debug!(
+            "[聚合] JSON #{}: bytes={}, chars={}",
+            json_count,
+            json_str.len(),
+            json_str.chars().count()
+        );
 
         if let Some(event) = parse_kiro_event_full(json_str) {
             let event_type = match &event {
@@ -426,14 +486,20 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
                     name,
                     input_delta,
                 } => {
-                    log::debug!("[聚合] 工具输入增量: id={}, delta_len={}", id, input_delta.len());
+                    log::debug!(
+                        "[聚合] 工具输入增量: id={}, delta_len={}",
+                        id,
+                        input_delta.len()
+                    );
                     if let Some((existing_name, current_input)) = tool_accumulators.get_mut(&id) {
                         if existing_name.is_empty() {
                             if let Some(name) = name {
                                 *existing_name = name;
                             }
                         }
-                        if input_delta.trim_start().starts_with('{') && current_input.trim_start().starts_with('{') {
+                        if input_delta.trim_start().starts_with('{')
+                            && current_input.trim_start().starts_with('{')
+                        {
                             log::debug!("[聚合] 检测到完整 JSON input，替换而不是追加");
                             *current_input = input_delta;
                         } else {
@@ -446,7 +512,12 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
                 KiroEvent::ToolUseStop { id } => {
                     log::debug!("[聚合] 工具使用结束: id={}", id);
                     if let Some((name, input)) = tool_accumulators.remove(&id) {
-                        log::debug!("[聚合] 完整的工具调用: id={}, name={}, input_len={}", id, name, input.len());
+                        log::debug!(
+                            "[聚合] 完整的工具调用: id={}, name={}, input_len={}",
+                            id,
+                            name,
+                            input.len()
+                        );
                         aggregated.tool_calls.push((id, name, input));
                     } else {
                         log::warn!("[聚合] ⚠️  工具使用结束但未找到对应的累加器: id={}", id);
@@ -478,11 +549,18 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
                 }
                 KiroEvent::Citation { text, link, target } => {
                     log::debug!("[聚合] 引用: link={}", link);
-                    aggregated.citations.push(AggregatedCitation { text, link, target });
+                    aggregated
+                        .citations
+                        .push(AggregatedCitation { text, link, target });
                 }
             }
         } else {
-            log::warn!("[聚合] 解析事件失败: {}", json_str.chars().take(200).collect::<String>());
+            log::warn!(
+                "[聚合] 解析事件失败: json_index={}, bytes={}, chars={}",
+                json_count,
+                json_str.len(),
+                json_str.chars().count()
+            );
         }
     }
 
@@ -500,8 +578,10 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
     log::info!("[聚合] 事件计数: {:?}", event_counts);
     log::info!(
         "[聚合] 结果: 文本={} 字符, 思考={} 字符, 工具调用={}, 引用={}",
-        aggregated.text.len(), aggregated.thinking.len(),
-        aggregated.tool_calls.len(), aggregated.citations.len()
+        aggregated.text.len(),
+        aggregated.thinking.len(),
+        aggregated.tool_calls.len(),
+        aggregated.citations.len()
     );
 
     if !found_usage {
@@ -510,8 +590,6 @@ pub fn aggregate_kiro_response_from_payloads(payloads: &[String]) -> AggregatedK
 
     aggregated
 }
-
-
 
 fn parse_text_content(value: &serde_json::Value) -> Option<String> {
     if let Some(text) = value.get("content").and_then(|item| item.as_str()) {
@@ -708,9 +786,9 @@ fn ensure_citation_target_supported(target: &serde_json::Value) -> Option<()> {
 }
 
 use crate::gateway::models::{
-    OpenAIChatChunk, OpenAIChatChunkChoice, OpenAIChatDelta, OpenAIChatResponse,
-    OpenAIChatChoice, OpenAIChatResponseMessage, OpenAIResponseToolCall, OpenAIChatUsage,
-    OpenAIToolCallFunction, OpenAIUsage,
+    OpenAIChatChoice, OpenAIChatChunk, OpenAIChatChunkChoice, OpenAIChatDelta, OpenAIChatResponse,
+    OpenAIChatResponseMessage, OpenAIChatUsage, OpenAIResponseToolCall, OpenAIToolCallFunction,
+    OpenAIUsage,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -846,7 +924,9 @@ mod tests {
     #[test]
     fn parse_kiro_event_full_reads_metering_event() {
         assert_eq!(
-            parse_kiro_event_full(r#"{"meteringEvent":{"unit":"credit","unitPlural":"credits","usage":0.3876425741791045}}"#),
+            parse_kiro_event_full(
+                r#"{"meteringEvent":{"unit":"credit","unitPlural":"credits","usage":0.3876425741791045}}"#
+            ),
             Some(KiroEvent::Metering {
                 unit: "credit".to_string(),
                 unit_plural: "credits".to_string(),
@@ -886,6 +966,26 @@ mod tests {
                 "server_health".to_string(),
                 "{}".to_string()
             )]
+        );
+    }
+
+    #[test]
+    fn aggregate_kiro_response_from_payloads_concatenates_string_input_deltas() {
+        let payloads = vec![
+            r#"{"toolUseEvent":{"toolUseId":"tool_1","name":"todo_write","input":"{\"todos\":[{\"content\":\""}}"#.to_string(),
+            r#"{"toolUseEvent":{"toolUseId":"tool_1","input":"plan"}}"#.to_string(),
+            r#"{"toolUseEvent":{"toolUseId":"tool_1","input":"a\",\"status\":\"pending\"}]}"}}"#.to_string(),
+            r#"{"toolUseEvent":{"toolUseId":"tool_1","stop":true}}"#.to_string(),
+        ];
+
+        let aggregated = aggregate_kiro_response_from_payloads(&payloads);
+
+        assert_eq!(aggregated.tool_calls.len(), 1);
+        assert_eq!(aggregated.tool_calls[0].0, "tool_1");
+        assert_eq!(aggregated.tool_calls[0].1, "todo_write");
+        assert_eq!(
+            aggregated.tool_calls[0].2,
+            r#"{"todos":[{"content":"plana","status":"pending"}]}"#
         );
     }
 

@@ -17,7 +17,10 @@ impl TokenizerType {
 
         if model_lower.contains("claude") {
             TokenizerType::Claude
-        } else if model_lower.contains("gpt") || model_lower.contains("o1") || model_lower.contains("o3") {
+        } else if model_lower.contains("gpt")
+            || model_lower.contains("o1")
+            || model_lower.contains("o3")
+        {
             TokenizerType::OpenAI
         } else if model_lower.contains("llama") {
             TokenizerType::Llama
@@ -33,18 +36,10 @@ fn estimate_text_tokens(text: &str, tokenizer_type: TokenizerType) -> usize {
     }
 
     match tokenizer_type {
-        TokenizerType::Claude => {
-            (text.len() + 3) / 4
-        }
-        TokenizerType::OpenAI => {
-            estimate_generic_tokens(text)
-        }
-        TokenizerType::Llama => {
-            ((text.len() as f64 / 3.5).ceil() as usize).max(1)
-        }
-        TokenizerType::Generic => {
-            estimate_generic_tokens(text)
-        }
+        TokenizerType::Claude => (text.len() + 3) / 4,
+        TokenizerType::OpenAI => estimate_generic_tokens(text),
+        TokenizerType::Llama => ((text.len() as f64 / 3.5).ceil() as usize).max(1),
+        TokenizerType::Generic => estimate_generic_tokens(text),
     }
 }
 
@@ -59,9 +54,7 @@ fn estimate_generic_tokens(text: &str) -> usize {
 }
 
 fn check_payload_size(payload: &serde_json::Value) -> usize {
-    serde_json::to_string(payload)
-        .map(|s| s.len())
-        .unwrap_or(0)
+    serde_json::to_string(payload).map(|s| s.len()).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -130,7 +123,11 @@ mod tests {
         let large_text = "a".repeat(640_000);
         let tokens = estimate_text_tokens(&large_text, TokenizerType::Claude);
 
-        println!("Large text ({} chars) estimated tokens: {}", large_text.len(), tokens);
+        println!(
+            "Large text ({} chars) estimated tokens: {}",
+            large_text.len(),
+            tokens
+        );
         assert!(tokens > 150_000);
         assert!(tokens < 170_000);
     }
@@ -197,7 +194,8 @@ mod tests {
 
         // 验证代码块增加了额外的 tokens
         let text_without_backticks = text.replace("```", "");
-        let tokens_without_backticks = estimate_text_tokens(&text_without_backticks, TokenizerType::Generic);
+        let tokens_without_backticks =
+            estimate_text_tokens(&text_without_backticks, TokenizerType::Generic);
 
         assert!(tokens > tokens_without_backticks);
     }

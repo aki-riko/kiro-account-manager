@@ -69,7 +69,8 @@ pub fn estimate_tokens(text: &str, model_name: &str) -> i32 {
     if model_lower.contains("claude")
         || model_lower.contains("sonnet")
         || model_lower.contains("opus")
-        || model_lower.contains("haiku") {
+        || model_lower.contains("haiku")
+    {
         // Claude 系列模型
         estimate_tokens_claude(text)
     } else if model_lower.contains("llama") {
@@ -78,7 +79,8 @@ pub fn estimate_tokens(text: &str, model_name: &str) -> i32 {
     } else if model_lower.contains("deepseek")
         || model_lower.contains("qwen")
         || model_lower.contains("glm")
-        || model_lower.contains("minimax") {
+        || model_lower.contains("minimax")
+    {
         // 中文开源模型（DeepSeek、Qwen、GLM、MiniMax）
         // 使用 Llama 的估算方法（字符数 / 3.5）
         estimate_tokens_llama(text)
@@ -127,13 +129,25 @@ mod tests {
         let text = "Hello, world!";
 
         // Claude 模型
-        assert_eq!(estimate_tokens(text, "claude-sonnet-4.5"), estimate_tokens_claude(text));
-        assert_eq!(estimate_tokens(text, "claude-opus-4"), estimate_tokens_claude(text));
+        assert_eq!(
+            estimate_tokens(text, "claude-sonnet-4.5"),
+            estimate_tokens_claude(text)
+        );
+        assert_eq!(
+            estimate_tokens(text, "claude-opus-4"),
+            estimate_tokens_claude(text)
+        );
 
         // Llama 模型
-        assert_eq!(estimate_tokens(text, "llama-3"), estimate_tokens_llama(text));
+        assert_eq!(
+            estimate_tokens(text, "llama-3"),
+            estimate_tokens_llama(text)
+        );
 
         // 未知模型（使用通用方法）
-        assert_eq!(estimate_tokens(text, "unknown-model"), estimate_tokens_generic(text));
+        assert_eq!(
+            estimate_tokens(text, "unknown-model"),
+            estimate_tokens_generic(text)
+        );
     }
 }

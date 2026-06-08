@@ -43,8 +43,7 @@ fn default_stream() -> bool {
     true
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NormalizedRequest {
     pub model: String,
     pub messages: Vec<NormalizedMessage>,
@@ -183,7 +182,7 @@ pub struct ImageBlock {
 #[allow(dead_code)]
 pub enum ImageSource {
     Bytes {
-        bytes: String,  // Base64 编码的图片数据
+        bytes: String, // Base64 编码的图片数据
     },
     Other {
         #[serde(flatten)]
@@ -203,10 +202,10 @@ pub struct DocumentBlock {
 #[allow(dead_code)]
 pub enum DocumentSource {
     Bytes {
-        bytes: String,  // Base64 编码的字节数据
+        bytes: String, // Base64 编码的字节数据
     },
     FileId {
-        file_id: String,  // Files API 上传后的文件ID
+        file_id: String, // Files API 上传后的文件ID
     },
     Other {
         #[serde(flatten)]
@@ -668,7 +667,6 @@ pub struct AnthropicTool {
     #[serde(default)]
     pub cache_control: Option<serde_json::Value>,
 }
-
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AnthropicMessagesResponse {

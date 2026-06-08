@@ -81,6 +81,8 @@ pub struct GatewayConfig {
     pub account_id: Option<String>,
     #[serde(default)]
     pub group_id: Option<String>,
+    #[serde(default)]
+    pub pool_account_ids: Vec<String>,
     #[serde(default = "default_strategy")]
     pub strategy: String,
     #[serde(default = "default_threshold")]
@@ -116,7 +118,9 @@ pub struct GatewayConfig {
     pub response_cache_ttl: u64,
 }
 
-fn default_cache_ttl() -> u64 { 180 }
+fn default_cache_ttl() -> u64 {
+    180
+}
 
 /// 自定义提示过滤规则
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,8 +156,12 @@ pub struct ModelMappingRule {
     pub weights: Vec<u32>,
 }
 
-fn default_true_val() -> bool { true }
-fn default_mapping_type() -> String { "replace".to_string() }
+fn default_true_val() -> bool {
+    true
+}
+fn default_mapping_type() -> String {
+    "replace".to_string()
+}
 
 /// 根据模型映射规则解析实际模型名
 pub fn resolve_model_mapping(config: &GatewayConfig, requested_model: &str) -> String {
@@ -178,7 +186,8 @@ pub fn resolve_model_mapping(config: &GatewayConfig, requested_model: &str) -> S
             "loadbalance" => {
                 if rule.weights.is_empty() || rule.weights.len() != rule.target_models.len() {
                     // 无权重或权重数量不匹配，简单轮询
-                    let idx = ROUND_ROBIN.fetch_add(1, Ordering::Relaxed) % rule.target_models.len();
+                    let idx =
+                        ROUND_ROBIN.fetch_add(1, Ordering::Relaxed) % rule.target_models.len();
                     return rule.target_models[idx].clone();
                 }
                 // 加权轮询
@@ -317,6 +326,7 @@ pub struct GatewayRuntime {
     pub last_error: Arc<AsyncMutex<Option<String>>>,
     pub log_store: Arc<log_store::LogStore>,
     pub response_cache: Arc<AsyncMutex<response_cache::ResponseCache>>,
+    pub load_balancer: Arc<load_balancer::LoadBalancer>,
     shutdown_tx: Option<oneshot::Sender<()>>,
     server_task: Option<JoinHandle<()>>,
 }
@@ -415,7 +425,6 @@ fn build_bind_addr(host: &str, port: u16) -> Result<SocketAddr, String> {
         .parse::<SocketAddr>()
         .map_err(|e| format!("监听地址无效: {e}"))
 }
-
 impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
@@ -428,6 +437,7 @@ impl Default for GatewayConfig {
             account_mode: default_account_mode(),
             account_id: None,
             group_id: None,
+            pool_account_ids: Vec::new(),
             strategy: default_strategy(),
             threshold: default_threshold(),
             local_only: default_local_only(),
@@ -444,7 +454,6 @@ impl Default for GatewayConfig {
         }
     }
 }
-
 pub(crate) fn effective_client_api_keys(config: &GatewayConfig) -> Vec<String> {
     let mut keys = Vec::new();
 
@@ -453,7 +462,8 @@ pub(crate) fn effective_client_api_keys(config: &GatewayConfig) -> Vec<String> {
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .filter(|value| !value.starts_with("#disabled#")) // 过滤禁用的 Key
+        .filter(|value| !value.starts_with("#disabled#"))
+    // 过滤禁用的 Key
     {
         keys.push(key.to_string());
     }
@@ -463,7 +473,8 @@ pub(crate) fn effective_client_api_keys(config: &GatewayConfig) -> Vec<String> {
         .iter()
         .map(|item| item.trim())
         .filter(|item| !item.is_empty())
-        .filter(|item| !item.starts_with("#disabled#")) // 过滤禁用的 Key
+        .filter(|item| !item.starts_with("#disabled#"))
+    // 过滤禁用的 Key
     {
         if !keys.iter().any(|existing| existing == key) {
             keys.push(key.to_string());
@@ -519,6 +530,9 @@ fn ensure_config_valid(config: &GatewayConfig) -> Result<(), String> {
                 .is_empty() =>
         {
             return Err("group 模式必须选择分组".to_string());
+        }
+        "pool" if config.pool_account_ids.is_empty() => {
+            return Err("pool 模式必须至少选择一个账号".to_string());
         }
         "single" | "group" | "pool" => {}
         "local" => {
@@ -746,7 +760,8 @@ pub async fn get_gateway_request_stats(
         let all_logs = log_store.get_all().await;
 
         // 计算最大延迟
-        let max_duration_ms = all_logs.iter()
+        let max_duration_ms = all_logs
+            .iter()
             .map(|log| log.duration_ms)
             .max()
             .unwrap_or(0);
@@ -868,7 +883,8 @@ fn get_gateway_request_stats_from_path(path: &Path) -> Result<GatewayRequestStat
             total_cache_creation_tokens += entry.cache_creation_input_tokens.unwrap_or(0) as i64;
 
             if entry.cache_read_input_tokens.unwrap_or(0) > 0
-                || entry.cache_creation_input_tokens.unwrap_or(0) > 0 {
+                || entry.cache_creation_input_tokens.unwrap_or(0) > 0
+            {
                 requests_with_cache += 1;
             }
 
@@ -1013,9 +1029,12 @@ fn router(state: RouterState) -> Router {
     Router::new()
         .route("/health", get(health_handler))
         .route("/v1/models", get(models_handler))
-        .route("/v1/messages", post(messages_handler))
-        .route("/v1/messages/count_tokens", post(count_tokens_handler))
-        .route("/v1/responses", post(responses_handler))
+        .route("/v1/messages", post(anthropic_messages_handler))
+        .route(
+            "/v1/messages/count_tokens",
+            post(anthropic_count_tokens_handler),
+        )
+        .route("/v1/responses", post(openai_responses_handler))
         .route("/v1/responses/input_tokens", post(openai_tokens_handler))
         .route("/v1/chat/completions", post(openai_chat_handler))
         .with_state(state)
@@ -1029,8 +1048,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
     let responses_sessions = Arc::new(AsyncMutex::new(HashMap::new()));
     let token_cache = Arc::new(AsyncMutex::new(TokenCache::new()));
 
-    let http = build_streaming_http_client()
-        .map_err(|e| format!("初始化 HTTP 客户端失败: {e}"))?;
+    let http = build_streaming_http_client().map_err(|e| format!("初始化 HTTP 客户端失败: {e}"))?;
 
     // 初始化负载均衡器
     let strategy = load_balancer::LoadBalancerStrategy::from_str(&config.strategy);
@@ -1058,8 +1076,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
         summary_cache_max_age_seconds: config.response_cache_ttl,
         ..response_cache::CacheConfig::default()
     };
-    let cache_dir = dirs::data_dir()
-        .map(|p| p.join(".kiro-account-manager").join("cache"));
+    let cache_dir = dirs::data_dir().map(|p| p.join(".kiro-account-manager").join("cache"));
     let response_cache = Arc::new(AsyncMutex::new(response_cache::ResponseCache::new(
         cache_config,
         cache_dir,
@@ -1072,7 +1089,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
         http,
         responses_sessions,
         token_cache,
-        load_balancer,
+        load_balancer: load_balancer.clone(),
         log_store: log_store.clone(),
         response_cache: response_cache.clone(),
     };
@@ -1106,6 +1123,7 @@ async fn spawn_runtime(config: GatewayConfig) -> Result<GatewayRuntime, String> 
         last_error,
         log_store,
         response_cache,
+        load_balancer,
         shutdown_tx: Some(shutdown_tx),
         server_task: Some(server_task),
     })
@@ -1160,13 +1178,13 @@ async fn models_handler(
 ) -> Response {
     proxy::models_handler(state, addr, headers).await
 }
-async fn count_tokens_handler(
+async fn anthropic_count_tokens_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<RouterState>,
     headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Response {
-    proxy::count_tokens_handler(state, addr, headers, payload).await
+    proxy::anthropic_count_tokens_handler(state, addr, headers, payload).await
 }
 
 async fn openai_tokens_handler(
@@ -1178,7 +1196,7 @@ async fn openai_tokens_handler(
     proxy::openai_tokens_handler(state, addr, headers, payload).await
 }
 
-async fn messages_handler(
+async fn anthropic_messages_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<RouterState>,
     headers: HeaderMap,
@@ -1187,7 +1205,7 @@ async fn messages_handler(
     proxy::proxy_handler(state, addr, headers, payload, ResponseFormat::Anthropic).await
 }
 
-async fn responses_handler(
+async fn openai_responses_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<RouterState>,
     headers: HeaderMap,
@@ -1202,7 +1220,7 @@ async fn openai_chat_handler(
     headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Response {
-    proxy::proxy_handler(state, addr, headers, payload, ResponseFormat::OpenAI).await
+    proxy::openai_chat_handler(state, addr, headers, payload).await
 }
 
 #[cfg(test)]
@@ -1286,14 +1304,6 @@ mod tests {
         headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer sk-test"));
         headers
     }
-
-    
-
-    
-
-    
-
-    
 
     fn test_router_state() -> RouterState {
         let config = GatewayConfig::default();
@@ -1402,8 +1412,7 @@ mod tests {
 
         let models = proxy::models_handler(state.clone(), client_addr, auth_headers()).await;
         assert_eq!(models.status(), StatusCode::OK);
-
-        let count_tokens = proxy::count_tokens_handler(
+        let count_tokens = proxy::anthropic_count_tokens_handler(
             state.clone(),
             client_addr,
             auth_headers(),
@@ -1609,7 +1618,10 @@ mod tests {
             .expect("models request should succeed");
 
         assert_eq!(response.status(), StatusCode::OK);
-        let payload: Value = response.json().await.expect("models response should be json");
+        let payload: Value = response
+            .json()
+            .await
+            .expect("models response should be json");
         assert_eq!(payload.get("object").and_then(Value::as_str), Some("list"));
         assert!(
             payload

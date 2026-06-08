@@ -1,8 +1,8 @@
 //! 网关核心功能综合测试
-//! 
+//!
 //! 测试覆盖：
 //! - P0: Payload 裁剪逻辑
-//! - P0: 账号选择策略  
+//! - P0: 账号选择策略
 //! - P1: Token 限制拒绝
 //! - P1: 服务端 Web 搜索迭代
 
@@ -19,7 +19,7 @@ fn test_trim_payload_basic() {
             ]
         }
     });
-    
+
     let trimmed = trim_payload(&mut payload, 100);
     println!("Trimmed: {}", trimmed);
     assert!(trimmed);
@@ -46,8 +46,11 @@ fn trim_payload(payload: &mut Value, max_bytes: usize) -> bool {
     if size <= max_bytes {
         return false;
     }
-    
-    if let Some(history) = payload.pointer_mut("/conversationState/history").and_then(|v| v.as_array_mut()) {
+
+    if let Some(history) = payload
+        .pointer_mut("/conversationState/history")
+        .and_then(|v| v.as_array_mut())
+    {
         if history.len() > 2 {
             history.remove(0);
             return true;

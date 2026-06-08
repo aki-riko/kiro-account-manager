@@ -26,8 +26,11 @@ fn test_trim_payload_preserves_recent_messages() {
             break;
         }
 
-        let history_len = payload.pointer("/conversationState/history")
-            .and_then(|v| v.as_array()).map(|arr| arr.len()).unwrap_or(0);
+        let history_len = payload
+            .pointer("/conversationState/history")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.len())
+            .unwrap_or(0);
 
         if history_len <= 2 {
             break;
@@ -40,14 +43,19 @@ fn test_trim_payload_preserves_recent_messages() {
         }
     }
 
-    let history = payload.pointer("/conversationState/history")
-        .and_then(|v| v.as_array()).unwrap();
+    let history = payload
+        .pointer("/conversationState/history")
+        .and_then(|v| v.as_array())
+        .unwrap();
 
     assert!(history.len() >= 2);
     let last_msg = &history[history.len() - 1];
-    assert!(last_msg.get("assistant_response_message")
+    assert!(last_msg
+        .get("assistant_response_message")
         .and_then(|m| m.get("text"))
-        .and_then(|t| t.as_str()).unwrap().contains("Recent response"));
+        .and_then(|t| t.as_str())
+        .unwrap()
+        .contains("Recent response"));
 
     println!("✓ Payload trimming preserves recent messages");
 }
@@ -74,15 +82,21 @@ fn test_trim_payload_preserves_tool_pairs() {
             break;
         }
 
-        let history_len = payload.pointer("/conversationState/history")
-            .and_then(|v| v.as_array()).map(|arr| arr.len()).unwrap_or(0);
+        let history_len = payload
+            .pointer("/conversationState/history")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.len())
+            .unwrap_or(0);
 
         if history_len <= 2 {
             break;
         }
 
-        let first_has_tools = payload.pointer("/conversationState/history/0/assistant_response_message/tool_uses")
-            .and_then(|v| v.as_array()).map(|arr| !arr.is_empty()).unwrap_or(false);
+        let first_has_tools = payload
+            .pointer("/conversationState/history/0/assistant_response_message/tool_uses")
+            .and_then(|v| v.as_array())
+            .map(|arr| !arr.is_empty())
+            .unwrap_or(false);
 
         let second_has_results = payload.pointer("/conversationState/history/1/user_input_message/user_input_message_context/tool_results")
             .and_then(|v| v.as_array()).map(|arr| !arr.is_empty()).unwrap_or(false);
@@ -101,8 +115,10 @@ fn test_trim_payload_preserves_tool_pairs() {
         }
     }
 
-    let history = payload.pointer("/conversationState/history")
-        .and_then(|v| v.as_array()).unwrap();
+    let history = payload
+        .pointer("/conversationState/history")
+        .and_then(|v| v.as_array())
+        .unwrap();
 
     // 验证：如果有 tool_uses，必须有对应的 tool_results
     // 如果没有 tool_uses，也不应该有孤立的 tool_results
@@ -110,7 +126,8 @@ fn test_trim_payload_preserves_tool_pairs() {
         msg.get("assistant_response_message")
             .and_then(|m| m.get("tool_uses"))
             .and_then(|t| t.as_array())
-            .map(|arr| !arr.is_empty()).unwrap_or(false)
+            .map(|arr| !arr.is_empty())
+            .unwrap_or(false)
     });
 
     let has_tool_results = history.iter().any(|msg| {
@@ -118,11 +135,15 @@ fn test_trim_payload_preserves_tool_pairs() {
             .and_then(|m| m.get("user_input_message_context"))
             .and_then(|ctx| ctx.get("tool_results"))
             .and_then(|r| r.as_array())
-            .map(|arr| !arr.is_empty()).unwrap_or(false)
+            .map(|arr| !arr.is_empty())
+            .unwrap_or(false)
     });
 
     // 配对关系：要么都有，要么都没有
-    assert_eq!(has_tool_uses, has_tool_results, "Tool call/result pairing should be preserved");
+    assert_eq!(
+        has_tool_uses, has_tool_results,
+        "Tool call/result pairing should be preserved"
+    );
     println!("✓ Payload trimming preserves tool call/result pairs");
 }
 
@@ -135,9 +156,18 @@ fn test_account_selection_round_robin() {
     }
 
     let accounts = vec![
-        Account { id: "acc1".to_string(), failure_count: 0 },
-        Account { id: "acc2".to_string(), failure_count: 0 },
-        Account { id: "acc3".to_string(), failure_count: 0 },
+        Account {
+            id: "acc1".to_string(),
+            failure_count: 0,
+        },
+        Account {
+            id: "acc2".to_string(),
+            failure_count: 0,
+        },
+        Account {
+            id: "acc3".to_string(),
+            failure_count: 0,
+        },
     ];
 
     let mut last_index = 0;
@@ -176,13 +206,25 @@ fn test_account_selection_skips_failed_accounts() {
     }
 
     let accounts = vec![
-        Account { id: "acc1".to_string(), failure_count: 5 },
-        Account { id: "acc2".to_string(), failure_count: 0 },
-        Account { id: "acc3".to_string(), failure_count: 3 },
+        Account {
+            id: "acc1".to_string(),
+            failure_count: 5,
+        },
+        Account {
+            id: "acc2".to_string(),
+            failure_count: 0,
+        },
+        Account {
+            id: "acc3".to_string(),
+            failure_count: 3,
+        },
     ];
 
     let max_failures = 3;
-    let available: Vec<_> = accounts.iter().filter(|acc| acc.failure_count < max_failures).collect();
+    let available: Vec<_> = accounts
+        .iter()
+        .filter(|acc| acc.failure_count < max_failures)
+        .collect();
 
     assert_eq!(available.len(), 1);
     assert_eq!(available[0].id, "acc2");
@@ -200,15 +242,28 @@ fn test_account_selection_balanced() {
     }
 
     let mut accounts = vec![
-        Account { id: "acc1".to_string(), usage_count: 10, failure_count: 0 },
-        Account { id: "acc2".to_string(), usage_count: 5, failure_count: 0 },
-        Account { id: "acc3".to_string(), usage_count: 15, failure_count: 0 },
+        Account {
+            id: "acc1".to_string(),
+            usage_count: 10,
+            failure_count: 0,
+        },
+        Account {
+            id: "acc2".to_string(),
+            usage_count: 5,
+            failure_count: 0,
+        },
+        Account {
+            id: "acc3".to_string(),
+            usage_count: 15,
+            failure_count: 0,
+        },
     ];
 
     let max_failures = 3;
 
     let select_balanced = |accounts: &mut [Account]| -> Option<String> {
-        accounts.iter_mut()
+        accounts
+            .iter_mut()
             .filter(|acc| acc.failure_count < max_failures)
             .min_by_key(|acc| acc.usage_count)
             .map(|acc| {
@@ -320,8 +375,16 @@ fn test_merge_adjacent_same_role_messages() {
 
     let first = &merged[0];
     assert_eq!(first.get("role").and_then(|r| r.as_str()), Some("user"));
-    assert!(first.get("content").and_then(|c| c.as_str()).unwrap().contains("Hello"));
-    assert!(first.get("content").and_then(|c| c.as_str()).unwrap().contains("How are you?"));
+    assert!(first
+        .get("content")
+        .and_then(|c| c.as_str())
+        .unwrap()
+        .contains("Hello"));
+    assert!(first
+        .get("content")
+        .and_then(|c| c.as_str())
+        .unwrap()
+        .contains("How are you?"));
 
     println!("✓ Adjacent same-role messages are merged correctly");
 }

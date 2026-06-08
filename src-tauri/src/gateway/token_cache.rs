@@ -92,11 +92,11 @@ mod tests {
     #[test]
     fn test_token_cache_basic() {
         let mut cache = TokenCache::new();
-        
+
         // Insert and retrieve
         cache.insert("key1".to_string(), 100);
         assert_eq!(cache.get("key1"), Some(100));
-        
+
         // Non-existent key
         assert_eq!(cache.get("key2"), None);
     }
@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn test_token_cache_ttl() {
         let mut cache = TokenCache::new();
-        
+
         // Insert with custom TTL for testing
         let key = "test_key".to_string();
         let entry = TokenCacheEntry {
@@ -112,13 +112,13 @@ mod tests {
             expires_at: Instant::now() + Duration::from_millis(100),
         };
         cache.cache.put(key.clone(), entry);
-        
+
         // Should be available immediately
         assert_eq!(cache.get(&key), Some(100));
-        
+
         // Wait for expiration
         sleep(Duration::from_millis(150));
-        
+
         // Should be expired and removed
         assert_eq!(cache.get(&key), None);
     }
@@ -126,15 +126,15 @@ mod tests {
     #[test]
     fn test_token_cache_lru() {
         let mut cache = TokenCache::new();
-        
+
         // Fill cache beyond capacity (1000 entries)
         for i in 0..1001 {
             cache.insert(format!("key{}", i), i);
         }
-        
+
         // First entry should be evicted
         assert_eq!(cache.get("key0"), None);
-        
+
         // Last entry should still be there
         assert_eq!(cache.get("key1000"), Some(1000));
     }
