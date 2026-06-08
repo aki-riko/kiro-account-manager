@@ -1,14 +1,40 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Play, Square, Zap, ScrollText } from 'lucide-react'
+import { Play, Square, Zap, ScrollText, Copy } from 'lucide-react'
 import { Alert as AlertPrimitive, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
 import { Stack, Group, Badge, Card, Text } from '@/components/shared/layout'
+import {
+  DialogRoot,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogBody
+} from '@/components/shared/dialog'
 import GatewayConfigComponent from './GatewayConfig'
 import { RequestLogsDialog } from './RequestLogsDialog'
+import { RouteTestDialog } from './RouteTestDialog'
 import { GatewayConfig, GatewayStatus } from './gatewayPageState'
+import { ErrorHistoryEntry } from './gatewayPageUtils'
+
+// 定义类型接口
+interface Account {
+  id: string
+  email?: string
+  userId?: string
+}
+
+interface Group {
+  id: string
+  name: string
+}
+
+interface ClientConfigResult {
+  success: boolean
+  error?: string
+}
 import {
   GatewayConfigProvider,
   GatewayStatusProvider,
@@ -61,20 +87,21 @@ function GatewayPage() {
 
   const [config, setConfig] = useState<GatewayConfig>(DEFAULT_GATEWAY_CONFIG)
   const [status, setStatus] = useState<GatewayStatus>(DEFAULT_GATEWAY_STATUS)
-  const [errorHistory, setErrorHistory] = useState<any[]>([])
-  const [accounts, setAccounts] = useState<any[]>([])
-  const [groups, setGroups] = useState<any[]>([])
+  const [errorHistory, setErrorHistory] = useState<ErrorHistoryEntry[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [copySuccess, setCopySuccess] = useState('')
   const [logDir, setLogDir] = useState('')
   const [showRequestLogs, setShowRequestLogs] = useState(false)
+  const [showRouteTest, setShowRouteTest] = useState(false)
   const [savedConfigSnapshot, setSavedConfigSnapshot] = useState(() => buildGatewayConfigSnapshot(DEFAULT_GATEWAY_CONFIG))
   const [appliedRuntimeSnapshot, setAppliedRuntimeSnapshot] = useState<any>(null)
   const [lastStatusSyncAt, setLastStatusSyncAt] = useState('-')
   const [showClientConfig, setShowClientConfig] = useState(false)
   const [clientConfigLoading, setClientConfigLoading] = useState(false)
-  const [clientConfigResults, setClientConfigResults] = useState<any[]>([])
+  const [clientConfigResults, setClientConfigResults] = useState<ClientConfigResult[]>([])
   const [selectedClients, setSelectedClients] = useState<string[]>(['claudeCode'])
 
   const hasConfiguredClients = useMemo(
@@ -476,14 +503,35 @@ function GatewayPage() {
                   <ScrollText size={12} className="mr-1" />
                   请求日志
                 </Button>
+                <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setShowRouteTest(true)}>
+                  <Zap size={12} className="mr-1" />
+                  测试路由
+                </Button>
               </Group>
             </Group>
 
             <div className="grid grid-cols-3 gap-2">
               {consoleHighlights.map((item) => (
-                <div key={item.label} className="border rounded-lg p-2">
+                <div key={item.label} className="border rounded-lg p-2 group relative">
                   <Text size="xs" className={"text-muted-foreground"}>{item.label}</Text>
-                  <Text fw={700} className={"text-foreground text-sm"}>{item.value}</Text>
+                  <div className="flex items-center gap-2">
+                    <Text fw={700} className={"text-foreground text-sm flex-1 truncate"}>{item.value}</Text>
+                    {(item.label === '当前入口' || item.label === '客户端 Key') && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => {
+                          const text = item.label === '当前入口'
+                            ? effectiveBaseUrl
+                            : (effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || '').split('\n')[0]?.trim()
+                          copyText(text, `已复制${item.label}`)
+                        }}
+                      >
+                        <Copy size={12} className="text-muted-foreground" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -507,17 +555,23 @@ function GatewayPage() {
 
         <RequestLogsDialog open={showRequestLogs} onOpenChange={setShowRequestLogs} logLevel={config.logLevel} onLogLevelChange={(v) => setField('logLevel', v)} logRequests={config.logRequests} onLogRequestsChange={(v) => setField('logRequests', v)} onSave={handleSilentSave} />
 
+        <RouteTestDialog
+          open={showRouteTest}
+          onOpenChange={setShowRouteTest}
+          config={config}
+        />
+
         {/* 快速配置客户端弹窗 */}
-        <Dialog open={showClientConfig} onOpenChange={setShowClientConfig}>
-          <DialogContent className="sm:max-w-[480px]">
+        <DialogRoot open={showClientConfig} onOpenChange={setShowClientConfig}>
+          <DialogContent maxWidth="480px">
             <DialogHeader className="">
-              <DialogTitle className="">⚡ 快速配置客户端</DialogTitle>
+              <DialogTitle className="">{t('gateway.quickClientConfig')}</DialogTitle>
               <DialogDescription className="">
-                一键将反代地址写入客户端配置文件，配置前自动备份
+                {t('gateway.quickClientConfigDesc')}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex flex-col gap-4 mt-2">
+            <DialogBody className="flex flex-col gap-4 pt-2">
               {/* 客户端选择 */}
               <div className="flex gap-3">
                 {[
@@ -543,7 +597,7 @@ function GatewayPage() {
 
               {/* 配置预览 */}
               <div className="bg-muted/30 border border-border rounded-xl p-3">
-                <Text size="xs" className="text-muted-foreground mb-2">将写入的配置：</Text>
+                <Text size="xs" className="text-muted-foreground mb-2">{t('gateway.configToWrite')}</Text>
                 <div className="flex flex-col gap-2 font-mono text-[11px]">
                   {selectedClients.includes('claudeCode') && (
                     <div className="flex flex-col gap-0.5 p-2 rounded-lg bg-muted/30">
@@ -569,7 +623,7 @@ function GatewayPage() {
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 <Zap size={16} className="mr-1" />
-                {clientConfigLoading ? '配置中...' : `一键配置 ${selectedClients.length} 个客户端`}
+                {clientConfigLoading ? t('gateway.configuring') : t('gateway.oneClickConfigClients', { count: selectedClients.length })}
               </Button>
 
               {/* 结果展示 */}
@@ -592,9 +646,9 @@ function GatewayPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </DialogBody>
           </DialogContent>
-        </Dialog>
+        </DialogRoot>
       </Stack>
     </div>
         </GatewayDataProvider>

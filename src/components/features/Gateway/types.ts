@@ -88,4 +88,20 @@ export interface GatewayStatus {
 export interface GatewayConfig {
   strategy: string
   localOnly: boolean
+  host: string
+  port: number
+  region: string
+  accountMode: 'single' | 'group' | 'pool'
+}
+
+export type LoadBalancerStrategy = 'round_robin' | 'least_loaded' | 'random' | 'priority';
+
+export interface AccountHealth {
+  account_id: string
+  success_count: number
+  failure_count: number
+  success_rate: number
+  is_healthy: boolean
+  last_used: string
+  last_error: string | null
 }

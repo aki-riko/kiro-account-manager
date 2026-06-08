@@ -42,10 +42,12 @@ export function GatewayDataProvider({ children }: { children: ReactNode }) {
   const [copySuccess, setCopySuccess] = useState('')
 
   const accountOptions = useMemo(
-    () => accounts.map(account => ({
-      value: account.id,
-      label: formatGatewayAccountOptionLabel(account)
-    })),
+    () => accounts
+      .filter(account => account.enabled !== false)
+      .map(account => ({
+        value: account.id,
+        label: formatGatewayAccountOptionLabel(account)
+      })),
     [accounts]
   )
 

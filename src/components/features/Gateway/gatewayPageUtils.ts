@@ -232,7 +232,7 @@ export const redactGatewayApiKey = (apiKey: string): string => {
   return `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
-interface ErrorHistoryEntry {
+export interface ErrorHistoryEntry {
   message: string
   firstSeenAt: string
   lastSeenAt: string
@@ -350,10 +350,23 @@ export const buildClientSamples = (baseUrl: string, apiKey: string | string[]): 
   }
 }
 
+import { getQuota, getUsed, formatUsage } from '../../../utils/accountStats'
+
 export const formatGatewayAccountOptionLabel = (account: any): string => {
   const email = String(account?.email || '').trim()
   const userId = String(account?.userId || '').trim()
-  return email || userId || '未知账号'
+  const baseLabel = email || userId || '未知账号'
+
+  const quota = getQuota(account)
+  const used = getUsed(account)
+  const remaining = quota - used
+  const quotaInfo = `剩余 ${formatUsage(remaining)}/${formatUsage(quota)}`
+
+  const status = String(account?.status || '').trim()
+  const isActive = status === 'active' || status === ''
+  const statusInfo = !isActive ? ` [${status}]` : ''
+
+  return `${baseLabel} ${quotaInfo}${statusInfo}`
 }
 
 export const buildGatewayStatusSummary = ({ config, status, errorHistory, lastStatusSyncAt }: any) => {

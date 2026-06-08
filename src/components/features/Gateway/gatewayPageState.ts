@@ -11,6 +11,7 @@ export interface GatewayConfig {
   accountMode: string;
   accountId: string | null;
   groupId: string | null;
+  poolAccountIds: string[];
   strategy: string;
   threshold: number;
   localOnly: boolean;
@@ -64,6 +65,7 @@ export const DEFAULT_GATEWAY_CONFIG: GatewayConfig = {
   accountMode: 'single',
   accountId: null,
   groupId: null,
+  poolAccountIds: [],
   strategy: 'round_robin',
   threshold: 90,
   localOnly: true,
@@ -98,6 +100,7 @@ export const buildGatewayConfigSnapshot = (config: GatewayConfig) => JSON.string
   accountMode: config.accountMode || 'single',
   accountId: config.accountId || null,
   groupId: config.groupId || null,
+  poolAccountIds: config.poolAccountIds || [],
   strategy: config.strategy || 'round_robin',
   threshold: Number(config.threshold) || 90,
   localOnly: !!config.localOnly,
@@ -119,6 +122,7 @@ export const buildGatewayRuntimeSnapshot = (config: GatewayConfig) => JSON.strin
   accountMode: config.accountMode || 'single',
   accountId: config.accountId || null,
   groupId: config.groupId || null,
+  poolAccountIds: config.poolAccountIds || [],
   strategy: config.strategy || 'round_robin',
   threshold: Number(config.threshold) || 90,
   localOnly: !!config.localOnly,
@@ -150,6 +154,7 @@ export const hydrateGatewayConfig = (gatewayConfig: any): GatewayConfig => ({
     : (gatewayConfig?.accountMode || 'single'),
   accountId: gatewayConfig?.accountId || null,
   groupId: gatewayConfig?.groupId || null,
+  poolAccountIds: Array.isArray(gatewayConfig?.poolAccountIds) ? gatewayConfig.poolAccountIds : [],
   strategy: gatewayConfig?.strategy || 'round_robin',
   threshold: gatewayConfig?.threshold ?? 90,
   localOnly: gatewayConfig?.localOnly ?? true,
@@ -190,7 +195,8 @@ export const buildGatewayPayload = (config: GatewayConfig) => ({
   accountMode: config.accountMode,
   accountId: config.accountId || null,
   groupId: config.groupId || null,
-  strategy: config.strategy,
+  poolAccountIds: config.poolAccountIds || [],
+  strategy: config.strategy || 'round_robin',
   threshold: Number(config.threshold) || 90,
   localOnly: !!config.localOnly,
   allowedIps: parseAllowedIps(config.allowedIpsText),

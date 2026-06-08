@@ -1,10 +1,20 @@
+import React, { useState, useEffect } from 'react'
 import { Plus, Trash2, Zap } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import {
+  DialogRoot,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogBody
+} from '@/components/shared/dialog'
+import { toast } from 'sonner'
+import { ModelMappingRule } from './gatewayPageState'
 
 // Kiro 内部模型格式（点号分隔）— 用于目标模型下拉
 const TARGET_MODELS = [
@@ -103,13 +113,26 @@ const PRESET_RULES = [
 interface ModelMappingDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  modelMappings: any[]
-  setField: (key: string, value: any) => void
+  modelMappings: ModelMappingRule[]
+  setField: (key: string, value: ModelMappingRule[] | string | boolean) => void
   onSave?: () => void
 }
 
-function ModelMappingDialog({ open, onOpenChange, modelMappings, setField, onSave }: ModelMappingDialogProps) {
+export function ModelMappingDialog({ open, onOpenChange, modelMappings, setField, onSave }: ModelMappingDialogProps) {
   const rules = modelMappings || []
+
+  const [newSourceModel, setNewSourceModel] = useState('')
+  const [newTargetModel, setNewTargetModel] = useState('')
+  const [newRuleType, setNewRuleType] = useState('replace')
+
+  // 弹窗关闭时清理表单输入
+  useEffect(() => {
+    if (!open) {
+      setNewSourceModel('')
+      setNewTargetModel('')
+      setNewRuleType('replace')
+    }
+  }, [open])
 
   const handleToggle = (idx: number, checked: boolean) => {
     const updated = [...rules]
@@ -118,26 +141,31 @@ function ModelMappingDialog({ open, onOpenChange, modelMappings, setField, onSav
   }
 
   const handleDelete = (idx: number) => {
-    setField('modelMappings', rules.filter((_: any, i: number) => i !== idx))
+    setField('modelMappings', rules.filter((_: ModelMappingRule, i: number) => i !== idx))
+  }
+
+  const handleOpenChange = (value: boolean) => {
+    onOpenChange(value)
+    if (!value && onSave) onSave()
   }
 
   const handleAdd = () => {
-    const sourceEl = document.getElementById('dialog-mapping-source') as HTMLInputElement
-    const targetEl = document.getElementById('dialog-mapping-target') as HTMLInputElement
-    if (!sourceEl?.value?.trim() || !targetEl?.value?.trim()) return
+    if (!newSourceModel.trim() || !newTargetModel.trim()) return
 
     const newRule = {
       id: crypto.randomUUID(),
-      name: `${sourceEl.value.trim()} → ${targetEl.value.trim()}`,
+      name: `${newSourceModel.trim()} → ${newTargetModel.trim()}`,
       enabled: true,
-      ruleType: 'replace',
-      sourceModel: sourceEl.value.trim(),
-      targetModels: [targetEl.value.trim()],
+      ruleType: newRuleType,
+      sourceModel: newSourceModel.trim(),
+      targetModels: [newTargetModel.trim()],
       weights: []
     }
     setField('modelMappings', [...rules, newRule])
-    sourceEl.value = ''
-    targetEl.value = ''
+    setNewSourceModel('')
+    setNewTargetModel('')
+    setNewRuleType('replace')
+    toast.success(`已添加映射规则: ${newRule.name}`)
   }
 
   const handlePreset = () => {
@@ -155,12 +183,15 @@ function ModelMappingDialog({ open, onOpenChange, modelMappings, setField, onSav
       }))
     if (newRules.length > 0) {
       setField('modelMappings', [...rules, ...newRules])
+      toast.success(`成功载入 ${newRules.length} 条预置映射规则`)
+    } else {
+      toast.info('所有预置映射规则均已存在')
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v && onSave) onSave() }}>
-      <DialogContent className="sm:max-w-[560px]">
+    <DialogRoot open={open} onOpenChange={handleOpenChange}>
+      <DialogContent maxWidth="560px">
         <DialogHeader>
           <DialogTitle>模型映射规则</DialogTitle>
           <DialogDescription>
@@ -168,7 +199,7 @@ function ModelMappingDialog({ open, onOpenChange, modelMappings, setField, onSav
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4 mt-2">
+        <DialogBody className="pt-2">
           {/* 规则列表 */}
           <div className="border rounded-lg overflow-hidden max-h-[300px] overflow-y-auto">
             {rules.length === 0 ? (
@@ -212,21 +243,33 @@ function ModelMappingDialog({ open, onOpenChange, modelMappings, setField, onSav
             <div className="text-xs font-medium text-muted-foreground">添加新规则</div>
             <div className="grid grid-cols-2 gap-2">
               <div className="relative">
-                <Input placeholder="源模型名" className="text-xs" id="dialog-mapping-source" list="model-list-source" />
+                <Input
+                  placeholder="源模型名"
+                  className="text-xs"
+                  value={newSourceModel}
+                  onChange={(e) => setNewSourceModel(e.target.value)}
+                  list="model-list-source"
+                />
                 <datalist id="model-list-source">
                   {SOURCE_MODELS.map(m => <option key={m} value={m} />)}
                 </datalist>
               </div>
               <div className="relative">
-                <Input placeholder="目标模型名" className="text-xs" id="dialog-mapping-target" list="model-list-target" />
+                <Input
+                  placeholder="目标模型名"
+                  className="text-xs"
+                  value={newTargetModel}
+                  onChange={(e) => setNewTargetModel(e.target.value)}
+                  list="model-list-target"
+                />
                 <datalist id="model-list-target">
                   {TARGET_MODELS.map(m => <option key={m} value={m} />)}
                 </datalist>
               </div>
             </div>
             <div className="flex gap-2">
-              <Select defaultValue="replace">
-                <SelectTrigger className="text-xs flex-1" id="dialog-mapping-type">
+              <Select value={newRuleType} onValueChange={setNewRuleType}>
+                <SelectTrigger className="text-xs flex-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -234,7 +277,12 @@ function ModelMappingDialog({ open, onOpenChange, modelMappings, setField, onSav
                   <SelectItem value="alias">别名 (alias)</SelectItem>
                 </SelectContent>
               </Select>
-              <Button size="sm" className="text-xs" onClick={handleAdd}>
+              <Button
+                size="sm"
+                className="text-xs"
+                onClick={handleAdd}
+                disabled={!newSourceModel.trim() || !newTargetModel.trim()}
+              >
                 <Plus size={14} className="mr-1" />
                 添加
               </Button>
@@ -249,9 +297,9 @@ function ModelMappingDialog({ open, onOpenChange, modelMappings, setField, onSav
               预置 GPT 映射
             </Button>
           </div>
-        </div>
+        </DialogBody>
       </DialogContent>
-    </Dialog>
+    </DialogRoot>
   )
 }
 

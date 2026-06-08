@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import {
   buildClientSamples,
   buildGatewayBaseUrl,
@@ -10,31 +11,57 @@ import {
   formatGatewayAccountOptionLabel,
   parseClientApiKeys} from './gatewayPageUtils.js'
 
-test('formatGatewayAccountOptionLabel prefers email over verbose label for current account display', () => {
-  const label = formatGatewayAccountOptionLabel({
-    label: 'Kiro BuilderId 账号',
-    email: 'hjj09903+260205210415kv6h@gmail.com',
-    userId: 'd-9067642ac7.945864e8-00e1-7095-94d3-eb71ba0e2398',
-    id: '0d24370c-1111-2222-3333-444455556666',
-    status: 'active'})
+test('gateway page does not expose the standalone account health dialog', async () => {
+  const source = await readFile(new URL('./index.tsx', import.meta.url), 'utf8')
 
-  assert.equal(label, 'hjj09903+260205210415kv6h@gmail.com')
+  assert.equal(source.includes('AccountHealthDialog'), false)
+  assert.equal(source.includes('showAccountHealth'), false)
+  assert.equal(source.includes('账号健康'), false)
 })
 
-test('formatGatewayAccountOptionLabel falls back to userId only when email is missing', () => {
+test('formatGatewayAccountOptionLabel shows email with quota and status', () => {
+  const label = formatGatewayAccountOptionLabel({
+    email: 'foo@example.com',
+    userId: 'user-id-foo',
+    id: 'abc',
+    status: 'active',
+    quota: 100,
+    used: 30
+  })
+  assert.equal(label, 'foo@example.com 剩余 70/100')
+})
+
+test('formatGatewayAccountOptionLabel shows banned status', () => {
+  const label = formatGatewayAccountOptionLabel({
+    email: 'test@example.com',
+    userId: 'user-id',
+    id: 'def',
+    status: 'banned',
+    quota: 100,
+    used: 95.0
+  })
+  // banned 账号是 unavailable 状态，getQuota/getUsed 返回 0
+  assert.strictEqual(label, 'test@example.com 剩余 0/0 [banned]')
+})
+
+test('formatGatewayAccountOptionLabel falls back to userId when email is missing', () => {
   assert.equal(
     formatGatewayAccountOptionLabel({
-      label: 'Kiro BuilderId 账号',
       userId: 'builder-user-1',
-      id: '0d24370c-1111-2222-3333-444455556666'}),
-    'builder-user-1'
+      id: '0d24370c-1111-2222-3333-444455556666',
+      quota: 50,
+      used: 10
+    }),
+    'builder-user-1 剩余 40/50'
   )
 
   assert.equal(
     formatGatewayAccountOptionLabel({
-      label: 'Kiro BuilderId 账号',
-      id: '0d24370c-1111-2222-3333-444455556666'}),
-    '未知账号'
+      id: '0d24370c-1111-2222-3333-444455556666',
+      quota: 0,
+      used: 0
+    }),
+    '未知账号 剩余 0/0'
   )
 })
 
