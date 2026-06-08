@@ -21,15 +21,15 @@ use crate::{
     clients::{
         http_client::{
             build_kiro_custom_user_agent, build_kiro_x_amz_user_agent,
-            resolve_kiro_upstream_region, should_add_redirect_for_internal,
-            should_send_codewhisperer_optout,
+            build_streaming_http_client_for_account, resolve_kiro_upstream_region,
+            should_add_redirect_for_internal, should_send_codewhisperer_optout,
         },
         kiro_client::{build_generate_assistant_response_url, build_kiro_runtime_host, KiroClient},
     },
     commands::common::{
-        get_usage_by_provider, is_token_expiring_soon, refresh_token_by_provider,
-        resolve_machine_id, resolve_profile_arn_from_candidates, update_account_status,
-        RefreshResult,
+        get_usage_by_provider_for_account, is_token_expiring_soon,
+        refresh_token_by_provider_with_account_proxy, resolve_machine_id,
+        resolve_profile_arn_from_candidates, update_account_status, RefreshResult,
     },
     core::account::{Account, AccountStore},
 };
@@ -82,6 +82,7 @@ struct UpstreamCredentials {
     #[allow(dead_code)]
     auth_method: Option<String>,
     send_opt_out: bool,
+    http: Client,
 }
 
 async fn restore_responses_session_messages(
@@ -310,7 +311,7 @@ fn build_health_response() -> Value {
 async fn get_available_models_for_upstream(
     upstream: &UpstreamCredentials,
 ) -> Result<Vec<String>, String> {
-    let client = KiroClient::new()?;
+    let client = KiroClient::from_client(upstream.http.clone());
     let (machine_id, profile_arn) = available_models_call_context(upstream);
 
     let response = client
@@ -1919,7 +1920,6 @@ pub async fn proxy_handler(
 
         // 发送请求
         match send_generate_request(
-            &state.http,
             &current_upstream,
             &payload_value,
             upstream_payload_log_context.request_index as usize,
@@ -2391,7 +2391,6 @@ pub async fn proxy_handler(
 }
 
 async fn send_generate_request<T: serde::Serialize + ?Sized>(
-    http: &Client,
     upstream: &UpstreamCredentials,
     upstream_payload: &T,
     request_index: usize,
@@ -2428,7 +2427,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
         attempt += 1;
 
         let upstream_resp = with_kiro_upstream_headers(
-            http.post(&upstream_url),
+            upstream.http.post(&upstream_url),
             upstream,
             "application/vnd.amazon.eventstream",
             true,
@@ -2743,6 +2742,17 @@ async fn resolve_managed_account_credentials(
                     &state.config.region,
                 );
                 let available_models_profile_arn = ctx.profile_arn.clone();
+                let http = match build_streaming_http_client_for_account(&account) {
+                    Ok(http) => http,
+                    Err(error) => {
+                        state.load_balancer.decrement_connections(&account.id).await;
+                        return Err(format!(
+                            "创建账号 {} 的反代 HTTP 客户端失败: {}",
+                            account.label,
+                            sanitize_error(&error)
+                        ));
+                    }
+                };
                 return Ok(UpstreamCredentials {
                     account_id: account.id.clone(),
                     access_token: access_token.clone(),
@@ -2755,15 +2765,17 @@ async fn resolve_managed_account_credentials(
                     user_agent: build_kiro_custom_user_agent(&ctx.machine_id),
                     auth_method: account.auth_method.clone(),
                     send_opt_out: should_send_codewhisperer_optout(),
+                    http,
                 });
             }
         }
     }
 
-    match refresh_token_by_provider(&account).await {
+    match refresh_token_by_provider_with_account_proxy(&account).await {
         Ok(refresh) => {
             let provider = account.provider.as_deref().unwrap_or("Google").to_string();
-            let usage_result = get_usage_by_provider(&provider, &refresh.access_token).await;
+            let usage_result =
+                get_usage_by_provider_for_account(&account, &provider, &refresh.access_token).await;
             let mut usage_data = None;
             let mut is_banned = false;
             let mut is_auth_error = false;
@@ -2818,9 +2830,7 @@ async fn resolve_managed_account_credentials(
                 .record_success(&account.id, response_time_ms)
                 .await;
 
-            Ok(build_upstream_credentials_from_refresh(
-                config, &account, refresh,
-            ))
+            build_upstream_credentials_from_refresh(config, &account, refresh)
         }
         Err(error) => {
             // 减少连接计数
@@ -2852,16 +2862,19 @@ async fn force_refresh_upstream_credentials(
         .cloned()
         .ok_or_else(|| format!("账号 {} 不存在，无法刷新 Token", upstream.source_label))?;
 
-    let refresh = refresh_token_by_provider(&account).await.map_err(|error| {
-        format!(
-            "刷新账号 {} 失败: {}",
-            account.label,
-            sanitize_error(&error)
-        )
-    })?;
+    let refresh = refresh_token_by_provider_with_account_proxy(&account)
+        .await
+        .map_err(|error| {
+            format!(
+                "刷新账号 {} 失败: {}",
+                account.label,
+                sanitize_error(&error)
+            )
+        })?;
 
     let provider = account.provider.as_deref().unwrap_or("Google").to_string();
-    let usage_result = get_usage_by_provider(&provider, &refresh.access_token).await;
+    let usage_result =
+        get_usage_by_provider_for_account(&account, &provider, &refresh.access_token).await;
     let mut usage_data = None;
     let mut is_banned = false;
     let mut is_auth_error = false;
@@ -2894,16 +2907,14 @@ async fn force_refresh_upstream_credentials(
         }
     }
 
-    Ok(build_upstream_credentials_from_refresh(
-        config, &account, refresh,
-    ))
+    build_upstream_credentials_from_refresh(config, &account, refresh)
 }
 
 fn build_upstream_credentials_from_refresh(
     config: &GatewayConfig,
     account: &Account,
     refresh: RefreshResult,
-) -> UpstreamCredentials {
+) -> Result<UpstreamCredentials, String> {
     let machine_id = resolve_machine_id(account.machine_id.clone());
     let profile_arn = resolve_profile_arn_from_candidates(
         refresh.profile_arn.as_deref(),
@@ -2916,7 +2927,15 @@ fn build_upstream_credentials_from_refresh(
         &config.region,
     );
 
-    UpstreamCredentials {
+    let http = build_streaming_http_client_for_account(account).map_err(|error| {
+        format!(
+            "创建账号 {} 的反代 HTTP 客户端失败: {}",
+            account.label,
+            sanitize_error(&error)
+        )
+    })?;
+
+    Ok(UpstreamCredentials {
         account_id: account.id.clone(),
         access_token: refresh.access_token,
         machine_id: machine_id.clone(),
@@ -2928,7 +2947,8 @@ fn build_upstream_credentials_from_refresh(
         user_agent: build_kiro_custom_user_agent(&machine_id),
         auth_method: account.auth_method.clone(),
         send_opt_out: should_send_codewhisperer_optout(),
-    }
+        http,
+    })
 }
 /// 根据账号 provider 返回默认的 profileArn
 /// BuilderId 账号和 Social 账号（Github/Google）使用不同的 profileArn
@@ -3719,13 +3739,15 @@ fn stream_proxy_response(
                                         .unwrap_or_default()
                                         .join(".kiro-account-manager")
                                         .join("logs");
+                                    let _ = std::fs::create_dir_all(&log_dir);
                                     let entry = format!(
-                                        "[{}] kind=kiro_event idx={} event={} bytes={} chars={}\n",
+                                        "[{}] kind=kiro_event idx={} event={} bytes={} chars={} body={}\n",
                                         chrono::Local::now().format("%H:%M:%S%.3f"),
                                         log_context.request_index,
                                         event_type.unwrap_or("unknown"),
                                         json_text.len(),
-                                        json_text.chars().count()
+                                        json_text.chars().count(),
+                                        json_text
                                     );
                                     let _ = std::fs::OpenOptions::new()
                                         .create(true)

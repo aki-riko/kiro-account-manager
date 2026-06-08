@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { invoke } from '@tauri-apps/api/core'
-import { Copy, Check, Folder, Plus, X, RefreshCw, Loader2, CheckCircle } from 'lucide-react'
+import { Copy, Check, Folder, Plus, X, RefreshCw, Loader2, CheckCircle, Network, PlugZap, Tag } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { setAccountTags, setAccountGroup, getGroups, addGroup } from '../../../api/groupTag'
@@ -17,7 +17,7 @@ import {
   DialogFooter} from '../../shared/dialog'
 import { Button } from '../../shared/button'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
-import { Account, GroupDefinition } from '../../../types/account'
+import { Account, AccountProxyConfig, AccountProxyProtocol, GroupDefinition } from '../../../types/account'
 
 const PRESET_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
@@ -37,6 +37,9 @@ function GroupSelector({ groups, value, onChange, onGroupsChange }: GroupSelecto
   const colors = useMemo(() => ({
     inputFocus: 'focus:ring-primary/20 focus:border-primary'
   }), [])
+  const inputClass = `flex-1 px-4 py-2.5 border rounded-xl text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`
+  const buttonClass = `p-2.5 ${accent.solidBg} text-white rounded-xl ${accent.solidHoverBg} disabled:opacity-50 cursor-pointer`
+  const ghostButtonClass = `p-2.5 rounded-xl hover:bg-muted/50 cursor-pointer`
 
   const [newGroupName, setNewGroupName] = useState('')
   const [showInput, setShowInput] = useState(false)
@@ -69,18 +72,18 @@ function GroupSelector({ groups, value, onChange, onGroupsChange }: GroupSelecto
           onChange={(e) => setNewGroupName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAddGroup()}
           placeholder={t('groups.newGroupPlaceholder') || '输入新分组名...'}
-          className={`flex-1 px-4 py-2.5 border rounded-xl text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
+          className={inputClass}
         />
         <button
           onClick={handleAddGroup}
           disabled={!newGroupName.trim()}
-          className={`p-2.5 ${accent.solidBg} text-white rounded-xl ${accent.solidHoverBg} disabled:opacity-50 cursor-pointer`}
+          className={buttonClass}
         >
           <Check size={16} />
         </button>
         <button
           onClick={() => { setShowInput(false); setNewGroupName('') }}
-          className={`p-2.5 rounded-xl hover:bg-muted/50 cursor-pointer`}
+          className={ghostButtonClass}
         >
           <X size={16} />
         </button>
@@ -93,7 +96,7 @@ function GroupSelector({ groups, value, onChange, onGroupsChange }: GroupSelecto
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`flex-1 px-4 py-2.5 border rounded-xl text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
+        className={inputClass}
       >
         <option value="">{t('groups.noGroup') || '无分组'}</option>
         {groups.map(g => (
@@ -102,7 +105,7 @@ function GroupSelector({ groups, value, onChange, onGroupsChange }: GroupSelecto
       </select>
       <button
         onClick={() => setShowInput(true)}
-        className={`p-2.5 ${accent.solidBg} text-white rounded-xl ${accent.solidHoverBg} cursor-pointer`}
+        className={buttonClass}
       >
         <Plus size={16} />
       </button>
@@ -122,9 +125,59 @@ interface VerifyAccountResponse {
   refreshToken: string;
 }
 
+interface AccountProxyTestResult {
+  success: boolean;
+  latencyMs: number;
+  status?: number | null;
+  message: string;
+}
+
+const defaultProxyConfig = (): AccountProxyConfig => ({
+  enabled: false,
+  protocol: 'http',
+  host: '',
+  port: 0,
+  username: null,
+  password: null
+})
+
+const normalizeProxyConfig = (value?: AccountProxyConfig | null): AccountProxyConfig => ({
+  ...defaultProxyConfig(),
+  ...value,
+  protocol: value?.protocol === 'socks5' ? 'socks5' : 'http',
+  host: value?.host || '',
+  port: Number(value?.port || 0),
+  username: value?.username || null,
+  password: value?.password || null
+})
+
+const normalizeProxyForSave = (value: AccountProxyConfig): AccountProxyConfig => ({
+  ...value,
+  host: value.host.trim(),
+  port: Number(value.port || 0),
+  username: value.username?.trim() || null,
+  password: value.password || null
+})
+
+const parseProxyUrl = (value: string): AccountProxyConfig => {
+  const raw = value.trim()
+  const url = new URL(raw.includes('://') ? raw : `http://${raw}`)
+  const protocol: AccountProxyProtocol = url.protocol.startsWith('socks') ? 'socks5' : 'http'
+  const fallbackPort = protocol === 'socks5' ? 1080 : 80
+
+  return {
+    enabled: true,
+    protocol,
+    host: url.hostname,
+    port: Number(url.port || fallbackPort),
+    username: url.username ? decodeURIComponent(url.username) : null,
+    password: url.password ? decodeURIComponent(url.password) : null
+  }
+}
+
 function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps) {
   const { t, theme } = useApp()
-  const { showError } = useDialog()
+  const { showError, showSuccess } = useDialog()
   const accent = useMemo(() => getThemeAccent(theme), [theme])
   const colors = useMemo(() => ({
     inputFocus: 'focus:ring-primary/20 focus:border-primary'
@@ -147,6 +200,9 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
   const [groups, setGroups] = useState<GroupDefinition[]>([])
   const [saving, setSaving] = useState(false)
   const [verifying, setVerifying] = useState(false)
+  const [testingProxy, setTestingProxy] = useState(false)
+  const [proxyQuickInput, setProxyQuickInput] = useState('')
+  const [proxyConfig, setProxyConfig] = useState<AccountProxyConfig>(() => normalizeProxyConfig(account.proxyConfig))
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
   const formatResetTime = (value?: string | number | null) => {
@@ -193,6 +249,47 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
       setTimeout(() => setCopiedField(null), 2000)
     } catch (e) {
       console.error('复制失败:', e)
+    }
+  }
+
+  const updateProxyConfig = (patch: Partial<AccountProxyConfig>) => {
+    setProxyConfig(prev => ({ ...prev, ...patch }))
+  }
+
+  const handlePasteProxyUrl = async () => {
+    if (!proxyQuickInput.trim()) {
+      await showError('代理格式错误', '请粘贴代理地址，例如 http://user:pass@127.0.0.1:7890 或 socks5://127.0.0.1:1080')
+      return
+    }
+
+    try {
+      setProxyConfig(parseProxyUrl(proxyQuickInput))
+    } catch (error) {
+      await showError('代理格式错误', String(error))
+    }
+  }
+
+  const handleTestProxy = async () => {
+    const config = normalizeProxyForSave({ ...proxyConfig, enabled: true })
+    if (!config.host || !config.port) {
+      await showError('代理测试失败', '请先填写代理主机和端口')
+      return
+    }
+
+    setTestingProxy(true)
+    try {
+      const result = await invoke<AccountProxyTestResult>('test_account_proxy', {
+        proxyConfig: config
+      })
+      if (result.success) {
+        await showSuccess('代理测试成功', result.message)
+      } else {
+        await showError('代理测试失败', result.message)
+      }
+    } catch (error) {
+      await showError('代理测试失败', String(error))
+    } finally {
+      setTestingProxy(false)
     }
   }
 
@@ -259,7 +356,8 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
         refreshToken: form.refreshToken || null,
         machineId: form.machineId || null,
         addedAt: form.addedAt || null,
-        expiresAt: form.expiresAt}
+        expiresAt: form.expiresAt,
+        proxyConfig: normalizeProxyForSave(proxyConfig)}
       if (isIdCAccount) {
         params.clientId = form.clientId || null
         params.clientSecret = form.clientSecret || null
@@ -511,26 +609,160 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
             )}
           </Button>
 
-          {/* 分组 */}
-          <div>
-            <div className={`text-sm font-medium mb-2 flex items-center gap-1.5 text-foreground`}>
-              <Folder size={14} />
-              {t('groups.title') || '分组'}
+          {/* 账号代理 */}
+          <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className={`mt-0.5 rounded-lg p-2 ${accent.iconBadgeBg}`}>
+                  <Network size={18} className={accent.text} />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-foreground">账号专属代理</div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    仅反代请求、刷新 Token 和 usage 检测会使用此代理；关闭后继续跟随应用代理设置。
+                  </p>
+                </div>
+              </div>
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm font-medium text-foreground">
+                <input
+                  type="checkbox"
+                  checked={proxyConfig.enabled}
+                  onChange={(event) => updateProxyConfig({ enabled: event.target.checked })}
+                  className="h-4 w-4 accent-primary cursor-pointer"
+                />
+                启用
+              </label>
             </div>
-            <GroupSelector
-              groups={groups}
-              value={selectedGroupId}
-              onChange={setSelectedGroupId}
-              onGroupsChange={setGroups}
-            />
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">快速粘贴代理地址</label>
+                <input
+                  type="text"
+                  value={proxyQuickInput}
+                  onChange={(event) => setProxyQuickInput(event.target.value)}
+                  placeholder="http://user:pass@127.0.0.1:7890 或 socks5://127.0.0.1:1080"
+                  className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none font-mono`}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="secondary"
+                  className="h-11 rounded-xl font-medium"
+                  onClick={handlePasteProxyUrl}
+                >
+                  解析填充
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">协议</label>
+                <select
+                  value={proxyConfig.protocol}
+                  onChange={(event) => updateProxyConfig({ protocol: event.target.value as AccountProxyProtocol })}
+                  className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
+                >
+                  <option value="http">HTTP / HTTPS</option>
+                  <option value="socks5">SOCKS5</option>
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-foreground mb-2">主机</label>
+                <input
+                  type="text"
+                  value={proxyConfig.host}
+                  onChange={(event) => updateProxyConfig({ host: event.target.value })}
+                  placeholder="127.0.0.1"
+                  className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">端口</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={65535}
+                  value={proxyConfig.port || ''}
+                  onChange={(event) => updateProxyConfig({ port: Number(event.target.value || 0) })}
+                  placeholder="7890"
+                  className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">用户名（可选）</label>
+                <input
+                  type="text"
+                  value={proxyConfig.username || ''}
+                  onChange={(event) => updateProxyConfig({ username: event.target.value || null })}
+                  placeholder="username"
+                  className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">密码（可选）</label>
+                <input
+                  type="password"
+                  value={proxyConfig.password || ''}
+                  onChange={(event) => updateProxyConfig({ password: event.target.value || null })}
+                  placeholder="password"
+                  className={`w-full px-4 py-3 border rounded-xl text-sm text-foreground bg-background border-input ${colors.inputFocus} focus:ring-2 outline-none`}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                variant="secondary"
+                className="h-10 rounded-xl font-medium"
+                onClick={handleTestProxy}
+                disabled={testingProxy || !proxyConfig.host || !proxyConfig.port}
+              >
+                {testingProxy ? (
+                  <>
+                    <Loader2 size={16} className="mr-2 animate-spin" />
+                    测试中...
+                  </>
+                ) : (
+                  <>
+                    <PlugZap size={16} className="mr-2" />
+                    测试代理
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
-          {/* 标签 */}
-          <div>
-            <TagSelector
-              selectedTagIds={selectedTagIds}
-              onChange={setSelectedTagIds}
-            />
+          {/* 分组 & 标签 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 rounded-xl border border-border bg-muted/20 p-3">
+            <div className="min-w-0">
+              <div className={`text-xs font-medium mb-1.5 flex items-center gap-1.5 text-muted-foreground`}>
+                <Folder size={14} />
+                {t('groups.title') || '分组'}
+              </div>
+              <GroupSelector
+                groups={groups}
+                value={selectedGroupId}
+                onChange={setSelectedGroupId}
+                onGroupsChange={setGroups}
+              />
+            </div>
+
+            <div className="min-w-0">
+              <div className={`text-xs font-medium mb-1.5 flex items-center gap-1.5 text-muted-foreground`}>
+                <Tag size={14} />
+                {t('tags.title') || '标签'}
+              </div>
+              <TagSelector
+                selectedTagIds={selectedTagIds}
+                onChange={setSelectedTagIds}
+              />
+            </div>
           </div>
         </div>
 

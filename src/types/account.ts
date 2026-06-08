@@ -104,6 +104,17 @@ export interface ListAvailableModelsResponse {
     defaultModel?: AvailableModel | null;
 }
 
+export type AccountProxyProtocol = 'http' | 'socks5';
+
+export interface AccountProxyConfig {
+    enabled: boolean;
+    protocol: AccountProxyProtocol;
+    host: string;
+    port: number;
+    username?: string | null;
+    password?: string | null;
+}
+
 export interface Account {
     id: string;
     email?: string;
@@ -128,6 +139,7 @@ export interface Account {
     clientId?: string;
     clientSecret?: string;
     enabled?: boolean;
+    proxyConfig?: AccountProxyConfig | null;
     _index?: number;
 }
 

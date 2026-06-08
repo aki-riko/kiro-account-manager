@@ -16,7 +16,7 @@ use crate::commands::common::{
     refresh_token_by_provider, save_store, token_needs_refresh, update_account_status,
     RefreshResult,
 };
-use crate::core::account::Account;
+use crate::core::account::{Account, AccountProxyConfig};
 use crate::state::AppState;
 use crate::utils::client_id_hash::{extract_start_url_from_client_secret, normalize_start_url};
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,7 @@ pub struct UpdateAccountParams {
     pub added_at: Option<String>,
     pub expires_at: Option<String>,
     pub enabled: Option<bool>,
+    pub proxy_config: Option<AccountProxyConfig>,
 }
 
 // ===== 数据结构 =====
@@ -1176,6 +1177,9 @@ pub fn update_account(
         // 启用/禁用
         if let Some(enabled) = params.enabled {
             store.accounts[idx].enabled = enabled;
+        }
+        if let Some(proxy_config) = params.proxy_config {
+            store.accounts[idx].proxy_config = Some(proxy_config);
         }
         let result = store.accounts[idx].clone();
         save_store(&store)?;

@@ -4,7 +4,13 @@
 
 #[cfg(target_os = "windows")]
 use crate::utils::cmd_output::decode_cmd_output;
+use crate::clients::{
+    http_client::build_http_client_for_proxy_test,
+    kiro_client::build_generate_assistant_response_url,
+};
+use crate::core::account::AccountProxyConfig;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +20,15 @@ pub struct SystemProxyInfo {
     pub http_proxy: Option<String>,
     pub tun_mode: bool,
     pub tun_interface: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountProxyTestResult {
+    pub success: bool,
+    pub latency_ms: u128,
+    pub status: Option<u16>,
+    pub message: String,
 }
 
 // ============================================================
@@ -364,6 +379,31 @@ pub async fn detect_system_proxy() -> Result<SystemProxyInfo, String> {
     tokio::task::spawn_blocking(detect_system_proxy_inner)
         .await
         .map_err(|e| format!("Task failed: {e}"))?
+}
+
+#[tauri::command]
+pub async fn test_account_proxy(
+    proxy_config: AccountProxyConfig,
+) -> Result<AccountProxyTestResult, String> {
+    let started_at = Instant::now();
+    let client = build_http_client_for_proxy_test(&proxy_config)?;
+
+    let test_url = build_generate_assistant_response_url("us-east-1");
+    let response = client
+        .get(&test_url)
+        .send()
+        .await
+        .map_err(|error| format!("代理连接失败: {error}"))?;
+
+    let status = response.status();
+    let latency_ms = started_at.elapsed().as_millis();
+
+    Ok(AccountProxyTestResult {
+        success: true,
+        latency_ms,
+        status: Some(status.as_u16()),
+        message: format!("代理已连通 Kiro runtime 上游，延迟 {latency_ms}ms，上游返回 HTTP {status}"),
+    })
 }
 
 #[cfg(test)]

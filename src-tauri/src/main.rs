@@ -118,7 +118,7 @@ use commands::session_manager::{
 };
 
 //代理
-use commands::proxy_cmd::detect_system_proxy;
+use commands::proxy_cmd::{detect_system_proxy, test_account_proxy};
 
 //Powers
 use commands::powers_cmd::{
@@ -529,6 +529,7 @@ fn main() {
             open_gateway_log_dir,
             clear_gateway_request_logs,
             configure_proxy_clients,
+            test_account_proxy,
             // Gateway 负载均衡 API
             get_rate_limited_accounts,
             get_banned_accounts,

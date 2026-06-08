@@ -6,7 +6,7 @@ use crate::clients::http_client::{
     build_kiro_x_amz_user_agent, get_usage_probe_regions,
 };
 use crate::commands::common::resolve_default_profile_arn;
-use reqwest::RequestBuilder;
+use reqwest::{Client, RequestBuilder};
 use uuid::Uuid;
 
 pub struct KiroClient {
@@ -150,6 +150,10 @@ impl KiroClient {
     pub fn new() -> Result<Self, String> {
         let client = build_http_client()?;
         Ok(Self { client })
+    }
+
+    pub fn from_client(client: Client) -> Self {
+        Self { client }
     }
 
     /// 统一的 getUsageLimits 接口（支持所有账号类型）
