@@ -416,28 +416,9 @@ mod tests {
     }
 
     #[test]
-    fn auto_switch_machine_guid_ignores_legacy_auto_change_disabled() {
-        let account = account_with_machine_id(Some("account-machine"));
-        let settings = AppSettings {
-            auto_change_machine_id: Some(false),
-            bind_machine_id_to_account: Some(true),
-            ..AppSettings::default()
-        };
-
-        assert_eq!(
-            resolve_machine_guid_switch_action(&account, &settings),
-            MachineGuidSwitchAction::UseAccountMachineId("account-machine".to_string())
-        );
-    }
-
-    #[test]
     fn auto_switch_machine_guid_uses_existing_account_machine_id_by_default() {
         let account = account_with_machine_id(Some(" ACCOUNT-MACHINE "));
-        let settings = AppSettings {
-            auto_change_machine_id: Some(true),
-            bind_machine_id_to_account: None,
-            ..AppSettings::default()
-        };
+        let settings = AppSettings::default();
 
         assert_eq!(
             resolve_machine_guid_switch_action(&account, &settings),
@@ -448,11 +429,7 @@ mod tests {
     #[test]
     fn auto_switch_machine_guid_generates_account_machine_id_when_bound_id_is_missing() {
         let account = account_with_machine_id(Some("   "));
-        let settings = AppSettings {
-            auto_change_machine_id: Some(true),
-            bind_machine_id_to_account: Some(true),
-            ..AppSettings::default()
-        };
+        let settings = AppSettings::default();
 
         let MachineGuidSwitchAction::UseAccountMachineId(machine_id) =
             resolve_machine_guid_switch_action(&account, &settings);
@@ -460,21 +437,6 @@ mod tests {
         assert_ne!(
             machine_id.trim(),
             account.machine_id.as_deref().unwrap().trim()
-        );
-    }
-
-    #[test]
-    fn auto_switch_machine_guid_ignores_legacy_random_mode() {
-        let account = account_with_machine_id(Some("account-machine"));
-        let settings = AppSettings {
-            auto_change_machine_id: Some(true),
-            bind_machine_id_to_account: Some(false),
-            ..AppSettings::default()
-        };
-
-        assert_eq!(
-            resolve_machine_guid_switch_action(&account, &settings),
-            MachineGuidSwitchAction::UseAccountMachineId("account-machine".to_string())
         );
     }
 }

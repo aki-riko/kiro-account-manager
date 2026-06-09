@@ -7,8 +7,6 @@ export interface AppSettings {
   lockedModel: string | null;
   autoRefresh: boolean;
   autoRefreshInterval: number;
-  autoChangeMachineId: boolean; // legacy compatibility only
-  bindMachineIdToAccount: boolean; // legacy compatibility only
   browserPath: string;
   privacyMode: boolean;
   autoSwitchEnabled: boolean;
@@ -48,8 +46,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   lockedModel: null,
   autoRefresh: true,
   autoRefreshInterval: 50,
-  autoChangeMachineId: true,
-  bindMachineIdToAccount: true,
   browserPath: '',
   privacyMode: true,
   autoSwitchEnabled: false,

@@ -37,10 +37,8 @@ use commands::account_cmd::{
 //应用设置
 use commands::app_data_cmd::{get_app_data_dir, open_app_data_dir};
 use commands::app_settings_cmd::{
-    bind_machine_id_to_account, clear_custom_kiro_path, get_all_bound_machine_ids,
-    get_app_settings, get_bound_machine_id, get_custom_kiro_path, get_usage_history,
+    clear_custom_kiro_path, get_app_settings, get_custom_kiro_path, get_usage_history,
     save_app_settings, save_usage_history_entry, set_custom_kiro_path,
-    unbind_machine_id_from_account,
 };
 //授权相关
 use commands::auth_cmd::{
@@ -495,11 +493,6 @@ fn main() {
             // 使用量历史记录命令
             get_usage_history,
             save_usage_history_entry,
-            // 账号绑定机器码命令
-            bind_machine_id_to_account,
-            unbind_machine_id_from_account,
-            get_bound_machine_id,
-            get_all_bound_machine_ids,
             // 系统机器码命令
             get_system_machine_guid,
             reset_system_machine_guid,
