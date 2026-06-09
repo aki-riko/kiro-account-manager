@@ -584,17 +584,6 @@ impl AccountStore {
         path.with_extension("json.bak")
     }
 
-    fn timestamped_backup_path_for(path: &PathBuf) -> PathBuf {
-        let backup_name = format!(
-            "accounts.backup-{}-{}.json",
-            chrono::Local::now().format("%Y%m%d-%H%M%S%.3f"),
-            uuid::Uuid::new_v4()
-        );
-        path.parent()
-            .map(|parent| parent.join(&backup_name))
-            .unwrap_or_else(|| PathBuf::from(backup_name))
-    }
-
     fn backup_candidates_for(path: &PathBuf) -> Vec<PathBuf> {
         let mut candidates = Vec::new();
         let latest_backup = Self::backup_path_for(path);
@@ -666,7 +655,12 @@ impl AccountStore {
     fn load_from_file(path: &PathBuf) -> Vec<Account> {
         let content = match std::fs::read_to_string(path) {
             Ok(content) => content,
-            Err(_) => {
+            Err(error) => {
+                let original_error = format!("无法读取账号文件: {}; 错误: {error}", path.display());
+                if !Self::backup_candidates_for(path).is_empty() {
+                    eprintln!("[AccountStore] {original_error}，尝试从备份恢复");
+                    return Self::load_backup_or_panic(path, original_error);
+                }
                 eprintln!("[AccountStore] 无法读取文件: {}", path.display());
                 return Vec::new();
             }
@@ -708,11 +702,6 @@ impl AccountStore {
 
         std::fs::copy(&self.file_path, self.backup_path())
             .map_err(|e| format!("备份账号文件失败: {e}"))?;
-        std::fs::copy(
-            &self.file_path,
-            Self::timestamped_backup_path_for(&self.file_path),
-        )
-        .map_err(|e| format!("创建账号历史备份失败: {e}"))?;
         Ok(())
     }
 
@@ -737,11 +726,17 @@ impl AccountStore {
             format!("写入临时账号文件失败: {e}")
         })?;
 
+        let backup_path = self.backup_path();
         if self.file_path.exists() {
             std::fs::remove_file(&self.file_path)
                 .map_err(|e| format!("替换账号文件前删除旧文件失败: {e}"))?;
         }
         std::fs::rename(&temp_path, &self.file_path).map_err(|e| {
+            if !self.file_path.exists() && backup_path.exists() {
+                if let Err(restore_error) = std::fs::copy(&backup_path, &self.file_path) {
+                    eprintln!("[AccountStore] 替换失败后恢复账号文件失败: {restore_error}");
+                }
+            }
             let _ = std::fs::remove_file(&temp_path);
             eprintln!("[AccountStore] 替换账号文件失败: {e}");
             format!("替换账号文件失败: {e}")
@@ -1048,12 +1043,40 @@ mod tests {
     use std::path::PathBuf;
 
     fn unique_test_path(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "kiro-account-store-{name}-{}.json",
+        let dir = std::env::temp_dir().join(format!(
+            "kiro-account-store-{name}-{}",
             uuid::Uuid::new_v4()
-        ))
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("accounts.json")
     }
 
+    fn cleanup_test_path(path: PathBuf) {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::remove_dir_all(parent);
+        }
+    }
+
+    #[test]
+    fn load_from_file_recovers_from_backup_when_primary_json_is_missing() {
+        let path = unique_test_path("missing");
+        let backup_path = path.with_extension("json.bak");
+        let backup_account = Account::new("backup@example.com".to_string(), "backup".to_string());
+        std::fs::write(
+            &backup_path,
+            serde_json::to_string_pretty(&vec![backup_account]).unwrap(),
+        )
+        .unwrap();
+
+        let accounts = AccountStore::load_from_file(&path);
+
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0].email.as_deref(), Some("backup@example.com"));
+        let repaired = std::fs::read_to_string(&path).unwrap();
+        assert!(repaired.contains("backup@example.com"));
+
+        cleanup_test_path(path);
+    }
     #[test]
     fn load_from_file_recovers_from_backup_when_primary_json_is_corrupt() {
         let path = unique_test_path("corrupt");
@@ -1073,23 +1096,36 @@ mod tests {
         let repaired = std::fs::read_to_string(&path).unwrap();
         assert!(repaired.contains("backup@example.com"));
 
-        let _ = std::fs::remove_file(path);
-        let _ = std::fs::remove_file(backup_path);
+        cleanup_test_path(path);
     }
 
     #[test]
-    #[should_panic(expected = "没有可用备份")]
     fn load_from_file_panics_on_corrupt_account_json_without_backup() {
         let path = unique_test_path("corrupt-no-backup");
         std::fs::write(&path, "[").unwrap();
 
-        let _ = AccountStore::load_from_file(&path);
+        let result = std::panic::catch_unwind(|| {
+            let _ = AccountStore::load_from_file(&path);
+        });
 
-        let _ = std::fs::remove_file(path);
+        assert!(result.is_err());
+        let message = result
+            .err()
+            .and_then(|panic| {
+                panic.downcast_ref::<String>().cloned().or_else(|| {
+                    panic
+                        .downcast_ref::<&str>()
+                        .map(|message| (*message).to_string())
+                })
+            })
+            .unwrap_or_default();
+        assert!(message.contains("没有可用备份"));
+
+        cleanup_test_path(path);
     }
 
     #[test]
-    fn try_save_to_file_preserves_previous_valid_file_as_latest_and_history_backups() {
+    fn try_save_to_file_preserves_previous_valid_file_as_latest_backup_only() {
         let path = unique_test_path("backup");
         let mut existing = Account::new("old@example.com".to_string(), "old".to_string());
         existing.user_id = Some("old-user".to_string());
@@ -1114,19 +1150,22 @@ mod tests {
         let backup = std::fs::read_to_string(&backup_path).unwrap();
         assert!(backup.contains("old@example.com"));
 
-        let history_backups = AccountStore::backup_candidates_for(&path);
-        assert!(history_backups.iter().any(|candidate| {
-            candidate
-                .file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| name.starts_with("accounts.backup-") && name.ends_with(".json"))
-                .unwrap_or(false)
-        }));
+        let history_backups: Vec<PathBuf> = AccountStore::backup_candidates_for(&path)
+            .into_iter()
+            .filter(|candidate| {
+                candidate
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.starts_with("accounts.backup-") && name.ends_with(".json"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert!(
+            history_backups.is_empty(),
+            "regular account saves must not create timestamped backups"
+        );
 
-        let _ = std::fs::remove_file(path);
-        for candidate in history_backups {
-            let _ = std::fs::remove_file(candidate);
-        }
+        cleanup_test_path(path);
     }
 
     #[test]
