@@ -1,6 +1,7 @@
 // 公共工具函数 - 提取重复逻辑
 
 use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata, SocialProvider};
+use crate::commands::machine_guid::generate_random_machine_id;
 use crate::core::account::Account;
 use crate::utils::client_id_hash::calculate_client_id_hash;
 use std::sync::{Mutex, MutexGuard};
@@ -115,6 +116,36 @@ pub fn resolve_default_profile_arn(provider: Option<&str>) -> &'static str {
     }
 }
 
+/// Generate an account-scoped machine ID.
+///
+/// This deliberately does not read the system machine GUID: stored accounts must
+/// have stable IDs without linking multiple accounts on the same host.
+pub fn generate_account_machine_id() -> String {
+    generate_random_machine_id()
+}
+
+fn normalize_account_machine_id(machine_id: &str) -> Option<String> {
+    let trimmed = machine_id.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_lowercase())
+    }
+}
+
+pub fn account_machine_id_or_new(machine_id: &Option<String>) -> String {
+    machine_id
+        .as_deref()
+        .and_then(normalize_account_machine_id)
+        .unwrap_or_else(generate_account_machine_id)
+}
+
+pub fn ensure_account_machine_id(account: &mut Account) -> String {
+    let machine_id = account_machine_id_or_new(&account.machine_id);
+    account.machine_id = Some(machine_id.clone());
+    machine_id
+}
+
 /// 统一的 profileArn 解析逻辑（用于 ListAvailableModels 等 API 调用）
 ///
 /// BuilderId 账号本地常见为 `profileArn=null`，但真实 IDE 抓包会带固定
@@ -188,7 +219,7 @@ pub fn find_account_by_id(
 /// 调用 Kiro Management API 需要的三件套：machine_id / region / profile_arn
 ///
 /// 解析规则：
-/// - machine_id：账号自带（非空）→ 否则系统 machine_guid
+/// - machine_id：账号自带（非空）→ 否则生成账号独立 ID
 /// - profile_arn：Enterprise → None；其他账号自带 → 否则 provider 默认 ARN
 /// - region：profile_arn 解析出来的 region 优先 → 账号 region → fallback
 pub struct KiroCallContext {
@@ -197,13 +228,9 @@ pub struct KiroCallContext {
     pub profile_arn: Option<String>,
 }
 
-/// 从账号 machine_id 解析出有效的 machine_id，空值时回退到系统机器码
+/// 从账号 machine_id 解析出有效的 machine_id，空值时生成账号独立 ID
 pub fn resolve_machine_id(account_machine_id: Option<String>) -> String {
-    use crate::commands::machine_guid::get_machine_id;
-
-    account_machine_id
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(get_machine_id)
+    account_machine_id_or_new(&account_machine_id)
 }
 
 pub fn resolve_kiro_call_context(account: &Account, fallback_region: &str) -> KiroCallContext {
@@ -319,6 +346,7 @@ pub struct RefreshResult {
     pub profile_arn: Option<String>,
     pub id_token: Option<String>,
     pub sso_session_id: Option<String>,
+    pub machine_id: Option<String>,
 }
 
 /// 保存账号 store 到文件，统一错误信息
@@ -348,6 +376,9 @@ pub fn apply_refreshed_account_tokens(account: &mut Account, refresh: &RefreshRe
     }
     if let Some(sso_session_id) = refresh.sso_session_id.clone() {
         account.sso_session_id = Some(sso_session_id);
+    }
+    if let Some(machine_id) = refresh.machine_id.clone() {
+        account.machine_id = Some(machine_id);
     }
     account.expires_at = Some(calc_expires_at(refresh.expires_in));
 }
@@ -390,11 +421,12 @@ async fn refresh_token_by_provider_inner(
             profile_arn: None,
             id_token: auth.id_token,
             sso_session_id: auth.sso_session_id,
+            machine_id: None,
         })
     } else {
         let metadata = RefreshMetadata {
             profile_arn: account.profile_arn.clone(),
-            machine_id: account.machine_id.clone(),
+            machine_id: Some(account_machine_id_or_new(&account.machine_id)),
             account: use_account_proxy.then(|| account.clone()),
             ..Default::default()
         };
@@ -409,6 +441,7 @@ async fn refresh_token_by_provider_inner(
             profile_arn: auth.profile_arn,
             id_token: None,
             sso_session_id: None,
+            machine_id: auth.machine_id,
         })
     }
 }
@@ -489,24 +522,15 @@ pub async fn get_usage_by_account(
     get_usage_by_account_inner(account, access_token, false).await
 }
 
-pub async fn get_usage_by_account_with_account_proxy(
-    account: &crate::core::account::Account,
-    access_token: &str,
-) -> Result<UsageResult, String> {
-    get_usage_by_account_inner(account, access_token, true).await
-}
-
-/// 根据 provider 获取 usage 数据（兼容旧接口，内部调用 getUsageLimits）
-pub async fn get_usage_by_provider(
+pub async fn get_usage_by_provider_with_machine_id(
     provider: &str,
     access_token: &str,
+    machine_id: &str,
 ) -> Result<UsageResult, String> {
-    use crate::commands::machine_guid::get_machine_id;
-
     // 为了兼容旧调用，创建一个临时账号对象
     let mut temp_account = crate::core::account::Account::new(String::new(), String::new());
     temp_account.provider = Some(provider.to_string());
-    temp_account.machine_id = Some(get_machine_id());
+    temp_account.machine_id = Some(machine_id.to_string());
 
     // 根据 provider 设置 auth_method（profile_arn 由 get_usage_by_account 统一处理）
     if provider == "BuilderId" || provider == "Enterprise" {
@@ -516,31 +540,6 @@ pub async fn get_usage_by_provider(
     }
 
     get_usage_by_account(&temp_account, access_token).await
-}
-
-pub async fn get_usage_by_provider_for_account(
-    account: &crate::core::account::Account,
-    provider: &str,
-    access_token: &str,
-) -> Result<UsageResult, String> {
-    let mut temp_account = account.clone();
-    temp_account.provider = Some(provider.to_string());
-
-    if temp_account
-        .machine_id
-        .as_deref()
-        .is_none_or(|value| value.trim().is_empty())
-    {
-        temp_account.machine_id = Some(crate::commands::machine_guid::get_machine_id());
-    }
-
-    if provider == "BuilderId" || provider == "Enterprise" {
-        temp_account.auth_method = Some("IdC".to_string());
-    } else {
-        temp_account.auth_method = Some("social".to_string());
-    }
-
-    get_usage_by_account_with_account_proxy(&temp_account, access_token).await
 }
 
 /// 为企业账号获取 usage 数据（多区域探测）
@@ -948,6 +947,34 @@ mod tests {
             ctx.profile_arn.as_deref(),
             Some(super::KIRO_BUILDER_ID_PROFILE_ARN)
         );
+    }
+
+    #[test]
+    fn account_machine_id_or_new_preserves_existing_account_id() {
+        assert_eq!(
+            super::account_machine_id_or_new(&Some(" account-machine ".to_string())),
+            "account-machine"
+        );
+    }
+
+    #[test]
+    fn account_machine_id_or_new_generates_random_id_for_missing_values() {
+        let generated_from_none = super::account_machine_id_or_new(&None);
+        let generated_from_blank = super::account_machine_id_or_new(&Some("   ".to_string()));
+
+        assert!(!generated_from_none.trim().is_empty());
+        assert!(!generated_from_blank.trim().is_empty());
+        assert_ne!(generated_from_none, generated_from_blank);
+    }
+
+    #[test]
+    fn ensure_account_machine_id_persists_generated_id_on_account() {
+        let mut account = Account::new("missing@example.com".to_string(), "missing".to_string());
+
+        let machine_id = super::ensure_account_machine_id(&mut account);
+
+        assert!(!machine_id.trim().is_empty());
+        assert_eq!(account.machine_id.as_deref(), Some(machine_id.as_str()));
     }
 
     #[test]

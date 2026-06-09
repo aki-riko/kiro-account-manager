@@ -1,6 +1,9 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
 
-use crate::commands::common::{extract_user_info, get_usage_by_provider};
+use crate::commands::common::{
+    ensure_account_machine_id, extract_user_info, generate_account_machine_id,
+    get_usage_by_account, get_usage_by_provider_with_machine_id,
+};
 use crate::core::account::Account;
 use crate::kiro::cli::read_kiro_cli_accounts;
 use crate::state::AppState;
@@ -175,7 +178,26 @@ pub async fn import_from_kiro_cli(
 
     // 2. 调用统一的 getUsageLimits API 获取配额
     let provider = determine_provider(cli_account);
-    let usage_result = get_usage_by_provider(&provider, &cli_account.access_token).await;
+    let account_machine_id = {
+        let store = lock_account_store(&state.store)?;
+        store
+            .accounts
+            .iter()
+            .find(|account| account.refresh_token.as_ref() == Some(&cli_account.refresh_token))
+            .and_then(|account| {
+                account
+                    .machine_id
+                    .clone()
+                    .filter(|id| !id.trim().is_empty())
+            })
+            .unwrap_or_else(generate_account_machine_id)
+    };
+    let usage_result = get_usage_by_provider_with_machine_id(
+        &provider,
+        &cli_account.access_token,
+        &account_machine_id,
+    )
+    .await;
 
     let (email, user_id, usage_data, is_banned, is_auth_error) = match usage_result {
         Ok(result) => {
@@ -281,17 +303,22 @@ pub async fn import_from_kiro_cli(
 
     // 7. 生成或保留 machine_id
     if let Some(idx) = existing_index {
-        // 更新现有账号，保留 machine_id
+        // 更新现有账号，保留 machine_id；历史空值则回填本次导入使用的账号级 ID
         account
             .machine_id
             .clone_from(&store.accounts[idx].machine_id);
+        if account
+            .machine_id
+            .as_ref()
+            .is_none_or(|id| id.trim().is_empty())
+        {
+            account.machine_id = Some(account_machine_id);
+        }
         account.id.clone_from(&store.accounts[idx].id);
         store.accounts[idx] = account.clone();
     } else {
-        // 新账号，生成 machine_id
-        if account.machine_id.is_none() {
-            account.machine_id = Some(uuid::Uuid::new_v4().to_string().to_lowercase());
-        }
+        // 新账号，保存本次 usage 检测使用的账号级 machine_id
+        account.machine_id = Some(account_machine_id);
         store.accounts.push(account.clone());
     }
 
@@ -383,18 +410,37 @@ pub async fn switch_to_cli_account(
         account
     };
 
-    // 3. 切号后立即获取配额检测封禁状态
-    let provider = refreshed_account
-        .provider
+    let mut refreshed_account = refreshed_account;
+    let generated_machine_id = if refreshed_account
+        .machine_id
         .as_ref()
-        .ok_or("账号缺少 provider 字段")?;
+        .is_none_or(|id| id.trim().is_empty())
+    {
+        Some(ensure_account_machine_id(&mut refreshed_account))
+    } else {
+        None
+    };
+    if let Some(machine_id) = generated_machine_id {
+        let mut store = lock_account_store(&state.store)?;
+        if let Some(a) = store.accounts.iter_mut().find(|a| a.id == account_id) {
+            if a.machine_id.as_ref().is_none_or(|id| id.trim().is_empty()) {
+                a.machine_id = Some(machine_id);
+                let _ = crate::commands::common::save_store(&store);
+            }
+        }
+    }
+
+    // 3. 切号后立即获取配额检测封禁状态
+    if refreshed_account.provider.is_none() {
+        return Err("账号缺少 provider 字段".to_string());
+    }
     let access_token = refreshed_account
         .access_token
         .as_ref()
         .ok_or("账号缺少 access_token")?;
 
     log::info!("[CLI Switch] 切号后检测账号状态...");
-    match get_usage_by_provider(provider, access_token).await {
+    match get_usage_by_account(&refreshed_account, access_token).await {
         Ok(usage_result) => {
             // 更新账号状态（包括封禁检测）
             let mut store = lock_account_store(&state.store)?;

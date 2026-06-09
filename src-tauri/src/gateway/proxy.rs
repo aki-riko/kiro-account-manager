@@ -27,9 +27,9 @@ use crate::{
         kiro_client::{build_generate_assistant_response_url, build_kiro_runtime_host, KiroClient},
     },
     commands::common::{
-        get_usage_by_provider_for_account, is_token_expiring_soon,
-        refresh_token_by_provider_with_account_proxy, resolve_machine_id,
-        resolve_profile_arn_from_candidates, update_account_status, RefreshResult,
+        account_machine_id_or_new, get_usage_by_account, is_token_expiring_soon,
+        refresh_token_by_provider_with_account_proxy, resolve_profile_arn_from_candidates,
+        update_account_status, RefreshResult,
     },
     core::account::{Account, AccountStore},
 };
@@ -2773,9 +2773,7 @@ async fn resolve_managed_account_credentials(
 
     match refresh_token_by_provider_with_account_proxy(&account).await {
         Ok(refresh) => {
-            let provider = account.provider.as_deref().unwrap_or("Google").to_string();
-            let usage_result =
-                get_usage_by_provider_for_account(&account, &provider, &refresh.access_token).await;
+            let usage_result = get_usage_by_account(&account, &refresh.access_token).await;
             let mut usage_data = None;
             let mut is_banned = false;
             let mut is_auth_error = false;
@@ -2872,9 +2870,7 @@ async fn force_refresh_upstream_credentials(
             )
         })?;
 
-    let provider = account.provider.as_deref().unwrap_or("Google").to_string();
-    let usage_result =
-        get_usage_by_provider_for_account(&account, &provider, &refresh.access_token).await;
+    let usage_result = get_usage_by_account(&account, &refresh.access_token).await;
     let mut usage_data = None;
     let mut is_banned = false;
     let mut is_auth_error = false;
@@ -2915,7 +2911,7 @@ fn build_upstream_credentials_from_refresh(
     account: &Account,
     refresh: RefreshResult,
 ) -> Result<UpstreamCredentials, String> {
-    let machine_id = resolve_machine_id(account.machine_id.clone());
+    let machine_id = account_machine_id_or_new(&account.machine_id);
     let profile_arn = resolve_profile_arn_from_candidates(
         refresh.profile_arn.as_deref(),
         account.profile_arn.as_deref(),

@@ -1,8 +1,8 @@
 // Base Provider - 认证提供者接口和结果结构
 // 参考 kiro-batch-login/src/providers/base-provider.js
 
-use async_trait::async_trait;
 use crate::core::account::Account;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 /// 认证结果
@@ -29,6 +29,8 @@ pub struct AuthResult {
 
     // Social (Google/Github) 专用
     pub profile_arn: Option<String>,
+    #[serde(default)]
+    pub machine_id: Option<String>,
 }
 
 /// 刷新 Token 所需的元数据

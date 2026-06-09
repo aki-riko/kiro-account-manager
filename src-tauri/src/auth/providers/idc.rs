@@ -374,6 +374,7 @@ impl AuthProvider for IdcProvider {
                 None
             }, // Enterprise 保存 start_url
             profile_arn: None,
+            machine_id: None,
         })
     }
 
@@ -422,6 +423,7 @@ impl AuthProvider for IdcProvider {
             sso_session_id: token_response.aws_sso_app_session_id,
             start_url: self.start_url.clone(), // 保留原有的 start_url
             profile_arn: None,
+            machine_id: None,
         })
     }
 

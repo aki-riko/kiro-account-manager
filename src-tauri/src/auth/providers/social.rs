@@ -4,7 +4,7 @@
 use super::{AuthProvider, AuthResult, RefreshMetadata};
 use crate::auth::auth_social;
 use crate::clients::kiro_auth_client::KiroAuthServiceClient;
-use crate::commands::machine_guid::get_machine_id;
+use crate::commands::machine_guid::generate_random_machine_id;
 use crate::core::deep_link_handler::{register_waiter, DeepLinkCallbackWaiter};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -68,7 +68,7 @@ impl AuthProvider for SocialProvider {
         let waiter = register_waiter(&state);
 
         // Step 4: 打开浏览器登录
-        let machine_id = get_machine_id();
+        let machine_id = generate_random_machine_id();
         let client = KiroAuthServiceClient::new(&machine_id)?;
         client
             .login(provider, &redirect_uri, &code_challenge, &state)
@@ -105,6 +105,7 @@ impl AuthProvider for SocialProvider {
             sso_session_id: None,
             start_url: None, // Social 不需要 start_url
             profile_arn: token_response.profile_arn,
+            machine_id: Some(machine_id),
         })
     }
 
@@ -113,8 +114,11 @@ impl AuthProvider for SocialProvider {
         refresh_token: &str,
         metadata: RefreshMetadata,
     ) -> Result<AuthResult, String> {
-        // 优先使用账号的 machineId，没有则用系统机器码
-        let machine_id = metadata.machine_id.clone().unwrap_or_else(get_machine_id);
+        // 优先使用账号的 machineId，没有则生成账号独立 ID
+        let machine_id = metadata
+            .machine_id
+            .clone()
+            .unwrap_or_else(generate_random_machine_id);
         let client = if let Some(account) = metadata.account.as_ref() {
             KiroAuthServiceClient::for_account(&machine_id, account)?
         } else {
@@ -142,6 +146,7 @@ impl AuthProvider for SocialProvider {
             start_url: None, // Social 不需要 start_url
             // 优先使用 API 返回的新 profileArn，没有才用旧的
             profile_arn: token_response.profile_arn.or(metadata.profile_arn),
+            machine_id: Some(machine_id),
         })
     }
 
