@@ -3,7 +3,7 @@
 
 use crate::commands::app_settings_cmd::{get_app_settings_inner, AppSettings};
 use crate::commands::common::{account_machine_id_or_new, save_store};
-use crate::commands::machine_guid::{generate_random_machine_id, set_custom_machine_guid};
+use crate::commands::machine_guid::set_custom_machine_guid;
 use crate::core::account::Account;
 use crate::state::AppState;
 use tauri::{AppHandle, Emitter, Manager};
@@ -315,26 +315,14 @@ async fn switch_account(app_handle: &AppHandle, account: &Account) -> Result<(),
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum MachineGuidSwitchAction {
-    Skip,
     UseAccountMachineId(String),
-    GenerateRandomMachineId,
 }
 
 fn resolve_machine_guid_switch_action(
     account: &Account,
-    settings: &AppSettings,
+    _settings: &AppSettings,
 ) -> MachineGuidSwitchAction {
-    if settings.auto_change_machine_id == Some(false) {
-        return MachineGuidSwitchAction::Skip;
-    }
-
-    if settings.bind_machine_id_to_account != Some(false) {
-        return MachineGuidSwitchAction::UseAccountMachineId(account_machine_id_or_new(
-            &account.machine_id,
-        ));
-    }
-
-    MachineGuidSwitchAction::GenerateRandomMachineId
+    MachineGuidSwitchAction::UseAccountMachineId(account_machine_id_or_new(&account.machine_id))
 }
 
 fn persist_account_machine_id_if_needed(
@@ -382,9 +370,6 @@ async fn apply_machine_guid(
     let mut account = account.clone();
 
     match resolve_machine_guid_switch_action(&account, settings) {
-        MachineGuidSwitchAction::Skip => {
-            log::debug!("[AutoSwitch] 机器码切换已禁用");
-        }
         MachineGuidSwitchAction::UseAccountMachineId(machine_id) => {
             log::debug!("[AutoSwitch] 使用账号绑定的机器码: {}", machine_id);
             if let Err(error) =
@@ -396,13 +381,6 @@ async fn apply_machine_guid(
                 log::warn!("[AutoSwitch] 写入系统机器码失败: {}", error);
             }
             account.machine_id = Some(machine_id);
-        }
-        MachineGuidSwitchAction::GenerateRandomMachineId => {
-            let machine_id = generate_random_machine_id();
-            log::debug!("[AutoSwitch] 使用随机机器码: {}", machine_id);
-            if let Err(error) = set_custom_machine_guid(machine_id).await {
-                log::warn!("[AutoSwitch] 写入随机机器码失败: {}", error);
-            }
         }
     }
 
@@ -438,7 +416,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_switch_machine_guid_skips_when_auto_change_disabled() {
+    fn auto_switch_machine_guid_ignores_legacy_auto_change_disabled() {
         let account = account_with_machine_id(Some("account-machine"));
         let settings = AppSettings {
             auto_change_machine_id: Some(false),
@@ -448,7 +426,7 @@ mod tests {
 
         assert_eq!(
             resolve_machine_guid_switch_action(&account, &settings),
-            MachineGuidSwitchAction::Skip
+            MachineGuidSwitchAction::UseAccountMachineId("account-machine".to_string())
         );
     }
 
@@ -476,11 +454,8 @@ mod tests {
             ..AppSettings::default()
         };
 
-        let action = resolve_machine_guid_switch_action(&account, &settings);
-
-        let MachineGuidSwitchAction::UseAccountMachineId(machine_id) = action else {
-            panic!("expected account machine id action");
-        };
+        let MachineGuidSwitchAction::UseAccountMachineId(machine_id) =
+            resolve_machine_guid_switch_action(&account, &settings);
         assert!(!machine_id.trim().is_empty());
         assert_ne!(
             machine_id.trim(),
@@ -489,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_switch_machine_guid_generates_random_id_when_binding_is_disabled() {
+    fn auto_switch_machine_guid_ignores_legacy_random_mode() {
         let account = account_with_machine_id(Some("account-machine"));
         let settings = AppSettings {
             auto_change_machine_id: Some(true),
@@ -499,7 +474,7 @@ mod tests {
 
         assert_eq!(
             resolve_machine_guid_switch_action(&account, &settings),
-            MachineGuidSwitchAction::GenerateRandomMachineId
+            MachineGuidSwitchAction::UseAccountMachineId("account-machine".to_string())
         );
     }
 }

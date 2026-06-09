@@ -23,8 +23,6 @@ interface SystemMachineInfo {
 interface SettingsGeneralProps {
   autoRefresh: boolean;
   autoRefreshInterval: number;
-  autoChangeMachineId: boolean;
-  machineIdMode: string;
   privacyMode: boolean;
   setPrivacyMode: (checked: boolean) => void;
   autoSwitchEnabled: boolean;
@@ -50,8 +48,6 @@ interface SettingsGeneralProps {
   handleApplyBrowser: () => void;
   handleAutoRefreshChange: (checked: boolean) => void;
   handleAutoRefreshIntervalChange: (value: string) => void;
-  handleAutoChangeMachineIdChange: (checked: boolean) => void;
-  handleMachineIdModeChange: (mode: string) => void;
   handleAutoSwitchEnabledChange: (checked: boolean) => void;
   handleAutoSwitchThresholdChange: (value: number) => void;
   handleAutoSwitchIntervalChange: (value: string) => void;
@@ -85,8 +81,6 @@ function LanguageSelector({ t }: { t: TFunction }) {
 function SettingsGeneral({
   autoRefresh,
   autoRefreshInterval,
-  autoChangeMachineId,
-  machineIdMode,
   privacyMode,
   setPrivacyMode,
   autoSwitchEnabled,
@@ -112,8 +106,6 @@ function SettingsGeneral({
   handleApplyBrowser,
   handleAutoRefreshChange,
   handleAutoRefreshIntervalChange,
-  handleAutoChangeMachineIdChange,
-  handleMachineIdModeChange,
   handleAutoSwitchEnabledChange,
   handleAutoSwitchThresholdChange,
   handleAutoSwitchIntervalChange,
@@ -185,24 +177,6 @@ function SettingsGeneral({
                   <SelectItem value="30">30 {t('common.minutes')}</SelectItem>
                   <SelectItem value="40">40 {t('common.minutes')}</SelectItem>
                   <SelectItem value="50">50 {t('common.minutes')} ({t('common.recommended')})</SelectItem>
-                </SelectContent>
-              </Select>
-            }
-          />
-
-          {/* 机器码 */}
-          <SwitchRow
-            checked={autoChangeMachineId}
-            onCheckedChange={handleAutoChangeMachineIdChange}
-            icon={<Shuffle size={14} />}
-            label={t('settings.autoChangeMachineId')}
-            title={t('settings.autoChangeMachineIdDesc')}
-            trailing={
-              <Select value={machineIdMode} onValueChange={handleMachineIdModeChange} disabled={!autoChangeMachineId}>
-                <SelectTrigger className="h-7 w-[160px] text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bind">{t('settings.machineIdBind')} ({t('common.recommended')})</SelectItem>
-                  <SelectItem value="random">{t('settings.machineIdRandom')}</SelectItem>
                 </SelectContent>
               </Select>
             }

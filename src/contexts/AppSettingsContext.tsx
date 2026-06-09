@@ -7,8 +7,8 @@ export interface AppSettings {
   lockedModel: string | null;
   autoRefresh: boolean;
   autoRefreshInterval: number;
-  autoChangeMachineId: boolean;
-  bindMachineIdToAccount: boolean;
+  autoChangeMachineId: boolean; // legacy compatibility only
+  bindMachineIdToAccount: boolean; // legacy compatibility only
   browserPath: string;
   privacyMode: boolean;
   autoSwitchEnabled: boolean;

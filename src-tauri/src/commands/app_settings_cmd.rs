@@ -12,10 +12,11 @@ pub struct AppSettings {
     pub locked_model: Option<String>,
     pub auto_refresh: Option<bool>,
     pub auto_refresh_interval: Option<i32>,
-    pub auto_change_machine_id: Option<bool>, // 切换账号时是否更换机器码（默认 true）
+    // Legacy compatibility only: account switching now always applies the selected account's machine_id.
+    pub auto_change_machine_id: Option<bool>,
     pub browser_path: Option<String>,
-    // 账户机器码绑定功能
-    pub bind_machine_id_to_account: Option<bool>, // true=绑定模式（每个账号固定机器码），false=随机模式
+    // Legacy compatibility only: machine_id is stored directly on each account.
+    pub bind_machine_id_to_account: Option<bool>,
     // 隐私模式：脱敏显示邮箱
     pub privacy_mode: Option<bool>,
     // 自动换号设置
@@ -59,7 +60,7 @@ impl Default for AppSettings {
             locked_model: None,
             auto_refresh: Some(true),
             auto_refresh_interval: Some(50),
-            auto_change_machine_id: Some(true), // 默认开启
+            auto_change_machine_id: Some(true),
             browser_path: None,
             bind_machine_id_to_account: Some(true),
             privacy_mode: Some(true), // 默认开启

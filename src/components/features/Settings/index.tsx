@@ -25,8 +25,6 @@ function Settings() {
     const [lockModel, setLockModel] = useState(false)
     const [autoRefresh, setAutoRefresh] = useState(true)
     const [autoRefreshInterval, setAutoRefreshInterval] = useState(50) // 分钟
-    const [autoChangeMachineId, setAutoChangeMachineId] = useState(true) // 默认开启
-    const [machineIdMode, setMachineIdMode] = useState<'random' | 'bind'>('bind') // 'random' | 'bind'
     const [httpProxy, setHttpProxy] = useState('')
     const [originalProxy, setOriginalProxy] = useState('') // 原始代理值，用于判断是否修改
     const [appProxyMode, setAppProxyMode] = useState('followKiro')
@@ -114,8 +112,6 @@ function Settings() {
                 setLockModel(appSettings.lockModel ?? false)
                 setAutoRefresh(appSettings.autoRefresh ?? true)
                 setAutoRefreshInterval(appSettings.autoRefreshInterval ?? 50)
-                setAutoChangeMachineId(appSettings.autoChangeMachineId !== false) // 默认 true
-                setMachineIdMode(appSettings.bindMachineIdToAccount !== false ? 'bind' : 'random')
                 const browser = appSettings.browserPath || ''
                 setBrowserPath(browser)
                 setOriginalBrowserPath(browser)
@@ -205,13 +201,6 @@ function Settings() {
         const interval = parseInt(value) || 50
         setAutoRefreshInterval(interval)
         await saveAppSettings({ autoRefreshInterval: interval }, true)
-    }
-
-    const handleAutoChangeMachineIdChange = makeAppBoolToggle(setAutoChangeMachineId, 'autoChangeMachineId', saveAppSettings)
-
-    const handleMachineIdModeChange = async (mode: 'bind' | 'random') => {
-        setMachineIdMode(mode)
-        await saveAppSettings({ bindMachineIdToAccount: mode === 'bind' })
     }
 
     const handleAutoSwitchEnabledChange = makeAppBoolToggle(setAutoSwitchEnabled, 'autoSwitchEnabled', saveAppSettings, true)
@@ -428,8 +417,6 @@ function Settings() {
                         <SettingsGeneral
                             autoRefresh={autoRefresh}
                             autoRefreshInterval={autoRefreshInterval}
-                            autoChangeMachineId={autoChangeMachineId}
-                            machineIdMode={machineIdMode}
                             privacyMode={privacyMode}
                             setPrivacyMode={setPrivacyMode}
                             autoSwitchEnabled={autoSwitchEnabled}
@@ -453,8 +440,6 @@ function Settings() {
                             handleApplyBrowser={handleApplyBrowser}
                             handleAutoRefreshChange={handleAutoRefreshChange}
                             handleAutoRefreshIntervalChange={handleAutoRefreshIntervalChange}
-                            handleAutoChangeMachineIdChange={handleAutoChangeMachineIdChange}
-                            handleMachineIdModeChange={handleMachineIdModeChange}
                             handleAutoSwitchEnabledChange={handleAutoSwitchEnabledChange}
                             handleAutoSwitchThresholdChange={handleAutoSwitchThresholdChange}
                             handleAutoSwitchIntervalChange={handleAutoSwitchIntervalChange}

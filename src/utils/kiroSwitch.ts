@@ -1,31 +1,20 @@
 import { invoke } from '@tauri-apps/api/core'
 
-export async function applyMachineGuid(account, settings: Record<string, any> = {}) {
-  const autoChangeMachineId = settings.autoChangeMachineId !== false
-  const bindMachineIdToAccount = settings.bindMachineIdToAccount !== false
-
-  if (!autoChangeMachineId) return account
-
+export async function applyMachineGuid(account, _settings: Record<string, any> = {}) {
   try {
-    if (bindMachineIdToAccount) {
-      let machineId = account.machineId
+    let machineId = account.machineId
 
-      if (!machineId) {
-        machineId = await invoke('generate_machine_guid')
-        await invoke('update_account', {
-            params: {
-                id: account.id,
-                machine_id: machineId
-            }
-        })
-        return await setCustomMachineGuid(account, machineId)
-      }
-
-      return await setCustomMachineGuid(account, machineId)
+    if (!machineId) {
+      machineId = await invoke('generate_machine_guid')
+      await invoke('update_account', {
+        params: {
+          id: account.id,
+          machine_id: machineId
+        }
+      })
     }
 
-    const newMachineId = await invoke('generate_machine_guid')
-    await invoke('set_custom_machine_guid', { newGuid: newMachineId })
+    return await setCustomMachineGuid(account, machineId)
   } catch {
     // 机器码操作失败不阻断切换流程
   }
