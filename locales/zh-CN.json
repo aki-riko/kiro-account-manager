@@ -1537,5 +1537,21 @@
   "filter.statusExpired": "过期",
 
   "home.expires": "到期",
-  "kiroConfig.selectProjectDirFailed": "选择项目目录失败"
+  "kiroConfig.selectProjectDirFailed": "选择项目目录失败",
+  "welcome.priorityFeedback": "⚡ 问题反馈优先处理",
+  "common.preview": "预览",
+  "about.closePreview": "关闭预览",
+  "about.kiroGoDesc": "Kiro API 反向代理，提供标准 OpenAI 和 Anthropic 接口",
+  "accountCard.enableDisableAccount": "启用或禁用账号",
+  "accountCard.overageToggle": "超额开关",
+  "accountCard.overageEnabled": "超额已开启",
+  "accountCard.cap": "上限",
+  "accountCard.resetDate": "{{date}} 重置",
+  "common.viewRawResponse": "查看原始响应",
+  "common.hideRawResponse": "隐藏原始响应",
+  "app.networkError": "网络错误",
+  "app.networkErrorMessage": "{{count}}/{{total}} 个账号同步失败，请检查网络连接",
+  "common.pleaseWait": "请稍候...",
+  "common.noMatches": "未找到匹配项",
+  "home.remaining": "剩余"
 }

@@ -186,7 +186,7 @@ function WelcomeModal() {
           <div className="relative" onClick={(e) => e.stopPropagation()}>
             <img
               src={previewImg}
-              alt="预览"
+              alt={t('common.preview')}
               className="max-w-[360px] max-h-[360px] rounded-2xl shadow-2xl"
             />
             <button

@@ -1542,5 +1542,20 @@
   "filter.statusExpired": "Истёк",
 
   "home.expires": "истекает",
-  "kiroConfig.selectProjectDirFailed": "Не удалось выбрать каталог проекта"
+  "kiroConfig.selectProjectDirFailed": "Не удалось выбрать каталог проекта",
+  "common.preview": "Предпросмотр",
+  "about.closePreview": "Закрыть предпросмотр",
+  "about.kiroGoDesc": "Обратный прокси Kiro API со стандартными интерфейсами OpenAI и Anthropic",
+  "accountCard.enableDisableAccount": "Включить или отключить аккаунт",
+  "accountCard.overageToggle": "Переключатель перерасхода",
+  "accountCard.overageEnabled": "Перерасход включён",
+  "accountCard.cap": "Лимит",
+  "accountCard.resetDate": "Сброс {{date}}",
+  "common.viewRawResponse": "Показать исходный ответ",
+  "common.hideRawResponse": "Скрыть исходный ответ",
+  "app.networkError": "Ошибка сети",
+  "app.networkErrorMessage": "Не удалось синхронизировать аккаунты: {{count}}/{{total}}. Проверьте сетевое подключение",
+  "common.pleaseWait": "Пожалуйста, подождите...",
+  "common.noMatches": "Совпадения не найдены",
+  "home.remaining": "Осталось"
 }

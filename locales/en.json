@@ -1540,5 +1540,20 @@
   "filter.statusExpired": "Expired",
 
   "home.expires": "expires",
-  "kiroConfig.selectProjectDirFailed": "Failed to select project directory"
+  "kiroConfig.selectProjectDirFailed": "Failed to select project directory",
+  "common.preview": "Preview",
+  "about.closePreview": "Close preview",
+  "about.kiroGoDesc": "Kiro API reverse proxy with standard OpenAI and Anthropic interfaces",
+  "accountCard.enableDisableAccount": "Enable or disable account",
+  "accountCard.overageToggle": "Overage toggle",
+  "accountCard.overageEnabled": "Overage enabled",
+  "accountCard.cap": "Cap",
+  "accountCard.resetDate": "{{date}} reset",
+  "common.viewRawResponse": "View raw response",
+  "common.hideRawResponse": "Hide raw response",
+  "app.networkError": "Network error",
+  "app.networkErrorMessage": "{{count}}/{{total}} accounts failed to sync. Please check your network connection",
+  "common.pleaseWait": "Please wait...",
+  "common.noMatches": "No matches found",
+  "home.remaining": "Remaining"
 }

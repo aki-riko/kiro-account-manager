@@ -369,7 +369,7 @@ function SettingsGeneral({
               <button
                 onClick={() => copyToClipboard(appDataDir, 'appDataDir')}
                 className="p-1.5 rounded border border-border hover:bg-muted/50 transition-colors flex-shrink-0"
-                title="复制路径"
+                title={t('settings.copyPath')}
               >
                 {copiedField === 'appDataDir' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-muted-foreground" />}
               </button>
@@ -406,7 +406,7 @@ function SettingsGeneral({
               <button
                 onClick={() => copyToClipboard(systemMachineInfo.machineGuid, 'sysMachineGuid')}
                 className="p-1.5 rounded border border-border hover:bg-muted/50 transition-colors flex-shrink-0"
-                title="复制"
+                title={t('common.copy')}
               >
                 {copiedField === 'sysMachineGuid' ? <Check size={13} className="text-green-500" /> : <Copy size={13} className="text-muted-foreground" />}
               </button>

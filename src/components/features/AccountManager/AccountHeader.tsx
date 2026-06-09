@@ -158,7 +158,7 @@ function AccountHeader({
                 <h1 className="text-sm font-semibold text-foreground leading-tight">
                   {t('common.selected')} {selectedCount} {t('accounts.title')}
                 </h1>
-                <p className="text-[11px] text-muted-foreground leading-tight">批量操作模式</p>
+                <p className="text-[11px] text-muted-foreground leading-tight">{t('accounts.batchOperationMode')}</p>
               </>
             ) : (
               <>
@@ -193,7 +193,7 @@ function AccountHeader({
                           onSearchChange('')
                         }}
                         className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted/50 transition-colors cursor-pointer"
-                        title="清空"
+                        title={t('settings.clear')}
                       >
                         <X size={12} className="text-muted-foreground" />
                       </button>
@@ -285,14 +285,14 @@ function AccountHeader({
             <>
               <IconButton
                 onClick={() => onSelectAll()}
-                title="全选"
+                title={t('common.selectAll')}
                 accent={accent}
               >
                 <CheckSquare size={14} className={accent.text} />
               </IconButton>
               <IconButton
                 onClick={onDeselectAll}
-                title="取消全选"
+                title={t('session.deselectAll')}
                 accent={accent}
               >
                 <Square size={14} />
@@ -300,10 +300,10 @@ function AccountHeader({
               <button
                 onClick={onBatchEdit}
                 className={`px-3 h-8 text-xs font-medium rounded-md inline-flex items-center gap-1.5 cursor-pointer text-white shadow-sm bg-gradient-to-br ${accent.gradientFrom} ${accent.gradientTo} hover:opacity-90 transition-opacity`}
-                title="批量编辑（标签和分组）"
+                title={t('accounts.batchEditTagsAndGroups')}
               >
                 <Edit size={13} />
-                批量编辑 ({selectedCount})
+                {t('accounts.batchEdit')} ({selectedCount})
               </button>
               <button
                 onClick={onBatchDelete}

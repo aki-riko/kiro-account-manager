@@ -217,7 +217,7 @@ function About() {
               href={LINKS.kiroGo}
               icon={<Github size={15} />}
               label="Kiro-Go"
-              desc="Kiro API 反向代理 - 标准 OpenAI/Anthropic 接口"
+              desc={t('about.kiroGoDesc')}
               accent="github"
             />
             <div className="grid grid-cols-2 gap-2">
@@ -295,11 +295,11 @@ function About() {
       <DialogRoot open={!!previewImg} onOpenChange={(open) => !open && setPreviewImg(null)}>
         <DialogContent maxWidth="fit-content" showClose={false} className="bg-transparent border-none shadow-none">
           <div className="relative">
-            {previewImg && <img src={previewImg} alt="预览" className="max-w-[320px] max-h-[320px] rounded-xl shadow-xl" />}
+            {previewImg && <img src={previewImg} alt={t('common.preview')} className="max-w-[320px] max-h-[320px] rounded-xl shadow-xl" />}
             <button
               className="absolute -top-3 -right-3 w-8 h-8 rounded-full glass-card flex items-center justify-center shadow-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
               onClick={() => setPreviewImg(null)}
-              aria-label="关闭预览"
+              aria-label={t('about.closePreview')}
             >
               <X size={16} className="text-foreground" />
             </button>

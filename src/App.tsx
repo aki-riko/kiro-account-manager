@@ -21,9 +21,10 @@ const allRoutes = { ...routeMap, ...internalRoutes }
 
 // 页面加载骨架屏
 function PageLoading() {
+  const { t } = useApp()
   return (
     <div className="h-full flex items-center justify-center glass-main">
-      <div className="animate-pulse text-muted-foreground">加载中...</div>
+      <div className="animate-pulse text-muted-foreground">{t('common.loading')}</div>
     </div>
   )
 }
@@ -88,17 +89,17 @@ function App() {
 
       unlistenBanned = await listen<{ email: string }>('account-banned', (event) => {
         if (!mounted) return
-        showError('账号已封禁', `账号 ${event.payload.email} 已被封禁，无法继续使用`)
+        showError(t('app.accountBanned'), t('app.accountBannedMessage', { email: event.payload.email }))
       })
 
       unlistenTokenInvalid = await listen<{ email: string }>('account-token-invalid', (event) => {
         if (!mounted) return
-        showInfo('Token 已失效', `账号 ${event.payload.email} 的 Token 已失效，请重新登录`)
+        showInfo(t('app.tokenExpired'), t('app.tokenExpiredMessage', { email: event.payload.email }))
       })
 
       unlistenNetworkError = await listen<{ count: number, total: number }>('sync-network-error', (event) => {
         if (!mounted) return
-        showError('网络错误', `${event.payload.count}/${event.payload.total} 个账号同步失败，请检查网络连接`)
+        showError(t('app.networkError'), t('app.networkErrorMessage', { count: event.payload.count, total: event.payload.total }))
       })
     }
 

@@ -128,7 +128,7 @@ const AccountCard = memo(function AccountCard({
             size="sm"
             checked={account.enabled !== false}
             onCheckedChange={(checked) => onToggleEnabled?.(account, checked)}
-            title="启用/禁用账号"
+            title={t('accountCard.enableDisableAccount')}
           />
         </div>
         {account.usageData?.subscriptionInfo?.overageCapability === 'OVERAGE_CAPABLE' && (
@@ -139,7 +139,7 @@ const AccountCard = memo(function AccountCard({
               checked={account.usageData?.overageConfiguration?.overageStatus === 'ENABLED'}
               disabled={isTogglingOverage}
               onCheckedChange={(checked) => onToggleOverage?.(account, checked)}
-              title="超额开关"
+              title={t('accountCard.overageToggle')}
             />
           </div>
         )}
@@ -221,7 +221,7 @@ const AccountCard = memo(function AccountCard({
               : percent > 50 ? 'text-orange-500'
               : 'text-green-500'
             }`}>
-              {(breakdown?.currentOverages ?? 0) > 0 ? '超额' : `${Math.round(percent)}%`}
+              {(breakdown?.currentOverages ?? 0) > 0 ? t('home.overage') : `${Math.round(percent)}%`}
             </span>
           </div>
           <div className="h-1 bg-muted rounded-full overflow-hidden mb-1.5">
@@ -242,9 +242,9 @@ const AccountCard = memo(function AccountCard({
                 : `${formatUsage(used)} / ${formatUsage(quota)}`}
             </span>
             {(breakdown?.currentOverages ?? 0) > 0 ? (
-              <span className="text-purple-500 font-bold">超额 {formatUsage(breakdown!.currentOverages)}</span>
+              <span className="text-purple-500 font-bold">{t('home.overage')} {formatUsage(breakdown!.currentOverages)}</span>
             ) : (
-              <span className="text-muted-foreground">剩余 {formatUsage(Math.max(0, quota - used))}</span>
+              <span className="text-muted-foreground">{t('home.remaining')} {formatUsage(Math.max(0, quota - used))}</span>
             )}
           </div>
           {breakdown?.currentOverages != null && breakdown.currentOverages > 0 && (
@@ -269,7 +269,7 @@ const AccountCard = memo(function AccountCard({
           )}
           {(breakdown?.currentOverages === 0 || breakdown?.currentOverages == null) && account.usageData?.overageConfiguration?.overageStatus === 'ENABLED' && account.usageData?.subscriptionInfo?.overageCapability === 'OVERAGE_CAPABLE' && (
             <div className="flex items-center justify-between text-[10px] pt-1.5 mt-1.5 border-t border-border/30">
-              <span className="text-green-500 font-medium">⚡ 超额已开启{breakdown?.overageCap ? ` (上限 ${formatUsage(breakdown.overageCap)})` : ''}</span>
+              <span className="text-green-500 font-medium">⚡ {t('accountCard.overageEnabled')}{breakdown?.overageCap ? ` (${t('accountCard.cap')} ${formatUsage(breakdown.overageCap)})` : ''}</span>
               {breakdown?.overageRate != null && (
                 <span className="text-muted-foreground">${breakdown.overageRate}/credit</span>
               )}
@@ -284,7 +284,7 @@ const AccountCard = memo(function AccountCard({
               )}
               {nextDateReset && (
                 <span className="text-muted-foreground whitespace-nowrap">
-                  {new Date(nextDateReset * 1000).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}重置
+                  {t('accountCard.resetDate', { date: new Date(nextDateReset * 1000).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) })}
                 </span>
               )}
             </div>
