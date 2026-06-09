@@ -23,6 +23,8 @@ jobs:
             target: 'aarch64-apple-darwin'
           - platform: ubuntu-22.04
             target: ''
+          - platform: ubuntu-22.04-arm
+            target: ''
 
     runs-on: ${{ matrix.platform }}
 
@@ -33,7 +35,7 @@ jobs:
           fetch-depth: 0  # 获取完整 git 历史，用于生成 Release Notes
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm libfuse2
@@ -181,7 +183,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Linux AppImage 使用 gzip 压缩，兼容旧版 AppImageLauncher
-          APPIMAGETOOL_COMP: ${{ matrix.platform == 'ubuntu-22.04' && 'gzip' || '' }}
+          APPIMAGETOOL_COMP: ${{ startsWith(matrix.platform, 'ubuntu') && 'gzip' || '' }}
         with:
           tagName: v__VERSION__
           releaseName: 'Kiro Account Manager v__VERSION__'
@@ -207,19 +209,21 @@ jobs:
 
       - name: Generate latest-deb.json
         run: |
-          VERSION=${{ github.ref_name }}
-          VERSION_NUM=${VERSION#v}
-          jq --arg ver "$VERSION" --arg verNum "$VERSION_NUM" '
-            .platforms["linux-x86_64"].url = "https://github.com/${{ github.repository }}/releases/download/\($ver)/Kiro.Account.Manager_\($verNum)_amd64.deb"
+          jq '
+            reduce (.platforms | keys[] | select(test("^linux-.*-deb$"))) as $key (.;
+              ($key | sub("-deb$"; "")) as $base |
+              .platforms[$base] = .platforms[$key]
+            )
           ' latest.json > latest-deb.json
           cat latest-deb.json
 
       - name: Generate latest-rpm.json
         run: |
-          VERSION=${{ github.ref_name }}
-          VERSION_NUM=${VERSION#v}
-          jq --arg ver "$VERSION" --arg verNum "$VERSION_NUM" '
-            .platforms["linux-x86_64"].url = "https://github.com/${{ github.repository }}/releases/download/\($ver)/Kiro.Account.Manager-\($verNum)-1.x86_64.rpm"
+          jq '
+            reduce (.platforms | keys[] | select(test("^linux-.*-rpm$"))) as $key (.;
+              ($key | sub("-rpm$"; "")) as $base |
+              .platforms[$base] = .platforms[$key]
+            )
           ' latest.json > latest-rpm.json
           cat latest-rpm.json
 

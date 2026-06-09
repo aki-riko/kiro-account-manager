@@ -84,7 +84,10 @@ fn get_download_url_for_platform(
 
 fn get_platform_download_url(platforms: &serde_json::Value) -> Option<String> {
     #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-    let platform_key = "windows-x86_64-nsis";
+    let platform_key = "windows-x86_64";
+
+    #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+    let platform_key = "windows-aarch64";
 
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
     let platform_key = "darwin-x86_64";
@@ -95,11 +98,16 @@ fn get_platform_download_url(platforms: &serde_json::Value) -> Option<String> {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     let platform_key = "linux-x86_64";
 
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    let platform_key = "linux-aarch64";
+
     #[cfg(not(any(
         all(target_os = "windows", target_arch = "x86_64"),
+        all(target_os = "windows", target_arch = "aarch64"),
         all(target_os = "macos", target_arch = "x86_64"),
         all(target_os = "macos", target_arch = "aarch64"),
-        all(target_os = "linux", target_arch = "x86_64")
+        all(target_os = "linux", target_arch = "x86_64"),
+        all(target_os = "linux", target_arch = "aarch64")
     )))]
     let platform_key = "";
 
@@ -192,15 +200,15 @@ mod tests {
     #[test]
     fn get_download_url_for_platform_reads_nested_url_only() {
         let platforms = serde_json::json!({
-            "windows-x86_64-nsis": {
-                "url": "https://example.com/app.exe"
+            "windows-x86_64": {
+                "url": "https://example.com/app.msi"
             },
             "linux-x86_64": {}
         });
 
         assert_eq!(
-            get_download_url_for_platform(&platforms, "windows-x86_64-nsis"),
-            Some("https://example.com/app.exe".to_string())
+            get_download_url_for_platform(&platforms, "windows-x86_64"),
+            Some("https://example.com/app.msi".to_string())
         );
         assert_eq!(
             get_download_url_for_platform(&platforms, "linux-x86_64"),

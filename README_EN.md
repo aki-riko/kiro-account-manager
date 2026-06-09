@@ -104,6 +104,7 @@ Entries are grouped by the actual GitHub Release publish windows. “Unreleased�
 - **Fix**: OpenAI Responses body shape for `/v1/responses` — reduces client parsing failures caused by incomplete output fields.
 - **Change**: Move MCP configuration out of proxy settings.
 - **New**: Linux WebKit software-rendering thread limit — reduces long-running WebKitWebProcess CPU saturation on GPU-less, remote desktop, and server environments.
+- **New**: Linux ARM64 release builds — the release pipeline now also builds AppImage / DEB / RPM artifacts on an ARM64 Linux runner and derives DEB / RPM updater metadata from the actual platform entries.
 
 ### 🛠️ v1.9.1 - 2026-06-02 — Tool Calls, Responses, Request Logs, and Quota Recovery
 
