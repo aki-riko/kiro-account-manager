@@ -100,7 +100,7 @@ pub async fn clear_gateway_request_logs(state: State<'_, AppState>) -> Result<()
     clear_gateway_request_logs_inner(&state).await
 }
 
-/// 一键配置反代客户端（Claude Code / Codex）
+/// 一键配置2API客户端（Claude Code / Codex）
 #[tauri::command]
 pub async fn configure_proxy_clients(
     clients: Vec<String>,
@@ -195,7 +195,7 @@ fn configure_claude_code(proxy_origin: &str, api_key: &str) -> Result<Vec<String
         .as_object_mut()
         .ok_or("env 字段不是对象".to_string())?;
 
-    // 写入反代配置
+    // 写入2API配置
     env.insert(
         "ANTHROPIC_BASE_URL".to_string(),
         serde_json::Value::String(proxy_origin.to_string()),
@@ -542,7 +542,7 @@ pub async fn test_route_config(
         return Ok(RouteTestResult {
             matched_accounts: Vec::new(),
             selected_account: None,
-            error: Some("未找到符合反代配置的可用账号".to_string()),
+            error: Some("未找到符合2API配置的可用账号".to_string()),
         });
     }
 

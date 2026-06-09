@@ -536,7 +536,7 @@ fn ensure_config_valid(config: &GatewayConfig) -> Result<(), String> {
         }
         "single" | "group" | "pool" => {}
         "local" => {
-            return Err("反代不再支持 local 模式，请改用 single/group/pool 账号池模式".to_string());
+            return Err("2API不再支持 local 模式，请改用 single/group/pool 账号池模式".to_string());
         }
         _ => return Err("accountMode 必须是 single/group/pool".to_string()),
     }

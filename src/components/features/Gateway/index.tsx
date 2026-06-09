@@ -40,17 +40,17 @@ import {
   GatewayStatusProvider,
   GatewayDataProvider
 } from './contexts'
-import { 
-  applyGatewayLocalOnlyChange, 
-  buildGatewayActionSummary, 
-  buildGatewayBaseUrl, 
-  buildGatewayIntegrationSummary, 
-  buildGatewayRoutingSummary, 
-  buildGatewaySecuritySummary, 
-  createGatewayFieldErrors, 
-  formatGatewayAccountOptionLabel, 
-  formatGatewayTimestamp, 
-  mergeErrorHistory 
+import {
+  applyGatewayLocalOnlyChange,
+  buildGatewayActionSummary,
+  buildGatewayBaseUrl,
+  buildGatewayIntegrationSummary,
+  buildGatewayRoutingSummary,
+  buildGatewaySecuritySummary,
+  createGatewayFieldErrors,
+  formatGatewayAccountOptionLabel,
+  formatGatewayTimestamp,
+  mergeErrorHistory
 } from './gatewayPageUtils'
 import {
   buildGatewayConfigSnapshot,
@@ -112,7 +112,8 @@ function GatewayPage() {
   const accountOptions = useMemo(
     () => accounts.map(account => ({
       value: account.id,
-      label: formatGatewayAccountOptionLabel(account)})),
+      label: formatGatewayAccountOptionLabel(account)
+    })),
     [accounts]
   )
 
@@ -157,7 +158,7 @@ function GatewayPage() {
     }, 1500)
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
   }, [configSnapshot])
-  
+
   const effectiveConfig = useMemo(
     () => (status.running && status.runtimeConfig ? status.runtimeConfig : config),
     [status.running, status.runtimeConfig, config]
@@ -180,17 +181,21 @@ function GatewayPage() {
       apiKey: effectiveConfig.clientApiKeysText || effectiveConfig.apiKey,
       clientApiKeysText: effectiveConfig.clientApiKeysText || effectiveConfig.apiKey,
       logDir,
-      errorHistory}),
+      errorHistory
+    }),
     [effectiveBaseUrl, effectiveConfig.clientApiKeysText, effectiveConfig.apiKey, logDir, errorHistory]
   )
   const effectiveRoutingSummary = useMemo(() => buildGatewayRoutingSummary({
     config: effectiveConfig,
     counts: {
       accounts: accounts.length,
-      groups: groups.length},
+      groups: groups.length
+    },
     selectedLabels: {
       single: accountOptions.find(item => item.value === effectiveConfig.accountId)?.label,
-      group: groupOptions.find(item => item.value === effectiveConfig.groupId)?.label}}), [effectiveConfig, accounts.length, groups.length, accountOptions, groupOptions])
+      group: groupOptions.find(item => item.value === effectiveConfig.groupId)?.label
+    }
+  }), [effectiveConfig, accounts.length, groups.length, accountOptions, groupOptions])
 
   const latestErrorEntry = useMemo(
     () => errorHistory[0] || null,
@@ -200,13 +205,16 @@ function GatewayPage() {
   const consoleHighlights = useMemo(() => ([
     {
       label: '当前入口',
-      value: effectiveBaseUrl},
+      value: effectiveBaseUrl
+    },
     {
       label: '客户端 Key',
-      value: effectiveSecuritySummary.apiKeyState},
+      value: effectiveSecuritySummary.apiKeyState
+    },
     {
       label: '路由模式',
-      value: effectiveRoutingSummary.modeLabel},
+      value: effectiveRoutingSummary.modeLabel
+    },
   ]), [
     effectiveBaseUrl,
     effectiveSecuritySummary.apiKeyState,
@@ -216,7 +224,8 @@ function GatewayPage() {
   const pollingFallbackConfig = useMemo(
     () => ({
       host: config.host,
-      port: config.port}),
+      port: config.port
+    }),
     [config.host, config.port]
   )
 
@@ -274,7 +283,8 @@ function GatewayPage() {
   useGatewayPolling({
     activeTab: 'config',
     fallbackConfig: pollingFallbackConfig,
-    onStatus: handleStatusPoll})
+    onStatus: handleStatusPoll
+  })
 
   const setField = (key: string, value: any) => setConfig(prev => ({ ...prev, [key]: value }))
 
@@ -299,7 +309,8 @@ function GatewayPage() {
       return {
         ...prev,
         apiKey: generatedKey,
-        clientApiKeysText}
+        clientApiKeysText
+      }
     })
   }
 
@@ -403,15 +414,15 @@ function GatewayPage() {
 
   const handleAutoStartToggle = async (checked: boolean) => {
     setField('enabled', checked)
-    
+
     // 延迟执行，确保 setField 先更新状态
     setTimeout(async () => {
       try {
         // 先保存配置
         await saveGatewayConfig({ ...config, enabled: checked })
         setSavedConfigSnapshot(buildGatewayConfigSnapshot({ ...config, enabled: checked }))
-        
-        // 如果勾选自动启动且配置有效，立即启动反代
+
+        // 如果勾选自动启动且配置有效，立即启动2API
         if (checked && !hasFieldErrors) {
           setSaving(true)
           const st = await startGateway({ ...config, enabled: checked })
@@ -421,7 +432,7 @@ function GatewayPage() {
           setLastStatusSyncAt(formatGatewayTimestamp())
           setSaving(false)
         } else if (!checked && status.running) {
-          // 如果取消自动启动且反代正在运行，停止反代
+          // 如果取消自动启动且2API正在运行，停止2API
           setSaving(true)
           await stopGateway()
           setStatus(prev => ({ ...prev, running: false }))
@@ -468,189 +479,188 @@ function GatewayPage() {
     <GatewayConfigProvider>
       <GatewayStatusProvider>
         <GatewayDataProvider>
-            <div className={`h-full overflow-y-auto p-3 glass-main`}>
-              <Stack gap="sm">
-                <Card className={`glass-card border border-border rounded-xl p-3`}>
-          <Stack gap="sm">
-            <Group justify="space-between" align="center">
-              <Group gap="xs">
-                <Text fw={700} className="text-foreground text-base">Kiro API 反代</Text>
-                {!status.running ? (
-                  <Button
-                    size="sm"
-                    onClick={handleStart}
-                    disabled={hasFieldErrors || saving || loading}
-                    className="bg-green-500 hover:bg-green-600 text-white h-7 px-2.5 text-xs"
-                  >
-                    <Play size={12} className="mr-1" />
-                    启动
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    onClick={handleStop}
-                    disabled={saving || loading}
-                    className="bg-red-500 hover:bg-red-600 text-white h-7 px-2.5 text-xs"
-                  >
-                    <Square size={12} className="mr-1" />
-                    停止
-                  </Button>
-                )}
-                <Badge color={status.running ? 'green' : 'gray'}>{status.running ? '运行中' : '已停止'}</Badge>
-              </Group>
-              <Group gap="xs">
-                <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setShowRequestLogs(true)} disabled={!status.running}>
-                  <ScrollText size={12} className="mr-1" />
-                  请求日志
-                </Button>
-                <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setShowRouteTest(true)}>
-                  <Zap size={12} className="mr-1" />
-                  测试路由
-                </Button>
-              </Group>
-            </Group>
-
-            <div className="grid grid-cols-3 gap-2">
-              {consoleHighlights.map((item) => (
-                <div key={item.label} className="border rounded-lg p-2 group relative">
-                  <Text size="xs" className={"text-muted-foreground"}>{item.label}</Text>
-                  <div className="flex items-center gap-2">
-                    <Text fw={700} className={"text-foreground text-sm flex-1 truncate"}>{item.value}</Text>
-                    {(item.label === '当前入口' || item.label === '客户端 Key') && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => {
-                          const text = item.label === '当前入口'
-                            ? effectiveBaseUrl
-                            : (effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || '').split('\n')[0]?.trim()
-                          copyText(text, `已复制${item.label}`)
-                        }}
-                      >
-                        <Copy size={12} className="text-muted-foreground" />
+          <div className={`h-full overflow-y-auto p-3 glass-main`}>
+            <Stack gap="sm">
+              <Card className={`glass-card border border-border rounded-xl p-3`}>
+                <Stack gap="sm">
+                  <Group justify="space-between" align="center">
+                    <Group gap="xs">
+                      <Text fw={700} className="text-foreground text-base">Kiro2API </Text>
+                      {!status.running ? (
+                        <Button
+                          size="sm"
+                          onClick={handleStart}
+                          disabled={hasFieldErrors || saving || loading}
+                          className="bg-green-500 hover:bg-green-600 text-white h-7 px-2.5 text-xs"
+                        >
+                          <Play size={12} className="mr-1" />
+                          启动
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={handleStop}
+                          disabled={saving || loading}
+                          className="bg-red-500 hover:bg-red-600 text-white h-7 px-2.5 text-xs"
+                        >
+                          <Square size={12} className="mr-1" />
+                          停止
+                        </Button>
+                      )}
+                      <Badge color={status.running ? 'green' : 'gray'}>{status.running ? '运行中' : '已停止'}</Badge>
+                    </Group>
+                    <Group gap="xs">
+                      <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setShowRequestLogs(true)} disabled={!status.running}>
+                        <ScrollText size={12} className="mr-1" />
+                        请求日志
                       </Button>
-                    )}
+                      <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setShowRouteTest(true)}>
+                        <Zap size={12} className="mr-1" />
+                        测试路由
+                      </Button>
+                    </Group>
+                  </Group>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {consoleHighlights.map((item) => (
+                      <div key={item.label} className="border rounded-lg p-2 group relative">
+                        <Text size="xs" className={"text-muted-foreground"}>{item.label}</Text>
+                        <div className="flex items-center gap-2">
+                          <Text fw={700} className={"text-foreground text-sm flex-1 truncate"}>{item.value}</Text>
+                          {(item.label === '当前入口' || item.label === '客户端 Key') && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => {
+                                const text = item.label === '当前入口'
+                                  ? effectiveBaseUrl
+                                  : (effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || '').split('\n')[0]?.trim()
+                                copyText(text, `已复制${item.label}`)
+                              }}
+                            >
+                              <Copy size={12} className="text-muted-foreground" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          </Stack>
-        </Card>
+                </Stack>
+              </Card>
 
-        <GatewayConfigComponent
-          config={config}
-          fieldErrors={fieldErrors}
-          setField={setField}
-          accountOptions={accountOptions}
-          groupOptions={groupOptions}
-          setConfig={setConfig}
-          applyGatewayLocalOnlyChange={applyGatewayLocalOnlyChange}
-          createGeneratedApiKey={createGeneratedApiKey}
-          handleSaveConfig={handleSilentSave}
-          handleAutoStartToggle={handleAutoStartToggle}
-          onShowClientConfig={() => setShowClientConfig(true)}
-          hasConfiguredClients={hasConfiguredClients}
-        />
+              <GatewayConfigComponent
+                config={config}
+                fieldErrors={fieldErrors}
+                setField={setField}
+                accountOptions={accountOptions}
+                groupOptions={groupOptions}
+                setConfig={setConfig}
+                applyGatewayLocalOnlyChange={applyGatewayLocalOnlyChange}
+                createGeneratedApiKey={createGeneratedApiKey}
+                handleSaveConfig={handleSilentSave}
+                handleAutoStartToggle={handleAutoStartToggle}
+                onShowClientConfig={() => setShowClientConfig(true)}
+                hasConfiguredClients={hasConfiguredClients}
+              />
 
-        <RequestLogsDialog open={showRequestLogs} onOpenChange={setShowRequestLogs} logLevel={config.logLevel} onLogLevelChange={(v) => setField('logLevel', v)} logRequests={config.logRequests} onLogRequestsChange={(v) => setField('logRequests', v)} onSave={handleSilentSave} />
+              <RequestLogsDialog open={showRequestLogs} onOpenChange={setShowRequestLogs} logLevel={config.logLevel} onLogLevelChange={(v) => setField('logLevel', v)} logRequests={config.logRequests} onLogRequestsChange={(v) => setField('logRequests', v)} onSave={handleSilentSave} />
 
-        <RouteTestDialog
-          open={showRouteTest}
-          onOpenChange={setShowRouteTest}
-          config={config}
-        />
+              <RouteTestDialog
+                open={showRouteTest}
+                onOpenChange={setShowRouteTest}
+                config={config}
+              />
 
-        {/* 快速配置客户端弹窗 */}
-        <DialogRoot open={showClientConfig} onOpenChange={setShowClientConfig}>
-          <DialogContent maxWidth="480px">
-            <DialogHeader className="">
-              <DialogTitle className="">{t('gateway.quickClientConfig')}</DialogTitle>
-              <DialogDescription className="">
-                {t('gateway.quickClientConfigDesc')}
-              </DialogDescription>
-            </DialogHeader>
+              {/* 快速配置客户端弹窗 */}
+              <DialogRoot open={showClientConfig} onOpenChange={setShowClientConfig}>
+                <DialogContent maxWidth="480px">
+                  <DialogHeader className="">
+                    <DialogTitle className="">{t('gateway.quickClientConfig')}</DialogTitle>
+                    <DialogDescription className="">
+                      {t('gateway.quickClientConfigDesc')}
+                    </DialogDescription>
+                  </DialogHeader>
 
-            <DialogBody className="flex flex-col gap-4 pt-2">
-              {/* 客户端选择 */}
-              <div className="flex gap-3">
-                {[
-                  { id: 'claudeCode', label: 'Claude Code CLI', desc: '~/.claude/settings.json' },
-                  { id: 'codex', label: 'Codex CLI', desc: '~/.codex/auth.json + config.toml' },
-                ].map(client => (
-                  <div
-                    key={client.id}
-                    onClick={() => setSelectedClients(prev =>
-                      prev.includes(client.id) ? prev.filter(c => c !== client.id) : [...prev, client.id]
+                  <DialogBody className="flex flex-col gap-4 pt-2">
+                    {/* 客户端选择 */}
+                    <div className="flex gap-3">
+                      {[
+                        { id: 'claudeCode', label: 'Claude Code CLI', desc: '~/.claude/settings.json' },
+                        { id: 'codex', label: 'Codex CLI', desc: '~/.codex/auth.json + config.toml' },
+                      ].map(client => (
+                        <div
+                          key={client.id}
+                          onClick={() => setSelectedClients(prev =>
+                            prev.includes(client.id) ? prev.filter(c => c !== client.id) : [...prev, client.id]
+                          )}
+                          className={`flex-1 p-3 rounded-xl border cursor-pointer transition-all ${selectedClients.includes(client.id)
+                              ? 'border-primary bg-primary/5 shadow-sm'
+                              : 'border-border bg-muted/20 hover:bg-muted/40'
+                            }`}
+                        >
+                          <Text size="sm" fw={600} className="text-foreground">{client.label}</Text>
+                          <Text size="xs" className="text-muted-foreground font-mono mt-1">{client.desc}</Text>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 配置预览 */}
+                    <div className="bg-muted/30 border border-border rounded-xl p-3">
+                      <Text size="xs" className="text-muted-foreground mb-2">{t('gateway.configToWrite')}</Text>
+                      <div className="flex flex-col gap-2 font-mono text-[11px]">
+                        {selectedClients.includes('claudeCode') && (
+                          <div className="flex flex-col gap-0.5 p-2 rounded-lg bg-muted/30">
+                            <span className="text-muted-foreground text-[10px] font-sans">Claude Code → ~/.claude/settings.json</span>
+                            <span className="text-foreground">ANTHROPIC_BASE_URL = {effectiveBaseUrl}</span>
+                            <span className="text-foreground">ANTHROPIC_API_KEY = {(effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || '').split('\n')[0]?.substring(0, 12)}***</span>
+                          </div>
+                        )}
+                        {selectedClients.includes('codex') && (
+                          <div className="flex flex-col gap-0.5 p-2 rounded-lg bg-muted/30">
+                            <span className="text-muted-foreground text-[10px] font-sans">Codex → ~/.codex/config.toml + auth.json</span>
+                            <span className="text-foreground">base_url = "{effectiveBaseUrl}/v1"</span>
+                            <span className="text-foreground">OPENAI_API_KEY = {(effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || '').split('\n')[0]?.substring(0, 12)}***</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 执行按钮 */}
+                    <Button
+                      onClick={handleConfigureClients}
+                      disabled={selectedClients.length === 0 || clientConfigLoading}
+                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                    >
+                      <Zap size={16} className="mr-1" />
+                      {clientConfigLoading ? t('gateway.configuring') : t('gateway.oneClickConfigClients', { count: selectedClients.length })}
+                    </Button>
+
+                    {/* 结果展示 */}
+                    {clientConfigResults.length > 0 && (
+                      <div className="flex flex-col gap-2">
+                        {clientConfigResults.map((result: any, idx: number) => (
+                          <div key={idx} className={`p-3 rounded-lg border ${result.success ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+                            <Text size="sm" fw={600} className={result.success ? 'text-green-600' : 'text-red-500'}>
+                              {result.success ? '✓' : '✗'} {result.client}
+                            </Text>
+                            {result.success && result.paths?.length > 0 && (
+                              <Text size="xs" className="text-muted-foreground font-mono mt-1">
+                                {result.paths.join(', ')}
+                              </Text>
+                            )}
+                            {result.error && (
+                              <Text size="xs" className="text-red-500 mt-1">{result.error}</Text>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
-                    className={`flex-1 p-3 rounded-xl border cursor-pointer transition-all ${
-                      selectedClients.includes(client.id)
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-border bg-muted/20 hover:bg-muted/40'
-                    }`}
-                  >
-                    <Text size="sm" fw={600} className="text-foreground">{client.label}</Text>
-                    <Text size="xs" className="text-muted-foreground font-mono mt-1">{client.desc}</Text>
-                  </div>
-                ))}
-              </div>
-
-              {/* 配置预览 */}
-              <div className="bg-muted/30 border border-border rounded-xl p-3">
-                <Text size="xs" className="text-muted-foreground mb-2">{t('gateway.configToWrite')}</Text>
-                <div className="flex flex-col gap-2 font-mono text-[11px]">
-                  {selectedClients.includes('claudeCode') && (
-                    <div className="flex flex-col gap-0.5 p-2 rounded-lg bg-muted/30">
-                      <span className="text-muted-foreground text-[10px] font-sans">Claude Code → ~/.claude/settings.json</span>
-                      <span className="text-foreground">ANTHROPIC_BASE_URL = {effectiveBaseUrl}</span>
-                      <span className="text-foreground">ANTHROPIC_API_KEY = {(effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || '').split('\n')[0]?.substring(0, 12)}***</span>
-                    </div>
-                  )}
-                  {selectedClients.includes('codex') && (
-                    <div className="flex flex-col gap-0.5 p-2 rounded-lg bg-muted/30">
-                      <span className="text-muted-foreground text-[10px] font-sans">Codex → ~/.codex/config.toml + auth.json</span>
-                      <span className="text-foreground">base_url = "{effectiveBaseUrl}/v1"</span>
-                      <span className="text-foreground">OPENAI_API_KEY = {(effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || '').split('\n')[0]?.substring(0, 12)}***</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* 执行按钮 */}
-              <Button
-                onClick={handleConfigureClients}
-                disabled={selectedClients.length === 0 || clientConfigLoading}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                <Zap size={16} className="mr-1" />
-                {clientConfigLoading ? t('gateway.configuring') : t('gateway.oneClickConfigClients', { count: selectedClients.length })}
-              </Button>
-
-              {/* 结果展示 */}
-              {clientConfigResults.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  {clientConfigResults.map((result: any, idx: number) => (
-                    <div key={idx} className={`p-3 rounded-lg border ${result.success ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
-                      <Text size="sm" fw={600} className={result.success ? 'text-green-600' : 'text-red-500'}>
-                        {result.success ? '✓' : '✗'} {result.client}
-                      </Text>
-                      {result.success && result.paths?.length > 0 && (
-                        <Text size="xs" className="text-muted-foreground font-mono mt-1">
-                          {result.paths.join(', ')}
-                        </Text>
-                      )}
-                      {result.error && (
-                        <Text size="xs" className="text-red-500 mt-1">{result.error}</Text>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </DialogBody>
-          </DialogContent>
-        </DialogRoot>
-      </Stack>
-    </div>
+                  </DialogBody>
+                </DialogContent>
+              </DialogRoot>
+            </Stack>
+          </div>
         </GatewayDataProvider>
       </GatewayStatusProvider>
     </GatewayConfigProvider>

@@ -50,7 +50,7 @@ use commands::cli_config_cmd::{
     write_codex_cli_config,
 };
 
-//网关反代
+//网关2API
 use commands::gateway_cmd::{
     cleanup_stale_health,
     clear_banned_account,
@@ -279,7 +279,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
         if let Err(err) = gateway::auto_start_if_enabled(&app_handle).await {
-            log::error!("自动启动反代失败: {err}");
+            log::error!("自动启动2API失败: {err}");
         }
     });
 

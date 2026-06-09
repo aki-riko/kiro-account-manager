@@ -394,11 +394,12 @@ export const buildGatewayRoutingSummary = ({ config, counts, selectedLabels = {}
   if (mode === 'single') {
     return {
       modeLabel: '指定单账号',
-      modeDescription: '反代会固定使用一个账号，适合调试或绑定到单一租户场景。',
+      modeDescription: '2API会固定使用一个账号，适合调试或绑定到单一租户场景。',
       selectionLabel: '当前账号',
       selectionValue: selectedLabels.single || '未选择账号',
       inventorySummary,
-      strategySummary: '固定账号，不参与轮换'}
+      strategySummary: '固定账号，不参与轮换'
+    }
   }
 
   if (mode === 'group') {
@@ -408,7 +409,8 @@ export const buildGatewayRoutingSummary = ({ config, counts, selectedLabels = {}
       selectionLabel: '当前分组',
       selectionValue: selectedLabels.group || '未选择分组',
       inventorySummary,
-      strategySummary: `策略 ${config?.strategy || 'round_robin'} / 阈值 ${Number(config?.threshold) || 90}%`}
+      strategySummary: `策略 ${config?.strategy || 'round_robin'} / 阈值 ${Number(config?.threshold) || 90}%`
+    }
   }
 
   if (mode === 'pool') {
@@ -418,7 +420,8 @@ export const buildGatewayRoutingSummary = ({ config, counts, selectedLabels = {}
       selectionLabel: '账号范围',
       selectionValue: '所有可用账号',
       inventorySummary,
-      strategySummary: `策略 ${config?.strategy || 'round_robin'} / 阈值 ${Number(config?.threshold) || 90}%`}
+      strategySummary: `策略 ${config?.strategy || 'round_robin'} / 阈值 ${Number(config?.threshold) || 90}%`
+    }
   }
 
   return {
@@ -427,7 +430,8 @@ export const buildGatewayRoutingSummary = ({ config, counts, selectedLabels = {}
     selectionLabel: '当前分组',
     selectionValue: selectedLabels.group || '未选择分组',
     inventorySummary,
-    strategySummary: `策略 ${config?.strategy || 'round_robin'} / 阈值 ${Number(config?.threshold) || 90}%`}
+    strategySummary: `策略 ${config?.strategy || 'round_robin'} / 阈值 ${Number(config?.threshold) || 90}%`
+  }
 }
 
 export const buildGatewayActionSummary = ({
@@ -435,7 +439,7 @@ export const buildGatewayActionSummary = ({
   isDirty,
   hasUnsavedChanges,
   hasRuntimeChanges,
-  hasFieldErrors}: any) => {
+  hasFieldErrors }: any) => {
   const unsavedChanges = hasUnsavedChanges ?? isDirty ?? false
   const runtimeChanges = hasRuntimeChanges ?? (running && unsavedChanges)
 
@@ -443,41 +447,47 @@ export const buildGatewayActionSummary = ({
     return {
       tone: 'red',
       title: '先修正配置错误',
-      description: '当前表单存在无效配置，保存、启动和重启都会被拦截，先修正标红字段。'}
+      description: '当前表单存在无效配置，保存、启动和重启都会被拦截，先修正标红字段。'
+    }
   }
 
   if (running && unsavedChanges && runtimeChanges) {
     return {
       tone: 'yellow',
       title: '配置已变更，重启后生效',
-      description: '反代仍按已启动时的配置运行。先保存，再执行重启反代，才能让新配置生效。'}
+      description: '2API仍按已启动时的配置运行。先保存，再执行重启2API，才能让新配置生效。'
+    }
   }
 
   if (running && unsavedChanges) {
     return {
       tone: 'blue',
       title: '当前运行配置尚未保存',
-      description: '当前页面配置已经用于运行反代，但还没有写回配置文件；如需保留下次启动沿用，请保存配置。'}
+      description: '当前页面配置已经用于运行2API，但还没有写回配置文件；如需保留下次启动沿用，请保存配置。'
+    }
   }
 
   if (running) {
     return {
       tone: 'teal',
-      title: '反代运行中',
-      description: '当前配置与已保存状态一致；如需中断流量可直接停止反代。'}
+      title: '2API运行中',
+      description: '当前配置与已保存状态一致；如需中断流量可直接停止2API。'
+    }
   }
 
   if (unsavedChanges) {
     return {
       tone: 'blue',
       title: '可按当前配置直接启动',
-      description: '启动反代会使用当前表单里的配置；如果希望下次应用启动也沿用这些设置，先点保存配置。'}
+      description: '启动2API会使用当前表单里的配置；如果希望下次应用启动也沿用这些设置，先点保存配置。'
+    }
   }
 
   return {
     tone: 'blue',
-    title: '反代当前未启动',
-    description: '可以直接启动现有配置，或先调整表单后再启动。'}
+    title: '2API当前未启动',
+    description: '可以直接启动现有配置，或先调整表单后再启动。'
+  }
 }
 
 export const buildGatewaySecuritySummary = ({ config }: any) => {
@@ -490,7 +500,8 @@ export const buildGatewaySecuritySummary = ({ config }: any) => {
     apiKeyState: clientApiKeys.length
       ? `已配置 ${clientApiKeys.length} 个客户端 Key`
       : '未配置客户端 Key',
-    logLevel: config?.logLevel || 'debug'}
+    logLevel: config?.logLevel || 'debug'
+  }
 }
 
 export const buildGatewayIntegrationSummary = ({ baseUrl, apiKey, clientApiKeysText, logDir, errorHistory }: any) => {
@@ -503,7 +514,8 @@ export const buildGatewayIntegrationSummary = ({ baseUrl, apiKey, clientApiKeysT
     endpointLabel: baseUrl,
     authLabel: clientApiKeys.length > 1 ? `Bearer ${safeKey}（共 ${clientApiKeys.length} 个 Key）` : `Bearer ${safeKey}`,
     logDirState: String(logDir || '').trim() ? '日志目录已定位' : '日志目录未获取',
-    errorDigest: `${errorCount} 条错误 / ${errorHits} 次命中`}
+    errorDigest: `${errorCount} 条错误 / ${errorHits} 次命中`
+  }
 }
 
 export const formatGatewayRequestDuration = (durationMs: number): string => {

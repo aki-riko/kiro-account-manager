@@ -860,7 +860,7 @@ async fn guarded_local_response(
         && !state.config.allowed_ips.is_empty()
         && !ip_matches_allowlist(client_addr.ip(), &state.config.allowed_ips)
     {
-        let message = format!("访问地址 {} 不在反代白名单中", client_addr.ip());
+        let message = format!("访问地址 {} 不在2API白名单中", client_addr.ip());
         return gateway_error_with_log(
             &state,
             ResponseFormat::Responses,
@@ -1445,7 +1445,7 @@ pub async fn proxy_handler(
         && !state.config.allowed_ips.is_empty()
         && !ip_matches_allowlist(client_addr.ip(), &state.config.allowed_ips)
     {
-        let message = format!("访问地址 {} 不在反代白名单中", client_addr.ip());
+        let message = format!("访问地址 {} 不在2API白名单中", client_addr.ip());
         return gateway_error_with_log(
             &state,
             format,
@@ -1892,7 +1892,7 @@ pub async fn proxy_handler(
                         sanitized
                     );
                     // 如果是账号不可用，继续尝试
-                    if message.contains("未找到符合反代配置的可用账号") {
+                    if message.contains("未找到符合2API配置的可用账号") {
                         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                         continue;
                     }
@@ -2625,7 +2625,7 @@ async fn resolve_upstream_credentials(
 ) -> Result<UpstreamCredentials, String> {
     match config.account_mode.as_str() {
         "single" | "group" | "pool" => resolve_managed_account_credentials(config, state).await,
-        "local" => Err("反代不再支持 local 模式，请改用 single/group/pool 账号池模式".to_string()),
+        "local" => Err("2API不再支持 local 模式，请改用 single/group/pool 账号池模式".to_string()),
         _ => Err("accountMode 必须是 single/group/pool".to_string()),
     }
 }
@@ -2713,7 +2713,7 @@ async fn resolve_managed_account_credentials(
     };
 
     if accounts.is_empty() {
-        return Err("__402__未找到符合反代配置的可用账号".to_string());
+        return Err("__402__未找到符合2API配置的可用账号".to_string());
     }
 
     // 使用 LoadBalancer 选择账号
@@ -2747,7 +2747,7 @@ async fn resolve_managed_account_credentials(
                     Err(error) => {
                         state.load_balancer.decrement_connections(&account.id).await;
                         return Err(format!(
-                            "创建账号 {} 的反代 HTTP 客户端失败: {}",
+                            "创建账号 {} 的2API HTTP 客户端失败: {}",
                             account.label,
                             sanitize_error(&error)
                         ));
@@ -2925,7 +2925,7 @@ fn build_upstream_credentials_from_refresh(
 
     let http = build_streaming_http_client_for_account(account).map_err(|error| {
         format!(
-            "创建账号 {} 的反代 HTTP 客户端失败: {}",
+            "创建账号 {} 的2API HTTP 客户端失败: {}",
             account.label,
             sanitize_error(&error)
         )
