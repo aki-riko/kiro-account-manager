@@ -53,10 +53,14 @@ Kiro Account Manager is a desktop application based on **Tauri 2.x** for central
 | Platform | Architecture | File Format | Download Link |
 |----------|-------------|-------------|---------------|
 | 🪟 **Windows** | x64 | MSI Installer | [KiroAccountManager_1.9.1_x64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_x64_zh-CN.msi) |
-| 🍎 **macOS** | Intel (x64) | DMG Image | [KiroAccountManager_1.9.1_x64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_x64.dmg) |
-| 🍎 **macOS** | Apple Silicon (M1/M2/M3) | DMG Image | [KiroAccountManager_1.9.1_aarch64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_aarch64.dmg) |
+| 🪟 **Windows** | ARM64 | MSI Installer | [KiroAccountManager_1.9.1_arm64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_arm64_zh-CN.msi) |
+| 🍎 **macOS** | x64 / Intel | DMG Image | [KiroAccountManager_1.9.1_x64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_x64.dmg) |
+| 🍎 **macOS** | x64 / Intel | App Archive | [KiroAccountManager_x64.app.tar.gz](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_x64.app.tar.gz) |
+| 🍎 **macOS** | ARM64 / Apple Silicon (M1/M2/M3/M4) | DMG Image | [KiroAccountManager_1.9.1_aarch64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_aarch64.dmg) |
+| 🍎 **macOS** | ARM64 / Apple Silicon (M1/M2/M3/M4) | App Archive | [KiroAccountManager_aarch64.app.tar.gz](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_aarch64.app.tar.gz) |
 | 🐧 **Linux** | x86_64 | AppImage | [KiroAccountManager_1.9.1_amd64.AppImage](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_amd64.AppImage) |
 | 🐧 **Linux** | x86_64 | DEB Package | [KiroAccountManager_1.9.1_amd64.deb](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_amd64.deb) |
+| 🐧 **Linux** | x86_64 | RPM Package | [KiroAccountManager-1.9.1-1.x86_64.rpm](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager-1.9.1-1.x86_64.rpm) |
 
 > **macOS Style Note**: If style display issues occur, please adjust based on the current repository source code (I don't have a macOS device, cannot reproduce and debug).
 
@@ -70,6 +74,128 @@ Kiro Account Manager is a desktop application based on **Tauri 2.x** for central
 - **macOS**: Open `.dmg`, drag to Applications, allow in "Security & Privacy" on first run
 - **Linux AppImage**: Run directly after `chmod +x`
 - **Linux DEB**: Install with `sudo dpkg -i`
+- **Linux RPM**: Install with `sudo rpm -i` or the package manager for your distribution
+
+---
+
+## 📝 Changelog
+
+Entries are grouped by the actual GitHub Release publish windows. “Unreleased” contains changes merged after v1.9.1 but not yet packaged in a release.
+
+### 🚧 Unreleased — Account Isolation and Kiro2API Reliability
+
+> Focuses on long-running multi-account issues: account-scoped machine IDs, per-account proxies, safer account-file saves, upstream error passthrough, Responses compatibility, and Linux WebKit software-rendering behavior.
+
+#### 🔑 Account Machine ID Isolation
+- **New**: Account-scoped `machineId` persistence — imported accounts, online login, and normalization now generate a stable random machine ID for accounts that do not already have one, instead of borrowing the current system machine ID at switch time.
+- **Fix**: Manual switching and auto-switching write the target account's own machine ID — fixes the case where the account changes but Kiro IDE state or request headers still use the previous/current system machine ID.
+- **Change**: Removed legacy global machine ID compatibility settings; switching now uses the account's own `machineId`.
+
+#### 🌐 Per-account Proxy and BuilderId
+- **New**: Per-account proxy configuration — a specific account can use its own outbound proxy for Kiro2API / Kiro API calls without changing Kiro IDE, Kiro CLI, or the system proxy.
+- **Fix**: BuilderId `profileArn` fallback — covers accounts that can log in successfully but fail later Kiro API requests because the profile ARN is missing.
+- **Improve**: Account edit layout for groups, tags, proxy, and machine ID fields.
+
+#### 💾 Account Files and Kiro2API
+- **Change**: Account saves keep only the latest `.bak` backup — avoids continuously creating `accounts.backup-*.json` files under AppData on every account update.
+- **Fix**: Restore from backup when `accounts.json` is missing or replacement fails — prevents an interrupted save from turning the account list into an empty state.
+- **New**: Anthropic 429 raw error passthrough — callers now see the real upstream rate-limit response instead of a generic wrapped failure.
+- **Fix**: Preserve upstream JSON for non-200 responses where possible — authentication, rate-limit, and model errors keep their actionable fields for clients and logs.
+- **Fix**: OpenAI Responses body shape for `/v1/responses` — reduces client parsing failures caused by incomplete output fields.
+- **Change**: Move MCP configuration out of proxy settings.
+- **New**: Linux WebKit software-rendering thread limit — reduces long-running WebKitWebProcess CPU saturation on GPU-less, remote desktop, and server environments.
+
+### 🛠️ v1.9.1 - 2026-06-02 — Tool Calls, Responses, Request Logs, and Quota Recovery
+
+> Focuses on Kiro2API protocol compatibility: Chat Completions tool results, Responses output shape, non-200 passthrough, structured logs, and quota recovery.
+
+#### 🔧 Chat Completions Tool Calls
+- **Fix**: Tool results are no longer double-serialized — Chat Completions clients no longer receive a JSON-looking string that cannot be parsed as the expected tool result object.
+- **Fix**: Requests with missing or empty `messages[].content` are accepted, matching common tool-call / assistant-message shapes produced by third-party clients.
+- **Change**: Tool results are ordered by previous tool-use relationships, reducing mismatches when multiple tools are invoked in sequence or concurrently.
+
+#### 📡 Responses, Errors, and Logs
+- **Fix**: `/v1/responses` output and event fields are completed, reducing missing fields in Responses clients.
+- **New**: Raw JSON passthrough for authentication, rate-limit, and model errors.
+- **New**: Structured request logs — account, model, Region, status code, duration, streaming state, and error summary are recorded so failures can be traced to the exact account/model/Region.
+- **New**: Accounts are re-enabled automatically after quota recovery, so capped or temporarily unavailable accounts return to the pool after usable quota is synchronized.
+
+### 🔄 v1.9.0 - 2026-06-01 — Kiro IDE Switch Ordering and CLI Logout
+
+> Fixes account switching and logout write order so Kiro IDE and kiro-cli do not keep stale or partially updated token state.
+
+- **Fix**: Account file write ordering for switch/logout now matches Kiro IDE behavior.
+- **Fix**: Logout and switch gates are separated.
+- **Fix**: CLI logout clears old tokens and handles repeated logout states.
+- **Change**: Usage probing covers all backend-supported Regions.
+- **Change**: Chinese authentication terminology is unified.
+
+### 🔐 v1.8.9 - 2026-06-01 — Login Callback, profileArn, Auto-switching, and Release Signing
+
+> Fixes login callback compatibility, Kiro IDE cache fields, overage auto-switching, Region alignment, UTF-8 truncation, and release artifact checks.
+
+- **Fix**: AWS SSO uses loopback `redirect_uri` without a port.
+- **Fix**: Social `expiresAt` and BuilderId `profileArn` are written in Kiro IDE-compatible form.
+- **New**: Explicit logout action in the account list.
+- **Fix**: Auto-switching allows capped accounts with overage headroom.
+- **Fix**: kiro-cli switching refreshes tokens and cleans old keys.
+- **Fix**: UTF-8 truncation, Region alignment, and wildcard connection host generation.
+- **New**: Claude Opus 4.8 model support.
+- **Fix**: Available-model cache provider identity.
+- **New**: Auto-update signing validation and MSI artifact selection fix.
+
+### 🌍 v1.8.8 - 2026-05-31 — Bun, i18n, and Account Status Detection
+
+> Improves build speed, adds English/Russian UI, and unifies account status detection across sync, refresh, usage, and model-list queries.
+
+- **Change**: Build workflow migrated to Bun and npm lockfile removed.
+- **Fix**: Token-file TOCTOU symlink risk; CSP and HTTP permissions tightened.
+- **New**: suspended / banned / invalid / capped / overage status detection.
+- **New**: Unusable accounts are automatically disabled for auto-switching and Kiro2API routing.
+- **New**: English and Russian UI with a settings language switcher.
+- **Change**: Close-to-tray is disabled by default.
+- **Fix**: Streaming `tool_use` restores original MCP tool names and emits missing tool-use start events.
+- **Fix**: Enterprise gateway accounts no longer send incompatible profileArn.
+
+### 🚀 v1.8.7 - 2026-05-20 — Core Kiro2API and Account Pool Release
+
+> Major Kiro2API expansion: OpenAI / Anthropic protocols, Prompt Cache, request logs, account-pool routing, API Keys, model mapping, prompt filters, and Claude Code / Codex quick setup.
+
+- **New**: Anthropic `/v1/messages`, OpenAI `/v1/chat/completions`, and OpenAI `/v1/responses` compatibility.
+- **New**: Image content, thinking parameters, tool calls, Responses session recovery, and model mapping.
+- **Fix**: Chat Completions streaming `completion_id` / `role`, Responses tool inheritance, and multiple Kiro API 400 cases.
+- **New**: Prompt Cache mapping, simulator, payload size control, message trimming, and token control.
+- **New**: Request logs, request/model/endpoint stats, log directory access, search, filters, log levels, and virtualized lists — Kiro2API requests can now be inspected instead of treated as a black box.
+- **New**: Account pool routing, route testing, API Key management, model mapping rules, prompt filters, and Claude Code / Codex quick configuration — clients can be connected without manually assembling URLs, keys, and model aliases.
+- **New**: Account enabled/disabled state, overage controls, overage cap display, and quota-based auto-disable / auto-enable — usable overage accounts are no longer treated the same as exhausted accounts.
+- **Change**: Token auto-refresh moved to backend background tasks so refresh behavior is not tied to whether the page is currently open.
+- **New**: Windows ARM64 builds.
+- **Remove**: Early MITM experiment and deprecated `/messages` route.
+- **Fix**: Client registration path traversal and backend security issues.
+
+### ⚙️ v1.8.6 - 2026-05-10 — Responses Foundation, Account Pool, and IDE Integration
+
+> Establishes the Responses foundation, switches gateway accounts to the account manager pool, and improves Kiro IDE path detection, token refresh before switching, and machine ID backfill.
+
+- **New**: OpenAI Responses API foundation.
+- **New**: Gateway account source defaults to the account manager pool.
+- **New**: Account failure tracking, auto-disable, Balanced strategy, and pool status view.
+- **New**: Prompt Caching, token limits, payload size control, virtualized request logs, and search optimization.
+- **Fix**: Early Kiro API 400 cases and q.us-east-1 compatibility.
+- **New**: Custom Kiro IDE path, token refresh before switching, machine ID generation, current-account logout, context menus, app data directory entry, and IDE Session Manager.
+- **Fix**: `kiro://` deep links, FilterDropdown clipping, WiX template, auto-update public key, macOS DMG, and multi-platform builds.
+
+### 🧩 v1.8.5 - 2026-04-27 — Login Callback and Kiro Upstream Request Fixes
+
+> Fixes online login callback behavior, `kiro://` protocol registration, and Kiro upstream headers that caused 403 responses.
+
+- **Fix**: AuthCallback close behavior after successful online login.
+- **Fix**: `kiro://` points to the currently running app.
+- **Fix**: Missing Host header for q.us-east-1 upstream requests.
+- **Fix**: Removed `TokenType: EXTERNAL_IDP` header that caused 403 responses.
+- **Improve**: Account card spacing and window event handling.
+
+For older versions, see GitHub Releases.
 
 ---
 
