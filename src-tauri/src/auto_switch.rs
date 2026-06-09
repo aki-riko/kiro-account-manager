@@ -2,6 +2,8 @@
 // 使用 tokio::time::interval 实现真正的后台定时检查
 
 use crate::commands::app_settings_cmd::{get_app_settings_inner, AppSettings};
+use crate::commands::common::{account_machine_id_or_new, save_store};
+use crate::commands::machine_guid::{generate_random_machine_id, set_custom_machine_guid};
 use crate::core::account::Account;
 use crate::state::AppState;
 use tauri::{AppHandle, Emitter, Manager};
@@ -293,12 +295,12 @@ fn find_available_account(
 }
 
 /// 切换账号
-async fn switch_account(_app_handle: &AppHandle, account: &Account) -> Result<(), String> {
+async fn switch_account(app_handle: &AppHandle, account: &Account) -> Result<(), String> {
     // 读取应用设置
     let settings = get_app_settings_inner().map_err(|e| e.to_string())?;
 
     // 应用机器码（如果需要）
-    let account_to_switch = apply_machine_guid(account, &settings)?;
+    let account_to_switch = apply_machine_guid(app_handle, account, &settings).await?;
 
     // 构建切换参数
     let params = build_switch_params(&account_to_switch);
@@ -311,16 +313,96 @@ async fn switch_account(_app_handle: &AppHandle, account: &Account) -> Result<()
     Ok(())
 }
 
-/// 应用机器码
-fn apply_machine_guid(account: &Account, settings: &AppSettings) -> Result<Account, String> {
-    let account = account.clone();
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MachineGuidSwitchAction {
+    Skip,
+    UseAccountMachineId(String),
+    GenerateRandomMachineId,
+}
 
-    // 如果启用了机器码绑定
-    if settings.bind_machine_id_to_account == Some(true) {
-        // 查找绑定的机器码（从 account.machine_id 字段）
-        if let Some(machine_id) = &account.machine_id {
-            // 这里不需要修改 account，因为 machine_id 已经在 account 中了
-            log::debug!("[AutoSwitch] 使用绑定的机器码: {}", machine_id);
+fn resolve_machine_guid_switch_action(
+    account: &Account,
+    settings: &AppSettings,
+) -> MachineGuidSwitchAction {
+    if settings.auto_change_machine_id == Some(false) {
+        return MachineGuidSwitchAction::Skip;
+    }
+
+    if settings.bind_machine_id_to_account != Some(false) {
+        return MachineGuidSwitchAction::UseAccountMachineId(account_machine_id_or_new(
+            &account.machine_id,
+        ));
+    }
+
+    MachineGuidSwitchAction::GenerateRandomMachineId
+}
+
+fn persist_account_machine_id_if_needed(
+    app_handle: &AppHandle,
+    account_id: &str,
+    machine_id: &str,
+) -> Result<(), String> {
+    let state = app_handle.state::<AppState>();
+    let mut store = match state.store.lock() {
+        Ok(store) => store,
+        Err(poisoned) => {
+            log::warn!("[AutoSwitch] 锁被污染，尝试恢复");
+            poisoned.into_inner()
+        }
+    };
+
+    let Some(stored_account) = store
+        .accounts
+        .iter_mut()
+        .find(|stored_account| stored_account.id == account_id)
+    else {
+        return Err("账号不存在".to_string());
+    };
+
+    let current_machine_id = stored_account
+        .machine_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if current_machine_id == Some(machine_id) {
+        return Ok(());
+    }
+
+    stored_account.machine_id = Some(machine_id.to_string());
+    save_store(&store)
+}
+
+/// 应用机器码
+async fn apply_machine_guid(
+    app_handle: &AppHandle,
+    account: &Account,
+    settings: &AppSettings,
+) -> Result<Account, String> {
+    let mut account = account.clone();
+
+    match resolve_machine_guid_switch_action(&account, settings) {
+        MachineGuidSwitchAction::Skip => {
+            log::debug!("[AutoSwitch] 机器码切换已禁用");
+        }
+        MachineGuidSwitchAction::UseAccountMachineId(machine_id) => {
+            log::debug!("[AutoSwitch] 使用账号绑定的机器码: {}", machine_id);
+            if let Err(error) =
+                persist_account_machine_id_if_needed(app_handle, &account.id, &machine_id)
+            {
+                log::warn!("[AutoSwitch] 保存账号机器码失败: {}", error);
+            }
+            if let Err(error) = set_custom_machine_guid(machine_id.clone()).await {
+                log::warn!("[AutoSwitch] 写入系统机器码失败: {}", error);
+            }
+            account.machine_id = Some(machine_id);
+        }
+        MachineGuidSwitchAction::GenerateRandomMachineId => {
+            let machine_id = generate_random_machine_id();
+            log::debug!("[AutoSwitch] 使用随机机器码: {}", machine_id);
+            if let Err(error) = set_custom_machine_guid(machine_id).await {
+                log::warn!("[AutoSwitch] 写入随机机器码失败: {}", error);
+            }
         }
     }
 
@@ -340,5 +422,84 @@ fn build_switch_params(account: &Account) -> crate::kiro::ide::SwitchAccountPara
         client_secret: account.client_secret.clone(),
         client_id_hash: account.client_id_hash.clone(),
         region: account.region.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_machine_guid_switch_action, MachineGuidSwitchAction};
+    use crate::commands::app_settings_cmd::AppSettings;
+    use crate::core::account::Account;
+
+    fn account_with_machine_id(machine_id: Option<&str>) -> Account {
+        let mut account = Account::new("test@example.com".to_string(), "test".to_string());
+        account.machine_id = machine_id.map(str::to_string);
+        account
+    }
+
+    #[test]
+    fn auto_switch_machine_guid_skips_when_auto_change_disabled() {
+        let account = account_with_machine_id(Some("account-machine"));
+        let settings = AppSettings {
+            auto_change_machine_id: Some(false),
+            bind_machine_id_to_account: Some(true),
+            ..AppSettings::default()
+        };
+
+        assert_eq!(
+            resolve_machine_guid_switch_action(&account, &settings),
+            MachineGuidSwitchAction::Skip
+        );
+    }
+
+    #[test]
+    fn auto_switch_machine_guid_uses_existing_account_machine_id_by_default() {
+        let account = account_with_machine_id(Some(" ACCOUNT-MACHINE "));
+        let settings = AppSettings {
+            auto_change_machine_id: Some(true),
+            bind_machine_id_to_account: None,
+            ..AppSettings::default()
+        };
+
+        assert_eq!(
+            resolve_machine_guid_switch_action(&account, &settings),
+            MachineGuidSwitchAction::UseAccountMachineId("account-machine".to_string())
+        );
+    }
+
+    #[test]
+    fn auto_switch_machine_guid_generates_account_machine_id_when_bound_id_is_missing() {
+        let account = account_with_machine_id(Some("   "));
+        let settings = AppSettings {
+            auto_change_machine_id: Some(true),
+            bind_machine_id_to_account: Some(true),
+            ..AppSettings::default()
+        };
+
+        let action = resolve_machine_guid_switch_action(&account, &settings);
+
+        let MachineGuidSwitchAction::UseAccountMachineId(machine_id) = action else {
+            panic!("expected account machine id action");
+        };
+        assert!(!machine_id.trim().is_empty());
+        assert_ne!(
+            machine_id.trim(),
+            account.machine_id.as_deref().unwrap().trim()
+        );
+    }
+
+    #[test]
+    fn auto_switch_machine_guid_generates_random_id_when_binding_is_disabled() {
+        let account = account_with_machine_id(Some("account-machine"));
+        let settings = AppSettings {
+            auto_change_machine_id: Some(true),
+            bind_machine_id_to_account: Some(false),
+            ..AppSettings::default()
+        };
+
+        assert_eq!(
+            resolve_machine_guid_switch_action(&account, &settings),
+            MachineGuidSwitchAction::GenerateRandomMachineId
+        );
     }
 }
