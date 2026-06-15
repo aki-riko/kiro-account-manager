@@ -165,9 +165,8 @@ jobs:
           prerelease: false
 
       - name: Upload build artifacts
-        if: steps.should_run.outputs.should_run == 'true'
+        if: always() && steps.should_run.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: build-${{ matrix.platform }}-${{ matrix.target || 'default' }}
           path: |
