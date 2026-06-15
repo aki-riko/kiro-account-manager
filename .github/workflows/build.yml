@@ -103,8 +103,11 @@ jobs:
       - name: Build application
         uses: tauri-apps/tauri-action@v0
         env:
-          # 不需要签名密钥，因为这只是构建测试
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Linux AppImage 使用 gzip 压缩，兼容旧版 AppImageLauncher
+          APPIMAGETOOL_COMP: ${{ startsWith(matrix.platform, 'ubuntu') && 'gzip' || '' }}
         with:
           args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
           # 不上传到 release
