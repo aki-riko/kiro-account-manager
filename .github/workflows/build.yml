@@ -30,13 +30,6 @@ on:
 
 jobs:
   build:
-    # 根据 workflow_dispatch 输入过滤平台
-    if: |
-      github.event_name != 'workflow_dispatch' ||
-      github.event.inputs.platforms == 'all' ||
-      (github.event.inputs.platforms == 'windows' && startsWith(matrix.platform, 'windows')) ||
-      (github.event.inputs.platforms == 'macos' && startsWith(matrix.platform, 'macos')) ||
-      (github.event.inputs.platforms == 'linux' && startsWith(matrix.platform, 'ubuntu'))
     strategy:
       fail-fast: false
       matrix:
@@ -63,26 +56,50 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
+      - name: Check if should run
+        id: should_run
+        run: |
+          SHOULD_RUN="true"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PLATFORM="${{ matrix.platform }}"
+            FILTER="${{ github.event.inputs.platforms }}"
+            if [ "$FILTER" != "all" ]; then
+              if [ "$FILTER" = "windows" ] && [[ ! "$PLATFORM" =~ ^windows ]]; then
+                SHOULD_RUN="false"
+              elif [ "$FILTER" = "macos" ] && [[ ! "$PLATFORM" =~ ^macos ]]; then
+                SHOULD_RUN="false"
+              elif [ "$FILTER" = "linux" ] && [[ ! "$PLATFORM" =~ ^ubuntu ]]; then
+                SHOULD_RUN="false"
+              fi
+            fi
+          fi
+          echo "should_run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Checkout
+        if: steps.should_run.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
       - name: Install Linux dependencies
-        if: startsWith(matrix.platform, 'ubuntu')
+        if: steps.should_run.outputs.should_run == 'true' && startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Setup Node
+        if: steps.should_run.outputs.should_run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Setup Bun
+        if: steps.should_run.outputs.should_run == 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Rust cache
+        if: steps.should_run.outputs.should_run == 'true'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -91,16 +108,19 @@ jobs:
           shared-key: "build"
 
       - name: Install Rust stable
+        if: steps.should_run.outputs.should_run == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.95.0
           targets: ${{ matrix.target }}
 
       - name: Install dependencies
+        if: steps.should_run.outputs.should_run == 'true'
         shell: bash
         run: bun install
 
       - name: Check frontend code
+        if: steps.should_run.outputs.should_run == 'true'
         shell: bash
         run: |
           echo "📦 Checking TypeScript types..."
@@ -110,6 +130,7 @@ jobs:
           bun run lint || true
 
       - name: Check Rust code
+        if: steps.should_run.outputs.should_run == 'true'
         shell: bash
         working-directory: src-tauri
         run: |
@@ -118,7 +139,7 @@ jobs:
           cargo clippy -- -D warnings || echo "⚠️ Clippy warnings found"
 
       - name: Run Rust tests
-        if: github.event.inputs.skip_tests != 'true'
+        if: steps.should_run.outputs.should_run == 'true' && github.event.inputs.skip_tests != 'true'
         shell: bash
         working-directory: src-tauri
         run: |
@@ -126,6 +147,7 @@ jobs:
           cargo test --all-features || echo "⚠️ Some tests failed"
 
       - name: Build application
+        if: steps.should_run.outputs.should_run == 'true'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -143,6 +165,7 @@ jobs:
           prerelease: false
 
       - name: Upload build artifacts
+        if: steps.should_run.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         if: always()
         with:
