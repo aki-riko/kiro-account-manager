@@ -10,9 +10,33 @@ on:
     branches:
       - main
       - dev
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: '选择要构建的平台 (留空构建全部)'
+        required: false
+        type: choice
+        default: 'all'
+        options:
+          - 'all'
+          - 'windows'
+          - 'macos'
+          - 'linux'
+      skip_tests:
+        description: '跳过测试'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
+    # 根据 workflow_dispatch 输入过滤平台
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.platforms == 'all' ||
+      (github.event.inputs.platforms == 'windows' && startsWith(matrix.platform, 'windows')) ||
+      (github.event.inputs.platforms == 'macos' && startsWith(matrix.platform, 'macos')) ||
+      (github.event.inputs.platforms == 'linux' && startsWith(matrix.platform, 'ubuntu'))
     strategy:
       fail-fast: false
       matrix:
@@ -94,6 +118,7 @@ jobs:
           cargo clippy -- -D warnings || echo "⚠️ Clippy warnings found"
 
       - name: Run Rust tests
+        if: github.event.inputs.skip_tests != 'true'
         shell: bash
         working-directory: src-tauri
         run: |
