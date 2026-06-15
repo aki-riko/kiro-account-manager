@@ -175,7 +175,7 @@ jobs:
         if: always() && steps.should_run.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ matrix.platform }}-${{ matrix.target || 'default' }}
+          name: ${{ matrix.platform }}-${{ matrix.target || 'x64' }}
           path: |
             src-tauri/target/release/bundle
           retention-days: 7
