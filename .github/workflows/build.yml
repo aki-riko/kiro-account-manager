@@ -80,6 +80,13 @@ jobs:
         if: steps.should_run.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
+      - name: Install NASM (Windows)
+        if: steps.should_run.outputs.should_run == 'true' && startsWith(matrix.platform, 'windows')
+        run: |
+          choco install nasm -y
+          echo "C:\Program Files\NASM" >> $env:GITHUB_PATH
+        shell: pwsh
+
       - name: Install Linux dependencies
         if: steps.should_run.outputs.should_run == 'true' && startsWith(matrix.platform, 'ubuntu')
         run: |
