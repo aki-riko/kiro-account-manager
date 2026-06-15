@@ -175,7 +175,7 @@ jobs:
         if: always() && steps.should_run.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: kiro-account-manager-${{ matrix.platform }}-${{ matrix.target || 'x64' }}
+          name: kiro-account-manager-${{ matrix.target || (startsWith(matrix.platform, 'windows') && 'x64-windows' || startsWith(matrix.platform, 'macos') && 'universal-macos' || 'x64-linux') }}
           path: |
             src-tauri/target/release/bundle
           retention-days: 7
