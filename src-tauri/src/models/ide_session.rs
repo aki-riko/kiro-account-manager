@@ -57,6 +57,7 @@ pub struct Message {
     pub content: Vec<ContentItem>,
     #[serde(rename = "isHidden", default)]
     pub is_hidden: bool,
+    #[serde(default)]
     pub id: String,
 }
 
