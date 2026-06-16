@@ -536,6 +536,8 @@ function GatewayConfig({
                     const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
                     const email = acct.email || acct.userId || '未知账号'
                     const provider = acct.provider || ''
+                    const subPlan = acct.usageData?.subscriptionInfo?.subscriptionTitle || ''
+                    const hasData = !!acct.usageData
 
                     return (
                       <div
@@ -548,14 +550,15 @@ function GatewayConfig({
                       >
                         <Checkbox checked={checked} onCheckedChange={() => togglePoolAccount(opt.value)} onClick={(e) => e.stopPropagation()} />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="truncate text-xs font-medium text-foreground">{email}</span>
                             {provider && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">{provider}</Badge>}
+                            {subPlan && <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 shrink-0">{subPlan}</Badge>}
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${POOL_STATUS_COLORS[status] || 'bg-gray-400'}`} />
                             <span className="text-[9px] text-muted-foreground shrink-0">{POOL_STATUS_LABELS[status] || status}</span>
                           </div>
-                          {/* 进度条 */}
-                          {limit > 0 && (
+                          {/* 额度信息 */}
+                          {hasData ? (
                             <div className="mt-1.5 flex items-center gap-2">
                               <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
                                 <div
@@ -566,10 +569,14 @@ function GatewayConfig({
                               <span className="text-[9px] text-muted-foreground whitespace-nowrap">
                                 {currentOverages > 0
                                   ? `⚡${formatUsage(currentOverages)}${overageCap > 0 ? '/' + formatUsage(overageCap) : ''}`
-                                  : `${formatUsage(Math.max(0, limit - used))}/${formatUsage(limit)}`
+                                  : limit > 0
+                                    ? `${formatUsage(Math.max(0, limit - used))}/${formatUsage(limit)} (${Math.round(100 - percent)}%)`
+                                    : '无额度'
                                 }
                               </span>
                             </div>
+                          ) : (
+                            <div className="mt-1 text-[9px] text-muted-foreground/60 italic">未刷新</div>
                           )}
                         </div>
                         {checked && <CheckCircle2 size={14} className="text-primary shrink-0" />}
