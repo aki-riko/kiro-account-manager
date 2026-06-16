@@ -5901,7 +5901,7 @@ mod tests {
             .get("x-amz-user-agent")
             .and_then(|value| value.to_str().ok())
             .expect("x-amz-user-agent header");
-        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.0 KiroIDE-"));
+        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.39 KiroIDE-"));
         assert!(x_amz_user_agent.ends_with("-machine-123"));
         assert_eq!(
             request
@@ -5957,7 +5957,7 @@ mod tests {
             .get("x-amz-user-agent")
             .and_then(|value| value.to_str().ok())
             .expect("x-amz-user-agent header");
-        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.0 KiroIDE-"));
+        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.39 KiroIDE-"));
         assert!(x_amz_user_agent.ends_with("-machine-456"));
         assert!(request
             .headers()

@@ -299,14 +299,14 @@ fn detect_os_release_for_user_agent() -> String {
 
 pub fn build_kiro_x_amz_user_agent(machine_id: &str) -> String {
     format!(
-        "aws-sdk-js/1.0.0 {}",
+        "aws-sdk-js/1.0.39 {}",
         kiro_ide_user_agent_suffix(machine_id)
     )
 }
 
 pub fn build_kiro_custom_user_agent(machine_id: &str) -> String {
     format!(
-        "aws-sdk-js/1.0.0 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/codewhispererruntime#1.0.0 m/N,E {}",
+        "aws-sdk-js/1.0.39 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/codewhispererruntime#1.0.39 m/N {}",
         js_os_platform_for_user_agent(),
         KIRO_UA_OS_RELEASE.as_str(),
         KIRO_UA_NODE_VERSION.as_str(),
@@ -316,7 +316,7 @@ pub fn build_kiro_custom_user_agent(machine_id: &str) -> String {
 
 pub fn build_kiro_control_plane_user_agent() -> String {
     format!(
-        "aws-sdk-js/1.0.0 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/kirocontrolplanebearer#1.0.0 m/N,E",
+        "aws-sdk-js/1.0.39 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/kirocontrolplanebearer#1.0.39 m/N",
         js_os_platform_for_user_agent(),
         KIRO_UA_OS_RELEASE.as_str(),
         KIRO_UA_NODE_VERSION.as_str()
@@ -565,12 +565,12 @@ mod tests {
         let user_agent = build_kiro_custom_user_agent("machine-abc");
         let x_amz_user_agent = build_kiro_x_amz_user_agent("machine-abc");
 
-        assert!(user_agent.starts_with("aws-sdk-js/1.0.0 ua/2.1 os/"));
+        assert!(user_agent.starts_with("aws-sdk-js/1.0.39 ua/2.1 os/"));
         assert!(user_agent.contains(" lang/js md/nodejs#"));
-        assert!(user_agent.contains(" api/codewhispererruntime#1.0.0 m/N,E KiroIDE-"));
+        assert!(user_agent.contains(" api/codewhispererruntime#1.0.39 m/N KiroIDE-"));
         assert!(user_agent.ends_with("-machine-abc"));
 
-        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.0 KiroIDE-"));
+        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.39 KiroIDE-"));
         assert!(x_amz_user_agent.ends_with("-machine-abc"));
         assert!(!x_amz_user_agent.contains(" ua/2.1 "));
     }
