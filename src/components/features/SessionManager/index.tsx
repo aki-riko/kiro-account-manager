@@ -21,7 +21,7 @@ import { writeTextFile } from '@tauri-apps/plugin-fs'
 import { useDialog } from '@/contexts/DialogContext'
 import { showSuccess, showError, showWarning } from '@/utils/toast'
 
-export default function SessionManager() {
+function IdeSessionManager() {
   const { showConfirm } = useDialog()
   const [workspaces, setWorkspaces] = useState<string[]>([])
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null)
@@ -101,6 +101,7 @@ export default function SessionManager() {
     try {
       setLoading(true)
       setSelectedSession(null) // 先清空，避免显示旧数据
+      setSelectedWorkspace(workspaceHash)
       const data = await sessionApi.loadSession(workspaceHash, session.sessionId)
       setSelectedSession(data)
     } catch (error) {
@@ -407,30 +408,29 @@ export default function SessionManager() {
                       return (
                       <Card
                         key={session.sessionId}
-                        className={`group relative cursor-pointer overflow-hidden rounded-2xl p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5 hover:shadow-md ${isSelected ? 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/25 ring-2 ring-primary/25' : 'border-border/70 bg-card'}
+                        className={`group relative cursor-pointer overflow-hidden rounded-2xl p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5 hover:shadow-md ${isSelected ? 'border-primary/60 bg-primary/10 shadow-sm ring-1 ring-primary/20' : 'border-border/70 bg-card'}
                         `}
                         onClick={() => handleSelectSession(session.workspaceHash, session)}
                       >
                         {isSelected && (
                           <>
-                            <div className="absolute inset-y-2 left-0 w-1.5 rounded-r-full bg-primary-foreground/95 shadow-[0_0_18px_hsl(var(--primary-foreground)/0.45)]" />
-                            <div className="absolute right-2 top-2 rounded-full bg-primary-foreground/15 px-2 py-0.5 text-[10px] font-medium text-primary-foreground ring-1 ring-primary-foreground/30">当前</div>
+                            <div className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-primary" />
                           </>
                         )}
                         <div className="space-y-2 pl-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                              <h3 className={`line-clamp-2 text-sm font-semibold leading-snug ${isSelected ? 'pr-12 text-primary-foreground' : 'text-foreground'}`}>
+                              <h3 className={`line-clamp-2 text-sm font-semibold leading-snug ${isSelected ? 'text-primary' : 'text-foreground'}`}>
                                 {session.title}
                               </h3>
-                              <p className={`mt-1 truncate text-xs ${isSelected ? 'text-primary-foreground/75' : 'text-muted-foreground'}`}>
+                              <p className="mt-1 truncate text-xs text-muted-foreground">
                                 {decodeWorkspaceName(session.workspaceHash)}
                               </p>
                             </div>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className={`h-7 w-7 shrink-0 rounded-lg transition-opacity ${isSelected ? 'text-primary-foreground/80 opacity-100 hover:bg-primary-foreground/20 hover:text-primary-foreground' : 'opacity-0 hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100'}`}
+                              className="h-7 w-7 shrink-0 rounded-lg text-muted-foreground opacity-0 transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleDeleteSession(session.workspaceHash, session)
@@ -441,14 +441,14 @@ export default function SessionManager() {
                             </Button>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant={isSelected ? 'outline' : 'secondary'} className={`h-5 rounded-full px-2 text-[10px] font-normal ${isSelected ? 'border-primary-foreground/35 bg-primary-foreground/15 text-primary-foreground' : ''}`}>
+                            <Badge variant="secondary" className="h-5 rounded-full px-2 text-[10px] font-normal">
                               {session.sessionType}
                             </Badge>
-                            <span className={`flex items-center gap-1 text-xs ${isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
                               <MessageSquare className="h-3 w-3" />
                               {session.messageCount}
                             </span>
-                            <span className={`text-xs ${isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                            <span className="text-xs text-muted-foreground">
                               {formatFileSize(session.fileSize)}
                             </span>
                           </div>
@@ -495,7 +495,7 @@ export default function SessionManager() {
                             toggleWorkspaceSelection(workspace)
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          className="shrink-0 cursor-pointer"
+                          className="shrink-0 cursor-pointer border-foreground/40 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                         />
 
                         {/* Workspace Name */}
@@ -551,25 +551,24 @@ export default function SessionManager() {
                             return (
                             <Card
                               key={session.sessionId}
-                              className={`group relative cursor-pointer overflow-hidden rounded-2xl p-2.5 transition-all hover:border-primary/40 hover:bg-primary/5 ${isSelected ? 'border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25 ring-2 ring-primary/25' : 'border-border/60 bg-card'}
+                              className={`group relative cursor-pointer overflow-hidden rounded-2xl p-2.5 transition-all hover:border-primary/40 hover:bg-primary/5 ${isSelected ? 'border-primary/60 bg-primary/10 shadow-sm ring-1 ring-primary/20' : 'border-border/60 bg-card'}
                               `}
                               onClick={() => handleSelectSession(workspace, session)}
                             >
                               {isSelected && (
                                 <>
-                                  <div className="absolute inset-y-1.5 left-0 w-1.5 rounded-r-full bg-primary-foreground/95 shadow-[0_0_16px_hsl(var(--primary-foreground)/0.45)]" />
-                                  <div className="absolute right-2 top-2 rounded-full bg-primary-foreground/15 px-1.5 py-0.5 text-[9px] font-medium text-primary-foreground ring-1 ring-primary-foreground/30">当前</div>
+                                  <div className="absolute inset-y-1.5 left-0 w-1 rounded-r-full bg-primary" />
                                 </>
                               )}
                               <div className="space-y-1.5 pl-1">
                                 <div className="flex items-start justify-between gap-2">
-                                  <h3 className={`line-clamp-2 flex-1 text-xs font-semibold leading-snug ${isSelected ? 'pr-10 text-primary-foreground' : 'text-foreground'}`}>
+                                  <h3 className={`line-clamp-2 flex-1 text-xs font-semibold leading-snug ${isSelected ? 'text-primary' : 'text-foreground'}`}>
                                     {session.title}
                                   </h3>
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className={`h-6 w-6 shrink-0 rounded-lg transition-opacity ${isSelected ? 'text-primary-foreground/80 opacity-100 hover:bg-primary-foreground/20 hover:text-primary-foreground' : 'opacity-0 hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100'}`}
+                                    className="h-6 w-6 shrink-0 rounded-lg text-muted-foreground opacity-0 transition-opacity hover:bg-destructive hover:text-destructive-foreground group-hover:opacity-100"
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       handleDeleteSession(workspace, session)
@@ -580,10 +579,10 @@ export default function SessionManager() {
                                   </Button>
                                 </div>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge variant={isSelected ? 'outline' : 'secondary'} className={`h-4 rounded-full px-1.5 text-[10px] font-normal ${isSelected ? 'border-primary-foreground/35 bg-primary-foreground/15 text-primary-foreground' : ''}`}>
+                                  <Badge variant="secondary" className="h-4 rounded-full px-1.5 text-[10px] font-normal">
                                     {session.sessionType}
                                   </Badge>
-                                  <span className={`flex items-center gap-1 text-xs ${isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                     <MessageSquare className="h-2.5 w-2.5" />
                                     {session.messageCount}
                                   </span>
@@ -728,5 +727,39 @@ export default function SessionManager() {
         </div>
       </div>
     </div>
+  )
+}
+
+
+// ===== Tab Wrapper =====
+import { lazy, Suspense } from 'react'
+import { Terminal, MonitorSmartphone } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+
+const CliSessionManager = lazy(() => import('../CliSessionManager/index'))
+
+export default function SessionManager() {
+  return (
+    <Tabs defaultValue="ide" className="flex flex-col h-full">
+      <TabsList className="glass-card mb-3 flex h-9 w-fit justify-start rounded-lg border-none p-0.5 no-scrollbar">
+        <TabsTrigger value="ide" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium data-[state=active]:shadow-sm">
+          <MonitorSmartphone size={13} />
+          Kiro IDE
+        </TabsTrigger>
+        <TabsTrigger value="cli" className="gap-1.5 px-3 h-8 shrink-0 text-xs font-medium data-[state=active]:shadow-sm">
+          <Terminal size={13} />
+          Kiro CLI
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="ide" className="flex-1 min-h-0 mt-0">
+        <IdeSessionManager />
+      </TabsContent>
+      <TabsContent value="cli" className="flex-1 min-h-0 mt-0">
+        <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground text-sm">加载中...</div>}>
+          <CliSessionManager />
+        </Suspense>
+      </TabsContent>
+    </Tabs>
   )
 }
