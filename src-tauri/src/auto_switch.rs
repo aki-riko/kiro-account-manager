@@ -229,18 +229,48 @@ async fn check_and_auto_switch(app_handle: &AppHandle, threshold: f64) {
 async fn get_current_account(accounts: &[Account]) -> Option<Account> {
     // 读取本地 Kiro Token
     let local_token = crate::kiro::ide::get_kiro_local_token().await?;
-    let refresh_token = local_token.refresh_token.as_ref()?;
 
-    // 查找匹配的账号
-    accounts
-        .iter()
-        .find(|acc| {
+    // 优先用 refreshToken 匹配
+    if let Some(refresh_token) = local_token.refresh_token.as_ref() {
+        if let Some(acc) = accounts.iter().find(|acc| {
             acc.refresh_token
                 .as_ref()
                 .map(|rt| rt == refresh_token)
                 .unwrap_or(false)
-        })
-        .cloned()
+        }) {
+            return Some(acc.clone());
+        }
+    }
+
+    // 降级：用 accessToken 前缀匹配（token refresh 后 refreshToken 变了，但 accessToken 前缀一样）
+    if let Some(access_token) = local_token.access_token.as_ref() {
+        let prefix = &access_token[..access_token.len().min(20)];
+        if let Some(acc) = accounts.iter().find(|acc| {
+            acc.access_token
+                .as_ref()
+                .map(|at| at.starts_with(prefix))
+                .unwrap_or(false)
+        }) {
+            return Some(acc.clone());
+        }
+    }
+
+    // 再降级：用 clientIdHash 匹配（IdC 账号）
+    if let Some(hash) = local_token.client_id_hash.as_ref() {
+        if let Some(acc) = accounts.iter().find(|acc| {
+            acc.client_id_hash
+                .as_ref()
+                .map(|h| h == hash)
+                .unwrap_or(false)
+        }) {
+            return Some(acc.clone());
+        }
+    }
+
+    log::warn!(
+        "[AutoSwitch] 无法匹配当前账号 (refreshToken/accessToken/clientIdHash 均不匹配)"
+    );
+    None
 }
 
 /// 计算剩余额度（主配额 + 试用 + 奖励 + 已开启的超额，减去全部已用）
