@@ -288,7 +288,7 @@ const ListRow = memo(function ListRow({
           <button
             onClick={(e) => { e.stopPropagation(); onLogin(account) }}
             disabled={isSwitching || isUnavailable}
-            className="h-7 w-7 rounded-md inline-flex items-center justify-center bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+            className="h-7 w-7 rounded-md inline-flex items-center justify-center border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
             title={t('accountCard.LogIn')}
           >
             <LogIn size={13} className={isSwitching ? 'animate-spin' : ''} />
