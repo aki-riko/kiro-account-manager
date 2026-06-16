@@ -27,7 +27,7 @@ use crate::{
         kiro_client::{build_generate_assistant_response_url, build_kiro_runtime_host, KiroClient},
     },
     commands::common::{
-        account_machine_id_or_new, get_usage_by_account, is_token_expiring_soon,
+        account_machine_id_or_new, get_usage_by_account, is_token_expired, is_token_expiring_soon,
         refresh_token_by_provider_with_account_proxy, resolve_profile_arn_from_candidates,
         update_account_status, RefreshResult,
     },
@@ -2750,9 +2750,10 @@ async fn resolve_managed_account_credentials(
     state.load_balancer.increment_connections(&account.id).await;
     let request_start = Instant::now();
 
-    // 检查 token 是否需要刷新（只有快过期时才刷新）
+    // 检查 token 是否真正过期（不再提前刷新，避免和定时器/IDE 冲突导致 429）
+    // 定时器会提前 10 分钟刷新，网关只在 token 真正过期时才刷新
     let need_refresh = match &account.expires_at {
-        Some(expires_at) => is_token_expiring_soon(expires_at),
+        Some(expires_at) => is_token_expired(expires_at),
         None => true, // 没有过期时间，强制刷新
     };
 
