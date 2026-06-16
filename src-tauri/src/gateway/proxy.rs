@@ -27,7 +27,7 @@ use crate::{
         kiro_client::{build_generate_assistant_response_url, build_kiro_runtime_host, KiroClient},
     },
     commands::common::{
-        account_machine_id_or_new, get_usage_by_account, is_token_expired, is_token_expiring_soon,
+        account_machine_id_or_new, get_usage_by_account, is_token_expired,
         refresh_token_by_provider_with_account_proxy, resolve_profile_arn_from_candidates,
         update_account_status, RefreshResult,
     },
