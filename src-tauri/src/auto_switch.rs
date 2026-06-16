@@ -433,6 +433,67 @@ fn build_switch_params(account: &Account) -> crate::kiro::ide::SwitchAccountPara
     }
 }
 
+/// 一键切换到下一个可用账号（前端按钮调用，不弹确认）
+#[tauri::command]
+pub async fn quick_switch_next(app_handle: AppHandle) -> Result<String, String> {
+    let state = app_handle.state::<AppState>();
+    let settings = get_app_settings_inner().map_err(|e| e.to_string())?;
+    let threshold = settings.auto_switch_threshold.unwrap_or(DEFAULT_THRESHOLD);
+
+    // 读取所有账号
+    let accounts = {
+        match state.store.lock() {
+            Ok(mut s) => {
+                s.reload();
+                s.get_all()
+            }
+            Err(poisoned) => {
+                let mut s = poisoned.into_inner();
+                s.reload();
+                s.get_all()
+            }
+        }
+    };
+
+    if accounts.is_empty() {
+        return Err("没有可用账号".to_string());
+    }
+
+    // 获取当前账号
+    let current_account = get_current_account(&accounts).await;
+
+    // 查找下一个可用账号
+    let next_account = if let Some(ref current) = current_account {
+        find_available_account(&accounts, current, threshold)
+    } else {
+        // 没有当前账号，找第一个有额度的
+        accounts
+            .iter()
+            .find(|acc| {
+                acc.enabled
+                    && !["banned", "invalid", "封禁", "已封禁", "失效"]
+                        .contains(&acc.status.to_lowercase().as_str())
+                    && calculate_remaining(acc) > threshold
+            })
+            .cloned()
+    };
+
+    let next_account = next_account.ok_or("没有可切换的可用账号")?;
+    let email = next_account.email.clone().unwrap_or_else(|| "未知账号".to_string());
+
+    // 执行切换
+    switch_account(&app_handle, &next_account).await?;
+
+    // 通知前端
+    let _ = app_handle.emit("accounts-updated", ());
+    let _ = app_handle.emit(
+        "account-switched",
+        serde_json::json!({ "email": &email }),
+    );
+
+    Ok(email)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{resolve_machine_guid_switch_action, MachineGuidSwitchAction};

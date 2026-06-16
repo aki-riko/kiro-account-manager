@@ -3,6 +3,7 @@ import { Users, Zap, Shield, TrendingUp, Sparkles, Server, RefreshCw, ArrowRight
 import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
+import { showSuccess } from '../../../utils/toast'
 import { useAccount } from '../../../contexts/AccountContext'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
@@ -40,6 +41,7 @@ function Home({ onNavigate }: HomeProps) {
   } = useAccount()
   
   const [refreshingAccount, setRefreshingAccount] = useState(false)
+  const [switching, setSwitching] = useState(false)
   const [mcpToolCount, setMcpToolCount] = useState(0)
   const [ideInstallInfo, setIdeInstallInfo] = useState<any>(null)
 
@@ -71,6 +73,18 @@ function Home({ onNavigate }: HomeProps) {
     loadMcpToolCount()
   }, [])
 
+  // 监听自动切号事件，弹气泡提醒
+  useEffect(() => {
+    let unlisten: (() => void) | null = null
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<{ email: string }>('account-switched', (event) => {
+        showSuccess(`自动切号：已切换到 ${event.payload?.email || '新账号'}`)
+        refresh()
+      }).then(fn => { unlisten = fn })
+    })
+    return () => { unlisten?.() }
+  }, [refresh])
+
   // 刷新当前账号
   const handleRefreshCurrentAccount = useCallback(async () => {
     if (!currentAccount || refreshingAccount) return
@@ -83,6 +97,21 @@ function Home({ onNavigate }: HomeProps) {
       setRefreshingAccount(false)
     }
   }, [currentAccount, refreshingAccount, refreshAccount, showError, t])
+
+  // 一键换号
+  const handleQuickSwitch = useCallback(async () => {
+    if (switching) return
+    setSwitching(true)
+    try {
+      const email = await invoke<string>('quick_switch_next')
+      showSuccess(`已切换到 ${email}`)
+      refresh()
+    } catch (e: any) {
+      showError('切换失败', String(e))
+    } finally {
+      setSwitching(false)
+    }
+  }, [switching, refresh, showError])
 
   // CLI 账号数据
   const [cliSnapshot, setCliSnapshot] = useState<any>(null)
@@ -241,14 +270,24 @@ function Home({ onNavigate }: HomeProps) {
               </div>
             </div>
 
-            {/* 底部跳转 */}
-            <button
-              onClick={() => onNavigate?.('accounts')}
-              className="w-full py-2.5 flex items-center justify-center gap-2 border-t border-border bg-primary/5 hover:bg-primary/10 text-primary text-sm font-medium transition-colors"
-            >
-              <ArrowRightLeft size={13} />
-              查看全部账号
-            </button>
+            {/* 底部操作 */}
+            <div className="flex items-center border-t border-border">
+              <button
+                onClick={handleQuickSwitch}
+                disabled={switching || tokens.length < 2}
+                className="flex-1 py-2.5 flex items-center justify-center gap-2 text-primary text-sm font-medium transition-colors hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed border-r border-border"
+              >
+                <Zap size={13} className={switching ? 'animate-spin' : ''} />
+                {switching ? '切换中...' : '一键换号'}
+              </button>
+              <button
+                onClick={() => onNavigate?.('accounts')}
+                className="flex-1 py-2.5 flex items-center justify-center gap-2 text-primary text-sm font-medium transition-colors hover:bg-primary/10"
+              >
+                <ArrowRightLeft size={13} />
+                查看全部账号
+              </button>
+            </div>
           </CardContent>
         </Card>
       </div>

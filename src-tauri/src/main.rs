@@ -593,6 +593,8 @@ fn main() {
             delete_cli_session,
             search_cli_sessions,
             export_cli_session,
+            // 一键换号
+            auto_switch::quick_switch_next,
             delete_session,
             delete_workspace,
             export_session,
