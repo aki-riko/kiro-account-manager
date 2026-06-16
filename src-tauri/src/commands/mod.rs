@@ -20,6 +20,7 @@ pub mod mcp_cmd;
 pub mod powers_cmd;
 pub mod proxy_cmd;
 pub mod session_manager;
+pub mod cli_session_cmd;
 pub mod skills_cmd;
 pub mod steering_cmd;
 pub mod update_cmd;

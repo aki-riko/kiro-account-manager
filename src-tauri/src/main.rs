@@ -114,6 +114,10 @@ use commands::session_manager::{
     delete_session, delete_workspace, export_session, list_sessions, list_workspaces, load_session,
     search_sessions,
 };
+use commands::cli_session_cmd::{
+    delete_cli_session, export_cli_session, list_cli_sessions, load_cli_session,
+    search_cli_sessions,
+};
 
 //代理
 use commands::proxy_cmd::{detect_system_proxy, test_account_proxy};
@@ -403,6 +407,7 @@ fn main() {
             gateway: Mutex::new(None),
         })
         .manage(SessionStorage::new().expect("Failed to initialize SessionStorage"))
+        .manage(services::cli_session_storage::CliSessionStorage::new().expect("Failed to initialize CliSessionStorage"))
         .setup(setup_app)
         .invoke_handler(tauri::generate_handler![
             // 账号命令
@@ -582,6 +587,12 @@ fn main() {
             list_workspaces,
             list_sessions,
             load_session,
+            // CLI Session 命令
+            list_cli_sessions,
+            load_cli_session,
+            delete_cli_session,
+            search_cli_sessions,
+            export_cli_session,
             delete_session,
             delete_workspace,
             export_session,
