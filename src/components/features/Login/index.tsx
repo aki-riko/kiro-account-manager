@@ -338,7 +338,7 @@ function Login({ onLogin }: LoginProps) {
         <DialogContent maxWidth="400px">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0">
                 <Loader size={20} className="text-primary animate-spin" />
               </div>
               <DialogTitle>{t('login.waitingTitle')}</DialogTitle>

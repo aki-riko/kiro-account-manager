@@ -67,7 +67,7 @@ function SteeringPanel({ onCountChange, projectDir }: any) {
     inputFocus: 'focus:ring-primary/20 focus:border-primary',
     btnDisabled: 'opacity-50 cursor-not-allowed grayscale',
     dialogHeader: 'border-b border-border bg-muted/30',
-    info: 'bg-primary/10'
+    info: 'bg-primary/10 ring-1 ring-primary/15'
   }
   
   const [files, setFiles] = useState<any[]>([])

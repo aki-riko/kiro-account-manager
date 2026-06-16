@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { AlertTriangle, ExternalLink, MessageCircle } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useApp } from '../../hooks/useApp'
@@ -22,7 +22,7 @@ export default function AnnouncementModal() {
     inputFocus: 'focus:ring-primary/20 focus:border-primary',
     btnDisabled: 'opacity-50 cursor-not-allowed grayscale',
     dialogHeader: 'border-b border-border bg-muted/30',
-    info: 'bg-primary/10'
+    info: 'bg-primary/10 ring-1 ring-primary/15'
   }
   useEffect(() => {
     fetchAnnouncement()

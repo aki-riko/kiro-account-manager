@@ -17,7 +17,7 @@ function AddMCPModal({ onClose, onSuccess, projectDir }: any) {
   // 定义本地色彩系统
   const colors = {
     inputFocus: 'focus:ring-primary/20 focus:border-primary',
-    info: 'bg-primary/10'
+    info: 'bg-primary/10 ring-1 ring-primary/15'
   }
 
   const [jsonConfig, setJsonConfig] = useState('')
