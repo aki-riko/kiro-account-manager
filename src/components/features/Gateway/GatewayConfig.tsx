@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import { formatUsage } from '@/utils/accountStats'
+import { formatUsage, getQuota, getUsed } from '@/utils/accountStats'
 
 const POOL_STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-500',
@@ -529,8 +529,8 @@ function GatewayConfig({
                     const acct = opt.account || {}
                     const status = acct.status || 'active'
                     const breakdown = acct.usageData?.usageBreakdownList?.[0]
-                    const used = breakdown?.currentUsage ?? 0
-                    const limit = breakdown?.usageLimit ?? 0
+                    const used = getUsed(acct)
+                    const limit = getQuota(acct)
                     const currentOverages = breakdown?.currentOverages ?? 0
                     const overageCap = breakdown?.overageCap ?? 0
                     const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
