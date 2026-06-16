@@ -1639,34 +1639,57 @@ pub async fn proxy_handler(
     let upstream = match resolve_upstream_credentials(&state.config, &state).await {
         Ok(creds) => creds,
         Err(message) => {
-            // 检查是否是配额不足错误（以 __402__ 为前缀标记）
-            let (status, error_type, display_message) = if message.starts_with("__402__") {
-                (
-                    StatusCode::PAYMENT_REQUIRED,
-                    "insufficient_quota",
-                    message.strip_prefix("__402__").unwrap_or(&message),
-                )
+            // 如果是 token refresh 429，尝试换一个账号而不是直接返回错误
+            if message.contains("429") || message.to_lowercase().contains("too many requests") {
+                log::warn!("[Gateway] Token 刷新被限流，尝试换账号: {}", sanitize_error(&message));
+                match resolve_upstream_credentials(&state.config, &state).await {
+                    Ok(creds) => creds,
+                    Err(retry_message) => {
+                        let sanitized = sanitize_error(&retry_message);
+                        return gateway_error_with_log(
+                            &state,
+                            format,
+                            &request_log_context,
+                            GatewayErrorDetails {
+                                status: StatusCode::TOO_MANY_REQUESTS,
+                                error_type: "rate_limit_error",
+                                message: &sanitized,
+                                response_body: None,
+                            },
+                        )
+                        .await;
+                    }
+                }
             } else {
-                (
-                    StatusCode::UNAUTHORIZED,
-                    "authentication_error",
-                    message.as_str(),
-                )
-            };
+                // 检查是否是配额不足错误（以 __402__ 为前缀标记）
+                let (status, error_type, display_message) = if message.starts_with("__402__") {
+                    (
+                        StatusCode::PAYMENT_REQUIRED,
+                        "insufficient_quota",
+                        message.strip_prefix("__402__").unwrap_or(&message),
+                    )
+                } else {
+                    (
+                        StatusCode::UNAUTHORIZED,
+                        "authentication_error",
+                        message.as_str(),
+                    )
+                };
 
-            let sanitized = sanitize_error(display_message);
-            return gateway_error_with_log(
-                &state,
-                format,
-                &request_log_context,
-                GatewayErrorDetails {
-                    status,
-                    error_type,
-                    message: &sanitized,
-                    response_body: None,
-                },
-            )
-            .await;
+                let sanitized = sanitize_error(display_message);
+                return gateway_error_with_log(
+                    &state,
+                    format,
+                    &request_log_context,
+                    GatewayErrorDetails {
+                        status,
+                        error_type,
+                        message: &sanitized,
+                        response_body: None,
+                    },
+                )
+                .await;
+            }
         }
     };
     let response_id = format!("resp_{}", short_uuid());
