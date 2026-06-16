@@ -1,6 +1,6 @@
 import type React from 'react'
-import { useState } from 'react'
-import { RotateCw, TrendingUp, Shuffle, Zap, Users, CheckCircle2 } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { RotateCw, TrendingUp, Shuffle, Zap, Users, CheckCircle2, Search, Ban, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,6 +8,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
+import { formatUsage } from '@/utils/accountStats'
+
+const POOL_STATUS_COLORS: Record<string, string> = {
+  active: 'bg-green-500',
+  overage: 'bg-purple-500',
+  capped: 'bg-yellow-500',
+  banned: 'bg-red-500',
+  invalid: 'bg-gray-500',
+}
+const POOL_STATUS_LABELS: Record<string, string> = {
+  active: '正常',
+  overage: '超额',
+  capped: '封顶',
+  banned: '封禁',
+  invalid: '失效',
+}
+const POOL_STATUS_ORDER: Record<string, number> = { active: 0, overage: 1, '': 0, capped: 2, invalid: 3, banned: 4 }
 import { Textarea } from '@/components/ui/textarea'
 import { GatewaySurfaceCard } from './GatewayShared'
 import ModelMappingDialog from './ModelMappingDialog'
@@ -58,6 +75,8 @@ function GatewayConfig({
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false)
   const [showPromptFilterRulesDialog, setShowPromptFilterRulesDialog] = useState(false)
   const [showAccountPoolDialog, setShowAccountPoolDialog] = useState(false)
+  const [poolSearchQuery, setPoolSearchQuery] = useState('')
+  const [poolStatusFilter, setPoolStatusFilter] = useState<string>('all')
 
   const getStrategyLabel = (strategy: string) => {
     const labels: Record<string, string> = {
@@ -74,6 +93,31 @@ function GatewayConfig({
   const selectedPoolAccountIds = Array.isArray(config.poolAccountIds) ? config.poolAccountIds : []
   const selectedPoolAccounts = accountOptions.filter((account: any) => selectedPoolAccountIds.includes(account.value))
   const effectiveStrategy = config.strategy || 'round_robin'
+
+  const filteredPoolAccounts = useMemo(() => {
+    return accountOptions
+      .filter((opt: any) => {
+        const acct = opt.account
+        const status = acct?.status || 'active'
+        if (poolStatusFilter !== 'all' && status !== poolStatusFilter) return false
+        if (poolSearchQuery.trim()) {
+          const q = poolSearchQuery.toLowerCase()
+          const email = (acct?.email || '').toLowerCase()
+          const userId = (acct?.userId || '').toLowerCase()
+          const provider = (acct?.provider || '').toLowerCase()
+          return email.includes(q) || userId.includes(q) || provider.includes(q)
+        }
+        return true
+      })
+      .sort((a: any, b: any) => {
+        const sa = POOL_STATUS_ORDER[a.account?.status || ''] ?? 5
+        const sb = POOL_STATUS_ORDER[b.account?.status || ''] ?? 5
+        if (sa !== sb) return sa - sb
+        const ca = selectedPoolAccountIds.includes(a.value) ? 0 : 1
+        const cb = selectedPoolAccountIds.includes(b.value) ? 0 : 1
+        return ca - cb
+      })
+  }, [accountOptions, poolSearchQuery, poolStatusFilter, selectedPoolAccountIds])
 
   const togglePoolAccount = (accountId: string) => {
     const next = selectedPoolAccountIds.includes(accountId)
@@ -413,7 +457,7 @@ function GatewayConfig({
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="rounded-xl border border-border bg-muted/20 p-3">
                 <div className="text-xs text-muted-foreground">已选择账号</div>
-                <div className="mt-1 text-2xl font-semibold text-foreground">{selectedPoolAccountIds.length}</div>
+                <div className="mt-1 text-2xl font-semibold text-foreground">{selectedPoolAccountIds.length}<span className="text-sm text-muted-foreground font-normal ml-1">/ {accountOptions.length}</span></div>
               </div>
               <div className="rounded-xl border border-border bg-muted/20 p-3">
                 <div className="flex items-center justify-between gap-2">
@@ -433,62 +477,107 @@ function GatewayConfig({
               </div>
             </div>
 
-            <div className="flex items-center justify-between rounded-xl border border-border bg-background/60 px-3 py-2">
-              <div>
-                <div className="text-sm font-medium text-foreground">账号列表</div>
-                <div className="text-xs text-muted-foreground">{accountOptions.length} 个可用账号</div>
+            {/* 搜索 + 过滤 + 操作栏 */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={poolSearchQuery}
+                  onChange={e => setPoolSearchQuery(e.target.value)}
+                  placeholder="搜索账号..."
+                  className="h-8 pl-8 text-xs"
+                />
               </div>
-              <Button type="button" variant="outline" size="sm" className="h-8" onClick={toggleAllPoolAccounts} disabled={accountOptions.length === 0}>
+              <Select value={poolStatusFilter} onValueChange={setPoolStatusFilter}>
+                <SelectTrigger className="h-8 w-[100px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部</SelectItem>
+                  <SelectItem value="active">正常</SelectItem>
+                  <SelectItem value="overage">超额</SelectItem>
+                  <SelectItem value="capped">封顶</SelectItem>
+                  <SelectItem value="banned">封禁</SelectItem>
+                  <SelectItem value="invalid">失效</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={toggleAllPoolAccounts} disabled={accountOptions.length === 0}>
                 {selectedPoolAccountIds.length === accountOptions.length && accountOptions.length > 0 ? '取消全选' : '全选'}
+              </Button>
+              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
+                const activeIds = accountOptions
+                  .filter((opt: any) => {
+                    const status = opt.account?.status || ''
+                    return status === 'active' || status === 'overage' || status === ''
+                  })
+                  .map((opt: any) => opt.value)
+                setField('poolAccountIds', activeIds)
+              }}>
+                选可用
               </Button>
             </div>
 
-            <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+            {/* 账号列表 */}
+            <div className="max-h-[380px] space-y-1.5 overflow-y-auto pr-1">
               {accountOptions.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                   暂无可用账号，请先添加账号。
                 </div>
               ) : (
-                accountOptions.map((account: any) => {
-                  const checked = selectedPoolAccountIds.includes(account.value)
-                  return (
-                    <button
-                      key={account.value}
-                      type="button"
-                      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all ${checked ? 'border-primary bg-primary/10 ring-1 ring-primary/20' : 'border-border bg-background/70 hover:border-primary/40 hover:bg-primary/5'}`}
-                      onClick={() => togglePoolAccount(account.value)}
-                    >
-                      <Checkbox checked={checked} onCheckedChange={() => togglePoolAccount(account.value)} onClick={(e) => e.stopPropagation()} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-foreground">{account.label}</div>
-                        {account.description && (
-                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{account.description}</div>
-                        )}
+                filteredPoolAccounts.map((opt: any) => {
+                    const checked = selectedPoolAccountIds.includes(opt.value)
+                    const acct = opt.account || {}
+                    const status = acct.status || 'active'
+                    const breakdown = acct.usageData?.usageBreakdownList?.[0]
+                    const used = breakdown?.currentUsage ?? 0
+                    const limit = breakdown?.usageLimit ?? 0
+                    const currentOverages = breakdown?.currentOverages ?? 0
+                    const overageCap = breakdown?.overageCap ?? 0
+                    const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
+                    const email = acct.email || acct.userId || '未知账号'
+                    const provider = acct.provider || ''
+
+                    return (
+                      <div
+                        key={opt.value}
+                        role="button"
+                        tabIndex={0}
+                        className={`flex w-full items-center gap-3 rounded-lg border p-2.5 text-left transition-all cursor-pointer ${checked ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-background/70 hover:border-primary/40 hover:bg-primary/5'} ${status === 'banned' || status === 'invalid' ? 'opacity-60' : ''}`}
+                        onClick={() => togglePoolAccount(opt.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') togglePoolAccount(opt.value) }}
+                      >
+                        <Checkbox checked={checked} onCheckedChange={() => togglePoolAccount(opt.value)} onClick={(e) => e.stopPropagation()} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-xs font-medium text-foreground">{email}</span>
+                            {provider && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">{provider}</Badge>}
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${POOL_STATUS_COLORS[status] || 'bg-gray-400'}`} />
+                            <span className="text-[9px] text-muted-foreground shrink-0">{POOL_STATUS_LABELS[status] || status}</span>
+                          </div>
+                          {/* 进度条 */}
+                          {limit > 0 && (
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${currentOverages > 0 ? 'bg-purple-500' : percent >= 90 ? 'bg-red-500' : percent >= 70 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                                  style={{ width: `${Math.min(100, percent)}%` }}
+                                />
+                              </div>
+                              <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                                {currentOverages > 0
+                                  ? `⚡${formatUsage(currentOverages)}${overageCap > 0 ? '/' + formatUsage(overageCap) : ''}`
+                                  : `${formatUsage(Math.max(0, limit - used))}/${formatUsage(limit)}`
+                                }
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {checked && <CheckCircle2 size={14} className="text-primary shrink-0" />}
                       </div>
-                      {checked && (
-                        <Badge variant="secondary" className="gap-1 rounded-full">
-                          <CheckCircle2 size={12} />
-                          已选
-                        </Badge>
-                      )}
-                    </button>
-                  )
-                })
+                    )
+                  })
               )}
             </div>
-
-            {selectedPoolAccounts.length > 0 && (
-              <div className="rounded-xl border border-border bg-muted/20 p-3">
-                <div className="mb-2 text-xs font-medium text-muted-foreground">当前账号池</div>
-                <div className="flex flex-wrap gap-2">
-                  {selectedPoolAccounts.map((account: any) => (
-                    <Badge key={account.value} variant="outline" className="rounded-full bg-background/70">
-                      {account.label}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
           </DialogBody>
 
           <DialogFooter>

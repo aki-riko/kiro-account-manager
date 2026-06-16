@@ -360,7 +360,12 @@ export const formatGatewayAccountOptionLabel = (account: any): string => {
   const quota = getQuota(account)
   const used = getUsed(account)
   const remaining = quota - used
-  const quotaInfo = `剩余 ${formatUsage(remaining)}/${formatUsage(quota)}`
+  const breakdown = account?.usageData?.usageBreakdownList?.[0]
+  const currentOverages = breakdown?.currentOverages ?? 0
+  const overageCap = breakdown?.overageCap ?? 0
+  const quotaInfo = currentOverages > 0
+    ? `超额 ${formatUsage(currentOverages)}${overageCap > 0 ? '/' + formatUsage(overageCap) : ''}`
+    : `剩余 ${formatUsage(Math.max(0, remaining))}/${formatUsage(quota)}`
 
   const status = String(account?.status || '').trim()
   const isActive = status === 'active' || status === ''

@@ -112,7 +112,8 @@ function GatewayPage() {
   const accountOptions = useMemo(
     () => accounts.map(account => ({
       value: account.id,
-      label: formatGatewayAccountOptionLabel(account)
+      label: formatGatewayAccountOptionLabel(account),
+      account, // 传递原始 account 数据，供账号池对话框使用
     })),
     [accounts]
   )

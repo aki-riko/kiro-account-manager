@@ -46,7 +46,8 @@ export function GatewayDataProvider({ children }: { children: ReactNode }) {
       .filter(account => account.enabled !== false)
       .map(account => ({
         value: account.id,
-        label: formatGatewayAccountOptionLabel(account)
+        label: formatGatewayAccountOptionLabel(account),
+        account,
       })),
     [accounts]
   )
