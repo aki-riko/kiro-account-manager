@@ -507,7 +507,10 @@ function GatewayConfig({
               <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
                 const activeIds = accountOptions
                   .filter((opt: any) => {
-                    const status = opt.account?.status || ''
+                    const acct = opt.account
+                    if (!acct) return false
+                    if (acct.enabled === false) return false
+                    const status = (acct.status || '').toLowerCase()
                     return status === 'active' || status === 'overage' || status === ''
                   })
                   .map((opt: any) => opt.value)
