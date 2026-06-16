@@ -190,6 +190,27 @@ function Home({ onNavigate }: HomeProps) {
           ))}
         </div>
 
+        {/* 操作按钮 */}
+        <div className="flex items-center gap-2 mb-3 animate-scale-in delay-200">
+          <Button
+            onClick={handleQuickSwitch}
+            disabled={switching || tokens.length < 2}
+            className="flex-1 h-11 text-sm font-semibold gap-2"
+            variant="default"
+          >
+            <Zap size={16} className={switching ? 'animate-spin' : ''} />
+            {switching ? '切换中...' : '一键换号'}
+          </Button>
+          <Button
+            onClick={() => onNavigate?.('accounts')}
+            variant="outline"
+            className="flex-1 h-11 text-sm font-medium gap-2"
+          >
+            <ArrowRightLeft size={14} />
+            查看全部账号
+          </Button>
+        </div>
+
         {/* 主卡片：当前账号 | CLI 账号 */}
         <Card className="card-glow animate-scale-in delay-300">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
@@ -270,24 +291,6 @@ function Home({ onNavigate }: HomeProps) {
               </div>
             </div>
 
-            {/* 底部操作 */}
-            <div className="flex items-center border-t border-border">
-              <button
-                onClick={handleQuickSwitch}
-                disabled={switching || tokens.length < 2}
-                className="flex-1 py-2.5 flex items-center justify-center gap-2 text-primary text-sm font-medium transition-colors hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed border-r border-border"
-              >
-                <Zap size={13} className={switching ? 'animate-spin' : ''} />
-                {switching ? '切换中...' : '一键换号'}
-              </button>
-              <button
-                onClick={() => onNavigate?.('accounts')}
-                className="flex-1 py-2.5 flex items-center justify-center gap-2 text-primary text-sm font-medium transition-colors hover:bg-primary/10"
-              >
-                <ArrowRightLeft size={13} />
-                查看全部账号
-              </button>
-            </div>
           </CardContent>
         </Card>
       </div>
