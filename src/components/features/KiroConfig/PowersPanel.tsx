@@ -378,7 +378,7 @@ function PowersPanel({ onCountChange }: any) {
                 {selectedRec.iconUrl ? (
                   <img src={selectedRec.iconUrl} alt="" className="w-14 h-14 rounded-xl flex-shrink-0 object-contain shadow-lg" onError={(e: any) => { e.target.style.display='none' }} />
                 ) : (
-                  <div className={`w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0`}>
+                  <div className={`w-14 h-14 rounded-xl bg-primary/10 ring-1 ring-primary/15 flex items-center justify-center flex-shrink-0`}>
                     <Zap size={28} className={accent.text} />
                   </div>
                 )}

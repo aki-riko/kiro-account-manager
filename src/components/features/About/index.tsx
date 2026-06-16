@@ -59,7 +59,7 @@ function LinkRow({ href, icon, label, desc, accent }: LinkRowProps) {
     ? 'text-foreground bg-foreground/5'
     : accent === 'telegram'
       ? 'text-blue-500 bg-blue-500/10'
-      : 'text-primary bg-primary/10'
+      : 'text-primary bg-primary/10 ring-1 ring-primary/15'
   return (
     <a
       href={href}
