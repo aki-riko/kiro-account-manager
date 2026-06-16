@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Plus, Dice6, Copy, Trash2, Pencil, Check } from 'lucide-react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { Plus, Dice6, Copy, Trash2, Pencil, Check, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -9,11 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogBody
+  DialogBody,
+  DialogFooter
 } from '@/components/shared/dialog'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { GatewayConfig } from './gatewayPageState'
+import { useDialog } from '@/contexts/DialogContext'
 
 interface ApiKeysDialogProps {
   open: boolean
@@ -36,7 +38,7 @@ const parseApiKeys = (text: string): ApiKeyItem[] =>
       const enabled = !rawKey.startsWith(DISABLED_PREFIX)
       const rest = enabled ? rawKey : rawKey.substring(DISABLED_PREFIX.length)
       const colonIdx = rest.indexOf(':')
-      const hasName = colonIdx > 0 && !rest.startsWith('sk-') && !rest.startsWith('PROXY_KEY:')
+      const hasName = colonIdx > 0 && !rest.startsWith('sk-')
 
       return {
         name: hasName ? rest.substring(0, colonIdx) : '',
@@ -50,123 +52,35 @@ const serializeApiKeys = (keys: ApiKeyItem[]) =>
     .map(({ name, key, enabled }) => `${enabled ? '' : DISABLED_PREFIX}${name ? `${name}:` : ''}${key}`)
     .join('\n')
 
-const createApiKey = (length = 16) => {
-  const random = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || `${Date.now()}${Math.random().toString(36).slice(2)}`
-  return `sk-${random.substring(0, length)}`
+// 生成标准 OpenAI 风格 API Key: sk-{48位大小写字母+数字}
+const createApiKey = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const array = new Uint8Array(48)
+  globalThis.crypto.getRandomValues(array)
+  const random = Array.from(array, b => chars[b % chars.length]).join('')
+  return `sk-${random}`
 }
 
-const maskApiKey = (key: string) => (key.length > 24 ? `${key.substring(0, 10)}...${key.slice(-4)}` : key)
-
-type IconButtonProps = React.ComponentProps<typeof Button>
-
-function IconButton({ className, ...props }: IconButtonProps) {
-  return (
-    <Button
-      size="sm"
-      variant="ghost"
-      className={cn('h-7 w-7 p-0 shrink-0', className)}
-      {...props}
-    />
-  )
-}
-
-interface ApiKeyRowProps {
-  item: ApiKeyItem
-  index: number
-  editing: boolean
-  editingKey: string
-  copied: boolean
-  onPatch: (index: number, patch: Partial<ApiKeyItem>) => void
-  onEditKeyChange: (key: string) => void
-  onStartEdit: (index: number) => void
-  onConfirmEdit: (index: number) => void
-  onCopy: (key: string, index: number) => void
-  onDelete: (index: number) => void
-}
-
-function ApiKeyRow({
-  item,
-  index,
-  editing,
-  editingKey,
-  copied,
-  onPatch,
-  onEditKeyChange,
-  onStartEdit,
-  onConfirmEdit,
-  onCopy,
-  onDelete
-}: ApiKeyRowProps) {
-  return (
-    <div
-      className={cn(
-        'grid grid-cols-[auto_minmax(96px,144px)_minmax(0,1fr)_auto] items-center gap-2 p-2.5 border-b last:border-b-0 hover:bg-muted/30',
-        !item.enabled && 'opacity-50'
-      )}
-    >
-      <Switch checked={item.enabled} onCheckedChange={(checked) => onPatch(index, { enabled: checked })} />
-      <Input
-        value={item.name}
-        onChange={(e) => onPatch(index, { name: e.target.value })}
-        className="h-7 text-xs"
-        placeholder="名称"
-      />
-
-      {editing ? (
-        <Input
-          value={editingKey}
-          onChange={(e) => onEditKeyChange(e.target.value)}
-          className="h-7 text-xs font-mono"
-          autoFocus
-          onKeyDown={(e) => { if (e.key === 'Enter') onConfirmEdit(index) }}
-          onBlur={() => onConfirmEdit(index)}
-        />
-      ) : (
-        <code className="min-w-0 text-xs font-mono bg-muted/50 px-2 py-1 rounded truncate">
-          {maskApiKey(item.key)}
-        </code>
-      )}
-
-      <div className="flex items-center gap-1">
-        {editing ? (
-          <IconButton className="text-green-600" onClick={() => onConfirmEdit(index)}>
-            <Check size={12} />
-          </IconButton>
-        ) : (
-          <>
-            <IconButton onClick={() => onStartEdit(index)}>
-              <Pencil size={12} className="text-muted-foreground" />
-            </IconButton>
-            <IconButton onClick={() => onCopy(item.key, index)}>
-              {copied ? <Check size={12} className="text-green-600" /> : <Copy size={12} className="text-muted-foreground" />}
-            </IconButton>
-          </>
-        )}
-        <IconButton className="text-red-500 hover:text-red-600" onClick={() => onDelete(index)}>
-          <Trash2 size={12} />
-        </IconButton>
-      </div>
-    </div>
-  )
-}
+const maskApiKey = (key: string) =>
+  key.length > 16 ? `${key.substring(0, 7)}${'•'.repeat(8)}${key.slice(-4)}` : key
 
 export function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig, onSave }: ApiKeysDialogProps) {
+  const { showConfirm } = useDialog()
   const [localKeys, setLocalKeys] = useState<ApiKeyItem[]>([])
   const [hasInitialized, setHasInitialized] = useState(false)
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [editingKey, setEditingKey] = useState('')
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
 
-  // 弹窗打开时，单次解析 Props 文本初始化本地临时状态
+  const enabledCount = useMemo(() => localKeys.filter(k => k.enabled).length, [localKeys])
+
   useEffect(() => {
     if (!open) {
       setHasInitialized(false)
       setEditingIdx(null)
       return
     }
-
     if (hasInitialized) return
-
     setLocalKeys(parseApiKeys(clientApiKeysText))
     setHasInitialized(true)
   }, [open, clientApiKeysText, hasInitialized])
@@ -188,20 +102,22 @@ export function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig
     commitKeys(localKeys.map((item, i) => i === idx ? { ...item, ...patch } : item))
   }
 
-  const appendKey = (key: string, message: string, editAfterAdd = false) => {
-    const next = [...localKeys, { name: '', key, enabled: true }]
+  const generateKey = () => {
+    const idx = localKeys.length + 1
+    const next = [...localKeys, { name: `Key ${idx}`, key: createApiKey(), enabled: true }]
     commitKeys(next)
-    toast.success(message)
-
-    if (editAfterAdd) {
-      setEditingIdx(next.length - 1)
-      setEditingKey(key)
-    }
+    toast.success('已生成 API Key')
   }
 
-  const generateKey = () => appendKey(createApiKey(), '已随机生成并添加 API Key')
-
-  const addKey = () => appendKey(createApiKey(12), '已添加新行，请直接编辑 API Key', true)
+  const addKey = () => {
+    const idx = localKeys.length + 1
+    const key = createApiKey()
+    const next = [...localKeys, { name: `Key ${idx}`, key, enabled: true }]
+    commitKeys(next)
+    setEditingIdx(next.length - 1)
+    setEditingKey(key)
+    toast.success('已添加，可直接编辑')
+  }
 
   const startEdit = (idx: number) => {
     setEditingIdx(idx)
@@ -215,81 +131,155 @@ export function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig
     setEditingKey('')
   }
 
-  const handleDelete = (idx: number) => {
+  const handleDelete = async (idx: number) => {
+    const confirmed = await showConfirm('确定删除这个 API Key？', '删除 Key')
+    if (!confirmed) return
     commitKeys(localKeys.filter((_, i) => i !== idx))
-    toast.success('已删除 API Key')
+    toast.success('已删除')
   }
 
   const handleCopy = async (keyText: string, idx: number) => {
     try {
       await navigator.clipboard.writeText(keyText)
       setCopiedIdx(idx)
-      toast.success('复制成功')
-      setTimeout(() => {
-        setCopiedIdx(null)
-      }, 1500)
+      toast.success('已复制到剪贴板')
+      setTimeout(() => setCopiedIdx(null), 1500)
     } catch {
       toast.error('复制失败')
     }
   }
 
-  // 弹窗关闭处理，支持自动提交未完成的行内编辑值
-  const handleClose = (v: boolean) => {
-    if (!v) {
-      let finalKeys = [...localKeys]
-      if (editingIdx !== null && editingKey.trim()) {
-        finalKeys[editingIdx] = { ...finalKeys[editingIdx], key: editingKey.trim() }
-      }
-      writeConfig(finalKeys)
-      setEditingIdx(null)
-      onSave?.()
+  const toggleAll = (enabled: boolean) => {
+    commitKeys(localKeys.map(k => ({ ...k, enabled })))
+    toast.success(enabled ? '已全部启用' : '已全部禁用')
+  }
+
+  const handleSave = () => {
+    let finalKeys = [...localKeys]
+    if (editingIdx !== null && editingKey.trim()) {
+      finalKeys[editingIdx] = { ...finalKeys[editingIdx], key: editingKey.trim() }
     }
-    onOpenChange(v)
+    writeConfig(finalKeys)
+    setEditingIdx(null)
+    onSave?.()
+    onOpenChange(false)
   }
 
   return (
-    <DialogRoot open={open} onOpenChange={handleClose}>
+    <DialogRoot open={open} onOpenChange={(v) => { if (!v) handleSave(); else onOpenChange(v) }}>
       <DialogContent maxWidth="800px" className="max-h-[85vh]">
         <DialogHeader>
           <DialogTitle>客户端 API Keys</DialogTitle>
-          <DialogDescription>管理客户端认证密钥，禁用的 Key 不会被使用</DialogDescription>
+          <DialogDescription>
+            管理客户端认证密钥。已启用 {enabledCount}/{localKeys.length} 个。
+          </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="flex flex-col gap-3 pt-2 min-h-0">
-          <div className="flex gap-2 justify-end">
-            <Button size="sm" variant="outline" onClick={generateKey} className="h-7 text-xs gap-1">
-              <Dice6 size={12} /> 随机生成
+          {/* 工具栏 */}
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="default" onClick={generateKey} className="h-8 text-xs gap-1.5">
+              <Dice6 size={13} /> 随机生成
             </Button>
-            <Button size="sm" variant="outline" onClick={addKey} className="h-7 text-xs gap-1">
-              <Plus size={12} /> 添加
+            <Button size="sm" variant="outline" onClick={addKey} className="h-8 text-xs gap-1.5">
+              <Plus size={13} /> 手动添加
             </Button>
+            <div className="ml-auto flex gap-1">
+              <Button size="sm" variant="ghost" onClick={() => toggleAll(true)} className="h-7 text-[10px] gap-1" disabled={localKeys.length === 0}>
+                <ToggleRight size={12} /> 全部启用
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => toggleAll(false)} className="h-7 text-[10px] gap-1" disabled={localKeys.length === 0}>
+                <ToggleLeft size={12} /> 全部禁用
+              </Button>
+            </div>
           </div>
 
-          <div className="border rounded-lg overflow-hidden max-h-[420px] overflow-y-auto">
+          {/* Key 列表 */}
+          <div className="border rounded-lg overflow-hidden max-h-[400px] overflow-y-auto">
             {localKeys.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
                 暂无 API Key，点击"随机生成"创建
               </div>
             ) : (
-              localKeys.map((item, idx) => (
-                <ApiKeyRow
-                  key={`${item.key}-${idx}`}
-                  item={item}
-                  index={idx}
-                  editing={editingIdx === idx}
-                  editingKey={editingKey}
-                  copied={copiedIdx === idx}
-                  onPatch={patchKey}
-                  onEditKeyChange={setEditingKey}
-                  onStartEdit={startEdit}
-                  onConfirmEdit={confirmEdit}
-                  onCopy={handleCopy}
-                  onDelete={handleDelete}
-                />
-              ))
+              <table className="w-full text-xs">
+                <thead className="bg-muted/30 sticky top-0">
+                  <tr>
+                    <th className="p-2 text-left font-medium w-10">启用</th>
+                    <th className="p-2 text-left font-medium w-28">名称</th>
+                    <th className="p-2 text-left font-medium">Key</th>
+                    <th className="p-2 text-right font-medium w-24">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {localKeys.map((item, idx) => (
+                    <tr
+                      key={`${item.key}-${idx}`}
+                      className={cn(
+                        'border-t hover:bg-muted/20 transition-colors',
+                        !item.enabled && 'opacity-50'
+                      )}
+                    >
+                      <td className="p-2">
+                        <Switch
+                          checked={item.enabled}
+                          onCheckedChange={(checked) => patchKey(idx, { enabled: checked })}
+                        />
+                      </td>
+                      <td className="p-2">
+                        <Input
+                          value={item.name}
+                          onChange={(e) => patchKey(idx, { name: e.target.value })}
+                          className="h-7 text-xs"
+                          placeholder="可选名称"
+                        />
+                      </td>
+                      <td className="p-2">
+                        {editingIdx === idx ? (
+                          <Input
+                            value={editingKey}
+                            onChange={(e) => setEditingKey(e.target.value)}
+                            className="h-7 text-xs font-mono"
+                            autoFocus
+                            onKeyDown={(e) => { if (e.key === 'Enter') confirmEdit(idx) }}
+                            onBlur={() => confirmEdit(idx)}
+                          />
+                        ) : (
+                          <code className="text-xs font-mono bg-muted/40 px-2 py-1 rounded inline-block max-w-full truncate">
+                            {maskApiKey(item.key)}
+                          </code>
+                        )}
+                      </td>
+                      <td className="p-2">
+                        <div className="flex items-center justify-end gap-0.5">
+                          {editingIdx === idx ? (
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => confirmEdit(idx)}>
+                              <Check size={12} className="text-green-600" />
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => startEdit(idx)}>
+                              <Pencil size={11} className="text-muted-foreground" />
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleCopy(item.key, idx)}>
+                            {copiedIdx === idx ? <Check size={12} className="text-green-600" /> : <Copy size={11} className="text-muted-foreground" />}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleDelete(idx)}>
+                            <Trash2 size={11} className="text-red-500" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </DialogBody>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button onClick={handleSave}>保存</Button>
+        </DialogFooter>
       </DialogContent>
     </DialogRoot>
   )
