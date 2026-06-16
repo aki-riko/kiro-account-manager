@@ -445,7 +445,7 @@ function GatewayConfig({
 
       {/* AccountPoolDialog */}
       <DialogRoot open={showAccountPoolDialog} onOpenChange={setShowAccountPoolDialog}>
-        <DialogContent maxWidth="720px">
+        <DialogContent maxWidth="800px">
           <DialogHeader icon={Users}>
             <DialogTitle>配置账号池</DialogTitle>
             <DialogDescription>

@@ -191,7 +191,7 @@ export function ModelMappingDialog({ open, onOpenChange, modelMappings, setField
 
   return (
     <DialogRoot open={open} onOpenChange={handleOpenChange}>
-      <DialogContent maxWidth="560px">
+      <DialogContent maxWidth="720px">
         <DialogHeader>
           <DialogTitle>模型映射规则</DialogTitle>
           <DialogDescription>

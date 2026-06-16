@@ -249,7 +249,7 @@ export function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig
 
   return (
     <DialogRoot open={open} onOpenChange={handleClose}>
-      <DialogContent maxWidth="720px" className="max-h-[85vh]">
+      <DialogContent maxWidth="800px" className="max-h-[85vh]">
         <DialogHeader>
           <DialogTitle>客户端 API Keys</DialogTitle>
           <DialogDescription>管理客户端认证密钥，禁用的 Key 不会被使用</DialogDescription>

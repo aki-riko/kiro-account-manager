@@ -575,7 +575,7 @@ function GatewayPage() {
 
               {/* 快速配置客户端弹窗 */}
               <DialogRoot open={showClientConfig} onOpenChange={setShowClientConfig}>
-                <DialogContent maxWidth="480px">
+                <DialogContent maxWidth="560px">
                   <DialogHeader className="">
                     <DialogTitle className="">{t('gateway.quickClientConfig')}</DialogTitle>
                     <DialogDescription className="">

@@ -59,7 +59,7 @@ export function RouteTestDialog({ open, onOpenChange, config }: RouteTestDialogP
 
   return (
     <DialogRoot open={open} onOpenChange={handleOpenChange}>
-      <DialogContent maxWidth="600px" className="max-h-[85vh]">
+      <DialogContent maxWidth="720px" className="max-h-[85vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Network className="w-5 h-5 text-primary" />
