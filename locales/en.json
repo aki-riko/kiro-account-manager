@@ -5,6 +5,7 @@
   "nav.home": "Dashboard",
   "nav.accounts": "Account Management",
   "nav.sessions": "Session Management",
+    "nav.cliSessions": "CLI Sessions",
   "nav.kiroConfig": "Rules Management",
   "nav.desktopOAuth": "Online Login",
   "nav.socialIdC": "Social/IdC",
