@@ -312,7 +312,7 @@ const AccountCard = memo(function AccountCard({
             <button
               onClick={(e) => { e.stopPropagation(); onLogin(account) }}
               disabled={isSwitching || isUnavailable}
-              className="flex-1 h-8 px-2 rounded-md inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+              className="flex-1 h-8 px-2 rounded-md inline-flex items-center justify-center gap-1.5 text-xs font-medium border border-primary/30 text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
               title={t('accountCard.LogIn')}
             >
               <LogIn size={13} className={isSwitching ? 'animate-spin' : ''} />
