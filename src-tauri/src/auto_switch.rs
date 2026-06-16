@@ -280,7 +280,7 @@ fn calculate_remaining(account: &Account) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// 查找可用账号
+/// 查找可用账号（选择剩余额度最多的）
 fn find_available_account(
     accounts: &[Account],
     current_account: &Account,
@@ -288,7 +288,7 @@ fn find_available_account(
 ) -> Option<Account> {
     accounts
         .iter()
-        .find(|acc| {
+        .filter(|acc| {
             // 排除当前账号
             if acc.id == current_account.id {
                 return false;
@@ -300,9 +300,6 @@ fn find_available_account(
             }
 
             // 排除不可用账号（banned / invalid 是真不可用）
-            // 注意：capped / 封顶不在这里硬排除——开启了超额的 capped 账号
-            // remaining 仍可能 > 0（base 用完但 overageCap 还有空间），
-            // 应该交由下面的 calculate_remaining + threshold 判断（issue #98）。
             let status = acc.status.to_lowercase();
             if status == "banned"
                 || status == "封禁"
@@ -320,6 +317,11 @@ fn find_available_account(
             }
 
             true
+        })
+        .max_by(|a, b| {
+            calculate_remaining(a)
+                .partial_cmp(&calculate_remaining(b))
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
         .cloned()
 }

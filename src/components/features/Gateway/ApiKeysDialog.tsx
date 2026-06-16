@@ -165,8 +165,15 @@ export function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig
     onOpenChange(false)
   }
 
+  const handleCancel = () => {
+    // 取消时恢复到打开时的状态，不保存
+    setLocalKeys(parseApiKeys(clientApiKeysText))
+    setEditingIdx(null)
+    onOpenChange(false)
+  }
+
   return (
-    <DialogRoot open={open} onOpenChange={(v) => { if (!v) handleSave(); else onOpenChange(v) }}>
+    <DialogRoot open={open} onOpenChange={(v) => { if (!v) handleCancel() }}>
       <DialogContent maxWidth="800px" className="max-h-[85vh]">
         <DialogHeader>
           <DialogTitle>客户端 API Keys</DialogTitle>
@@ -277,7 +284,7 @@ export function ApiKeysDialog({ open, onOpenChange, clientApiKeysText, setConfig
         </DialogBody>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button variant="outline" onClick={handleCancel}>取消</Button>
           <Button onClick={handleSave}>保存</Button>
         </DialogFooter>
       </DialogContent>

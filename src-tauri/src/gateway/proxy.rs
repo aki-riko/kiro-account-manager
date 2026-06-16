@@ -2761,6 +2761,8 @@ async fn resolve_managed_account_credentials(
     if !need_refresh {
         if let Some(access_token) = &account.access_token {
             if !access_token.is_empty() {
+                // token 未过期，不需要 refresh，释放连接计数
+                state.load_balancer.decrement_connections(&account.id).await;
                 let ctx = crate::commands::common::resolve_kiro_call_context(
                     &account,
                     &state.config.region,
