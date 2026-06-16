@@ -267,7 +267,7 @@ struct RequestLogContext<'a> {
 #[derive(Debug, Clone, Copy)]
 struct GatewayErrorDetails<'a> {
     status: StatusCode,
-    error_type: &'static str,
+    error_type: &'a str,
     message: &'a str,
     response_body: Option<&'a str>,
 }
@@ -1861,11 +1861,9 @@ pub async fn proxy_handler(
                     &upstream_payload_log_context,
                     GatewayErrorDetails {
                         status,
-                        error_type: Box::leak(error_type.into_boxed_str()),
-                        message: Box::leak(message.into_boxed_str()),
-                        response_body: response_body
-                            .as_ref()
-                            .map(|s| Box::leak(s.clone().into_boxed_str()) as &str),
+                        error_type: &error_type,
+                        message: &message,
+                        response_body: response_body.as_deref(),
                     },
                 )
                 .await;
