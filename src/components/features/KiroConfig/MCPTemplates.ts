@@ -53,5 +53,12 @@ export const MCP_TEMPLATES = {
     },
     disabled: false,
     autoApprove: ['*']
+  },
+  codegraph: {
+    command: 'codegraph',
+    args: ['serve', '--mcp'],
+    env: {},
+    disabled: false,
+    autoApprove: ['*']
   }
 }
