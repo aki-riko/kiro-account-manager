@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - dev
+      - public
       - 'feature/**'
   pull_request:
     branches:
@@ -38,22 +39,25 @@ jobs:
         include:
           - platform: windows-2022
             target: ''
+            artifact_name: 'kiro-account-manager-windows-x64'
           - platform: windows-2022
             target: 'aarch64-pc-windows-msvc'
+            artifact_name: 'kiro-account-manager-windows-arm64'
           - platform: windows-2022
             target: 'i686-pc-windows-msvc'
-          - platform: macos-15-intel
+            artifact_name: 'kiro-account-manager-windows-x86'
+          - platform: macos-13
             target: 'x86_64-apple-darwin'
+            artifact_name: 'kiro-account-manager-macos-intel'
           - platform: macos-latest
             target: 'aarch64-apple-darwin'
+            artifact_name: 'kiro-account-manager-macos-arm64'
           - platform: ubuntu-22.04
             target: ''
+            artifact_name: 'kiro-account-manager-linux-x64'
           - platform: ubuntu-22.04-arm
             target: ''
-          - platform: ubuntu-22.04
-            target: 'armv7-unknown-linux-gnueabihf'
-          - platform: ubuntu-22.04
-            target: 'i686-unknown-linux-gnu'
+            artifact_name: 'kiro-account-manager-linux-arm64'
 
     runs-on: ${{ matrix.platform }}
 
@@ -99,7 +103,7 @@ jobs:
         if: steps.should_run.outputs.should_run == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Setup Bun
         if: steps.should_run.outputs.should_run == 'true'
@@ -162,11 +166,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Linux AppImage 使用 gzip 压缩，兼容旧版 AppImageLauncher
           APPIMAGETOOL_COMP: ${{ startsWith(matrix.platform, 'ubuntu') && 'gzip' || '' }}
         with:
           args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
-          # 不上传到 release
           tagName: ''
           releaseName: ''
           releaseBody: ''
@@ -177,7 +179,7 @@ jobs:
         if: always() && steps.should_run.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: kiro-account-manager-${{ matrix.target || (startsWith(matrix.platform, 'windows') && 'x64-windows' || startsWith(matrix.platform, 'macos') && 'universal-macos' || 'x64-linux') }}
+          name: ${{ matrix.artifact_name }}
           path: |
             src-tauri/target/release/bundle
           retention-days: 7
@@ -205,5 +207,3 @@ jobs:
           echo "- macOS (Apple Silicon)" >> $GITHUB_STEP_SUMMARY
           echo "- Linux (x64)" >> $GITHUB_STEP_SUMMARY
           echo "- Linux (ARM64)" >> $GITHUB_STEP_SUMMARY
-          echo "- Linux (ARMv7)" >> $GITHUB_STEP_SUMMARY
-          echo "- Linux (x86 32-bit)" >> $GITHUB_STEP_SUMMARY
