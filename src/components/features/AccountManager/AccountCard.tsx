@@ -153,9 +153,9 @@ const AccountCard = memo(function AccountCard({
 
       <div className="p-3 pt-8 flex-1 flex flex-col gap-2">
         <div className="flex items-start gap-2.5">
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold border border-border/50 flex-shrink-0 ${account.provider === 'Google' ? "bg-red-500/10 text-red-500" :
-            isGitHubProvider(account.provider) ? "bg-slate-500/10 text-slate-500" :
-              "bg-primary/10 text-primary"
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold border flex-shrink-0 ${account.provider === 'Google' ? "border-red-500/30 text-red-500" :
+            isGitHubProvider(account.provider) ? "border-slate-500/30 text-slate-500" :
+              "border-primary/30 text-primary"
             }`}>
             {getAccountDisplayName(account)[0].toUpperCase()}
           </div>
