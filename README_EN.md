@@ -93,6 +93,16 @@ Entries are grouped by the actual GitHub Release publish windows. “Unreleased�
 - **New**: Linux ARM64 (aarch64) full build support — provides AppImage, DEB, and RPM formats
 - **Fix**: macOS Intel (x86_64) build environment update
 
+### 🚧 Unreleased — macOS Window Fix and UA Alignment
+
+> Fixes the macOS startup issue reported after v1.9.2, and aligns API request User-Agent strings with the real Kiro IDE.
+
+#### 🖥️ macOS Compatibility
+- **Fix**: Main window not showing after launch on macOS — added a 3-second fallback that force-shows the window if the frontend doesn't trigger `show_main_window` in time, preventing the "process running but no window" issue.
+
+#### 🔒 UA Alignment
+- **Fix**: API request User-Agent fully aligned with the real Kiro IDE — management APIs (`getUsageLimits`, `ListAvailableModels`) use `aws-sdk-js/1.0.0` + `codewhispererruntime#1.0.0` + `m/N,E`; streaming API (`generateAssistantResponse`) uses `aws-sdk-js/1.0.39` + `codewhispererstreaming#1.0.39` + `m/N`.
+
 ### 🚧 Unreleased — Account Isolation and Kiro2API Reliability
 
 > Focuses on long-running multi-account issues: account-scoped machine IDs, per-account proxies, safer account-file saves, upstream error passthrough, Responses compatibility, and Linux WebKit software-rendering behavior.
