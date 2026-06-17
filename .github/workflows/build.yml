@@ -46,7 +46,7 @@ jobs:
           - platform: windows-2022
             target: 'i686-pc-windows-msvc'
             artifact_name: 'kiro-account-manager-windows-x86'
-          - platform: macos-13
+          - platform: macos-15
             target: 'x86_64-apple-darwin'
             artifact_name: 'kiro-account-manager-macos-intel'
           - platform: macos-latest
