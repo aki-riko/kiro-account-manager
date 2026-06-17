@@ -85,17 +85,13 @@ Kiro Account Manager is a desktop application based on **Tauri 2.x** for central
 
 Entries are grouped by the actual GitHub Release publish windows. “Unreleased” contains changes merged after v1.9.1 but not yet packaged in a release.
 
-### 🏗️ v1.9.2 - 2026-06-17 — Linux ARM64 Architecture Support
+### 🏗️ v1.9.2 - 2026-06-17 — Linux ARM64 Architecture Support and macOS Startup Fix
 
-> This release adds full **Linux ARM64** architecture support, enabling native operation on Raspberry Pi, ARM servers, and other devices.
+> This release adds full **Linux ARM64** architecture support (Raspberry Pi, ARM servers, etc.), fixes the macOS startup issue where the window did not appear, and aligns API request User-Agent strings with the real Kiro IDE.
 
 #### 🏗️ Architecture Support
 - **New**: Linux ARM64 (aarch64) full build support — provides AppImage, DEB, and RPM formats
 - **Fix**: macOS Intel (x86_64) build environment update
-
-### 🚧 Unreleased — macOS Window Fix and UA Alignment
-
-> Fixes the macOS startup issue reported after v1.9.2, and aligns API request User-Agent strings with the real Kiro IDE.
 
 #### 🖥️ macOS Compatibility
 - **Fix**: Main window not showing after launch on macOS — added a 3-second fallback that force-shows the window if the frontend doesn't trigger `show_main_window` in time, preventing the "process running but no window" issue.
