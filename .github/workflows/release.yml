@@ -66,7 +66,7 @@ jobs:
           bun-version: latest
 
       - name: Rust cache
-        uses: swatinem/rust-cache@v3
+        uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
           # 即使构建失败也保存缓存
