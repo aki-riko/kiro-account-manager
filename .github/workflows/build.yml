@@ -171,6 +171,7 @@ jobs:
           cargo test --all-features || echo "⚠️ Some tests failed"
 
       - name: Build application
+        id: build
         if: steps.should_run.outputs.should_run == 'true'
         uses: tauri-apps/tauri-action@v0
         env:
@@ -187,13 +188,14 @@ jobs:
           prerelease: false
 
       - name: Upload build artifacts
-        if: always() && steps.should_run.outputs.should_run == 'true'
+        if: success() && steps.should_run.outputs.should_run == 'true' && steps.build.outcome == 'success'
         uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.artifact_name }}
           path: |
             src-tauri/target/release/bundle
           retention-days: 7
+          if-no-files-found: warn
 
   build-summary:
     needs: build
