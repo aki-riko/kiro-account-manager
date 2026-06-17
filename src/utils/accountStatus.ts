@@ -1,11 +1,11 @@
 import { Account, AccountUsageData } from '../types/account';
 
-const ACTIVE_STATUSES = new Set(['active', '正常', '有效'])
-const CAPPED_STATUSES = new Set(['capped', '封顶', '已封顶'])
-const OVERAGE_STATUSES = new Set(['overage', '超额', '超额中'])
-const BANNED_STATUSES = new Set(['banned', '封禁', '已封禁'])
-const INVALID_STATUSES = new Set(['invalid', '失效', '已失效', 'Token已失效', 'token已失效'])
-const EXPIRED_STATUSES = new Set(['expired', '过期', '已过期'])
+const ACTIVE_STATUSES = new Set(['active'])
+const CAPPED_STATUSES = new Set(['capped'])
+const OVERAGE_STATUSES = new Set(['overage'])
+const BANNED_STATUSES = new Set(['banned'])
+const INVALID_STATUSES = new Set(['invalid'])
+const EXPIRED_STATUSES = new Set(['expired'])
 
 function resolveStatusInput(statusOrAccount: string | Account | any, usageData?: AccountUsageData) {
   if (statusOrAccount && typeof statusOrAccount === 'object' && !Array.isArray(statusOrAccount)) {
