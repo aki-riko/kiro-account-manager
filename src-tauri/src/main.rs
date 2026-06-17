@@ -305,6 +305,18 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     setup_window_close_handler(app)?;
 
     // 主窗口由前端首屏 ready 后通过命令触发显示，避免 setup 阶段过早白屏
+    // 兜底：如果前端 3 秒内没有调用 show_main_window，强制显示窗口（防止 macOS 上"打不开"）
+    let app_handle = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        if let Some(window) = app_handle.get_webview_window("main") {
+            if !window.is_visible().unwrap_or(true) {
+                log::warn!("主窗口 3s 内未显示，强制 show");
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }
+    });
 
     Ok(())
 }
