@@ -58,10 +58,8 @@ jobs:
           - platform: ubuntu-22.04-arm
             target: ''
             artifact_name: 'kiro-account-manager-linux-arm64'
-            continue-on-error: true
 
     runs-on: ${{ matrix.platform }}
-    continue-on-error: ${{ matrix.continue-on-error == true }}
 
     steps:
       - name: Check if should run
@@ -99,7 +97,57 @@ jobs:
         if: steps.should_run.outputs.should_run == 'true' && startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - name: Setup Node
+        if: steps.should_run.outputs.should_run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        if: steps.should_run.outputs.should_run == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Rust cache
+        if: steps.should_run.outputs.should_run == 'true'
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          cache-on-failure: true
+          key: ${{ matrix.platform }}-${{ matrix.target || 'default' }}
+          shared-key: "build"
+
+      - name: Install Rust stable
+        if: steps.should_run.outputs.should_run == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.95.0
+          targets: ${{ matrix.target }}
+
+      - name: Install dependencies
+        if: steps.should_run.outputs.should_run == 'true'
+        shell: bash
+        run: bun install
+
+      - name: Check frontend code
+        if: steps.should_run.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          echo "📦 Checking TypeScript types..."
+          bun run typecheck || true
+          
+          echo "🎨 Checking code style..."
+          bun run lint || true
+
+      - name: Check Rust code
+        if: steps.should_run.outputs.should_run == 'true'
+        shell: bash
+        working-directory: src-tauri
+        run: |
+          echo "🦀 Checking Rust code..."
           cargo fmt --check || echo "⚠️ Rust formatting issues found"
           cargo clippy -- -D warnings || echo "⚠️ Clippy warnings found"
 
