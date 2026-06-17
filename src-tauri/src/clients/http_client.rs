@@ -306,7 +306,7 @@ pub fn build_kiro_x_amz_user_agent(machine_id: &str) -> String {
 
 pub fn build_kiro_custom_user_agent(machine_id: &str) -> String {
     format!(
-        "aws-sdk-js/1.0.39 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/codewhispererruntime#1.0.39 m/N {}",
+        "aws-sdk-js/1.0.39 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/codewhispererstreaming#1.0.39 m/N {}",
         js_os_platform_for_user_agent(),
         KIRO_UA_OS_RELEASE.as_str(),
         KIRO_UA_NODE_VERSION.as_str(),
@@ -314,9 +314,26 @@ pub fn build_kiro_custom_user_agent(machine_id: &str) -> String {
     )
 }
 
+pub fn build_kiro_management_user_agent(machine_id: &str) -> String {
+    format!(
+        "aws-sdk-js/1.0.0 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/codewhispererruntime#1.0.0 m/N,E {}",
+        js_os_platform_for_user_agent(),
+        KIRO_UA_OS_RELEASE.as_str(),
+        KIRO_UA_NODE_VERSION.as_str(),
+        kiro_ide_user_agent_suffix(machine_id)
+    )
+}
+
+pub fn build_kiro_management_x_amz_user_agent(machine_id: &str) -> String {
+    format!(
+        "aws-sdk-js/1.0.0 {}",
+        kiro_ide_user_agent_suffix(machine_id)
+    )
+}
+
 pub fn build_kiro_control_plane_user_agent() -> String {
     format!(
-        "aws-sdk-js/1.0.39 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/kirocontrolplanebearer#1.0.39 m/N",
+        "aws-sdk-js/1.0.0 ua/2.1 os/{}#{} lang/js md/nodejs#{} api/kirocontrolplanebearer#1.0.0 m/N,E",
         js_os_platform_for_user_agent(),
         KIRO_UA_OS_RELEASE.as_str(),
         KIRO_UA_NODE_VERSION.as_str()
@@ -567,7 +584,7 @@ mod tests {
 
         assert!(user_agent.starts_with("aws-sdk-js/1.0.39 ua/2.1 os/"));
         assert!(user_agent.contains(" lang/js md/nodejs#"));
-        assert!(user_agent.contains(" api/codewhispererruntime#1.0.39 m/N KiroIDE-"));
+        assert!(user_agent.contains(" api/codewhispererstreaming#1.0.39 m/N KiroIDE-"));
         assert!(user_agent.ends_with("-machine-abc"));
 
         assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.39 KiroIDE-"));

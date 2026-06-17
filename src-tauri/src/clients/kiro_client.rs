@@ -2,8 +2,9 @@
 // 支持 management 与 runtime API 的 endpoint/header 构造，以及 getUsageLimits、ListAvailableModels、setUserPreference
 
 use crate::clients::http_client::{
-    build_http_client, build_kiro_control_plane_user_agent, build_kiro_custom_user_agent,
-    build_kiro_x_amz_user_agent, get_usage_probe_regions,
+    build_http_client, build_kiro_control_plane_user_agent,
+    build_kiro_management_user_agent, build_kiro_management_x_amz_user_agent,
+    get_usage_probe_regions,
 };
 use crate::commands::common::resolve_default_profile_arn;
 use reqwest::{Client, RequestBuilder};
@@ -85,8 +86,8 @@ fn with_kiro_runtime_management_headers(
     machine_id: &str,
     region: &str,
 ) -> RequestBuilder {
-    let user_agent = build_kiro_custom_user_agent(machine_id);
-    let x_amz_user_agent = build_kiro_x_amz_user_agent(machine_id);
+    let user_agent = build_kiro_management_user_agent(machine_id);
+    let x_amz_user_agent = build_kiro_management_x_amz_user_agent(machine_id);
     let invocation_id = Uuid::new_v4().to_string();
     req.header("Authorization", format!("Bearer {access_token}"))
         .header("host", build_kiro_management_host(region))
@@ -106,7 +107,7 @@ fn with_kiro_control_plane_headers(
     req.header("Authorization", format!("Bearer {access_token}"))
         .header("host", build_kiro_management_host(region))
         .header("user-agent", build_kiro_control_plane_user_agent())
-        .header("x-amz-user-agent", "aws-sdk-js/1.0.39")
+        .header("x-amz-user-agent", "aws-sdk-js/1.0.0")
         .header("amz-sdk-invocation-id", invocation_id)
         .header("amz-sdk-request", "attempt=1; max=3")
         .header("connection", "close")
@@ -445,10 +446,10 @@ mod tests {
             .and_then(|value| value.to_str().ok())
             .expect("x-amz-user-agent header");
 
-        assert!(user_agent.starts_with("aws-sdk-js/1.0.39 ua/2.1 os/"));
-        assert!(user_agent.contains(" api/codewhispererruntime#1.0.39 m/N KiroIDE-"));
+        assert!(user_agent.starts_with("aws-sdk-js/1.0.0 ua/2.1 os/"));
+        assert!(user_agent.contains(" api/codewhispererruntime#1.0.0 m/N,E KiroIDE-"));
         assert!(user_agent.ends_with("-machine-ua"));
-        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.39 KiroIDE-"));
+        assert!(x_amz_user_agent.starts_with("aws-sdk-js/1.0.0 KiroIDE-"));
         assert!(x_amz_user_agent.ends_with("-machine-ua"));
         assert_eq!(
             request
@@ -505,13 +506,13 @@ mod tests {
                 .headers()
                 .get("x-amz-user-agent")
                 .and_then(|value| value.to_str().ok()),
-            Some("aws-sdk-js/1.0.39")
+            Some("aws-sdk-js/1.0.0")
         );
         assert!(request
             .headers()
             .get(reqwest::header::USER_AGENT)
             .and_then(|value| value.to_str().ok())
-            .is_some_and(|value| value.contains("api/kirocontrolplanebearer#1.0.39")));
+            .is_some_and(|value| value.contains("api/kirocontrolplanebearer#1.0.0")));
         assert_eq!(
             request
                 .headers()
