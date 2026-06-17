@@ -108,7 +108,8 @@ export default function CliSessionManager() {
   const formatTime = (isoStr: string | null) => {
     if (!isoStr) return ''
     try {
-      return new Date(isoStr).toLocaleString()
+      const date = new Date(isoStr)
+      return !isNaN(date.getTime()) ? date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : isoStr
     } catch {
       return isoStr
     }

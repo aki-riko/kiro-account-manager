@@ -212,8 +212,13 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
 
   const formatResetTime = (value?: string | number | null) => {
     if (!value) return undefined
-    const timestamp = typeof value === 'number' && value < 1e12 ? value * 1000 : value
-    return new Date(timestamp).toLocaleString()
+    try {
+      const timestamp = typeof value === 'number' && value < 1e12 ? value * 1000 : value
+      const date = new Date(timestamp)
+      return !isNaN(date.getTime()) ? date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : undefined
+    } catch {
+      return undefined
+    }
   }
 
   // 账号信息状态（验证后更新）

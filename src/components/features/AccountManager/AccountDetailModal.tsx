@@ -399,7 +399,14 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 used={form.used}
                 quota={form.quota}
                 icon="🔄"
-                expiry={currentAccount.usageData?.nextDateReset ? `${new Date(currentAccount.usageData.nextDateReset * 1000).toLocaleDateString()} ${t('detail.reset')}` : null}
+                expiry={currentAccount.usageData?.nextDateReset ? (() => {
+                  try {
+                    const date = new Date(currentAccount.usageData.nextDateReset * 1000)
+                    return !isNaN(date.getTime()) ? `${date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })} ${t('detail.reset')}` : null
+                  } catch {
+                    return null
+                  }
+                })() : null}
                 colors={colors}
                 t={t}
               />
@@ -411,7 +418,14 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 quota={freeTrialQuota}
                 status={freeTrialInfo?.freeTrialStatus}
                 icon="⏰"
-                expiry={freeTrialInfo?.freeTrialExpiry ? `${new Date(freeTrialInfo.freeTrialExpiry * 1000).toLocaleDateString()} ${t('detail.expires')}` : null}
+                expiry={freeTrialInfo?.freeTrialExpiry ? (() => {
+                  try {
+                    const date = new Date(freeTrialInfo.freeTrialExpiry * 1000)
+                    return !isNaN(date.getTime()) ? `${date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })} ${t('detail.expires')}` : null
+                  } catch {
+                    return null
+                  }
+                })() : null}
                 colors={colors}
                 t={t}
               />
@@ -458,8 +472,22 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                         </div>
                         <div className={`text-xs text-muted-foreground leading-relaxed`}>
                           {bonus.description && <span>{bonus.description} · </span>}
-                          {bonus.redeemedAt && <span>{t('detail.redeemed')}: {new Date(bonus.redeemedAt * 1000).toLocaleDateString()} · </span>}
-                          {bonus.expiresAt && <span>{t('detail.expires')}: {new Date(bonus.expiresAt * 1000).toLocaleDateString()}</span>}
+                          {bonus.redeemedAt && <span>{t('detail.redeemed')}: {(() => {
+                            try {
+                              const date = new Date(bonus.redeemedAt * 1000)
+                              return !isNaN(date.getTime()) ? date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'
+                            } catch {
+                              return '-'
+                            }
+                          })()} · </span>}
+                          {bonus.expiresAt && <span>{t('detail.expires')}: {(() => {
+                            try {
+                              const date = new Date(bonus.expiresAt * 1000)
+                              return !isNaN(date.getTime()) ? date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'
+                            } catch {
+                              return '-'
+                            }
+                          })()}</span>}
                         </div>
                       </div>
                       <div className="text-right ml-4 flex-shrink-0">
