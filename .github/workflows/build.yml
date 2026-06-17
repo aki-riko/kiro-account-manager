@@ -97,7 +97,18 @@ jobs:
         if: steps.should_run.outputs.should_run == 'true' && startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf lld xdg-utils
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            lld \
+            xdg-utils
 
       - name: Setup Node
         if: steps.should_run.outputs.should_run == 'true'
