@@ -294,11 +294,11 @@ pub async fn fetch_all_available_models(
     };
 
     log::info!(
-        "[ListAvailableModels] Account: {} | Provider: {:?} | ProfileArn (Original): {:?} | ProfileArn (Used): {:?}",
+        "[ListAvailableModels] Account: {} | Provider: {} | ProfileArn (Original): {} | ProfileArn (Used): {}",
         account.id,
-        account.provider,
-        account.profile_arn,
-        resolved_profile_arn
+        account.provider.as_deref().unwrap_or("None"),
+        account.profile_arn.as_deref().unwrap_or("None"),
+        resolved_profile_arn.as_deref().unwrap_or("None")
     );
 
     let response_value = client

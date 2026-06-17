@@ -243,6 +243,9 @@ pub struct SwitchAccountParams {
     pub client_secret: Option<String>,
     #[serde(default)]
     pub region: Option<String>,
+    // 仅用于日志记录，标识是哪个账号
+    #[serde(default)]
+    pub email: Option<String>,
 }
 
 /// 切换 Kiro 账号（原子写入 Token 文件，无需重启 IDE）
@@ -258,6 +261,7 @@ pub async fn switch_kiro_account(
         let profile_arn = params.profile_arn;
         let start_url = params.start_url;
         let client_id = params.client_id;
+        let email = params.email;
         let client_secret = params.client_secret;
         let region = params.region;
         let client_id_hash = params.client_id_hash.filter(|h| !h.trim().is_empty());
@@ -338,11 +342,19 @@ pub async fn switch_kiro_account(
         if auth_method == "IdC" {
             if let Some(secret) = client_secret.as_deref() {
                 if !crate::utils::client_id_hash::client_supports_refresh_token(secret) {
+                    // 使用 email 标识账号，如果没有 email 则用 provider 兜底
+                    let account_identifier = email
+                        .as_ref()
+                        .filter(|s| !s.trim().is_empty())
+                        .map(|s| s.as_str())
+                        .unwrap_or_else(|| provider.as_str());
+                    
                     log::warn!(
-                        "[switch_kiro_account] {} 账号的 clientSecret 缺少 REFRESH_TOKEN grant，\
+                        "[switch_kiro_account] {} 账号 [{}] 的 clientSecret 缺少 REFRESH_TOKEN grant，\
                          IDE token 过期后 refresh 会被 AWS 拒。\
                          建议用户在 KAM v1.8.9+ 重新登录此账号以获取健康 client。",
-                        provider
+                        provider,
+                        account_identifier
                     );
                 }
             }

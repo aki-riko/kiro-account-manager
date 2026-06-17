@@ -35,7 +35,8 @@ export function buildSwitchParams(account) {
     accessToken: account.accessToken,
     refreshToken: account.refreshToken,
     provider: account.provider || 'Google',
-    authMethod
+    authMethod,
+    email: account.email // 用于后端日志记录
   }
 
   if (isIdC) {
