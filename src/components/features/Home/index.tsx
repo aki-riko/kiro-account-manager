@@ -325,9 +325,23 @@ function CliAccountDetail({ snapshot, cliPath }: { snapshot: any; cliPath: strin
   let expiresStr = '-'
   let isExpired = false
   if (tokenData.expires_at) {
-    const expiresDate = new Date(tokenData.expires_at)
-    expiresStr = expiresDate.toLocaleString()
-    isExpired = expiresDate.getTime() < Date.now()
+    try {
+      const expiresDate = new Date(tokenData.expires_at)
+      if (!isNaN(expiresDate.getTime())) {
+        expiresStr = expiresDate.toLocaleString('zh-CN', { 
+          year: 'numeric',
+          month: '2-digit', 
+          day: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        })
+        isExpired = expiresDate.getTime() < Date.now()
+      } else {
+        expiresStr = 'Invalid Date'
+      }
+    } catch {
+      expiresStr = 'Invalid Date'
+    }
   }
 
   // 截断显示
@@ -458,7 +472,11 @@ function CurrentAccountDetail({ account, accent, maskEmail, t }: {
   let resetDateStr = ''
   if (nextReset) {
     const resetDate = new Date(typeof nextReset === 'string' ? nextReset : (nextReset < 1e12 ? nextReset * 1000 : nextReset))
-    resetDateStr = resetDate.toLocaleDateString()
+    if (!isNaN(resetDate.getTime())) {
+      resetDateStr = resetDate.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    } else {
+      resetDateStr = '-'
+    }
     const now = new Date()
     daysUntilReset = Math.max(0, Math.ceil((resetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
     resetStr = daysUntilReset === 0 ? '今日重置' : `${daysUntilReset}天后重置`
@@ -664,7 +682,14 @@ function QuotaRow({ label, used, limit, percent, color, accent, expiry }: {
     amber: { dot: 'bg-amber-500', bar: 'bg-amber-500', text: 'text-amber-600' },
   }
   const c = colorMap[color]
-  const expiryStr = expiry ? new Date(expiry * 1000).toLocaleDateString() : null
+  const expiryStr = expiry ? (() => {
+    try {
+      const date = new Date(expiry * 1000)
+      return !isNaN(date.getTime()) ? date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) : null
+    } catch {
+      return null
+    }
+  })() : null
 
   return (
     <div className="flex items-center gap-2">

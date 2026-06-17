@@ -294,7 +294,14 @@ function AccountInfo({ currentAccount, userInfo, breakdown, nextDateReset, accen
         <Group justify="space-between">
           <Text size="xs" className={"text-muted-foreground"}>{t('home.reset')}</Text>
           <Text size="xs" className={"text-foreground"}>
-            {nextDateReset ? new Date(nextDateReset * 1000).toLocaleDateString() : '-'}
+            {nextDateReset ? (() => {
+              try {
+                const date = new Date(nextDateReset * 1000)
+                return !isNaN(date.getTime()) ? date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'
+              } catch {
+                return '-'
+              }
+            })() : '-'}
           </Text>
         </Group>
         {breakdown?.overageRate && (
@@ -390,7 +397,14 @@ function QuotaRow({ label, used, limit, percent, color, expiry, accent, colors, 
     }
   }
   const c = colorMap[color] || colorMap.blue
-  const expiryStr = expiry ? new Date(expiry * 1000).toLocaleDateString() : null
+  const expiryStr = expiry ? (() => {
+    try {
+      const date = new Date(expiry * 1000)
+      return !isNaN(date.getTime()) ? date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) : null
+    } catch {
+      return null
+    }
+  })() : null
 
   return (
     <div className="flex items-center gap-2">

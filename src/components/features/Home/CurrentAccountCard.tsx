@@ -171,7 +171,14 @@ function TokenDetailPopover({ localToken, colors, t }: TokenDetailPopoverProps) 
           <div className="flex items-center gap-1">
             <Clock size={10} />
             <span className={`text-xs text-foreground`}>
-              {localToken.expiresAt ? new Date(localToken.expiresAt).toLocaleString() : t('home.unknown')}
+              {localToken.expiresAt ? (() => {
+                try {
+                  const date = new Date(localToken.expiresAt)
+                  return !isNaN(date.getTime()) ? date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : t('home.unknown')
+                } catch {
+                  return t('home.unknown')
+                }
+              })() : t('home.unknown')}
             </span>
           </div>
         </div>
