@@ -110,7 +110,7 @@ Entries are grouped by the actual GitHub Release publish windows. “Unreleased�
 
 #### 🌐 Per-account Proxy and BuilderId
 - **New**: Per-account proxy configuration — a specific account can use its own outbound proxy for Kiro2API / Kiro API calls without changing Kiro IDE, Kiro CLI, or the system proxy.
-- **Fix**: BuilderId `profileArn` fallback — covers accounts that can log in successfully but fail later Kiro API requests because the profile ARN is missing.
+- **Fix**: profileArn handling ([#132](https://github.com/hj01857655/kiro-account-manager/issues/132)) — fixes the 403 "User is not authorized to make this call" error caused by Social accounts (Google/GitHub) being incorrectly assigned the BuilderId default profileArn; BuilderId accounts also gain a fallback so missing profileArn no longer fails Kiro API requests.
 - **Improve**: Account edit layout for groups, tags, proxy, and machine ID fields.
 
 #### 💾 Account Files and Kiro2API
