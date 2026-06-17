@@ -136,14 +136,18 @@ export function useSwitchAccount(onLocalTokenChange) {
       let needsRefresh = false
       if (account.expiresAt) {
         try {
-          const expiryDate = new Date(account.expiresAt.replace(/\//g, '-'))
-          const now = new Date()
-          const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000)
+          const dateStr = account.expiresAt.replace(/\//g, '-')
+          const expiryDate = new Date(dateStr)
           
-          // 如果已过期或 1 小时内过期，需要刷新
-          if (expiryDate <= oneHourFromNow) {
-            needsRefresh = true
-            console.log('[Switch] Token 即将过期，先刷新 Token:', account.email, 'expires:', account.expiresAt)
+          if (!isNaN(expiryDate.getTime())) {
+            const now = new Date()
+            const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000)
+            
+            // 如果已过期或 1 小时内过期，需要刷新
+            if (expiryDate <= oneHourFromNow) {
+              needsRefresh = true
+              console.log('[Switch] Token 即将过期，先刷新 Token:', account.email, 'expires:', account.expiresAt)
+            }
           }
         } catch (e) {
           console.warn('[Switch] 解析过期时间失败:', e)

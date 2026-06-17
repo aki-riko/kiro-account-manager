@@ -138,7 +138,15 @@ const ListRow = memo(function ListRow({
     account.provider === 'Google' ? 'red'
     : isGitHubProvider(account.provider) ? 'slate'
     : 'muted'
-  const isExpired = account.expiresAt && new Date(account.expiresAt.replace(/\//g, '-')) < new Date()
+  const isExpired = account.expiresAt && (() => {
+    try {
+      const dateStr = account.expiresAt.replace(/\//g, '-')
+      const expiresDate = new Date(dateStr)
+      return !isNaN(expiresDate.getTime()) && expiresDate < new Date()
+    } catch {
+      return false
+    }
+  })()
   const trialExpiry = account.usageData?.usageBreakdownList?.[0]?.freeTrialInfo?.freeTrialExpiry
 
   return (

@@ -79,7 +79,15 @@ const AccountCard = memo(function AccountCard({
     const isBanned = isBannedStatus(account)
     const isNormal = statusMeta.key === 'active'
     const isUnavailable = isUnavailableStatus(account)
-    const isExpired = account.expiresAt && new Date(account.expiresAt.replace(/\//g, '-')) < new Date()
+    const isExpired = account.expiresAt && (() => {
+      try {
+        const dateStr = account.expiresAt.replace(/\//g, '-')
+        const expiresDate = new Date(dateStr)
+        return !isNaN(expiresDate.getTime()) && expiresDate < new Date()
+      } catch {
+        return false
+      }
+    })()
     const breakdown = account.usageData?.usageBreakdownList?.[0]
     const nextDateReset = account.usageData?.nextDateReset
 
@@ -279,7 +287,16 @@ const AccountCard = memo(function AccountCard({
             <div className="flex items-center justify-between text-[10px] pt-2 mt-2 border-t border-border/30 gap-2">
               {account.expiresAt && (
                 <span className={`flex items-center gap-1 ${cardData.isExpired ? 'text-red-500 font-bold bg-red-500/10 px-1.5 py-0.5 rounded' : 'text-muted-foreground'}`}>
-                  {cardData.isExpired && '⚠️ '}Token: {new Date(account.expiresAt.replace(/\//g, '-')).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  {cardData.isExpired && '⚠️ '}Token: {(() => {
+                    try {
+                      const dateStr = account.expiresAt.replace(/\//g, '-')
+                      const expiresDate = new Date(dateStr)
+                      if (isNaN(expiresDate.getTime())) return 'Invalid Date'
+                      return expiresDate.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    } catch {
+                      return 'Invalid Date'
+                    }
+                  })()}
                 </span>
               )}
               {nextDateReset && (
