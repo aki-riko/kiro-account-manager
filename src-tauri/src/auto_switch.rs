@@ -168,7 +168,10 @@ async fn check_and_auto_switch(app_handle: &AppHandle, threshold: f64) {
         }
     };
 
-    log::debug!("[AutoSwitch] 当前账号: {:?}", current_account.email);
+    log::debug!(
+        "[AutoSwitch] 当前账号: {}",
+        current_account.email.as_deref().unwrap_or("未知")
+    );
 
     // 直接使用本地数据计算剩余额度（不刷新，避免频繁调用 API）
     // 注意：自动刷新任务已经在定期更新所有账号数据，这里直接读取即可
@@ -203,8 +206,8 @@ async fn check_and_auto_switch(app_handle: &AppHandle, threshold: f64) {
     };
 
     log::info!(
-        "[AutoSwitch] 找到可用账号: {:?}，准备切换",
-        available_account.email
+        "[AutoSwitch] 找到可用账号: {}，准备切换",
+        available_account.email.as_deref().unwrap_or("未知")
     );
 
     // 执行切换
@@ -213,7 +216,10 @@ async fn check_and_auto_switch(app_handle: &AppHandle, threshold: f64) {
         return;
     }
 
-    log::info!("[AutoSwitch] 切换账号成功: {:?}", available_account.email);
+    log::info!(
+        "[AutoSwitch] 切换账号成功: {}",
+        available_account.email.as_deref().unwrap_or("未知")
+    );
 
     // 发送事件通知前端
     let _ = app_handle.emit("accounts-updated", ());
@@ -301,12 +307,7 @@ fn find_available_account(
 
             // 排除不可用账号（banned / invalid 是真不可用）
             let status = acc.status.to_lowercase();
-            if status == "banned"
-                || status == "封禁"
-                || status == "已封禁"
-                || status == "invalid"
-                || status == "失效"
-            {
+            if status == "banned" || status == "invalid" {
                 return false;
             }
 
@@ -432,6 +433,7 @@ fn build_switch_params(account: &Account) -> crate::kiro::ide::SwitchAccountPara
         client_secret: account.client_secret.clone(),
         client_id_hash: account.client_id_hash.clone(),
         region: account.region.clone(),
+        email: account.email.clone(),
     }
 }
 
@@ -473,8 +475,7 @@ pub async fn quick_switch_next(app_handle: AppHandle) -> Result<String, String> 
             .iter()
             .find(|acc| {
                 acc.enabled
-                    && !["banned", "invalid", "封禁", "已封禁", "失效"]
-                        .contains(&acc.status.to_lowercase().as_str())
+                    && !["banned", "invalid"].contains(&acc.status.to_lowercase().as_str())
                     && calculate_remaining(acc) > threshold
             })
             .cloned()
