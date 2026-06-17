@@ -46,28 +46,31 @@ Kiro Account Manager is a desktop application based on **Tauri 2.x** for central
 
 ## 📥 Download
 
-**Latest Version v1.9.1** (Released 2026-06-02): Please visit [Releases](https://github.com/hj01857655/kiro-account-manager/releases/latest) (auto-kept up-to-date)
+**Latest Version v1.9.2** (Released 2026-06-17): Please visit [Releases](https://github.com/hj01857655/kiro-account-manager/releases/latest) (auto-kept up-to-date)
 
 > The download links below may lag behind, refer to Releases for the latest versions.
 
 | Platform | Architecture | File Format | Download Link |
 |----------|-------------|-------------|---------------|
-| 🪟 **Windows** | x64 | MSI Installer | [KiroAccountManager_1.9.1_x64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_x64_zh-CN.msi) |
-| 🪟 **Windows** | ARM64 | MSI Installer | [KiroAccountManager_1.9.1_arm64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_arm64_zh-CN.msi) |
-| 🍎 **macOS** | x64 / Intel | DMG Image | [KiroAccountManager_1.9.1_x64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_x64.dmg) |
-| 🍎 **macOS** | x64 / Intel | App Archive | [KiroAccountManager_x64.app.tar.gz](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_x64.app.tar.gz) |
-| 🍎 **macOS** | ARM64 / Apple Silicon (M1/M2/M3/M4) | DMG Image | [KiroAccountManager_1.9.1_aarch64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_aarch64.dmg) |
-| 🍎 **macOS** | ARM64 / Apple Silicon (M1/M2/M3/M4) | App Archive | [KiroAccountManager_aarch64.app.tar.gz](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_aarch64.app.tar.gz) |
-| 🐧 **Linux** | x86_64 | AppImage | [KiroAccountManager_1.9.1_amd64.AppImage](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_amd64.AppImage) |
-| 🐧 **Linux** | x86_64 | DEB Package | [KiroAccountManager_1.9.1_amd64.deb](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager_1.9.1_amd64.deb) |
-| 🐧 **Linux** | x86_64 | RPM Package | [KiroAccountManager-1.9.1-1.x86_64.rpm](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.1/KiroAccountManager-1.9.1-1.x86_64.rpm) |
+| 🪟 **Windows** | x64 | MSI Installer | [KiroAccountManager_1.9.2_x64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_1.9.2_x64_zh-CN.msi) |
+| 🪟 **Windows** | ARM64 | MSI Installer | [KiroAccountManager_1.9.2_arm64_zh-CN.msi](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_1.9.2_arm64_zh-CN.msi) |
+| 🍎 **macOS** | x64 / Intel | DMG Image | [KiroAccountManager_1.9.2_x64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_1.9.2_x64.dmg) |
+| 🍎 **macOS** | x64 / Intel | App Archive | [KiroAccountManager_x64.app.tar.gz](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_x64.app.tar.gz) |
+| 🍎 **macOS** | ARM64 / Apple Silicon (M1/M2/M3/M4) | DMG Image | [KiroAccountManager_1.9.2_aarch64.dmg](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_1.9.2_aarch64.dmg) |
+| 🍎 **macOS** | ARM64 / Apple Silicon (M1/M2/M3/M4) | App Archive | [KiroAccountManager_aarch64.app.tar.gz](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_aarch64.app.tar.gz) |
+| 🐧 **Linux** | x86_64 | AppImage | [KiroAccountManager_1.9.2_amd64.AppImage](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_1.9.2_amd64.AppImage) |
+| 🐧 **Linux** | x86_64 | DEB Package | [KiroAccountManager_1.9.2_amd64.deb](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_1.9.2_amd64.deb) |
+| 🐧 **Linux** | x86_64 | RPM Package | [KiroAccountManager-1.9.2-1.x86_64.rpm](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager-1.9.2-1.x86_64.rpm) |
+| 🐧 **Linux** | ARM64 | AppImage | [KiroAccountManager_1.9.2_arm64.AppImage](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_1.9.2_arm64.AppImage) |
+| 🐧 **Linux** | ARM64 | DEB Package | [KiroAccountManager_1.9.2_arm64.deb](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager_1.9.2_arm64.deb) |
+| 🐧 **Linux** | ARM64 | RPM Package | [KiroAccountManager-1.9.2-1.aarch64.rpm](https://github.com/hj01857655/kiro-account-manager/releases/download/v1.9.2/KiroAccountManager-1.9.2-1.aarch64.rpm) |
 
 > **macOS Style Note**: If style display issues occur, please adjust based on the current repository source code (I don't have a macOS device, cannot reproduce and debug).
 
 **System Requirements**:
 - **Windows**: Windows 10/11 (64-bit), requires [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) (built-in on Win11)
 - **macOS**: macOS 10.15+ (Catalina and above)
-- **Linux**: x86_64 architecture, requires WebKitGTK 4.0+
+- **Linux**: x86_64 / ARM64 architecture, requires WebKitGTK 4.0+
 
 **Installation Instructions**:
 - **Windows**: Double-click `.msi` file to install
@@ -81,6 +84,14 @@ Kiro Account Manager is a desktop application based on **Tauri 2.x** for central
 ## 📝 Changelog
 
 Entries are grouped by the actual GitHub Release publish windows. “Unreleased” contains changes merged after v1.9.1 but not yet packaged in a release.
+
+### 🏗️ v1.9.2 - 2026-06-17 — Linux ARM64 Architecture Support
+
+> This release adds full **Linux ARM64** architecture support, enabling native operation on Raspberry Pi, ARM servers, and other devices.
+
+#### 🏗️ Architecture Support
+- **New**: Linux ARM64 (aarch64) full build support — provides AppImage, DEB, and RPM formats
+- **Fix**: macOS Intel (x86_64) build environment update
 
 ### 🚧 Unreleased — Account Isolation and Kiro2API Reliability
 
@@ -333,4 +344,4 @@ This software is for learning and communication purposes only. Users are respons
 ---
 
 <p align="center">Made with ❤️ by hj01857655</p>
-<p align="center"><sub>Last updated: 2026-06-02 | Version: v1.9.1</sub></p>
+<p align="center"><sub>Last updated: 2026-06-17 | Version: v1.9.2</sub></p>
