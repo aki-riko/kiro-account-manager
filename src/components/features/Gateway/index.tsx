@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Play, Square, ScrollText, Copy } from 'lucide-react'
+import { Play, Square, ScrollText, Copy, Zap } from 'lucide-react'
 import { Alert as AlertPrimitive, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { invoke } from '@tauri-apps/api/core'
