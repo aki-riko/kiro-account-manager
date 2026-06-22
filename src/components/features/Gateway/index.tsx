@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Play, Square, Zap, ScrollText, Copy } from 'lucide-react'
+import { Play, Square, ScrollText, Copy } from 'lucide-react'
 import { Alert as AlertPrimitive, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { invoke } from '@tauri-apps/api/core'
@@ -15,7 +15,6 @@ import {
 } from '@/components/shared/dialog'
 import GatewayConfigComponent from './GatewayConfig'
 import { RequestLogsDialog } from './RequestLogsDialog'
-import { RouteTestDialog } from './RouteTestDialog'
 import { GatewayConfig, GatewayStatus } from './gatewayPageState'
 import { ErrorHistoryEntry } from './gatewayPageUtils'
 
@@ -95,7 +94,6 @@ function GatewayPage() {
   const [copySuccess, setCopySuccess] = useState('')
   const [logDir, setLogDir] = useState('')
   const [showRequestLogs, setShowRequestLogs] = useState(false)
-  const [showRouteTest, setShowRouteTest] = useState(false)
   const [savedConfigSnapshot, setSavedConfigSnapshot] = useState(() => buildGatewayConfigSnapshot(DEFAULT_GATEWAY_CONFIG))
   const [appliedRuntimeSnapshot, setAppliedRuntimeSnapshot] = useState<any>(null)
   const [lastStatusSyncAt, setLastStatusSyncAt] = useState('-')
@@ -515,10 +513,6 @@ function GatewayPage() {
                         <ScrollText size={12} className="mr-1" />
                         请求日志
                       </Button>
-                      <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setShowRouteTest(true)}>
-                        <Zap size={12} className="mr-1" />
-                        测试路由
-                      </Button>
                     </Group>
                   </Group>
 
@@ -566,12 +560,6 @@ function GatewayPage() {
               />
 
               <RequestLogsDialog open={showRequestLogs} onOpenChange={setShowRequestLogs} logLevel={config.logLevel} onLogLevelChange={(v) => setField('logLevel', v)} logRequests={config.logRequests} onLogRequestsChange={(v) => setField('logRequests', v)} onSave={handleSilentSave} />
-
-              <RouteTestDialog
-                open={showRouteTest}
-                onOpenChange={setShowRouteTest}
-                config={config}
-              />
 
               {/* 快速配置客户端弹窗 */}
               <DialogRoot open={showClientConfig} onOpenChange={setShowClientConfig}>
