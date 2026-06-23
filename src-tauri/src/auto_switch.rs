@@ -62,17 +62,6 @@ pub fn start_auto_switch_task(app_handle: AppHandle) {
             let interval_minutes = settings.auto_switch_interval.unwrap_or(DEFAULT_INTERVAL);
 
             // 获取自动刷新间隔
-            let refresh_interval = settings.auto_refresh_interval.unwrap_or(50);
-
-            // 如果自动换号间隔小于自动刷新间隔，发出警告
-            if interval_minutes < refresh_interval {
-                log::warn!(
-                    "[AutoSwitch] 自动换号间隔 ({} 分钟) 小于自动刷新间隔 ({} 分钟)，可能导致使用过期数据",
-                    interval_minutes,
-                    refresh_interval
-                );
-            }
-
             let interval_duration = Duration::from_secs((interval_minutes as u64) * 60);
 
             log::info!(

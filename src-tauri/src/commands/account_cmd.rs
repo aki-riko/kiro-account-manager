@@ -289,6 +289,100 @@ pub async fn sync_account(
     }
 }
 
+/// 只获取配额，不刷新 token（用于手动刷新配额）
+/// 如果 token 无效（401/403），直接返回错误，不会自动刷新 token
+#[tauri::command]
+pub async fn get_usage_limits(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<SyncAccountResult, String> {
+    let mut account = find_account_by_id(&state, &id)?;
+
+    let provider_str = account.provider.as_deref().unwrap_or("Google");
+    let access_token = account.access_token.clone().ok_or("No access token")?;
+    let is_enterprise = provider_str == "Enterprise";
+
+    // 如果账号缺少 machine_id，自动生成账号独立 ID（所有账号都需要）
+    if account
+        .machine_id
+        .as_ref()
+        .is_none_or(|id| id.trim().is_empty())
+    {
+        ensure_account_machine_id(&mut account);
+        log::info!(
+            "Generated account-scoped machine_id for account: {}",
+            account.id
+        );
+    }
+
+    // 直接获取配额，不自动刷新 token
+    let usage_result = if is_enterprise {
+        let machine_id = account
+            .machine_id
+            .as_ref()
+            .ok_or("Enterprise account missing machine_id")?;
+        get_enterprise_usage_with_region_probe(&access_token, machine_id).await
+    } else {
+        get_usage_by_account(&account, &access_token).await
+    };
+
+    // 如果是认证错误，直接返回错误，不刷新 token
+    let usage = match usage_result {
+        Ok(u) => {
+            if u.is_auth_error {
+                return Err("Token 已失效，请刷新 token".to_string());
+            }
+            u
+        }
+        Err(e) => {
+            return Err(format!("获取配额失败: {e}"));
+        }
+    };
+
+    let mut store = lock_store(&state.store, "store")?;
+    let result = if let Some(a) = store.accounts.iter_mut().find(|a| a.id == id) {
+        // 如果生成了新的 machine_id，保存它（所有账号都需要）
+        if account.machine_id.is_some()
+            && a.machine_id.as_ref().is_none_or(|id| id.trim().is_empty())
+        {
+            a.machine_id = account.machine_id.clone();
+            log::info!("Saved account-scoped machine_id for account: {}", a.id);
+        }
+
+        // 更新 usage_data 和 status
+        a.usage_data = Some(usage.usage_data);
+        update_account_status(a, usage.is_banned, usage.is_auth_error);
+
+        // 从 usage_data 中提取并更新 email 和 user_id
+        if let Some(user_info) = a.usage_data.as_ref().and_then(|d| d.get("userInfo")) {
+            if let Some(email) = user_info.get("email").and_then(|v| v.as_str()) {
+                if !email.is_empty() {
+                    a.email = Some(email.to_string());
+                }
+            }
+            if let Some(user_id) = user_info.get("userId").and_then(|v| v.as_str()) {
+                a.user_id = Some(user_id.to_string());
+            }
+        }
+
+        // 克隆结果（这个必须 clone，因为要返回给前端）
+        Some(a.clone())
+    } else {
+        None
+    };
+
+    // 保存文件
+    save_store(&store)?;
+
+    match result {
+        Some(account) => Ok(SyncAccountResult {
+            account,
+            warning: None,
+        }),
+        None => Err("Account not found after update".to_string()),
+    }
+}
+
 /// 只刷新 token，不获取 usage（启动时快速刷新用）
 /// 如果 token 还有 5 分钟以上有效期，跳过刷新直接返回
 #[tauri::command]

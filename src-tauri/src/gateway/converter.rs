@@ -1062,18 +1062,8 @@ pub async fn build_kiro_payload(
                     }
 
                     let images = extract_images(client, message.content.as_ref()).await;
-                    let mut tool_results = extract_tool_results(message.content.as_ref());
-                    // 如果消息包含 toolResults，必须同时包含 tools 定义（Bedrock 要求）
-                    let tools_for_context = if !tool_results.is_empty() {
-                        convert_tools(&processed_tools)
-                    } else {
-                        None
-                    };
-                    // 如果没有 tools 定义，则清空孤立的 toolResults（否则 Bedrock 会报 TOOL_CONFIG_MISSING）
-                    if tools_for_context.is_none() && !tool_results.is_empty() {
-                        tool_results.clear();
-                    }
-                    let user_context = build_user_context(tools_for_context, tool_results.clone());
+                    let tool_results = extract_tool_results(message.content.as_ref());
+                    let user_context = build_user_context(None, tool_results.clone());
 
                     // 规则 7：user 消息必须有 content 或 toolResults
                     if content.trim().is_empty() && tool_results.is_empty() {
@@ -1099,17 +1089,11 @@ pub async fn build_kiro_payload(
                     });
                 }
                 "tool" => {
-                    let mut tool_results = extract_tool_results_from_tool_message(message);
-                    // 如果消息包含 toolResults，必须同时包含 tools 定义（Bedrock 要求）
-                    let tools_for_context = if !tool_results.is_empty() {
-                        convert_tools(&processed_tools)
-                    } else {
-                        None
-                    };
-                    // 如果没有 tools 定义，则清空孤立的 toolResults（否则 Bedrock 会报 TOOL_CONFIG_MISSING）
-                    if tools_for_context.is_none() && !tool_results.is_empty() {
-                        tool_results.clear();
-                    }
+                    let tool_results = extract_tool_results_from_tool_message(message);
+                    // 始终传递工具定义,让 AI 能够调用工具
+                    // 只有当工具列表真的为空时,才会返回 None
+                    let tools_for_context = convert_tools(&processed_tools);
+                    
                     history_items.push(HistoryItem::User {
                         user_input_message: HistoryUserMessage {
                             content: if Some(index) == first_user_index && !system_prompt.is_empty()
@@ -1240,18 +1224,11 @@ pub async fn build_kiro_payload(
         };
     order_tool_results_like_previous_tool_uses(&mut current_tool_results, &history);
 
-    // 如果 currentMessage 包含 toolResults，必须同时包含 tools 定义（Bedrock 要求）
-    let tools_for_current = if !current_tool_results.is_empty() {
-        convert_tools(&processed_tools)
-    } else {
-        None
-    };
-    // 如果没有 tools 定义，则清空孤立的 toolResults（否则 Bedrock 会报 TOOL_CONFIG_MISSING）
-    if tools_for_current.is_none() && !current_tool_results.is_empty() {
-        current_tool_results.clear();
-    }
+    // 始终传递工具定义给 currentMessage,让 AI 能够调用工具
+    // 只有当工具列表真的为空时,才会返回 None
+    let tools_for_current = convert_tools(&processed_tools);
 
-    // 最终保护：如果 content 和 toolResults 都为空，设置默认 content
+    // 最终保护:如果 content 和 toolResults 都为空,设置默认 content
     if current_content.trim().is_empty() && current_tool_results.is_empty() {
         current_content = "Continue".to_string();
     }

@@ -31,8 +31,9 @@ use commands::account_cmd::{
     add_account_by_idc, add_account_by_social, add_local_kiro_account, check_all_tokens_status,
     check_token_status, delete_account, delete_account_remote, delete_accounts, export_accounts,
     get_account_usage, get_accounts, get_accounts_by_group, get_accounts_by_tag,
-    get_available_accounts, import_accounts, list_available_models, refresh_account_token,
-    refresh_all_expiring_tokens, set_overage_status, sync_account, update_account, verify_account,
+    get_available_accounts, get_usage_limits, import_accounts, list_available_models,
+    refresh_account_token, refresh_all_expiring_tokens, set_overage_status, sync_account,
+    update_account, verify_account,
 };
 //应用设置
 use commands::app_data_cmd::{get_app_data_dir, open_app_data_dir};
@@ -428,6 +429,7 @@ fn main() {
             delete_account_remote,
             update_account,
             sync_account,
+            get_usage_limits,
             refresh_account_token,
             verify_account,
             add_account_by_social,
