@@ -280,17 +280,17 @@ fn build_models_response() -> Value {
     .unwrap_or_else(|_| json!({ "object": "list", "data": [] }))
 }
 fn build_count_tokens_response(payload: &Value) -> Value {
-    json!({ "input_tokens": estimate_count_tokens_payload(payload).max(1) })
+    json!({ "input_tokens": estimate_payload_tokens(payload).max(1) })
 }
 
 fn build_openai_tokens_response(payload: &Value) -> Value {
     json!({
         "object": "response.input_tokens",
-        "input_tokens": estimate_count_tokens_payload(payload).max(1)
+        "input_tokens": estimate_payload_tokens(payload).max(1)
     })
 }
 
-fn estimate_count_tokens_payload(payload: &Value) -> usize {
+fn estimate_payload_tokens(payload: &Value) -> usize {
     let model_id = payload
         .get("model")
         .and_then(Value::as_str)
@@ -312,7 +312,7 @@ async fn get_available_models_for_upstream(
     upstream: &UpstreamCredentials,
 ) -> Result<Vec<String>, String> {
     let client = KiroClient::from_client(upstream.http.clone());
-    let (machine_id, profile_arn) = available_models_call_context(upstream);
+    let (machine_id, profile_arn) = get_available_models_call_context(upstream);
 
     let response = client
         .list_available_models(
@@ -339,14 +339,14 @@ async fn get_available_models_for_upstream(
     Ok(models)
 }
 
-fn available_models_call_context(upstream: &UpstreamCredentials) -> (&str, Option<&str>) {
+fn get_available_models_call_context(upstream: &UpstreamCredentials) -> (&str, Option<&str>) {
     (
         upstream.machine_id.as_str(),
         upstream.available_models_profile_arn.as_deref(),
     )
 }
 
-fn check_payload_size(payload: &Value) -> usize {
+fn get_payload_size(payload: &Value) -> usize {
     serde_json::to_string(payload).map(|s| s.len()).unwrap_or(0)
 }
 
@@ -715,7 +715,7 @@ async fn get_model_max_input_tokens(model_id: &str) -> usize {
 /// 3. 保留最近的对话（至少保留最后 2 条消息）
 /// 4. 避免破坏 tool_calls 和 tool_results 的配对关系
 fn trim_kiro_payload_history(payload: &mut Value, max_bytes: usize) -> bool {
-    let original_size = check_payload_size(payload);
+    let original_size = get_payload_size(payload);
     if original_size <= max_bytes {
         return false;
     }
@@ -734,7 +734,7 @@ fn trim_kiro_payload_history(payload: &mut Value, max_bytes: usize) -> bool {
     let mut removed_count = 0;
     loop {
         // 检查当前大小
-        let current_size = check_payload_size(payload);
+        let current_size = get_payload_size(payload);
         if current_size <= max_bytes {
             break;
         }
@@ -814,7 +814,7 @@ fn trim_kiro_payload_history(payload: &mut Value, max_bytes: usize) -> bool {
     trimmed
 }
 
-async fn guarded_local_response(
+async fn generate_local_response(
     state: RouterState,
     client_addr: SocketAddr,
     headers: HeaderMap,
@@ -912,7 +912,7 @@ pub async fn health_handler(
     client_addr: SocketAddr,
     headers: HeaderMap,
 ) -> Response {
-    guarded_local_response(
+    generate_local_response(
         state,
         client_addr,
         headers,
@@ -928,7 +928,7 @@ pub async fn models_handler(
     client_addr: SocketAddr,
     headers: HeaderMap,
 ) -> Response {
-    guarded_local_response(
+    generate_local_response(
         state,
         client_addr,
         headers,
@@ -946,7 +946,7 @@ pub async fn anthropic_count_tokens_handler(
     payload: Value,
 ) -> Response {
     let request_body = payload.to_string();
-    guarded_local_response(
+    generate_local_response(
         state,
         client_addr,
         headers,
@@ -964,7 +964,7 @@ pub async fn openai_tokens_handler(
     payload: Value,
 ) -> Response {
     let request_body = payload.to_string();
-    guarded_local_response(
+    generate_local_response(
         state,
         client_addr,
         headers,
@@ -1038,7 +1038,7 @@ pub async fn openai_chat_handler(
     .await
 }
 
-fn request_endpoint(format: ResponseFormat) -> &'static str {
+fn get_request_endpoint(format: ResponseFormat) -> &'static str {
     match format {
         ResponseFormat::Anthropic => "v1/messages",
         ResponseFormat::Responses => "v1/responses",
@@ -1046,7 +1046,7 @@ fn request_endpoint(format: ResponseFormat) -> &'static str {
     }
 }
 
-fn client_log_prefix(format: ResponseFormat) -> &'static str {
+fn get_client_log_prefix(format: ResponseFormat) -> &'static str {
     match format {
         ResponseFormat::Anthropic => "anthropic-messages",
         ResponseFormat::Responses => "openai-responses",
@@ -1054,7 +1054,7 @@ fn client_log_prefix(format: ResponseFormat) -> &'static str {
     }
 }
 
-fn client_log_prefix_for_endpoint(endpoint: &str) -> &'static str {
+fn get_client_log_prefix_for_endpoint(endpoint: &str) -> &'static str {
     match endpoint {
         "v1/messages" => "anthropic-messages",
         "v1/responses" => "openai-responses",
@@ -1063,7 +1063,7 @@ fn client_log_prefix_for_endpoint(endpoint: &str) -> &'static str {
     }
 }
 
-fn client_sse_log_file(event: Option<&str>, payload: &str) -> &'static str {
+fn get_client_sse_log_file(event: Option<&str>, payload: &str) -> &'static str {
     if event.is_some() {
         return "anthropic-messages-response-sse.log";
     }
@@ -1381,8 +1381,8 @@ pub async fn proxy_handler(
     let request_index = state
         .request_count
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let endpoint = request_endpoint(format);
-    let client_log_prefix = client_log_prefix(format);
+    let endpoint = get_request_endpoint(format);
+    let get_client_log_prefix = get_client_log_prefix(format);
     let started_at = Instant::now();
     let raw_request_body = payload.to_string();
 
@@ -1406,7 +1406,7 @@ pub async fn proxy_handler(
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_dir.join(format!("{client_log_prefix}-request.log")))
+            .open(log_dir.join(format!("{get_client_log_prefix}-request.log")))
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
@@ -1751,7 +1751,7 @@ pub async fn proxy_handler(
     // 如果 payload 超过 Kiro API 的 HTTP 请求大小限制，自动裁剪历史记录
     let mut payload_value = serde_json::to_value(&upstream_payload).unwrap_or_else(|_| json!({}));
 
-    let original_size = check_payload_size(&payload_value);
+    let original_size = get_payload_size(&payload_value);
     if original_size > MAX_KIRO_PAYLOAD_SIZE {
         log::info!(
             "[网关] Payload 大小 {} 字节超过限制 {} 字节。裁剪历史记录...",
@@ -1760,7 +1760,7 @@ pub async fn proxy_handler(
         );
         let trimmed = trim_kiro_payload_history(&mut payload_value, MAX_KIRO_PAYLOAD_SIZE);
         if trimmed {
-            let final_size = check_payload_size(&payload_value);
+            let final_size = get_payload_size(&payload_value);
             log::info!(
                 "[网关] Payload 从 {} 字节裁剪到 {} 字节",
                 original_size,
@@ -1818,7 +1818,7 @@ pub async fn proxy_handler(
             payload_size = new_size;
         }
 
-        let final_payload_size = check_payload_size(&payload_value);
+        let final_payload_size = get_payload_size(&payload_value);
         if final_payload_size > MAX_KIRO_PAYLOAD_SIZE {
             log::error!(
                 "[网关] 多次裁剪后 payload 大小 {} 字节仍超过限制 {} 字节",
@@ -1852,9 +1852,10 @@ pub async fn proxy_handler(
         account_attempt += 1;
 
         if account_attempt > MAX_ACCOUNT_RETRIES {
-            // 所有账号都尝试过了，透传最后一个可重试错误的原始响应体
+            // 所有账号都尝试过了
             if let Some((status, error_type, message, response_body)) = last_retriable_error.take()
             {
+                // 有可重试错误（429 限流或 402 配额不足），透传原始响应体
                 return gateway_error_with_log(
                     &state,
                     format,
@@ -1868,15 +1869,16 @@ pub async fn proxy_handler(
                 )
                 .await;
             }
-            // 如果没有保存可重试错误（不应该发生），返回默认错误
+            // 没有可重试错误（比如都是 token invalid 或账号封禁）
+            // 返回认证错误而不是限流错误
             return gateway_error_with_log(
                 &state,
                 format,
                 &upstream_payload_log_context,
                 GatewayErrorDetails {
-                    status: StatusCode::SERVICE_UNAVAILABLE,
-                    error_type: "rate_limit_error",
-                    message: "所有账号均达到速率限制，请稍后再试",
+                    status: StatusCode::UNAUTHORIZED,
+                    error_type: "authentication_error",
+                    message: "所有可用账号均无法完成请求，请检查账号状态",
                     response_body: None,
                 },
             )
@@ -1940,7 +1942,7 @@ pub async fn proxy_handler(
         };
 
         // 发送请求
-        match send_generate_request(
+        match call_generate_assistant_response(
             &current_upstream,
             &payload_value,
             upstream_payload_log_context.request_index as usize,
@@ -1980,13 +1982,9 @@ pub async fn proxy_handler(
                 if status == StatusCode::FORBIDDEN && error_type == "token_expired_error" {
                     let account_id = extract_account_id_from_upstream(&current_upstream);
 
-                    // 保存原始上游错误；如果刷新/重试失败，最终仍按用户要求透传原始响应体。
-                    last_retriable_error = Some((
-                        status,
-                        error_type.to_string(),
-                        message.clone(),
-                        upstream_response_body.clone(),
-                    ));
+                    // 注意：token_expired_error 不保存到 last_retriable_error，
+                    // 因为它是账号级别的问题，不是临时的限流/配额问题。
+                    // 如果所有账号都 token invalid，应该返回认证错误，而不是透传单个账号的错误。
 
                     if token_refreshed_account_ids.insert(account_id.clone()) {
                         log::warn!(
@@ -2026,6 +2024,32 @@ pub async fn proxy_handler(
                         account_attempt,
                         MAX_ACCOUNT_RETRIES
                     );
+                    continue;
+                }
+
+                // 检查是否是 402 配额不足错误
+                if status == StatusCode::PAYMENT_REQUIRED {
+                    let account_id = extract_account_id_from_upstream(&current_upstream);
+
+                    // 保存最后一个配额不足错误详情
+                    last_retriable_error = Some((
+                        status,
+                        error_type.to_string(),
+                        message.clone(),
+                        upstream_response_body.clone(),
+                    ));
+
+                    // 标记账号为配额不足并切换账号
+                    state.load_balancer.record_failure(&account_id).await;
+
+                    log::warn!(
+                        "[Gateway] 账号 {} 返回 402 配额不足，切换账号 (尝试: {}/{})",
+                        current_upstream.source_label,
+                        account_attempt,
+                        MAX_ACCOUNT_RETRIES
+                    );
+
+                    // 继续尝试下一个账号
                     continue;
                 }
 
@@ -2371,7 +2395,7 @@ pub async fn proxy_handler(
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_dir.join(format!("{}-response.log", client_log_prefix)))
+            .open(log_dir.join(format!("{}-response.log", get_client_log_prefix)))
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
     // ===== 响应缓存：写入（仅非流式成功响应） =====
@@ -2411,7 +2435,7 @@ pub async fn proxy_handler(
     Json(response).into_response()
 }
 
-async fn send_generate_request<T: serde::Serialize + ?Sized>(
+async fn call_generate_assistant_response<T: serde::Serialize + ?Sized>(
     upstream: &UpstreamCredentials,
     upstream_payload: &T,
     request_index: usize,
@@ -2441,13 +2465,13 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
-    const MAX_RETRIES: u32 = 3;
+    const MAX_RETRIES: u32 = 5;
     let mut attempt = 0;
 
     loop {
         attempt += 1;
 
-        let upstream_resp = with_kiro_upstream_headers(
+        let upstream_resp = add_kiro_upstream_headers(
             upstream.http.post(&upstream_url),
             upstream,
             "application/vnd.amazon.eventstream",
@@ -2502,13 +2526,15 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
         // 403 bearer token invalid/expired 需要触发账号 token 刷新后重试。
         let (mapped_status, error_type, message) = map_upstream_error(status, &body);
 
-        // 402 配额不足错误不重试，直接返回原始响应
+        // 402 配额不足错误不重试，直接返回让外层切换账号
         if mapped_status == StatusCode::PAYMENT_REQUIRED {
+            log::warn!("[网关] 上游 402 配额不足，type={}，交给外层切换账号", error_type);
             return Err((mapped_status, error_type, message, Some(body)));
         }
 
-        // 429 限流错误不重试，直接返回原始响应
+        // 429 限流错误不重试，直接返回让外层切换账号
         if mapped_status == StatusCode::TOO_MANY_REQUESTS {
+            log::warn!("[网关] 上游 429 限流，type={}，交给外层切换账号", error_type);
             return Err((mapped_status, error_type, message, Some(body)));
         }
 
@@ -2524,8 +2550,9 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
         if should_retry {
             let backoff_ms = 1000 * 2u64.pow(attempt - 1);
             log::warn!(
-                "上游请求失败 (状态: {}, 尝试: {}/{}), {}ms 后重试",
+                "上游请求失败 (状态: {}, 类型: {}, 尝试: {}/{}), {}ms 后重试",
                 mapped_status,
+                error_type,
                 attempt,
                 MAX_RETRIES,
                 backoff_ms
@@ -2539,7 +2566,7 @@ async fn send_generate_request<T: serde::Serialize + ?Sized>(
     }
 }
 
-fn with_kiro_upstream_headers(
+fn add_kiro_upstream_headers(
     builder: reqwest::RequestBuilder,
     upstream: &UpstreamCredentials,
     accept: &str,
@@ -3447,10 +3474,10 @@ fn map_upstream_error(status: StatusCode, body: &str) -> (StatusCode, &'static s
     let explicit_error_type = extract_error_type(body);
     let text = body.to_lowercase();
 
-    // 检测封禁错误（403 + AccessDeniedException + TemporarilySuspended 或 suspended）
+    // 检测封禁错误（403 + TEMPORARILY_SUSPENDED 或 AccessDeniedException + TemporarilySuspended）
     let is_banned = status == StatusCode::FORBIDDEN
-        && (body.contains("AccessDeniedException") && body.contains("TemporarilySuspended")
-            || text.contains("suspended"));
+        && (body.contains("TEMPORARILY_SUSPENDED")
+            || (body.contains("AccessDeniedException") && body.contains("TemporarilySuspended")));
 
     // 检测token失效错误（403 + bearer token invalid/expired）
     let is_token_invalid = status == StatusCode::FORBIDDEN
@@ -4766,7 +4793,7 @@ fn stream_proxy_response(
                 .append(true)
                 .open(log_dir.join(format!(
                     "{}-response.log",
-                    client_log_prefix_for_endpoint(log_context.endpoint)
+                    get_client_log_prefix_for_endpoint(log_context.endpoint)
                 )))
                 .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
 
@@ -5041,7 +5068,7 @@ async fn send_event(
         let _ = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(log_dir.join(client_sse_log_file(event, payload)))
+            .open(log_dir.join(get_client_sse_log_file(event, payload)))
             .and_then(|mut f| std::io::Write::write_all(&mut f, entry.as_bytes()));
     }
 
@@ -5388,7 +5415,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_payload_size() {
+    fn test_get_payload_size() {
         let payload = json!({
             "model": "claude-3-7-sonnet-20250219",
             "messages": [
@@ -5396,7 +5423,7 @@ mod tests {
             ]
         });
 
-        let size = check_payload_size(&payload);
+        let size = get_payload_size(&payload);
         assert!(size > 0);
     }
 
@@ -5848,7 +5875,7 @@ mod tests {
     }
 
     #[test]
-    fn available_models_call_context_uses_account_machine_id_and_effective_profile_arn() {
+    fn get_available_models_call_context_uses_account_machine_id_and_effective_profile_arn() {
         let upstream = UpstreamCredentials {
             account_id: "test-account".to_string(),
             access_token: "token-models".to_string(),
@@ -5868,7 +5895,7 @@ mod tests {
             http: reqwest::Client::new(),
         };
 
-        let (machine_id, profile_arn) = available_models_call_context(&upstream);
+        let (machine_id, profile_arn) = get_available_models_call_context(&upstream);
 
         assert_eq!(machine_id, "account-machine-id");
         assert_eq!(
@@ -5878,7 +5905,7 @@ mod tests {
     }
 
     #[test]
-    fn with_kiro_upstream_headers_adds_generate_request_headers() {
+    fn add_kiro_upstream_headers_adds_generate_request_headers() {
         let upstream = UpstreamCredentials {
             account_id: "test-account".to_string(),
             access_token: "token-1".to_string(),
@@ -5894,7 +5921,7 @@ mod tests {
             http: reqwest::Client::new(),
         };
 
-        let request = with_kiro_upstream_headers(
+        let request = add_kiro_upstream_headers(
             reqwest::Client::new()
                 .post("https://runtime.us-east-1.kiro.dev/generateAssistantResponse"),
             &upstream,
@@ -5948,7 +5975,7 @@ mod tests {
     }
 
     #[test]
-    fn with_kiro_upstream_headers_keeps_runtime_requests_minimal() {
+    fn add_kiro_upstream_headers_keeps_runtime_requests_minimal() {
         let upstream = UpstreamCredentials {
             account_id: "test-account".to_string(),
             access_token: "token-2".to_string(),
@@ -5964,7 +5991,7 @@ mod tests {
             http: reqwest::Client::new(),
         };
 
-        let request = with_kiro_upstream_headers(
+        let request = add_kiro_upstream_headers(
             reqwest::Client::new()
                 .get("https://runtime.us-east-1.kiro.dev/ListAvailableModels?origin=AI_EDITOR"),
             &upstream,
@@ -5994,7 +6021,7 @@ mod tests {
     }
 
     #[test]
-    fn with_kiro_upstream_headers_adds_mcp_profile_arn_header() {
+    fn add_kiro_upstream_headers_adds_mcp_profile_arn_header() {
         let upstream = UpstreamCredentials {
             account_id: "test-account".to_string(),
             access_token: "token-3".to_string(),
@@ -6014,7 +6041,7 @@ mod tests {
             http: reqwest::Client::new(),
         };
 
-        let request = with_kiro_upstream_headers(
+        let request = add_kiro_upstream_headers(
             reqwest::Client::new().post(crate::clients::kiro_client::build_mcp_url("us-east-1")),
             &upstream,
             "application/json",
@@ -6036,7 +6063,7 @@ mod tests {
     }
 
     #[test]
-    fn with_kiro_upstream_headers_adds_redirect_for_internal_only_for_internal_provider() {
+    fn add_kiro_upstream_headers_adds_redirect_for_internal_only_for_internal_provider() {
         let upstream = UpstreamCredentials {
             account_id: "test-account".to_string(),
             access_token: "token-4".to_string(),
@@ -6052,7 +6079,7 @@ mod tests {
             http: reqwest::Client::new(),
         };
 
-        let request = with_kiro_upstream_headers(
+        let request = add_kiro_upstream_headers(
             reqwest::Client::new()
                 .post("https://runtime.us-east-1.kiro.dev/generateAssistantResponse"),
             &upstream,
@@ -6074,7 +6101,7 @@ mod tests {
     }
 
     #[test]
-    fn with_kiro_upstream_headers_does_not_add_redirect_for_enterprise_or_builderid() {
+    fn add_kiro_upstream_headers_does_not_add_redirect_for_enterprise_or_builderid() {
         for provider in ["Enterprise", "BuilderId"] {
             let upstream = UpstreamCredentials {
                 account_id: "test-account".to_string(),
@@ -6091,7 +6118,7 @@ mod tests {
                 http: reqwest::Client::new(),
             };
 
-            let request = with_kiro_upstream_headers(
+            let request = add_kiro_upstream_headers(
                 reqwest::Client::new()
                     .post("https://runtime.us-east-1.kiro.dev/generateAssistantResponse"),
                 &upstream,
