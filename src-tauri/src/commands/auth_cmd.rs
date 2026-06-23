@@ -27,9 +27,9 @@ fn resolve_idc_login_email(
     user_id: Option<String>,
 ) -> Result<String, String> {
     if provider_id == "Enterprise" {
-        email
+        Ok(email
             .or(user_id)
-            .ok_or_else(|| format!("{} 账号缺少 userId 或 email", provider_id))
+            .unwrap_or_else(|| format!("enterprise_{}", uuid::Uuid::new_v4())))
     } else if provider_id == "BuilderId" {
         // BuilderId 允许没有 email/userId
         Ok(email
