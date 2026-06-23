@@ -2181,10 +2181,9 @@ pub async fn proxy_handler(
                     available_account_count
                 );
                 
-                log::debug!(
-                    "[Gateway] 完整响应体: {}",
-                    upstream_response_body
-                );
+                if let Some(ref body) = upstream_response_body {
+                    log::debug!("[Gateway] 完整响应体: {}", body);
+                }
 
                 // 继续尝试下一个账号
                 continue;
