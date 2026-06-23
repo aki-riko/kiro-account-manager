@@ -195,7 +195,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      const result = await invoke<{ account: Account, warning?: string }>('sync_account', { id: account.id })
+      const result = await invoke<{ account: Account, warning?: string }>('sync_account', { id: account.id, skipTokenRefresh: true })
       const updated = result.account
       setCurrentAccount(updated)
 

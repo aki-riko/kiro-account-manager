@@ -166,7 +166,7 @@ export function useSwitchAccount(onLocalTokenChange) {
       }
 
       // 同步账号（获取最新配额，如果 Token 仍然失效会再次刷新）
-      const syncResult = await invoke<SyncResult>('sync_account', { id: account.id })
+      const syncResult = await invoke<SyncResult>('sync_account', { id: account.id, skipTokenRefresh: true })
       let refreshedAccount = syncResult.account
 
       const settings = appSettings || {}

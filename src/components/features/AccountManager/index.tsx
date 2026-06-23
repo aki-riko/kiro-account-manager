@@ -429,8 +429,8 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
 
     try {
       await invoke('set_overage_status', { id: account.id, enabled })
-      // API 成功后，再次同步确保数据一致
-      const result = await invoke<any>('sync_account', { id: account.id })
+      // API 成功后，获取最新配额确保数据一致（不需要刷新 token）
+      const result = await invoke<any>('get_usage_limits', { id: account.id })
       if (result?.account) {
         patchAccountLocally(result.account)
       }

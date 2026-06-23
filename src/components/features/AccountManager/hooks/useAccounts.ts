@@ -84,7 +84,7 @@ export function useAccounts() {
     const refreshOne = async (account: Account) => {
       let success = false, message = ''
       try {
-        const syncResult = await invoke<{ account: any }>('sync_account', { id: account.id })
+        const syncResult = await invoke<{ account: any }>('sync_account', { id: account.id, skipTokenRefresh: true })
         const updated = normalizeAccountForUi(syncResult.account)
         const idx = updatedAccounts.findIndex(a => a.id === account.id)
         if (idx !== -1) updatedAccounts[idx] = updated
@@ -133,7 +133,7 @@ export function useAccounts() {
   const handleRefreshStatus = useCallback(async (id: string) => {
     setRefreshingId(id)
     try {
-      const syncResult = await invoke<{ account: any }>('sync_account', { id })
+      const syncResult = await invoke<{ account: any }>('sync_account', { id, skipTokenRefresh: true })
       const updated = normalizeAccountForUi(syncResult.account)
       setAccounts(prev => prev.map(a => a.id === id ? updated : a))
       return { success: true, data: updated }

@@ -133,6 +133,7 @@ pub fn delete_accounts(state: State<AppState>, ids: Vec<String>) -> usize {
 pub async fn sync_account(
     state: State<'_, AppState>,
     id: String,
+    skip_token_refresh: Option<bool>,
 ) -> Result<SyncAccountResult, String> {
     let mut account = find_account_by_id(&state, &id)?;
 
@@ -166,9 +167,9 @@ pub async fn sync_account(
 
     let mut refresh_result: Option<RefreshResult> = None;
 
-    // 如果是认证错误，刷新 token 后重试
+    // 如果是认证错误，根据 skip_token_refresh 参数决定是否刷新 token
     let needs_refresh = match &usage_result {
-        Ok(r) => r.is_auth_error,
+        Ok(r) => r.is_auth_error && !skip_token_refresh.unwrap_or(false),
         Err(_) => false,
     };
 
