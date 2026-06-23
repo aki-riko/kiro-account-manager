@@ -285,14 +285,15 @@ async fn login_idc(
 
     let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
 
-    // 调试：输出 usage_data 内容
+    // 调试：输出 Enterprise 账号的信息
     if provider_id == "Enterprise" {
+        if let Some(user_info) = usage_result.usage_data.get("userInfo") {
+            log::info!("Enterprise userInfo: {}", user_info);
+        }
         log::info!(
-            "Enterprise usage_data: {}",
-            serde_json::to_string_pretty(&usage_result.usage_data)
-                .unwrap_or_else(|_| "failed to serialize".to_string())
+            "Extracted: user_id={:?}, email={:?}",
+            user_id, new_email
         );
-        log::info!("Extracted user_id: {:?}, email: {:?}", user_id, new_email);
     }
 
     // Enterprise 账号允许没有 email,使用 userId 作为标识
