@@ -271,12 +271,24 @@ async fn login_idc(
     let auth_result = idc_provider.login().await?;
 
     let account_machine_id = generate_account_machine_id();
-    let usage_result = get_usage_by_provider_with_machine_id(
+    let usage_result = match get_usage_by_provider_with_machine_id(
         &provider_id,
         &auth_result.access_token,
         &account_machine_id,
     )
-    .await?;
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            log::warn!("Failed to get usage for {}: {}", provider_id, e);
+            // 即使 getUsageLimits 失败，也能保存账号
+            crate::commands::common::UsageResult {
+                usage_data: serde_json::json!({}),
+                is_banned: false,
+                is_auth_error: false,
+            }
+        }
+    };
 
     // 封禁账号直接报错
     if usage_result.is_banned {
