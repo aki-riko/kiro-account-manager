@@ -391,6 +391,13 @@ fn get_proxy_from_env() -> Option<String> {
     // 2. https_proxy (小写版本)
     // 3. HTTP_PROXY (通用代理)
     // 4. http_proxy (小写版本)
+    
+    log::debug!("[HttpClient] 尝试读取系统环境变量代理...");
+    log::debug!("[HttpClient]   HTTPS_PROXY = {:?}", std::env::var("HTTPS_PROXY").ok());
+    log::debug!("[HttpClient]   https_proxy = {:?}", std::env::var("https_proxy").ok());
+    log::debug!("[HttpClient]   HTTP_PROXY = {:?}", std::env::var("HTTP_PROXY").ok());
+    log::debug!("[HttpClient]   http_proxy = {:?}", std::env::var("http_proxy").ok());
+    
     let proxy = std::env::var("HTTPS_PROXY")
         .or_else(|_| std::env::var("https_proxy"))
         .or_else(|_| std::env::var("HTTP_PROXY"))
@@ -398,6 +405,7 @@ fn get_proxy_from_env() -> Option<String> {
         .ok()?;
     
     if proxy.trim().is_empty() {
+        log::warn!("[HttpClient] 环境变量代理为空字符串");
         return None;
     }
     
@@ -416,13 +424,18 @@ fn resolve_app_proxy_url() -> Option<String> {
     .unwrap_or_else(|| "followKiro".to_string());
 
     match mode.as_str() {
-        "disabled" => None,
+        "disabled" => {
+            log::debug!("[HttpClient] 代理已禁用");
+            None
+        }
         "followKiro" | _ => {
             // 优先使用 Kiro IDE 配置的代理
             if let Some(proxy) = get_proxy_from_kiro_settings() {
+                log::debug!("[HttpClient] 使用 Kiro IDE 配置的代理: {}", proxy);
                 return Some(proxy);
             }
-            
+
+            log::debug!("[HttpClient] Kiro IDE 未配置代理，尝试系统环境变量");
             // 回退到系统环境变量（HTTP_PROXY, HTTPS_PROXY）
             get_proxy_from_env()
         }
@@ -431,10 +444,20 @@ fn resolve_app_proxy_url() -> Option<String> {
 
 pub fn apply_app_proxy(builder: ClientBuilder) -> Result<ClientBuilder, String> {
     match resolve_app_proxy_url() {
-        Some(proxy_url) => Proxy::all(&proxy_url)
-            .map(|proxy| builder.proxy(proxy))
-            .map_err(|e| format!("应用接口代理配置错误: {e}")),
-        None => Ok(builder),
+        Some(proxy_url) => {
+            log::info!("[HttpClient] 应用代理: {}", proxy_url);
+
+            // 使用 Proxy::all 同时设置 HTTP 和 HTTPS 代理
+            let proxy = Proxy::all(&proxy_url)
+                .map_err(|e| format!("应用接口代理配置错误: {e}"))?;
+
+            // 先禁用系统代理,再应用自定义代理
+            Ok(builder.no_proxy().proxy(proxy))
+        }
+        None => {
+            log::debug!("[HttpClient] 未配置代理，直连");
+            Ok(builder)
+        }
     }
 }
 
