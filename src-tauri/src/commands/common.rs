@@ -542,12 +542,11 @@ pub async fn get_usage_by_provider_with_machine_id(
     get_usage_by_account(&temp_account, access_token).await
 }
 
-/// 为企业账号获取 usage 数据（多区域探测）
-/// 返回 (UsageResult, detected_region)
+/// 为企业账号获取 usage 数据（简化版，直接使用 us-east-1）
 pub async fn get_enterprise_usage_with_region_probe(
     access_token: &str,
     machine_id: &str,
-) -> Result<(UsageResult, String), String> {
+) -> Result<UsageResult, String> {
     use crate::clients::kiro_client::KiroClient;
 
     let client = KiroClient::new()?;
@@ -556,30 +555,21 @@ pub async fn get_enterprise_usage_with_region_probe(
         .await;
 
     match result {
-        Ok((usage_data, region)) => Ok((
-            UsageResult {
-                usage_data,
-                is_banned: false,
-                is_auth_error: false,
-            },
-            region,
-        )),
-        Err(e) if e.starts_with("BANNED:") => Ok((
-            UsageResult {
-                usage_data: serde_json::Value::Null,
-                is_banned: true,
-                is_auth_error: false,
-            },
-            String::new(),
-        )),
-        Err(e) if is_auth_error_message(&e) => Ok((
-            UsageResult {
-                usage_data: serde_json::Value::Null,
-                is_banned: false,
-                is_auth_error: true,
-            },
-            String::new(),
-        )),
+        Ok(usage_data) => Ok(UsageResult {
+            usage_data,
+            is_banned: false,
+            is_auth_error: false,
+        }),
+        Err(e) if e.starts_with("BANNED:") => Ok(UsageResult {
+            usage_data: serde_json::Value::Null,
+            is_banned: true,
+            is_auth_error: false,
+        }),
+        Err(e) if is_auth_error_message(&e) => Ok(UsageResult {
+            usage_data: serde_json::Value::Null,
+            is_banned: false,
+            is_auth_error: true,
+        }),
         Err(e) => Err(e),
     }
 }

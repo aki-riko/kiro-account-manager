@@ -159,15 +159,12 @@ pub async fn sync_account(
             .machine_id
             .as_ref()
             .ok_or("Enterprise account missing machine_id")?;
-        get_enterprise_usage_with_region_probe(&access_token, machine_id)
-            .await
-            .map(|(result, _region)| result)
+        get_enterprise_usage_with_region_probe(&access_token, machine_id).await
     } else {
         get_usage_by_account(&account, &access_token).await
     };
 
     let mut refresh_result: Option<RefreshResult> = None;
-    let mut detected_region: Option<String> = None;
 
     // 如果是认证错误，刷新 token 后重试
     let needs_refresh = match &usage_result {
@@ -183,18 +180,7 @@ pub async fn sync_account(
                         .machine_id
                         .as_ref()
                         .ok_or("Enterprise account missing machine_id")?;
-                    match get_enterprise_usage_with_region_probe(
-                        &refreshed.access_token,
-                        machine_id,
-                    )
-                    .await
-                    {
-                        Ok((result, region)) => {
-                            detected_region = Some(region);
-                            Ok(result)
-                        }
-                        Err(e) => Err(e),
-                    }
+                    get_enterprise_usage_with_region_probe(&refreshed.access_token, machine_id).await
                 } else {
                     get_usage_by_account(&account, &refreshed.access_token).await
                 };
@@ -261,10 +247,6 @@ pub async fn sync_account(
                 "Token refreshed successfully for account: {}",
                 email_display
             );
-        }
-        // 如果探测到了新的区域，更新账户的 region 字段
-        if let Some(region) = detected_region {
-            a.region = Some(region);
         }
 
         // 只有成功获取配额时才更新 usage_data 和 status
@@ -875,7 +857,7 @@ async fn add_account_by_idc_internal(
     };
 
     // BuilderId 和 Enterprise 都使用默认 region（如果未提供）
-    let mut region = params.region.unwrap_or_else(|| "us-east-1".to_string());
+    let region = params.region.unwrap_or_else(|| "us-east-1".to_string());
 
     // 获取 machine_id（企业账号多区域探测需要）
     let machine_id = params
@@ -905,49 +887,25 @@ async fn add_account_by_idc_internal(
             .refresh_token(&params.refresh_token, metadata)
             .await?;
 
-        // 企业账号使用多区域探测
-        let (usage_result, detected_region) = if is_enterprise {
-            match get_enterprise_usage_with_region_probe(&auth_result.access_token, &machine_id)
-                .await
-            {
-                Ok((result, detected_region)) => (result, detected_region),
-                Err(e) => {
-                    log::warn!("Failed to get enterprise usage in add_account_by_idc: {}", e);
-                    // 即使 getUsageLimits 失败，也能保存账号
-                    (
-                        crate::commands::common::UsageResult {
-                            usage_data: serde_json::json!({}),
-                            is_banned: false,
-                            is_auth_error: false,
-                        },
-                        region.clone(),
-                    )
-                }
-            }
-        } else {
-            match get_usage_by_provider_with_machine_id(
-                &params.provider_id,
-                &auth_result.access_token,
-                &machine_id,
-            )
-            .await
-            {
-                Ok(result) => (result, region.clone()),
-                Err(e) => {
-                    log::warn!("Failed to get usage in add_account_by_idc: {}", e);
-                    // 即使 getUsageLimits 失败，也能保存账号
-                    (
-                        crate::commands::common::UsageResult {
-                            usage_data: serde_json::json!({}),
-                            is_banned: false,
-                            is_auth_error: false,
-                        },
-                        region.clone(),
-                    )
+        // 使用用户选择的 region，不再进行探测
+        let usage_result = match get_usage_by_provider_with_machine_id(
+            &params.provider_id,
+            &auth_result.access_token,
+            &machine_id,
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(e) => {
+                log::warn!("Failed to get usage in add_account_by_idc: {}", e);
+                // 即使 getUsageLimits 失败，也能保存账号
+                crate::commands::common::UsageResult {
+                    usage_data: serde_json::json!({}),
+                    is_banned: false,
+                    is_auth_error: false,
                 }
             }
         };
-        region = detected_region;
 
         let expires_at = calc_expires_at(auth_result.expires_in);
         (
@@ -1029,49 +987,25 @@ async fn add_account_by_idc_internal(
             .refresh_token(&params.refresh_token, metadata)
             .await?;
 
-        // 企业账号使用多区域探测
-        let (usage_result, detected_region) = if is_enterprise {
-            match get_enterprise_usage_with_region_probe(&auth_result.access_token, &machine_id)
-                .await
-            {
-                Ok((result, detected_region)) => (result, detected_region),
-                Err(e) => {
-                    log::warn!("Failed to get enterprise usage in add_account_by_idc: {}", e);
-                    // 即使 getUsageLimits 失败，也能保存账号
-                    (
-                        crate::commands::common::UsageResult {
-                            usage_data: serde_json::json!({}),
-                            is_banned: false,
-                            is_auth_error: false,
-                        },
-                        region.clone(),
-                    )
-                }
-            }
-        } else {
-            match get_usage_by_provider_with_machine_id(
-                &params.provider_id,
-                &auth_result.access_token,
-                &machine_id,
-            )
-            .await
-            {
-                Ok(result) => (result, region.clone()),
-                Err(e) => {
-                    log::warn!("Failed to get usage in add_account_by_idc: {}", e);
-                    // 即使 getUsageLimits 失败，也能保存账号
-                    (
-                        crate::commands::common::UsageResult {
-                            usage_data: serde_json::json!({}),
-                            is_banned: false,
-                            is_auth_error: false,
-                        },
-                        region.clone(),
-                    )
+        // 使用用户选择的 region，不再进行探测
+        let usage_result = match get_usage_by_provider_with_machine_id(
+            &params.provider_id,
+            &auth_result.access_token,
+            &machine_id,
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(e) => {
+                log::warn!("Failed to get usage in add_account_by_idc: {}", e);
+                // 即使 getUsageLimits 失败，也能保存账号
+                crate::commands::common::UsageResult {
+                    usage_data: serde_json::json!({}),
+                    is_banned: false,
+                    is_auth_error: false,
                 }
             }
         };
-        region = detected_region;
 
         let expires_at = calc_expires_at(auth_result.expires_in);
         (

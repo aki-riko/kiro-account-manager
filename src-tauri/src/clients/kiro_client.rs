@@ -4,7 +4,6 @@
 use crate::clients::http_client::{
     build_http_client, build_kiro_control_plane_user_agent,
     build_kiro_management_user_agent, build_kiro_management_x_amz_user_agent,
-    get_usage_probe_regions,
 };
 use crate::commands::common::resolve_default_profile_arn;
 use reqwest::{Client, RequestBuilder};
@@ -193,29 +192,24 @@ impl KiroClient {
             .map_err(|e| format!("Failed to parse JSON: {e}"))
     }
 
-    /// 多区域探测获取企业账号的 usage 数据
+    /// 获取企业账号的 usage 数据（简化版，直接使用 us-east-1）
     pub async fn get_usage_limits_with_region_probe(
         &self,
         access_token: &str,
         machine_id: &str,
-    ) -> Result<(serde_json::Value, String), String> {
+    ) -> Result<serde_json::Value, String> {
         // 不再探测多个区域，直接使用默认区域 us-east-1
         let region = "us-east-1";
         
-        match self
-            .get_usage_limits(
-                access_token,
-                machine_id,
-                region,
-                None,
-                None,
-                Some("BuilderId"),
-            )
-            .await
-        {
-            Ok(data) => Ok((data, region.to_string())),
-            Err(e) => Err(e),
-        }
+        self.get_usage_limits(
+            access_token,
+            machine_id,
+            region,
+            None,
+            None,
+            Some("BuilderId"),
+        )
+        .await
     }
 
     /// ListAvailableModels 接口
