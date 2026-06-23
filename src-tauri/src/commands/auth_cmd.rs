@@ -546,15 +546,16 @@ mod tests {
         assert_eq!(
             resolve_idc_login_email("Enterprise", None, Some("enterprise-user".to_string()))
                 .unwrap(),
-            "enterprise-user".to_string()
+            Some("enterprise-user".to_string())
         );
         assert_eq!(
             resolve_idc_login_email("BuilderId", None, Some("builder-user".to_string())).unwrap(),
-            "builder-user".to_string()
+            Some("builder-user".to_string())
         );
+        // Enterprise 账号允许都没有 email 和 userId
         assert_eq!(
-            resolve_idc_login_email("Enterprise", None, None).unwrap_err(),
-            "Enterprise 账号缺少 userId 或 email".to_string()
+            resolve_idc_login_email("Enterprise", None, None).unwrap(),
+            None
         );
     }
 
