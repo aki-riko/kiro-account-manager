@@ -199,27 +199,23 @@ impl KiroClient {
         access_token: &str,
         machine_id: &str,
     ) -> Result<(serde_json::Value, String), String> {
-        let regions = get_usage_probe_regions();
-
-        for region in regions {
-            match self
-                .get_usage_limits(
-                    access_token,
-                    machine_id,
-                    region,
-                    None,
-                    None,
-                    Some("BuilderId"),
-                )
-                .await
-            {
-                Ok(data) => return Ok((data, region.to_string())),
-                Err(e) if e.starts_with("AUTH_ERROR") && e.contains("403") => continue,
-                Err(e) => return Err(e),
-            }
+        // 不再探测多个区域，直接使用默认区域 us-east-1
+        let region = "us-east-1";
+        
+        match self
+            .get_usage_limits(
+                access_token,
+                machine_id,
+                region,
+                None,
+                None,
+                Some("BuilderId"),
+            )
+            .await
+        {
+            Ok(data) => Ok((data, region.to_string())),
+            Err(e) => Err(e),
         }
-
-        Err("Failed to find account in any region (all returned 403)".to_string())
     }
 
     /// ListAvailableModels 接口
