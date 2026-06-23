@@ -378,10 +378,13 @@ async fn login_idc(
         );
 
         store.accounts.insert(0, account.clone());
+        log::info!("Inserted new {} account into store", provider_id);
         account
     };
 
+    log::info!("Saving store with {} accounts...", store.accounts.len());
     save_store(&store)?;
+    log::info!("Store saved successfully");
     drop(store);
 
     let display_id = account.get_display_id();
