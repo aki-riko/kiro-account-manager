@@ -285,15 +285,9 @@ async fn login_idc(
 
     let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
 
-    // 调试：输出 Enterprise 账号的信息
+    // 调试：输出 Enterprise 账号的 userInfo 对象
     if provider_id == "Enterprise" {
-        if let Some(user_info) = usage_result.usage_data.get("userInfo") {
-            log::info!("Enterprise userInfo: {}", user_info);
-        }
-        log::info!(
-            "Extracted: user_id={:?}, email={:?}",
-            user_id, new_email
-        );
+        log::info!("Enterprise userInfo: {}", usage_result.usage_data.get("userInfo").unwrap_or(&serde_json::json!(null)));
     }
 
     // Enterprise 账号允许没有 email,使用 userId 作为标识
