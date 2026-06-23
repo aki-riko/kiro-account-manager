@@ -437,12 +437,51 @@ fn build_switch_params(account: &Account) -> crate::kiro::ide::SwitchAccountPara
     }
 }
 
-/// 一键切换到下一个可用账号（前端按钮调用，不弹确认）
+/// 查找下一个可用账号（轮换逻辑：从当前账号之后开始找，找到第一个可用的）
+/// 用于一键换号，不检查额度阈值，但跳过额度为0的账号
+fn find_next_available_account(
+    accounts: &[Account],
+    current_account: &Account,
+) -> Option<Account> {
+    let current_index = accounts.iter().position(|acc| acc.id == current_account.id)?;
+    
+    // 从当前账号的下一个开始循环查找
+    for i in 1..accounts.len() {
+        let next_index = (current_index + i) % accounts.len();
+        let acc = &accounts[next_index];
+        
+        // 检查是否可用
+        if acc.id == current_account.id {
+            continue; // 跳过当前账号
+        }
+        
+        // 跳过禁用的账号
+        if !acc.enabled {
+            continue;
+        }
+        
+        // 跳过真正不可用的状态（banned/invalid）
+        let status = acc.status.to_lowercase();
+        if status == "banned" || status == "invalid" {
+            continue;
+        }
+        
+        // 跳过额度为0的账号（已经完全用完）
+        let remaining = calculate_remaining(acc);
+        if remaining <= 0.0 {
+            continue;
+        }
+        
+        return Some(acc.clone());
+    }
+    
+    None
+}
+
+/// 一键切换到下一个可用账号（前端按钮调用，不弹确认，轮换逻辑，不检查额度阈值）
 #[tauri::command]
 pub async fn quick_switch_next(app_handle: AppHandle) -> Result<String, String> {
     let state = app_handle.state::<AppState>();
-    let settings = get_app_settings_inner().map_err(|e| e.to_string())?;
-    let threshold = settings.auto_switch_threshold.unwrap_or(DEFAULT_THRESHOLD);
 
     // 读取所有账号
     let accounts = {
@@ -466,17 +505,17 @@ pub async fn quick_switch_next(app_handle: AppHandle) -> Result<String, String> 
     // 获取当前账号
     let current_account = get_current_account(&accounts).await;
 
-    // 查找下一个可用账号
+    // 查找下一个可用账号（使用轮换逻辑，跳过额度为0的）
     let next_account = if let Some(ref current) = current_account {
-        find_available_account(&accounts, current, threshold)
+        find_next_available_account(&accounts, current)
     } else {
-        // 没有当前账号，找第一个有额度的
+        // 没有当前账号，找第一个启用、状态正常、有余额的
         accounts
             .iter()
             .find(|acc| {
                 acc.enabled
                     && !["banned", "invalid"].contains(&acc.status.to_lowercase().as_str())
-                    && calculate_remaining(acc) > threshold
+                    && calculate_remaining(acc) > 0.0
             })
             .cloned()
     };
