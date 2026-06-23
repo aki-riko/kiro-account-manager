@@ -399,6 +399,8 @@ async fn login_idc(
 
     log::info!("Emitting login-success event for account: {}", account.id);
     let _ = app_handle.emit("login-success", account.id.clone());
+    let _ = app_handle.emit("accounts-updated", ());
+    log::info!("Emitted login-success and accounts-updated events");
     log::info!("Returning success response");
     Ok(format!("{auth_method} login completed for {display_id}"))
 }
