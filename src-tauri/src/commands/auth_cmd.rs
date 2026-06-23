@@ -300,10 +300,12 @@ async fn login_idc(
     // 调试：输出 Enterprise 账号的 userInfo 对象
     if provider_id == "Enterprise" {
         log::info!("Enterprise userInfo: {}", usage_result.usage_data.get("userInfo").unwrap_or(&serde_json::json!(null)));
+        log::info!("Extracted email: {:?}, user_id: {:?}", new_email, user_id);
     }
 
     // Enterprise 账号允许没有 email,使用 userId 作为标识
     let final_email = resolve_idc_login_email(&provider_id, new_email.clone(), user_id.clone())?;
+    log::info!("final_email for {} account: {:?}", provider_id, final_email);
 
     let mut store = lock_store(&state.store, "store")?;
     let existing_idx = find_existing_account_idx(
@@ -313,8 +315,10 @@ async fn login_idc(
         &auth_result.refresh_token,
         user_id.as_ref(),
     );
+    log::info!("existing_idx: {:?}, will create new account: {}", existing_idx, existing_idx.is_none());
 
     let account = if let Some(idx) = existing_idx {
+        log::info!("Updating existing account at index {}", idx);
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(auth_result.access_token.clone());
         existing.refresh_token = Some(auth_result.refresh_token.clone());
