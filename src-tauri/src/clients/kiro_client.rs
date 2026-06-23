@@ -169,6 +169,12 @@ impl KiroClient {
         let profile_arn = effective_profile_arn(profile_arn, _provider);
         let url = build_get_usage_limits_url(region, &profile_arn);
 
+        log::info!(
+            "[GetUsageLimits] Request - region: {}, profileArn: {}",
+            region,
+            profile_arn
+        );
+
         let request = with_kiro_runtime_management_headers(
             self.client.get(&url),
             access_token,

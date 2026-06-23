@@ -1840,49 +1840,125 @@ pub async fn proxy_handler(
         ..upstream_log_context.clone()
     };
 
-    // 账号重试循环：遇到 429 错误时切换账号
-    const MAX_ACCOUNT_RETRIES: u32 = 3;
+    // 账号重试循环：持续尝试所有账号，直到成功
+    // 对于可重试错误（429/402），在尝试完所有账号后等待一段时间再重试
     let mut account_attempt = 0;
+    let mut retry_round = 0;
     let mut tried_account_ids: HashSet<String> = HashSet::new();
     let mut token_refreshed_account_ids: HashSet<String> = HashSet::new();
     let mut next_upstream_override: Option<UpstreamCredentials> = None;
     let mut last_retriable_error: Option<(StatusCode, String, String, Option<String>)> = None;
+    let mut consecutive_auth_failures = 0;
+    const MAX_AUTH_FAILURES: u32 = 5; // 连续认证失败次数上限
+
+    // 获取可用账号数量，用于判断何时需要等待
+    let available_account_count = {
+        let mut store = AccountStore::new();
+        store.reload();
+
+        match state.config.account_mode.as_str() {
+            "single" => store
+                .accounts
+                .iter()
+                .filter(|account| {
+                    state.config.account_id.as_deref() == Some(account.id.as_str())
+                        && account.is_available()
+                        && account.enabled
+                })
+                .count(),
+            "group" => store
+                .accounts
+                .iter()
+                .filter(|account| {
+                    state.config.group_id.as_deref() == account.group_id.as_deref()
+                        && account.is_available()
+                        && account.enabled
+                })
+                .count(),
+            "pool" => store
+                .accounts
+                .iter()
+                .filter(|account| {
+                    state.config.pool_account_ids.contains(&account.id)
+                        && account.is_available()
+                        && account.enabled
+                })
+                .count(),
+            _ => 0,
+        }
+    }.max(1); // 至少假设有1个账号
+
+    log::info!(
+        "[Gateway] 开始请求，可用账号数: {}",
+        available_account_count
+    );
 
     let (upstream_resp, successful_upstream) = loop {
         account_attempt += 1;
 
-        if account_attempt > MAX_ACCOUNT_RETRIES {
-            // 所有账号都尝试过了
-            if let Some((status, error_type, message, response_body)) = last_retriable_error.take()
-            {
-                // 有可重试错误（429 限流或 402 配额不足），透传原始响应体
-                return gateway_error_with_log(
-                    &state,
-                    format,
-                    &upstream_payload_log_context,
-                    GatewayErrorDetails {
-                        status,
-                        error_type: &error_type,
-                        message: &message,
-                        response_body: response_body.as_deref(),
-                    },
-                )
-                .await;
+        // 如果尝试次数超过账号数量，说明本轮所有账号都试过了
+        if account_attempt > available_account_count as u32 {
+            retry_round += 1;
+            account_attempt = 1; // 重置计数器，开始新一轮
+
+            // 如果有可重试错误（429/402/401），等待后重试
+            if let Some((status, _, _, _)) = &last_retriable_error {
+                if *status == StatusCode::TOO_MANY_REQUESTS || *status == StatusCode::PAYMENT_REQUIRED || *status == StatusCode::UNAUTHORIZED {
+                    let wait_seconds = 5u64 * retry_round as u64; // 每轮等待时间递增
+                    log::warn!(
+                        "[Gateway] 所有账号都返回 {} 错误，等{} 秒后重试 (第{} 轮)",
+                        status.as_u16(),
+                        wait_seconds,
+                        retry_round + 1
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_secs(wait_seconds)).await;
+
+                    // 清空已尝试账号列表，重新尝试所有账号
+                    tried_account_ids.clear();
+                    continue;
+                }
             }
-            // 没有可重试错误（比如都是 token invalid 或账号封禁）
-            // 返回认证错误而不是限流错误
-            return gateway_error_with_log(
-                &state,
-                format,
-                &upstream_payload_log_context,
-                GatewayErrorDetails {
-                    status: StatusCode::UNAUTHORIZED,
-                    error_type: "authentication_error",
-                    message: "所有可用账号均无法完成请求，请检查账号状态",
-                    response_body: None,
-                },
-            )
-            .await;
+
+            // 如果连续多次认证失败（非429/402/401），可能所有账号都不可用
+            consecutive_auth_failures += 1;
+            if consecutive_auth_failures >= MAX_AUTH_FAILURES {
+                log::error!(
+                    "[Gateway] 连续 {} 轮认证失败，停止重试",
+                    MAX_AUTH_FAILURES
+                );
+
+                // 如果有保存的错误详情，透传；否则返回通用认证错误
+                if let Some((status, error_type, message, response_body)) = last_retriable_error {
+                    return gateway_error_with_log(
+                        &state,
+                        format,
+                        &upstream_payload_log_context,
+                        GatewayErrorDetails {
+                            status,
+                            error_type: &error_type,
+                            message: &message,
+                            response_body: response_body.as_deref(),
+                        },
+                    )
+                    .await;
+                } else {
+                    return gateway_error_with_log(
+                        &state,
+                        format,
+                        &upstream_payload_log_context,
+                        GatewayErrorDetails {
+                            status: StatusCode::UNAUTHORIZED,
+                            error_type: "authentication_error",
+                            message: "所有可用账号均无法完成请求，请检查账号状态",
+                            response_body: None,
+                        },
+                    )
+                    .await;
+                }
+            }
+
+            // 清空已尝试账号列表，重新尝试
+            tried_account_ids.clear();
         }
 
         // 如果不是第一次尝试，需要重新选择账号
@@ -1899,7 +1975,7 @@ pub async fn proxy_handler(
                             "[Gateway] 账号 {} 已尝试过，继续尝试下一个 (尝试: {}/{})",
                             creds.source_label,
                             account_attempt,
-                            MAX_ACCOUNT_RETRIES
+                            available_account_count
                         );
                         continue;
                     }
@@ -1911,7 +1987,7 @@ pub async fn proxy_handler(
                     log::warn!(
                         "[Gateway] 重新选择账号失败 (尝试: {}/{}): {}",
                         account_attempt,
-                        MAX_ACCOUNT_RETRIES,
+                        available_account_count,
                         sanitized
                     );
                     // 如果是账号不可用，继续尝试
@@ -1949,7 +2025,10 @@ pub async fn proxy_handler(
         )
         .await
         {
-            Ok(resp) => break (resp, current_upstream),
+            Ok(resp) => {
+                // 请求成功，退出重试循环
+                break (resp, current_upstream);
+            }
             Err((status, error_type, message, upstream_response_body)) => {
                 // 检查是否是 429 错误
                 if status == StatusCode::TOO_MANY_REQUESTS {
@@ -1971,7 +2050,7 @@ pub async fn proxy_handler(
                         "[Gateway] 账号 {} 返回 429 错误，标记为速率限制并切换账号 (尝试: {}/{})",
                         current_upstream.source_label,
                         account_attempt,
-                        MAX_ACCOUNT_RETRIES
+                        available_account_count
                     );
 
                     // 继续尝试下一个账号
@@ -1991,7 +2070,7 @@ pub async fn proxy_handler(
                             "[Gateway] 账号 {} 返回 token 失效，刷新 token 后重试同一账号 (尝试: {}/{})",
                             current_upstream.source_label,
                             account_attempt,
-                            MAX_ACCOUNT_RETRIES
+                            available_account_count
                         );
 
                         match force_refresh_upstream_credentials(
@@ -2022,7 +2101,7 @@ pub async fn proxy_handler(
                         "[Gateway] 账号 {} 刷新后仍返回 token 失效，切换账号 (尝试: {}/{})",
                         current_upstream.source_label,
                         account_attempt,
-                        MAX_ACCOUNT_RETRIES
+                        available_account_count
                     );
                     continue;
                 }
@@ -2046,7 +2125,7 @@ pub async fn proxy_handler(
                         "[Gateway] 账号 {} 返回 402 配额不足，切换账号 (尝试: {}/{})",
                         current_upstream.source_label,
                         account_attempt,
-                        MAX_ACCOUNT_RETRIES
+                        available_account_count
                     );
 
                     // 继续尝试下一个账号
@@ -2072,26 +2151,43 @@ pub async fn proxy_handler(
                         "[Gateway] 账号 {} 被封禁，标记为不可用并切换账号 (尝试: {}/{})",
                         current_upstream.source_label,
                         account_attempt,
-                        MAX_ACCOUNT_RETRIES
+                        available_account_count
                     );
 
                     // 继续尝试下一个账号
                     continue;
                 }
 
-                // 其他错误直接返回
-                return gateway_error_with_log(
-                    &state,
-                    format,
-                    &upstream_payload_log_context,
-                    GatewayErrorDetails {
-                        status,
-                        error_type,
-                        message: &message,
-                        response_body: upstream_response_body.as_deref(),
-                    },
-                )
-                .await;
+                // 其他错误：记录并切换到下一个账号
+                let account_id = extract_account_id_from_upstream(&current_upstream);
+
+                // 保存最后一个错误详情，以便最终透传
+                last_retriable_error = Some((
+                    status,
+                    error_type.to_string(),
+                    message.clone(),
+                    upstream_response_body.clone(),
+                ));
+
+                state.load_balancer.record_failure(&account_id).await;
+
+                log::warn!(
+                    "[Gateway] 账号 {} 返回错误 (状态: {}, 类型: {}, 消息: {}), 切换账号 (尝试: {}/{})",
+                    current_upstream.source_label,
+                    status,
+                    error_type,
+                    message,
+                    account_attempt,
+                    available_account_count
+                );
+                
+                log::debug!(
+                    "[Gateway] 完整响应体: {}",
+                    upstream_response_body
+                );
+
+                // 继续尝试下一个账号
+                continue;
             }
         }
     };

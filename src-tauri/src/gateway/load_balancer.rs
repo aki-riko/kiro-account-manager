@@ -187,8 +187,6 @@ pub struct LoadBalancer {
     health_check_interval: Duration,
     /// 速率限制的账号（临时屏蔽）
     rate_limited_accounts: Arc<RwLock<HashMap<String, Instant>>>,
-    /// 已封禁的账号（永久屏蔽，直到手动重置）
-    banned_accounts: Arc<RwLock<HashMap<String, Instant>>>,
 }
 
 impl LoadBalancer {
@@ -199,7 +197,6 @@ impl LoadBalancer {
             health_map: Arc::new(RwLock::new(HashMap::new())),
             health_check_interval: Duration::from_secs(30),
             rate_limited_accounts: Arc::new(RwLock::new(HashMap::new())),
-            banned_accounts: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -236,14 +233,13 @@ impl LoadBalancer {
     async fn filter_healthy_accounts(&self, accounts: &[Account]) -> Vec<Account> {
         let health_map = self.health_map.read().await;
         let rate_limited = self.rate_limited_accounts.read().await;
-        let banned = self.banned_accounts.read().await;
 
         accounts
             .iter()
             .filter(|acc| {
-                // 检查是否被封禁（永久屏蔽）
-                if banned.contains_key(&acc.id) {
-                    log::debug!("[LoadBalancer] 跳过已封禁的账号: {}", acc.label);
+                // 检查账号是否启用（数据库持久化状态）
+                if !acc.enabled {
+                    log::debug!("[LoadBalancer] 跳过已禁用的账号: {} (enabled=false)", acc.label);
                     return false;
                 }
 
@@ -415,20 +411,70 @@ impl LoadBalancer {
     }
 
     /// 标记账号为已封禁（永久屏蔽，直到手动重置）
+    ///
+    /// 此方法会直接更新账号数据库，设置 status="banned" 和 enabled=false
+    /// 不再使用内存标记，直接依赖数据库的 enabled 字段过滤
     pub async fn mark_account_banned(&self, account_id: &str) {
-        let mut banned = self.banned_accounts.write().await;
-        banned.insert(account_id.to_string(), Instant::now());
         log::warn!(
-            "[LoadBalancer] 账号 {} 被标记为已封禁，永久屏蔽（需手动重置）",
+            "[LoadBalancer] 账号 {} 被标记为已封禁，正在持久化到数据库",
             account_id
         );
 
-        // 同时标记为不健康
+        // 标记为不健康
         let mut health_map = self.health_map.write().await;
         if let Some(health) = health_map.get_mut(account_id) {
             health.is_healthy = false;
             health.recent_failures = 999; // 设置高失败次数
         }
+        drop(health_map); // 释放锁
+
+        // 持久化到数据库
+        if let Err(e) = Self::persist_banned_status(account_id).await {
+            log::error!(
+                "[LoadBalancer] 持久化账号 {} 的封禁状态失败: {}",
+                account_id,
+                e
+            );
+        }
+    }
+
+    /// 持久化封禁状态到数据库
+    async fn persist_banned_status(account_id: &str) -> Result<(), String> {
+        use crate::core::account::AccountStore;
+        use crate::commands::common::update_account_status;
+
+        let mut store = AccountStore::new();
+
+        // 查找并更新账号
+        let mut found = false;
+        let accounts = &mut store.accounts;
+
+        for account in accounts.iter_mut() {
+            if account.id == account_id {
+                found = true;
+
+                // 更新状态为封禁，enabled 设为 false
+                update_account_status(account, true, false);
+
+                log::info!(
+                    "[LoadBalancer] 正在持久化账号 {} 的封禁状态: status={}, enabled={}",
+                    account_id,
+                    account.status,
+                    account.enabled
+                );
+                break;
+            }
+        }
+
+        if !found {
+            return Err(format!("账号 {} 未找到", account_id));
+        }
+
+        // 保存到文件
+        store.try_save_to_file()?;
+
+        log::info!("[LoadBalancer] 账号 {} 的封禁状态已持久化到数据库", account_id);
+        Ok(())
     }
 
     /// 获取所有被速率限制的账号
@@ -446,27 +492,6 @@ impl LoadBalancer {
         });
 
         rate_limited.keys().cloned().collect()
-    }
-
-    /// 获取所有被封禁的账号
-    pub async fn get_banned_accounts(&self) -> Vec<String> {
-        let banned = self.banned_accounts.read().await;
-        banned.keys().cloned().collect()
-    }
-
-    /// 清除账号的封禁标记（手动重置）
-    pub async fn clear_banned(&self, account_id: &str) {
-        let mut banned = self.banned_accounts.write().await;
-        if banned.remove(account_id).is_some() {
-            log::info!("[LoadBalancer] 手动解除账号 {} 的封禁状态", account_id);
-
-            // 重置健康状态
-            let mut health_map = self.health_map.write().await;
-            if let Some(health) = health_map.get_mut(account_id) {
-                health.is_healthy = true;
-                health.recent_failures = 0;
-            }
-        }
     }
 
     /// 清除账号的速率限制标记

@@ -53,7 +53,6 @@ use commands::cli_config_cmd::{
 //网关2API
 use commands::gateway_cmd::{
     cleanup_stale_health,
-    clear_banned_account,
     clear_gateway_request_logs,
     clear_rate_limit_account,
     configure_proxy_clients,
@@ -543,7 +542,6 @@ fn main() {
             // Gateway 负载均衡 API
             get_rate_limited_accounts,
             get_banned_accounts,
-            clear_banned_account,
             clear_rate_limit_account,
             get_all_account_health,
             reset_account_health,

@@ -376,38 +376,20 @@ pub async fn get_rate_limited_accounts(state: State<'_, AppState>) -> Result<Vec
     }
 }
 
-/// 获取所有被封禁的账号
+/// 获取所有被封禁的账号（从数据库读取）
 #[tauri::command]
-pub async fn get_banned_accounts(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    let balancer = {
-        let gateway = state.gateway.lock().unwrap();
-        gateway.as_ref().map(|g| g.load_balancer.clone())
-    };
+pub async fn get_banned_accounts(_state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    use crate::core::account::AccountStore;
 
-    if let Some(lb) = balancer {
-        Ok(lb.get_banned_accounts().await)
-    } else {
-        Err("Gateway not initialized".to_string())
-    }
-}
+    let store = AccountStore::new();
+    let banned_ids: Vec<String> = store
+        .get_all()
+        .into_iter()
+        .filter(|acc| acc.status == "banned" || !acc.enabled)
+        .map(|acc| acc.id)
+        .collect();
 
-/// 清除账号的封禁标记
-#[tauri::command]
-pub async fn clear_banned_account(
-    state: State<'_, AppState>,
-    account_id: String,
-) -> Result<(), String> {
-    let balancer = {
-        let gateway = state.gateway.lock().unwrap();
-        gateway.as_ref().map(|g| g.load_balancer.clone())
-    };
-
-    if let Some(lb) = balancer {
-        lb.clear_banned(&account_id).await;
-        Ok(())
-    } else {
-        Err("Gateway not initialized".to_string())
-    }
+    Ok(banned_ids)
 }
 
 /// 清除账号的速率限制标记
