@@ -652,14 +652,12 @@ fn normalize_claude_model_format(model: &str) -> String {
 ///
 /// 根据账号可用模型列表（来自 ListAvailableModels API），自动将不可用的模型降级
 ///
-/// ## 降级策略（基于 Kiro 订阅限制）
+/// ## 降级策略
 ///
 /// Free 用户可用模型：sonnet-4.5, sonnet-4, haiku-4.5, 开源模型
-/// Free 用户不可用：所有 Opus 系列、Sonnet 4.6
+/// Free 用户不可用：所有 Opus 系列、Sonnet 4.6+
 ///
-/// 降级链：
-/// - Opus 4.7 → Opus 4.6 → Opus 4.5 → Sonnet 4.5
-/// - Sonnet 4.6 → Sonnet 4.5
+/// 简单策略：所有不可用模型一律降级到 claude-sonnet-4.5（保留 -thinking 后缀）
 pub fn get_internal_model_id_with_fallback(
     external_model: &str,
     available_models: &[String],
@@ -671,33 +669,14 @@ pub fn get_internal_model_id_with_fallback(
         return Ok(mapped_model);
     }
 
-    // 降级策略：逐级降级直到找到可用模型
-    let fallback = if mapped_model.contains("opus-4.7") {
-        // Opus 4.7 → Opus 4.6 → Opus 4.5 → Sonnet 4.5
-        if available_models.iter().any(|m| m.contains("opus-4.6")) {
-            "claude-opus-4.6"
-        } else if available_models.iter().any(|m| m.contains("opus-4.5")) {
-            "claude-opus-4.5"
-        } else {
-            // Free 用户：Opus 全系列不可用，降级到 Sonnet 4.5
-            "claude-sonnet-4.5"
-        }
-    } else if mapped_model.contains("opus-4.6") {
-        // Opus 4.6 → Opus 4.5 → Sonnet 4.5
-        if available_models.iter().any(|m| m.contains("opus-4.5")) {
-            "claude-opus-4.5"
-        } else {
-            "claude-sonnet-4.5"
-        }
-    } else if mapped_model.contains("opus-4.5") {
-        // Opus 4.5 → Sonnet 4.5（Free 用户场景）
-        "claude-sonnet-4.5"
-    } else if mapped_model.contains("sonnet-4.6") {
-        // Sonnet 4.6 → Sonnet 4.5
-        "claude-sonnet-4.5"
+    // 检测原始模型名是否要求 thinking（用于降级后保留 -thinking 后缀）
+    let requires_thinking = external_model.to_lowercase().contains("thinking");
+
+    // 简单粗暴：一律降级到 claude-sonnet-4.5（Free 用户最高可用模型）
+    let fallback = if requires_thinking {
+        "claude-sonnet-4.5-thinking"
     } else {
-        // 其他模型不降级，返回原模型（可能会在后续请求中失败）
-        return Ok(mapped_model);
+        "claude-sonnet-4.5"
     };
 
     log::warn!(
@@ -967,6 +946,37 @@ pub async fn build_kiro_payload(
     } else {
         get_internal_model_id(&request.model)?
     };
+
+    // 如果模型被降级，需要根据降级后的模型重新调整 thinking 配置
+    // 避免出现不兼容的组合（例如：sonnet-4.5 + adaptive thinking）
+    if request.thinking.is_some() {
+        let original_model = get_internal_model_id(&request.model).unwrap_or_default();
+        if model_id != original_model {
+            log::info!(
+                "[网关] 模型从 {} 降级到 {}，重新调整 thinking 配置",
+                original_model,
+                model_id
+            );
+
+            // 判断降级后的模型是否支持 Adaptive Thinking
+            let supports_adaptive =
+                (model_id.contains("opus") && (model_id.contains("4.7") || model_id.contains("4-7")))
+                || (model_id.contains("sonnet") && (model_id.contains("4.6") || model_id.contains("4-6")));
+
+            let thinking_type = if supports_adaptive {
+                "adaptive"
+            } else {
+                "enabled"
+            };
+
+            use crate::gateway::models::Thinking;
+            request.thinking = Some(Thinking {
+                thinking_type: thinking_type.to_string(),
+                budget_tokens: 20000,
+            });
+        }
+    }
+
     let conversation_id = request
         .previous_response_id
         .clone()
@@ -1281,25 +1291,18 @@ pub async fn build_kiro_payload(
 
 pub fn get_available_models() -> Vec<ModelInfo> {
     // 数据来源：Kiro ListAvailableModels API 实际返回
+    // 注意：Claude 模型只保留 -thinking 版本，不带后缀的已删除
     [
         // 自动选择
         "auto",
-        // Claude 系列
-        "claude-opus-4.8",
+        // Claude 系列（仅 thinking 版本）
         "claude-opus-4.8-thinking",
-        "claude-opus-4.7",
         "claude-opus-4.7-thinking",
-        "claude-opus-4.6",
         "claude-opus-4.6-thinking",
-        "claude-sonnet-4.6",
         "claude-sonnet-4.6-thinking",
-        "claude-opus-4.5",
         "claude-opus-4.5-thinking",
-        "claude-sonnet-4.5",
         "claude-sonnet-4.5-thinking",
-        "claude-haiku-4.5",
         "claude-haiku-4.5-thinking",
-        "claude-sonnet-4",
         "claude-sonnet-4-thinking",
         // 开源模型
         "deepseek-3.2",

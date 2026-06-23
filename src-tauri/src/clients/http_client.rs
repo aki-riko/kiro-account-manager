@@ -384,6 +384,27 @@ fn get_proxy_from_kiro_settings() -> Option<String> {
         .and_then(|value| normalize_proxy_url(&value))
 }
 
+/// 从系统环境变量获取代理配置
+fn get_proxy_from_env() -> Option<String> {
+    // 按优先级尝试不同的环境变量
+    // 1. HTTPS_PROXY (用于 HTTPS 请求)
+    // 2. https_proxy (小写版本)
+    // 3. HTTP_PROXY (通用代理)
+    // 4. http_proxy (小写版本)
+    let proxy = std::env::var("HTTPS_PROXY")
+        .or_else(|_| std::env::var("https_proxy"))
+        .or_else(|_| std::env::var("HTTP_PROXY"))
+        .or_else(|_| std::env::var("http_proxy"))
+        .ok()?;
+    
+    if proxy.trim().is_empty() {
+        return None;
+    }
+    
+    log::info!("[HttpClient] 使用系统环境变量代理: {}", proxy);
+    normalize_proxy_url(&proxy)
+}
+
 fn resolve_app_proxy_url() -> Option<String> {
     let mode = match get_app_settings_inner() {
         Ok(settings) => settings.app_proxy_mode,
@@ -396,7 +417,15 @@ fn resolve_app_proxy_url() -> Option<String> {
 
     match mode.as_str() {
         "disabled" => None,
-        "followKiro" | _ => get_proxy_from_kiro_settings(),
+        "followKiro" | _ => {
+            // 优先使用 Kiro IDE 配置的代理
+            if let Some(proxy) = get_proxy_from_kiro_settings() {
+                return Some(proxy);
+            }
+            
+            // 回退到系统环境变量（HTTP_PROXY, HTTPS_PROXY）
+            get_proxy_from_env()
+        }
     }
 }
 
