@@ -84,23 +84,21 @@ export function useAccounts() {
     const refreshOne = async (account: Account) => {
       let success = false, message = ''
       try {
-        const syncResult = await invoke<{ account: any }>('sync_account', { id: account.id, skipTokenRefresh: true })
+        const syncResult = await invoke<{ account: any }>('sync_account', { id: account.id })
         const updated = normalizeAccountForUi(syncResult.account)
         const idx = updatedAccounts.findIndex(a => a.id === account.id)
         if (idx !== -1) updatedAccounts[idx] = updated
         success = true
-        message = '同步成功'
+        message = syncResult.warning || '同步成功'
       } catch (e) {
+        // sync_account 后端已处理状态更新，前端只需提取错误信息用于展示
         const errorMsg = String(e)
-        const idx = updatedAccounts.findIndex(a => a.id === account.id)
         if (errorMsg.includes('BANNED')) {
           message = '账号已封禁'
-          if (idx !== -1) updatedAccounts[idx] = { ...updatedAccounts[idx], status: 'banned' }
-        } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
+        } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid') || errorMsg.includes('失效')) {
           message = '账号已失效'
-          if (idx !== -1) updatedAccounts[idx] = { ...updatedAccounts[idx], status: 'invalid' }
         } else {
-          message = errorMsg.slice(0, 30)
+          message = errorMsg.slice(0, 50)
         }
       }
       completed++
@@ -133,7 +131,7 @@ export function useAccounts() {
   const handleRefreshStatus = useCallback(async (id: string) => {
     setRefreshingId(id)
     try {
-      const syncResult = await invoke<{ account: any }>('sync_account', { id, skipTokenRefresh: true })
+      const syncResult = await invoke<{ account: any }>('get_usage_limits', { id })
       const updated = normalizeAccountForUi(syncResult.account)
       setAccounts(prev => prev.map(a => a.id === id ? updated : a))
       return { success: true, data: updated }

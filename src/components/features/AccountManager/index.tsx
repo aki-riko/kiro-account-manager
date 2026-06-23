@@ -12,6 +12,7 @@ import { showSuccess, showError } from '../../../utils/toast'
 import { getAccountDisplayName, calcAccountUsagePercent } from '../../../utils/accountStats'
 import { normalizeAccountStatus } from '../../../utils/accountStatus'
 import { normalizeAccountForUi } from './utils/accountRuntime'
+import { Account } from '../../../types/account'
 import AccountHeader from './AccountHeader'
 import AccountTable from './AccountTable'
 import AccountListView from './AccountListView'
@@ -61,6 +62,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   })
   const [sortBy, setSortBy] = useState('trialAsc')
   const [refreshingTokenId, setRefreshingTokenId] = useState<string | null>(null)
+  const [refreshingQuotaId, setRefreshingQuotaId] = useState<string | null>(null)
   const [togglingOverageId, setTogglingOverageId] = useState<string | null>(null)
 
   // 当前登录的本地 token
@@ -154,7 +156,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     ids.forEach(clearAvailableModelsState)
   }, [clearAvailableModelsState, setAccounts])
 
-  const patchAccountLocally = useCallback((updatedAccount: any) => {
+  const updateAccountLocally = useCallback((updatedAccount: any) => {
     if (!updatedAccount?.id) return
     const normalizedAccount = normalizeAccountForUi(updatedAccount)
     setAccounts(prev => prev.map(account => account.id === normalizedAccount.id ? normalizedAccount : account))
@@ -193,6 +195,36 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     }
   }, [setAccounts])
 
+  // 刷新配额（智能同步：如果 token 失效会自动刷新）
+  const handleRefreshQuota = useCallback(async (id: string) => {
+    setRefreshingQuotaId(id)
+    try {
+      const result = await invoke<{ account: Account, warning?: string }>('sync_account', { id })
+      updateAccountLocally(result.account)
+      clearAvailableModelsState(id)
+      if (result.warning) {
+        showError('同步警告', result.warning)
+      } else {
+        showSuccess(t('accounts.refreshSuccess'))
+      }
+      return { success: true, account: result.account }
+    } catch (e) {
+      const errorMsg = String(e)
+      if (errorMsg.includes('BANNED')) {
+        showError(t('accounts.accountBanned'))
+      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid') || errorMsg.includes('失效')) {
+        showError(t('accounts.tokenInvalid'))
+      } else if (errorMsg.includes('error sending request') || errorMsg.includes('connection') || errorMsg.includes('network') || errorMsg.includes('timeout')) {
+        showError('❌ 网络连接失败\n\n可能原因：\n• 网络不稳定\n• 代理设置有误\n• 防火墙拦截\n\n解决方法：\n1. 检查网络连接\n2. 检查代理设置\n3. 关闭防火墙或添加白名单')
+      } else {
+        showError(errorMsg.slice(0, 100))
+      }
+      return { success: false, error: errorMsg }
+    } finally {
+      setRefreshingQuotaId(null)
+    }
+  }, [clearAvailableModelsState, updateAccountLocally, t])
+
   // 包装刷新函数，添加 toast 通知
   const handleRefreshWithNotify = useCallback(async (id: string) => {
     const result = await handleRefreshStatus(id)
@@ -217,23 +249,27 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     return result
   }, [clearAvailableModelsState, handleRefreshStatus, t])
 
-  // 刷新 Token
+  // 刷新 Token（刷新后自动获取最新配额）
   const handleRefreshToken = useCallback(async (id: string) => {
     setRefreshingTokenId(id)
     try {
-      const account = await invoke<any>('refresh_account_token', { id })
-      patchAccountLocally(account)
+      // 先刷新 token
+      await invoke('refresh_token', { id })
+      // 再获取配额（使用新 token）
+      const result = await invoke<{ account: Account, warning?: string }>('get_usage_limits', { id })
+      updateAccountLocally(result.account)
       clearAvailableModelsState(id)
-      showSuccess('Token 刷新成功')
-      return { success: true, account }
+      if (result.warning) {
+        showError('刷新成功，但有警告', result.warning)
+      } else {
+        showSuccess('Token 刷新成功')
+      }
+      return { success: true, account: result.account }
     } catch (e) {
       const errorMsg = String(e)
       if (errorMsg.includes('BANNED')) {
         showError('账号已封禁')
-      } else if (errorMsg.includes('AUTH_ERROR')) {
-        // AUTH_ERROR: 静默处理，不弹窗（账号已自动标记为 invalid）
-        console.log('[Refresh] Token 已失效，已自动标记账号状态')
-      } else if (errorMsg.includes('401') || errorMsg.includes('invalid')) {
+      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid') || errorMsg.includes('失效')) {
         showError('Token 无效，刷新失败')
       } else if (errorMsg.includes('error sending request') || errorMsg.includes('connection') || errorMsg.includes('network') || errorMsg.includes('timeout')) {
         showError('❌ 网络连接失败\n\n可能原因：\n• 网络不稳定\n• 代理设置有误\n• 防火墙拦截\n\n解决方法：\n1. 检查网络连接\n2. 检查代理设置\n3. 关闭防火墙或添加白名单')
@@ -244,7 +280,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     } finally {
       setRefreshingTokenId(null)
     }
-  }, [clearAvailableModelsState, patchAccountLocally])
+  }, [clearAvailableModelsState, updateAccountLocally])
 
   // 获取所有标签（从标签定义中获取）
   const allTags = useMemo(() => {
@@ -360,6 +396,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
       result[id] = {
         isRefreshing: refreshingId === id,
         isRefreshingToken: refreshingTokenId === id,
+        isRefreshingQuota: refreshingQuotaId === id,
         isSwitching: switchingId === id,
         isTogglingOverage: togglingOverageId === id,
         isCopied: copiedId === id,
@@ -368,7 +405,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
         availableModelsError: availableModelsErrorById[id] ?? ''}
     }
     return result
-  }, [filteredAccounts, refreshingId, refreshingTokenId, switchingId, togglingOverageId, copiedId, availableModelsById, availableModelsLoadingById, availableModelsErrorById])
+  }, [filteredAccounts, refreshingId, refreshingTokenId, refreshingQuotaId, switchingId, togglingOverageId, copiedId, availableModelsById, availableModelsLoadingById, availableModelsErrorById])
 
 
   const handleSearchChange = useCallback((term: string) => { setSearchTerm(term) }, [])
@@ -398,25 +435,25 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   // 切换账号启用/禁用
   const handleToggleEnabled = useCallback(async (account: any, enabled: boolean) => {
     // 乐观更新：立即更新本地状态
-    patchAccountLocally({ ...account, enabled })
+    updateAccountLocally({ ...account, enabled })
 
     try {
       const updated = await invoke<any>('update_account', { params: { id: account.id, enabled } })
-      patchAccountLocally(updated)
+      updateAccountLocally(updated)
     } catch (e) {
       // 失败时回滚
-      patchAccountLocally({ ...account, enabled: !enabled })
+      updateAccountLocally({ ...account, enabled: !enabled })
       console.error('Toggle enabled failed:', e)
       showError('启用/禁用切换失败', String(e))
     }
-  }, [patchAccountLocally])
+  }, [updateAccountLocally])
 
   // 切换超额开关
   const handleToggleOverage = useCallback(async (account: any, enabled: boolean) => {
     setTogglingOverageId(account.id)
 
     // 乐观更新：立即更新本地状态
-    patchAccountLocally({
+    updateAccountLocally({
       ...account,
       usageData: {
         ...account.usageData,
@@ -432,11 +469,11 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
       // API 成功后，获取最新配额确保数据一致（不需要刷新 token）
       const result = await invoke<any>('get_usage_limits', { id: account.id })
       if (result?.account) {
-        patchAccountLocally(result.account)
+        updateAccountLocally(result.account)
       }
     } catch (e) {
       // 失败时回滚状态
-      patchAccountLocally({
+      updateAccountLocally({
         ...account,
         usageData: {
           ...account.usageData,
@@ -451,7 +488,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     } finally {
       setTogglingOverageId(null)
     }
-  }, [patchAccountLocally])
+  }, [updateAccountLocally])
 
   // 删除单个账号
   const handleDelete = useCallback(async (id: string) => {
@@ -602,7 +639,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onCopy={handleCopy}
           onLogin={handleSwitchAccount}
           onLogout={handleLogoutAccount}
-          onRefresh={handleRefreshWithNotify}
+          onRefresh={handleRefreshQuota}
           onRefreshToken={handleRefreshToken}
           onEdit={setEditingAccount}
           onEditLabel={setEditingLabelAccount}
@@ -628,7 +665,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onCopy={handleCopy}
           onLogin={handleSwitchAccount}
           onLogout={handleLogoutAccount}
-          onRefresh={handleRefreshWithNotify}
+          onRefresh={handleRefreshQuota}
           onRefreshToken={handleRefreshToken}
           onEdit={setEditingAccount}
           onEditLabel={setEditingLabelAccount}
@@ -663,7 +700,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onSuccess={(updatedAccount: any) => {
             setEditingLabelAccount(null)
             if (updatedAccount) {
-              patchAccountLocally(updatedAccount)
+              updateAccountLocally(updatedAccount)
             }
             loadTagDefinitions()
             loadGroupDefinitions()

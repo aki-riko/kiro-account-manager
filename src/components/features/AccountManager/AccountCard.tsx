@@ -26,6 +26,7 @@ interface AccountCardProps {
   onDelete: (id: string) => void;
   isRefreshing?: boolean;
   isRefreshingToken?: boolean;
+  isRefreshingQuota?: boolean;
   isSwitching?: boolean;
   isTogglingOverage?: boolean;
   isCurrentAccount: boolean;

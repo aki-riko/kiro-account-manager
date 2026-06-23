@@ -121,7 +121,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   // 刷新单个账号
   const refreshAccount = useCallback(async (id: string) => {
     try {
-      const result = await invoke<{ warning?: string }>('sync_account', { id, skipTokenRefresh: true })
+      const result = await invoke<{ warning?: string }>('get_usage_limits', { id })
       if (result.warning) {
         console.warn(`[账号同步警告] ${result.warning}`)
       }

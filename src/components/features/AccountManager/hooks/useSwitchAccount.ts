@@ -154,19 +154,8 @@ export function useSwitchAccount(onLocalTokenChange) {
         }
       }
 
-      // 如果需要刷新，先刷新 Token（不刷新配额，节省时间）
-      if (needsRefresh) {
-        try {
-          await invoke('refresh_account_token', { id: account.id })
-          console.log('[Switch] Token 刷新成功')
-        } catch (e) {
-          console.error('[Switch] Token 刷新失败:', e)
-          // 刷新失败不阻断切换，让后续流程处理
-        }
-      }
-
-      // 同步账号（获取最新配额，如果 Token 仍然失效会再次刷新）
-      const syncResult = await invoke<SyncResult>('sync_account', { id: account.id, skipTokenRefresh: true })
+      // 同步账号（智能同步：如果 token 失效会自动刷新，否则只获取配额）
+      const syncResult = await invoke<SyncResult>('sync_account', { id: account.id })
       let refreshedAccount = syncResult.account
 
       const settings = appSettings || {}

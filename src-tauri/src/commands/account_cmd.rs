@@ -133,7 +133,6 @@ pub fn delete_accounts(state: State<AppState>, ids: Vec<String>) -> usize {
 pub async fn sync_account(
     state: State<'_, AppState>,
     id: String,
-    skip_token_refresh: Option<bool>,
 ) -> Result<SyncAccountResult, String> {
     let mut account = find_account_by_id(&state, &id)?;
 
@@ -167,9 +166,9 @@ pub async fn sync_account(
 
     let mut refresh_result: Option<RefreshResult> = None;
 
-    // 如果是认证错误，根据 skip_token_refresh 参数决定是否刷新 token
+    // 如果是认证错误，刷新 token 后重试
     let needs_refresh = match &usage_result {
-        Ok(r) => r.is_auth_error && !skip_token_refresh.unwrap_or(false),
+        Ok(r) => r.is_auth_error,
         Err(_) => false,
     };
 
@@ -387,7 +386,7 @@ pub async fn get_usage_limits(
 /// 只刷新 token，不获取 usage（启动时快速刷新用）
 /// 如果 token 还有 5 分钟以上有效期，跳过刷新直接返回
 #[tauri::command]
-pub async fn refresh_account_token(
+pub async fn refresh_token(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<Account, String> {

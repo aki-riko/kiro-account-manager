@@ -195,7 +195,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      const result = await invoke<{ account: Account, warning?: string }>('sync_account', { id: account.id, skipTokenRefresh: true })
+      const result = await invoke<{ account: Account, warning?: string }>('sync_account', { id: account.id })
       const updated = result.account
       setCurrentAccount(updated)
 
@@ -212,10 +212,11 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
       void onRefresh?.()
     } catch (e) {
       const errorMsg = String(e)
-      let status = '刷新失败'
+      // sync_account 后端已处理状态更新，前端同步状态用于表单显示
+      let status = account.status
       if (errorMsg.includes('BANNED')) {
         status = 'banned'
-      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
+      } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid') || errorMsg.includes('失效')) {
         status = 'invalid'
       }
       setForm(prev => ({ ...prev, status }))
