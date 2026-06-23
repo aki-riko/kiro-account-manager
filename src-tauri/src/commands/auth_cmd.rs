@@ -16,8 +16,6 @@ use crate::core::account::Account;
 use crate::core::protocol_registry;
 use crate::state::AppState;
 use tauri::{Emitter, State};
-use chrono::Local;
-use uuid::Uuid;
 
 fn require_login_email(email: Option<String>) -> Result<String, String> {
     email.ok_or("获取邮箱失败，请检查账号状态".to_string())
@@ -326,44 +324,14 @@ async fn login_idc(
         update_account_status(existing, usage_result.is_banned, usage_result.is_auth_error);
         existing.clone()
     } else {
-        let mut account = if let Some(email_val) = final_email {
-            Account::new(email_val, format!("Kiro {provider_id} 账号"))
-        } else {
-            // Enterprise 账号没有 email/userId 时，直接创建
-            Account {
-                id: Uuid::new_v4().to_string(),
-                email: None,
-                password: None,
-                label: format!("Kiro {provider_id} 账号"),
-                status: "active".to_string(),
-                added_at: Local::now().format("%Y/%m/%d %H:%M:%S").to_string(),
-                access_token: None,
-                refresh_token: None,
-                expires_at: None,
-                provider: Some(provider_id.clone()),
-                user_id: None,
-                auth_method: Some("IdC".to_string()),
-                client_id: None,
-                client_secret: None,
-                region: None,
-                client_id_hash: None,
-                sso_session_id: None,
-                id_token: None,
-                start_url: None,
-                profile_arn: None,
-                usage_data: None,
-                group_id: None,
-                tag_links: Vec::new(),
-                machine_id: None,
-                available_models_cache: None,
-                failure_count: 0,
-                last_failure_at: None,
-                disabled_reason: None,
-                success_count: 0,
-                enabled: true,
-                proxy_config: None,
-            }
-        };
+        let mut account = Account::new(
+            final_email.clone().unwrap_or_else(|| format!("{provider_id}_account")),
+            format!("Kiro {provider_id} 账号"),
+        );
+        // 如果 Enterprise 账号没有 email，设回 None
+        if provider_id == "Enterprise" && final_email.is_none() {
+            account.email = None;
+        }
         account.access_token = Some(auth_result.access_token.clone());
         account.refresh_token = Some(auth_result.refresh_token.clone());
         account.provider = Some(provider_id.clone());
