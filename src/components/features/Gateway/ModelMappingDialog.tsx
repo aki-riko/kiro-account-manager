@@ -14,51 +14,11 @@ import {
   DialogBody
 } from '@/components/shared/dialog'
 import { toast } from 'sonner'
+import { invoke } from '@tauri-apps/api/core'
 import { ModelMappingRule } from './gatewayPageState'
 
-// Kiro 内部模型格式（点号分隔）— 用于目标模型下拉
-const TARGET_MODELS = [
-  'claude-opus-4.8',
-  'claude-opus-4.8-thinking',
-  'claude-opus-4.7',
-  'claude-opus-4.7-thinking',
-  'claude-opus-4.6',
-  'claude-opus-4.6-thinking',
-  'claude-sonnet-4.6',
-  'claude-sonnet-4.6-thinking',
-  'claude-opus-4.5',
-  'claude-opus-4.5-thinking',
-  'claude-sonnet-4.5',
-  'claude-sonnet-4.5-thinking',
-  'claude-haiku-4.5',
-  'claude-haiku-4.5-thinking',
-  'claude-sonnet-4',
-  'claude-sonnet-4-thinking',
-  'deepseek-3.2',
-  'minimax-m2.5',
-  'glm-5',
-  'qwen3-coder-next',
-]
-
-// 常见源模型名 — 用于源模型下拉
+// 常见源模型名 — 用于源模型下拉（包含 GPT 和 Claude）
 const SOURCE_MODELS = [
-  // Claude（含 thinking 变体）
-  'claude-opus-4.8',
-  'claude-opus-4.8-thinking',
-  'claude-opus-4.7',
-  'claude-opus-4.7-thinking',
-  'claude-opus-4.6',
-  'claude-opus-4.6-thinking',
-  'claude-sonnet-4.6',
-  'claude-sonnet-4.6-thinking',
-  'claude-opus-4.5',
-  'claude-opus-4.5-thinking',
-  'claude-sonnet-4.5',
-  'claude-sonnet-4.5-thinking',
-  'claude-haiku-4.5',
-  'claude-haiku-4.5-thinking',
-  'claude-sonnet-4',
-  'claude-sonnet-4-thinking',
   // GPT 5.5 系列
   'gpt-5.5',
   'gpt-5.5-pro',
@@ -85,29 +45,31 @@ const SOURCE_MODELS = [
 ]
 
 // 预置 GPT/Codex → Claude 映射规则（5.5 ~ 5.1 系列）
+// 注意：目标模型使用 -thinking 版本（与 /v1/models 接口一致）
 const PRESET_RULES = [
-  // GPT-5.5 系列 → Opus 4.7
-  { source: 'gpt-5.5', target: 'claude-opus-4.8', name: 'GPT-5.5 → Opus 4.8' },  { source: 'gpt-5.5-pro', target: 'claude-opus-4.7', name: 'GPT-5.5-pro → Opus 4.7' },
-  { source: 'gpt-5.5-instant', target: 'claude-sonnet-4.6', name: 'GPT-5.5-instant → Sonnet 4.6' },
+  // GPT-5.5 系列 → Opus 4.8/4.7
+  { source: 'gpt-5.5', target: 'claude-opus-4.8-thinking', name: 'GPT-5.5 → Opus 4.8' },
+  { source: 'gpt-5.5-pro', target: 'claude-opus-4.7-thinking', name: 'GPT-5.5-pro → Opus 4.7' },
+  { source: 'gpt-5.5-instant', target: 'claude-sonnet-4.6-thinking', name: 'GPT-5.5-instant → Sonnet 4.6' },
   // GPT-5.4 系列 → Opus/Sonnet 4.6
-  { source: 'gpt-5.4', target: 'claude-opus-4.6', name: 'GPT-5.4 → Opus 4.6' },
-  { source: 'gpt-5.4-pro', target: 'claude-opus-4.6', name: 'GPT-5.4-pro → Opus 4.6' },
-  { source: 'gpt-5.4-mini', target: 'claude-sonnet-4.6', name: 'GPT-5.4-mini → Sonnet 4.6' },
+  { source: 'gpt-5.4', target: 'claude-opus-4.6-thinking', name: 'GPT-5.4 → Opus 4.6' },
+  { source: 'gpt-5.4-pro', target: 'claude-opus-4.6-thinking', name: 'GPT-5.4-pro → Opus 4.6' },
+  { source: 'gpt-5.4-mini', target: 'claude-sonnet-4.6-thinking', name: 'GPT-5.4-mini → Sonnet 4.6' },
   // GPT-5.3 系列 → Opus 4.5 / Sonnet 4.5
-  { source: 'gpt-5.3-codex', target: 'claude-opus-4.5', name: 'GPT-5.3-codex → Opus 4.5' },
-  { source: 'gpt-5.3-codex-spark', target: 'claude-sonnet-4.5', name: 'GPT-5.3-codex-spark → Sonnet 4.5' },
-  { source: 'gpt-5.3-instant', target: 'claude-sonnet-4.5', name: 'GPT-5.3-instant → Sonnet 4.5' },
+  { source: 'gpt-5.3-codex', target: 'claude-opus-4.5-thinking', name: 'GPT-5.3-codex → Opus 4.5' },
+  { source: 'gpt-5.3-codex-spark', target: 'claude-sonnet-4.5-thinking', name: 'GPT-5.3-codex-spark → Sonnet 4.5' },
+  { source: 'gpt-5.3-instant', target: 'claude-sonnet-4.5-thinking', name: 'GPT-5.3-instant → Sonnet 4.5' },
   // GPT-5.2 系列 → Opus 4.5
-  { source: 'gpt-5.2', target: 'claude-opus-4.5', name: 'GPT-5.2 → Opus 4.5' },
-  { source: 'gpt-5.2-pro', target: 'claude-opus-4.5', name: 'GPT-5.2-pro → Opus 4.5' },
-  { source: 'gpt-5.2-codex', target: 'claude-opus-4.5', name: 'GPT-5.2-codex → Opus 4.5' },
+  { source: 'gpt-5.2', target: 'claude-opus-4.5-thinking', name: 'GPT-5.2 → Opus 4.5' },
+  { source: 'gpt-5.2-pro', target: 'claude-opus-4.5-thinking', name: 'GPT-5.2-pro → Opus 4.5' },
+  { source: 'gpt-5.2-codex', target: 'claude-opus-4.5-thinking', name: 'GPT-5.2-codex → Opus 4.5' },
   // GPT-5.1 系列 → Sonnet 4.5 / Haiku 4.5
-  { source: 'gpt-5.1', target: 'claude-sonnet-4.5', name: 'GPT-5.1 → Sonnet 4.5' },
-  { source: 'gpt-5.1-pro', target: 'claude-sonnet-4.5', name: 'GPT-5.1-pro → Sonnet 4.5' },
-  { source: 'gpt-5.1-codex', target: 'claude-sonnet-4.5', name: 'GPT-5.1-codex → Sonnet 4.5' },
-  { source: 'gpt-5.1-codex-max', target: 'claude-opus-4.5', name: 'GPT-5.1-codex-max → Opus 4.5' },
-  { source: 'gpt-5.1-codex-mini', target: 'claude-haiku-4.5', name: 'GPT-5.1-codex-mini → Haiku 4.5' },
-  { source: 'gpt-5.1-instant', target: 'claude-haiku-4.5', name: 'GPT-5.1-instant → Haiku 4.5' },
+  { source: 'gpt-5.1', target: 'claude-sonnet-4.5-thinking', name: 'GPT-5.1 → Sonnet 4.5' },
+  { source: 'gpt-5.1-pro', target: 'claude-sonnet-4.5-thinking', name: 'GPT-5.1-pro → Sonnet 4.5' },
+  { source: 'gpt-5.1-codex', target: 'claude-sonnet-4.5-thinking', name: 'GPT-5.1-codex → Sonnet 4.5' },
+  { source: 'gpt-5.1-codex-max', target: 'claude-opus-4.5-thinking', name: 'GPT-5.1-codex-max → Opus 4.5' },
+  { source: 'gpt-5.1-codex-mini', target: 'claude-haiku-4.5-thinking', name: 'GPT-5.1-codex-mini → Haiku 4.5' },
+  { source: 'gpt-5.1-instant', target: 'claude-haiku-4.5-thinking', name: 'GPT-5.1-instant → Haiku 4.5' },
 ]
 
 interface ModelMappingDialogProps {
@@ -124,6 +86,19 @@ export function ModelMappingDialog({ open, onOpenChange, modelMappings, setField
   const [newSourceModel, setNewSourceModel] = useState('')
   const [newTargetModel, setNewTargetModel] = useState('')
   const [newRuleType, setNewRuleType] = useState('replace')
+  const [targetModels, setTargetModels] = useState<string[]>([])
+
+  // 弹窗打开时获取可用模型列表
+  useEffect(() => {
+    if (open) {
+      invoke<string[]>('get_available_models')
+        .then(models => setTargetModels(models))
+        .catch(err => {
+          console.error('获取可用模型失败:', err)
+          toast.error('获取可用模型列表失败')
+        })
+    }
+  }, [open])
 
   // 弹窗关闭时清理表单输入
   useEffect(() => {
@@ -263,7 +238,7 @@ export function ModelMappingDialog({ open, onOpenChange, modelMappings, setField
                   list="model-list-target"
                 />
                 <datalist id="model-list-target">
-                  {TARGET_MODELS.map(m => <option key={m} value={m} />)}
+                  {targetModels.map(m => <option key={m} value={m} />)}
                 </datalist>
               </div>
             </div>

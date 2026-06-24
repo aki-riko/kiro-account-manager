@@ -550,3 +550,10 @@ pub async fn test_route_config(
         error: None,
     })
 }
+
+/// 获取可用模型列表（用于前端下拉框）
+#[tauri::command]
+pub fn get_available_models() -> Vec<String> {
+    crate::gateway::get_available_models()
+}
+

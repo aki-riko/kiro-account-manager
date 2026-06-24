@@ -45,6 +45,14 @@ use tokio::{
 use crate::clients::http_client::{build_streaming_http_client, is_supported_kiro_region};
 use crate::gateway::token_cache::TokenCache;
 
+/// 获取可用模型列表（仅用于前端展示，返回 model ID 列表）
+pub fn get_available_models() -> Vec<String> {
+    converter::get_available_models()
+        .into_iter()
+        .map(|model| model.id)
+        .collect()
+}
+
 #[cfg(test)]
 thread_local! {
     static REQUEST_LOG_PATH_OVERRIDE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };

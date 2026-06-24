@@ -58,6 +58,7 @@ use commands::gateway_cmd::{
     clear_rate_limit_account,
     configure_proxy_clients,
     get_all_account_health,
+    get_available_models,
     get_banned_accounts,
     get_gateway_config,
     get_gateway_endpoint_stats,
@@ -549,6 +550,7 @@ fn main() {
             reset_account_health,
             cleanup_stale_health,
             test_route_config,
+            get_available_models,
             // 缓存管理命令
             get_cache_config,
             get_cache_stats,

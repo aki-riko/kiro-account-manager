@@ -1495,11 +1495,16 @@ pub async fn proxy_handler(
         }
     };
 
-    // 模型映射：根据规则替换请求的模型名
+    // 模型映射：根据规则替换请求的模型名（仅 OpenAI 协议）
     let original_model = request.model.clone();
-    request.model = super::resolve_model_mapping(&state.config, &request.model);
-    if request.model != original_model {
-        log::info!("[模型映射] {} → {}", original_model, request.model);
+    if matches!(format, ResponseFormat::OpenAI | ResponseFormat::Responses) {
+        request.model = super::resolve_model_mapping(&state.config, &request.model);
+        if request.model != original_model {
+            log::info!("[模型映射] {} → {} (OpenAI 协议)", original_model, request.model);
+        }
+    } else {
+        // Anthropic Messages 协议客户端直接传 Claude 模型名，不做映射
+        log::debug!("[模型映射] 跳过 Anthropic Messages 协议 (model={})", request.model);
     }
 
     // 添加详细的请求日志（参考 Kiro-account-manager 的日志设计）
@@ -2158,6 +2163,45 @@ pub async fn proxy_handler(
                     continue;
                 }
 
+                // 401 认证错误：直接标记账号为 invalid 并切换
+                if status == StatusCode::UNAUTHORIZED {
+                    let account_id = extract_account_id_from_upstream(&current_upstream);
+
+                    // 保存最后一个 401 错误详情
+                    last_retriable_error = Some((
+                        status,
+                        error_type.to_string(),
+                        message.clone(),
+                        upstream_response_body.clone(),
+                    ));
+
+                    // 标记账号为 invalid（不可用）
+                    log::warn!(
+                        "[Gateway] 账号 {} 返回 401 认证错误，标记为 invalid 并切换账号 (尝试: {}/{})",
+                        current_upstream.source_label,
+                        account_attempt,
+                        available_account_count
+                    );
+
+                    // 更新账号状态为 invalid
+                    let mut store = crate::core::account::AccountStore::new();
+                    if let Some(account) = store.accounts.iter_mut().find(|a| a.id == account_id) {
+                        update_account_status(account, false, true); // is_auth_error = true
+                        if let Err(e) = store.try_save_to_file() {
+                            log::error!("[Gateway] 保存账号状态失败: {}", e);
+                        }
+                    }
+
+                    state.load_balancer.record_failure(&account_id).await;
+
+                    if let Some(ref body) = upstream_response_body {
+                        log::debug!("[Gateway] 401 完整响应体: {}", body);
+                    }
+
+                    // 继续尝试下一个账号
+                    continue;
+                }
+
                 // 其他错误：记录并切换到下一个账号
                 let account_id = extract_account_id_from_upstream(&current_upstream);
 
@@ -2180,7 +2224,7 @@ pub async fn proxy_handler(
                     account_attempt,
                     available_account_count
                 );
-                
+
                 if let Some(ref body) = upstream_response_body {
                     log::debug!("[Gateway] 完整响应体: {}", body);
                 }
@@ -2630,6 +2674,12 @@ async fn call_generate_assistant_response<T: serde::Serialize + ?Sized>(
         // 429 限流错误不重试，直接返回让外层切换账号
         if mapped_status == StatusCode::TOO_MANY_REQUESTS {
             log::warn!("[网关] 上游 429 限流，type={}，交给外层切换账号", error_type);
+            return Err((mapped_status, error_type, message, Some(body)));
+        }
+
+        // 401 认证错误不在 HTTP 层重试；交给外层刷新当前账号 token 或切换账号。
+        if mapped_status == StatusCode::UNAUTHORIZED {
+            log::warn!("[网关] 上游 401 认证错误，type={}，交给外层处理", error_type);
             return Err((mapped_status, error_type, message, Some(body)));
         }
 
