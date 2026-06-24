@@ -786,6 +786,48 @@ impl AccountStore {
             Ok(imported) => {
                 let mut added = 0;
                 for mut account in imported {
+                    // 修复导入账号的 provider（如果为 null）
+                    if account.provider.is_none() && account.auth_method.as_deref() == Some("IdC") {
+                        // IdC 账号：根据 start_url 或 client_secret（JWT）判断是否 Enterprise
+                        // BuilderId: https://view.awsapps.com/start
+                        // Enterprise: d-xxx.awsapps.com
+                        let is_enterprise = if let Some(ref start_url) = account.start_url {
+                            // 有 start_url：检查是否非 BuilderId 的 awsapps.com 域名
+                            !crate::commands::common::is_builder_id_start_url(start_url)
+                                && start_url.contains("awsapps.com")
+                        } else if let Some(ref client_secret) = account.client_secret {
+                            // 无 start_url：从 client_secret（JWT）提取 initiateLoginUri 判断
+                            use crate::utils::client_id_hash::extract_start_url_from_client_secret;
+                            extract_start_url_from_client_secret(client_secret)
+                                .map(|url| {
+                                    !crate::commands::common::is_builder_id_start_url(&url)
+                                        && url.contains("awsapps.com")
+                                })
+                                .unwrap_or(false)
+                        } else {
+                            false
+                        };
+
+                        account.provider = Some(if is_enterprise {
+                            "Enterprise".to_string()
+                        } else {
+                            "BuilderId".to_string()
+                        });
+                    } else if account.provider.is_none() && account.auth_method.as_deref() == Some("social") {
+                        // Social 账号但 provider 为 null，根据邮箱判断
+                        if let Some(ref email) = account.email {
+                            if email.contains("gmail") {
+                                account.provider = Some("Google".to_string());
+                            } else if email.contains("github") {
+                                account.provider = Some("Github".to_string());
+                            } else {
+                                account.provider = Some("Google".to_string());
+                            }
+                        } else {
+                            account.provider = Some("Google".to_string());
+                        }
+                    }
+
                     // 修复导入账号的 authMethod（如果为 null）
                     if account.auth_method.is_none() {
                         if account.client_id.is_some() && account.client_secret.is_some() {
