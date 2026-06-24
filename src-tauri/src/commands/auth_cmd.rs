@@ -270,7 +270,30 @@ async fn login_idc(
 
     let auth_result = idc_provider.login().await?;
 
-    let account_machine_id = generate_account_machine_id();
+    // 先查找已存在账号，优先使用已有的 machine_id
+    let existing_machine_id = {
+        let store = lock_store(&state.store, "store")?;
+        store.accounts.iter().find(|acc| {
+            // 通过 start_url + client_id_hash 匹配 Enterprise 账号
+            if provider_id == "Enterprise" {
+                if let (Some(ref acc_start_url), Some(ref acc_hash), Some(ref auth_start_url), Some(ref auth_hash)) =
+                    (&acc.start_url, &acc.client_id_hash, &auth_result.start_url, &auth_result.client_id_hash)
+                {
+                    return acc_start_url == auth_start_url && acc_hash == auth_hash;
+                }
+            }
+            // BuilderId 通过 refresh_token 匹配
+            if let Some(ref acc_rt) = acc.refresh_token {
+                return acc_rt == &auth_result.refresh_token;
+            }
+            false
+        }).and_then(|acc| acc.machine_id.clone())
+    }; // store 在此作用域结束时自动释放
+
+    let account_machine_id = existing_machine_id
+        .filter(|id| !id.trim().is_empty())
+        .unwrap_or_else(generate_account_machine_id);
+
     let usage_result = match get_usage_by_provider_with_machine_id(
         &provider_id,
         &auth_result.access_token,
@@ -335,11 +358,8 @@ async fn login_idc(
         existing.id_token = auth_result.id_token;
         existing.profile_arn = auth_result.profile_arn;
         existing.usage_data = Some(usage_result.usage_data);
-        if existing
-            .machine_id
-            .as_ref()
-            .is_none_or(|id| id.trim().is_empty())
-        {
+        // machine_id 应该已经存在且被复用了，这里仅作兜底
+        if existing.machine_id.as_ref().is_none_or(|id| id.trim().is_empty()) {
             existing.machine_id = Some(account_machine_id.clone());
         }
         update_account_status(existing, usage_result.is_banned, usage_result.is_auth_error);

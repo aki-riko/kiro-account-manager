@@ -542,8 +542,8 @@ pub async fn get_usage_by_provider_with_machine_id(
     get_usage_by_account(&temp_account, access_token).await
 }
 
-/// 为企业账号获取 usage 数据（简化版，直接使用 us-east-1）
-pub async fn get_enterprise_usage_with_region_probe(
+/// 为企业账号获取 usage 数据
+pub async fn get_enterprise_usage(
     access_token: &str,
     machine_id: &str,
 ) -> Result<UsageResult, String> {
@@ -551,7 +551,7 @@ pub async fn get_enterprise_usage_with_region_probe(
 
     let client = KiroClient::new()?;
     let result = client
-        .get_usage_limits_with_region_probe(access_token, machine_id)
+        .get_enterprise_usage_limits(access_token, machine_id)
         .await;
 
     match result {

@@ -12,7 +12,7 @@ use crate::commands::account_models::{
 use crate::commands::common::{
     account_machine_id_or_new, calc_expires_at, ensure_account_machine_id, extract_user_info,
     find_account_by_id, find_existing_account_idx, generate_account_machine_id,
-    get_enterprise_usage_with_region_probe, get_usage_by_account,
+    get_enterprise_usage, get_usage_by_account,
     get_usage_by_provider_with_machine_id, is_auth_error_message, is_token_expired,
     is_token_expiring_soon, lock_store, refresh_token_by_provider, save_store, token_needs_refresh,
     update_account_status, RefreshResult,
@@ -159,7 +159,7 @@ pub async fn sync_account(
             .machine_id
             .as_ref()
             .ok_or("Enterprise account missing machine_id")?;
-        get_enterprise_usage_with_region_probe(&access_token, machine_id).await
+        get_enterprise_usage(&access_token, machine_id).await
     } else {
         get_usage_by_account(&account, &access_token).await
     };
@@ -180,7 +180,7 @@ pub async fn sync_account(
                         .machine_id
                         .as_ref()
                         .ok_or("Enterprise account missing machine_id")?;
-                    get_enterprise_usage_with_region_probe(&refreshed.access_token, machine_id).await
+                    get_enterprise_usage(&refreshed.access_token, machine_id).await
                 } else {
                     get_usage_by_account(&account, &refreshed.access_token).await
                 };
@@ -321,7 +321,8 @@ pub async fn get_usage_limits(
             .machine_id
             .as_ref()
             .ok_or("Enterprise account missing machine_id")?;
-        get_enterprise_usage_with_region_probe(&access_token, machine_id).await
+        log::info!("[Enterprise] Fetching usage for account {} with machine_id: {}", account.id, machine_id);
+        get_enterprise_usage(&access_token, machine_id).await
     } else {
         get_usage_by_account(&account, &access_token).await
     };

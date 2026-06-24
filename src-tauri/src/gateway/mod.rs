@@ -1,5 +1,5 @@
 mod compress;
-mod converter;
+pub(crate) mod converter;
 mod eventstream;
 pub(crate) mod load_balancer;
 pub mod log_store;

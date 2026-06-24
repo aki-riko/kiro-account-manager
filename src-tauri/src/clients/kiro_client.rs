@@ -199,21 +199,39 @@ impl KiroClient {
     }
 
     /// 获取企业账号的 usage 数据（简化版，直接使用 us-east-1）
-    pub async fn get_usage_limits_with_region_probe(
+    /// 获取 Enterprise 账号的 usage limits（自动获取 profileArn）
+    pub async fn get_enterprise_usage_limits(
         &self,
         access_token: &str,
         machine_id: &str,
     ) -> Result<serde_json::Value, String> {
-        // 不再探测多个区域，直接使用默认区域 us-east-1
         let region = "us-east-1";
-        
+
+        // Enterprise 账号需要先调用 ListAvailableProfiles 获取动态 profileArn
+        let profile_arn = match self.list_available_profiles(access_token, region).await {
+            Ok(response) => {
+                // 从响应中提取 profiles[0].arn
+                response
+                    .get("profiles")
+                    .and_then(|profiles| profiles.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|profile| profile.get("arn"))
+                    .and_then(|arn| arn.as_str())
+                    .map(|s| s.to_string())
+            }
+            Err(e) => {
+                log::warn!("[get_enterprise_usage_limits] ListAvailableProfiles 失败: {}", e);
+                None
+            }
+        };
+
         self.get_usage_limits(
             access_token,
             machine_id,
             region,
+            profile_arn.as_deref(),
             None,
-            None,
-            Some("BuilderId"),
+            Some("Enterprise"),
         )
         .await
     }
