@@ -576,7 +576,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
             return
           }
           await batchRefreshAccounts(selectedIds, accounts)
-          setSelectedIds([]) // 清除选中状态
+          // 刷新不改变选择：保留全选状态，便于连续操作
         }}
         autoRefreshing={autoRefreshing}
         refreshProgress={refreshProgress}
