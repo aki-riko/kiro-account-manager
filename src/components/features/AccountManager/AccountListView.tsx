@@ -462,9 +462,18 @@ function AccountListView({
             {selectedIds.length > 0 ? `${t('common.selected')} ${selectedIds.length}` : t('common.selectAll')}
           </span>
         </label>
-        <span className="text-xs text-muted-foreground">
-          {accounts.length === totalCount ? `共 ${totalCount} 个账号` : `${accounts.length} / ${totalCount} 个账号`}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {accounts.length === totalCount ? `共 ${totalCount} 个账号` : `${accounts.length} / ${totalCount} 个账号`}
+          </span>
+          <button
+            onClick={onAdd}
+            className="h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 inline-flex items-center gap-1 cursor-pointer"
+            title={t('common.addAccount')}
+          >
+            <Plus size={13} />{t('common.addAccount')}
+          </button>
+        </div>
       </div>
 
       {/* 表头 */}
