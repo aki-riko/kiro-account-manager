@@ -58,7 +58,8 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     subscriptions: [],
     statuses: [],
     providers: [],
-    usageRange: null
+    usageRange: null,
+    enabledStatus: null
   })
   const [sortBy, setSortBy] = useState('trialAsc')
   const [refreshingTokenId, setRefreshingTokenId] = useState<string | null>(null)
@@ -734,7 +735,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           accountIds={selectedIds}
           accounts={accounts}
           onClose={() => setShowBatchEditModal(false)}
-          onSuccess={({ accountIds: updatedIds, selectedTagIds, selectedGroupId }) => {
+          onSuccess={({ accountIds: updatedIds, selectedTagIds, selectedGroupId, enabledChange }) => {
             setShowBatchEditModal(false)
             setAccounts(prev => prev.map(account => {
               if (!updatedIds.includes(account.id)) return account
@@ -744,7 +745,8 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
               return {
                 ...account,
                 tagLinks: nextTagLinks,
-                groupId: selectedGroupId
+                groupId: selectedGroupId,
+                ...(enabledChange !== null ? { enabled: enabledChange } : {})
               }
             }))
             loadTagDefinitions()

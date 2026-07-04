@@ -16,6 +16,7 @@ const SUBSCRIPTION_OPTIONS = [
   { value: 'KIRO FREE', label: 'KIRO FREE' },
   { value: 'KIRO PRO', label: 'KIRO PRO' },
   { value: 'KIRO PRO+', label: 'KIRO PRO+' },
+  { value: 'KIRO PRO MAX', label: 'KIRO PRO MAX' },
   { value: 'KIRO POWER', label: 'KIRO POWER' },
 ]
 const STATUS_OPTIONS = [
@@ -33,12 +34,21 @@ const PROVIDER_OPTIONS = [
   { value: 'BuilderId', label: 'BuilderId' },
   { value: 'Enterprise', label: 'Enterprise' },
 ]
+const ENABLED_OPTIONS = [
+  { value: '', label: '全部' },
+  { value: 'enabled', label: '启用' },
+  { value: 'disabled', label: '禁用' },
+]
 const USAGE_RANGE_OPTIONS = [
   { value: '', label: '全部' },
-  { value: '0-500', label: '0-500' },
-  { value: '500-1000', label: '500-1000' },
+  { value: '0-50', label: '0-50' },
+  { value: '50-550', label: '50-550' },
+
+  { value: '550-1000', label: '550-1000' },
   { value: '1000-2000', label: '1000-2000' },
-  { value: '2000-+', label: '2000+' },
+  { value: '2000-5000', label: '1000-5000' },
+  { value: '5000-10000', label: '5000-10000' },
+  { value: '10000-+', label: '10000+' },
 ]
 
 interface FilterDropdownProps {
@@ -182,7 +192,7 @@ function FilterDropdown({
     allTags})
 
   const clearAll = () => {
-    onFiltersChange({ subscriptions: [], statuses: [], providers: [], usageRange: null })
+    onFiltersChange({ subscriptions: [], statuses: [], providers: [], usageRange: null, enabledStatus: null })
     onGroupFilter?.(null)
     onTagFilter(null)
   }
@@ -319,6 +329,15 @@ function FilterDropdown({
                   options={USAGE_RANGE_OPTIONS}
                   onChange={(value: string) => onFiltersChange({ ...filters, usageRange: value })}
                   onClear={() => onFiltersChange({ ...filters, usageRange: null })}
+                  accent={accent}
+                />
+
+                <FilterSelect
+                  label="启用状态"
+                  value={filters.enabledStatus || ''}
+                  options={ENABLED_OPTIONS}
+                  onChange={(value: string) => onFiltersChange({ ...filters, enabledStatus: value })}
+                  onClear={() => onFiltersChange({ ...filters, enabledStatus: null })}
                   accent={accent}
                 />
 

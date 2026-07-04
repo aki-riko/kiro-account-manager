@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { X, Tag, Plus, Folder, Check, Edit } from 'lucide-react'
+import { X, Tag, Plus, Folder, Check, Edit, Power } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { getTags, getGroups, setAccountTags, setAccountGroup, addTag, addGroup } from '../../../api/groupTag'
@@ -26,7 +26,7 @@ interface BatchEditModalProps {
   accountIds: string[];
   accounts?: Account[];
   onClose: () => void;
-  onSuccess?: (data: { accountIds: string[]; selectedTagIds: string[]; selectedGroupId: string | null }) => void;
+  onSuccess?: (data: { accountIds: string[]; selectedTagIds: string[]; selectedGroupId: string | null; enabledChange: boolean | null }) => void;
 }
 
 function BatchEditModal({ accountIds, accounts = [], onClose, onSuccess }: BatchEditModalProps) {
@@ -42,6 +42,7 @@ function BatchEditModal({ accountIds, accounts = [], onClose, onSuccess }: Batch
   const [groups, setGroups] = useState<GroupDefinition[]>([])
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([])
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
+  const [enabledAction, setEnabledAction] = useState<'keep' | 'enable' | 'disable'>('keep')
   const [newTagName, setNewTagName] = useState('')
   const [newGroupName, setNewGroupName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -52,8 +53,8 @@ function BatchEditModal({ accountIds, accounts = [], onClose, onSuccess }: Batch
   useEffect(() => {
     Promise.all([getTags(), getGroups()])
       .then(([tagsData, groupsData]) => {
-        setTags(tagsData)
-        setGroups(groupsData)
+        setTags(tagsData as TagDefinition[])
+        setGroups(groupsData as GroupDefinition[])
       })
       .catch(() => {})
   }, [])
@@ -150,13 +151,17 @@ function BatchEditModal({ accountIds, accounts = [], onClose, onSuccess }: Batch
 
   const handleSubmit = async () => {
     setLoading(true)
+    const enabledChange = enabledAction === 'keep' ? null : enabledAction === 'enable'
     try {
       // 批量设置标签和分组
       await Promise.all([
         ...accountIds.map(id => setAccountTags(id, selectedTagIds)),
-        ...accountIds.map(id => setAccountGroup(id, selectedGroupId || null))
+        ...accountIds.map(id => setAccountGroup(id, selectedGroupId || null)),
+        ...(enabledChange !== null
+          ? accountIds.map(id => invoke('update_account', { params: { id, enabled: enabledChange } }))
+          : [])
       ])
-      onSuccess?.({ accountIds, selectedTagIds, selectedGroupId: selectedGroupId || null })
+      onSuccess?.({ accountIds, selectedTagIds, selectedGroupId: selectedGroupId || null, enabledChange })
       onClose()
     } catch (e) {
       await showError(t('common.error'), String(e))
@@ -181,6 +186,34 @@ function BatchEditModal({ accountIds, accounts = [], onClose, onSuccess }: Batch
         </DialogHeader>
 
         <DialogBody gap="lg">
+          {/* 账号状态设置 */}
+          <div>
+            <label className={`block text-sm font-semibold text-foreground mb-3 flex items-center gap-2`}>
+              <Power size={16} className={accent.text} />
+              账号状态
+            </label>
+            <div className="flex gap-2">
+              {([
+                { key: 'keep', label: '保持不变' },
+                { key: 'enable', label: '启用' },
+                { key: 'disable', label: '禁用' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setEnabledAction(opt.key)}
+                  className={`flex-1 px-4 py-2.5 rounded-xl border-2 text-sm transition-all cursor-pointer ${
+                    enabledAction === opt.key
+                      ? `${accent.solidBg} text-white border-transparent`
+                      : 'bg-background border-input text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* 分组设置 */}
           <div>
             <label className={`block text-sm font-semibold text-foreground mb-3 flex items-center gap-2`}>

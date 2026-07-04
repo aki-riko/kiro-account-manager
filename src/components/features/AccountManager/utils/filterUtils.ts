@@ -7,7 +7,8 @@ export function applyFilters(accounts, filters) {
     (filters.subscriptions?.length > 0) ||
     (filters.statuses?.length > 0) ||
     (filters.providers?.length > 0) ||
-    filters.usageRange
+    filters.usageRange ||
+    filters.enabledStatus
   )
   
   if (!hasFilters) return accounts
@@ -52,6 +53,13 @@ export function applyFilters(accounts, filters) {
         p.toLowerCase() === provider.toLowerCase()
       )
       if (!matchProvider) return false
+    }
+
+    // 启用/禁用筛选
+    if (filters.enabledStatus) {
+      const isEnabled = account.enabled !== false
+      if (filters.enabledStatus === 'enabled' && !isEnabled) return false
+      if (filters.enabledStatus === 'disabled' && isEnabled) return false
     }
 
     // 使用量范围筛选 - 字符串格式 '0-10', '10-30' 等
