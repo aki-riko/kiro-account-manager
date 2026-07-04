@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getCustomAgents, saveCustomAgent, deleteCustomAgent, createCustomAgent } from '../../../api/kiroConfigApi'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { Bot, RefreshCw, Trash2, Save, Plus, X, Tag, FolderOpen, Globe } from 'lucide-react'
@@ -144,7 +144,7 @@ function AgentsPanel({ onCountChange, projectDir }: any) {
   const loadAgents = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await invoke<any[]>('get_custom_agents', { projectDir: projectDir || null })
+      const data = await getCustomAgents(projectDir || null)
       setAgents(data)
       onCountChange?.(data?.length || 0)
     } catch (e) {
@@ -188,12 +188,7 @@ function AgentsPanel({ onCountChange, projectDir }: any) {
     try {
       const { body, ...fm } = editState
       const fullContent = buildAgentContent(fm, body)
-      await invoke('save_custom_agent', {
-        fileName: selectedAgent.fileName,
-        content: fullContent,
-        scope: selectedAgent.scope,
-        projectDir: projectDir || null
-      })
+      await saveCustomAgent(selectedAgent.fileName, fullContent, selectedAgent.scope, projectDir || null)
       setAgents(agents.map(a => (a.fileName === selectedAgent.fileName && a.scope === selectedAgent.scope) ? { ...a, content: fullContent } : a))
       setSelectedAgent({ ...selectedAgent, content: fullContent })
       setHasChanges(false)
@@ -207,11 +202,7 @@ function AgentsPanel({ onCountChange, projectDir }: any) {
   const handleDelete = async (agent: any) => {
     if (!await showConfirm(t('agents.confirmDelete'), t('agents.confirmDeleteAgent', { fileName: agent.fileName }))) return
     try {
-      await invoke('delete_custom_agent', {
-        fileName: agent.fileName,
-        scope: agent.scope,
-        projectDir: projectDir || null
-      })
+      await deleteCustomAgent(agent.fileName, agent.scope, projectDir || null)
       const newAgents = agents.filter(a => !(a.fileName === agent.fileName && a.scope === agent.scope))
       setAgents(newAgents)
       onCountChange?.(newAgents.length)
@@ -230,12 +221,7 @@ function AgentsPanel({ onCountChange, projectDir }: any) {
     const body = '\n<!-- 在此编写 Agent 的系统提示词 -->\n'
     const content = buildAgentContent({ name: agentName.replace('.md', ''), description, tools, model, includeMcpJson: false, includePowers: false }, body)
     try {
-      const newAgent = await invoke<any>('create_custom_agent', {
-        fileName,
-        content,
-        scope,
-        projectDir: projectDir || null
-      })
+      const newAgent = await createCustomAgent(fileName, content, scope, projectDir || null)
       const newAgents = [...agents, newAgent]
       setAgents(newAgents)
       onCountChange?.(newAgents.length)

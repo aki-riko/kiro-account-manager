@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getPowers, getPowerRegistries, getRecommendedPowers, installPower, uninstallPower } from '../../../api/kiroConfigApi'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
@@ -43,8 +43,8 @@ function PowersPanel({ onCountChange }: any) {
     setLoading(true)
     try {
       const [data, regs] = await Promise.all([
-        invoke<any[]>('get_powers'),
-        invoke<any[]>('get_power_registries')
+        getPowers(),
+        getPowerRegistries()
       ])
       setPowers(data)
       setRegistries(regs)
@@ -59,7 +59,7 @@ function PowersPanel({ onCountChange }: any) {
   const loadRecommended = useCallback(async () => {
     setRecLoading(true)
     try {
-      const data = await invoke<any[]>('get_recommended_powers')
+      const data = await getRecommendedPowers()
       setRecommended(data)
     } catch (e) {
       handleUiError('加载推荐 Powers 失败', e, { userMessage: t('powers.loadRecommendedFailed') || '加载推荐 Powers 失败' })
@@ -74,7 +74,7 @@ function PowersPanel({ onCountChange }: any) {
   const handleUninstall = async (power: any) => {
     if (!await showConfirm(t('powers.confirmUninstall'), t('powers.confirmUninstallPower', { name: power.name }))) return
     try {
-      await invoke('uninstall_power', { name: power.name })
+      await uninstallPower(power.name)
       const newPowers = powers.filter(p => p.name !== power.name)
       setPowers(newPowers)
       onCountChange?.(newPowers.length)
@@ -94,17 +94,12 @@ function PowersPanel({ onCountChange }: any) {
     if (installing) return
     setInstalling(rec.name)
     try {
-      await invoke('install_power', {
-        name: rec.name,
-        cloneUrl: rec.repositoryCloneUrl || rec.repositoryUrl,
-        pathInRepo: rec.pathInRepo || '',
-        branch: rec.repositoryBranch || 'main'
-      })
+      await installPower(rec.name, rec.repositoryCloneUrl || rec.repositoryUrl, rec.pathInRepo || '', rec.repositoryBranch || 'main')
       // 更新推荐列表状态
       setRecommended(prev => prev.map(r => r.name === rec.name ? { ...r, installed: true } : r))
       if (selectedRec?.name === rec.name) setSelectedRec({ ...selectedRec, installed: true })
       // 重新加载已安装列表
-      const data = await invoke<any[]>('get_powers')
+      const data = await getPowers()
       setPowers(data)
       onCountChange?.(data?.length || 0)
       showSuccess(t('powers.installSuccess'), rec.displayName || rec.name)

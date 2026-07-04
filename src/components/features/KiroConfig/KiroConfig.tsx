@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getCustomAgents, getHooks, getPowers, getSkills, getSteeringFiles } from '../../../api/kiroConfigApi'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../../../hooks/useApp'
 import { Server, Settings2, FileText, Puzzle, Bot, Zap, FolderOpen, Link2, X } from 'lucide-react'
@@ -28,17 +28,17 @@ function KiroConfig() {
 
   // 初始加载数量
   useEffect(() => {
-    invoke<any[]>('get_steering_files', { projectDir: projectDir || null }).then(files => setSteeringCount(files?.length || 0)).catch(() => {})
-    invoke<any[]>('get_skills', { projectDir: projectDir || null }).then(skills => setSkillsCount(skills?.length || 0)).catch(() => {})
-    invoke<any[]>('get_custom_agents', { projectDir: projectDir || null }).then(agents => setAgentsCount(agents?.length || 0)).catch(() => {})
+    getSteeringFiles(projectDir || null).then(files => setSteeringCount(files?.length || 0)).catch(() => {})
+    getSkills(projectDir || null).then(skills => setSkillsCount(skills?.length || 0)).catch(() => {})
+    getCustomAgents(projectDir || null).then(agents => setAgentsCount(agents?.length || 0)).catch(() => {})
 
     if (projectDir) {
-      invoke<any[]>('get_hooks', { projectDir }).then(hooks => setHooksCount(hooks?.length || 0)).catch(() => setHooksCount(0))
+      getHooks(projectDir).then(hooks => setHooksCount(hooks?.length || 0)).catch(() => setHooksCount(0))
     } else {
       setHooksCount(0)
     }
 
-    invoke<any[]>('get_powers').then(powers => setPowersCount(powers?.length || 0)).catch(() => {})
+    getPowers().then(powers => setPowersCount(powers?.length || 0)).catch(() => {})
   }, [projectDir])
 
   useEffect(() => {

@@ -1,11 +1,22 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { Upload } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { useAccounts } from './hooks/useAccounts'
 import { useSwitchAccount } from './hooks/useSwitchAccount'
 import { getTags, getGroups } from '../../../api/groupTag'
+import {
+  getUsageLimits,
+  refreshToken,
+  syncAccount,
+  updateAccount,
+  setOverageStatus,
+  deleteAccount,
+  deleteAccountRemote,
+  deleteAccounts,
+  listAvailableModels,
+} from '../../../api/accountApi'
+import { getKiroLocalToken } from '../../../api/kiroApi'
 import { applyFilters } from './utils/filterUtils'
 import { cn } from '../../../utils/cn'
 import { showSuccess, showError } from '../../../utils/toast'
@@ -83,7 +94,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     closeSwitchDialog} = useSwitchAccount(setLocalToken)
 
   useEffect(() => {
-    invoke<any>('get_kiro_local_token').then(setLocalToken).catch(() => setLocalToken(null))
+    getKiroLocalToken<any>().then(setLocalToken).catch(() => setLocalToken(null))
   }, [])
 
   // 加载标签定义
@@ -174,7 +185,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     })
 
     try {
-      const response = await invoke<ListAvailableModelsResponse>('list_available_models', { id, forceRefresh })
+      const response = await listAvailableModels(id, forceRefresh)
       const models = response.availableModels
       setAvailableModelsById(prev => ({ ...prev, [id]: models }))
       setAccounts(prev => prev.map(account => (
@@ -200,7 +211,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   const handleRefreshQuota = useCallback(async (id: string) => {
     setRefreshingQuotaId(id)
     try {
-      const result = await invoke<{ account: Account, warning?: string }>('sync_account', { id })
+      const result = await syncAccount(id)
       updateAccountLocally(result.account)
       clearAvailableModelsState(id)
       if (result.warning) {
@@ -255,9 +266,9 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     setRefreshingTokenId(id)
     try {
       // 先刷新 token
-      await invoke('refresh_token', { id })
+      await refreshToken(id)
       // 再获取配额（使用新 token）
-      const result = await invoke<{ account: Account, warning?: string }>('get_usage_limits', { id })
+      const result = await getUsageLimits<{ account: Account, warning?: string }>(id)
       updateAccountLocally(result.account)
       clearAvailableModelsState(id)
       if (result.warning) {
@@ -439,7 +450,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     updateAccountLocally({ ...account, enabled })
 
     try {
-      const updated = await invoke<any>('update_account', { params: { id: account.id, enabled } })
+      const updated = await updateAccount<any>({ id: account.id, enabled })
       updateAccountLocally(updated)
     } catch (e) {
       // 失败时回滚
@@ -466,9 +477,9 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     })
 
     try {
-      await invoke('set_overage_status', { id: account.id, enabled })
+      await setOverageStatus(account.id, enabled)
       // API 成功后，获取最新配额确保数据一致（不需要刷新 token）
-      const result = await invoke<any>('get_usage_limits', { id: account.id })
+      const result = await getUsageLimits<any>(account.id)
       if (result?.account) {
         updateAccountLocally(result.account)
       }
@@ -508,7 +519,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
       if (!confirmed) return
     }
 
-    await invoke('delete_account', { id })
+    await deleteAccount(id)
     removeAccountsLocally([id])
   }, [accounts, localToken, removeAccountsLocally, showConfirm, t])
 
@@ -520,7 +531,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     )
     if (confirmed) {
       try {
-        await invoke('delete_account_remote', { id: account.id, deleteLocal: true })
+        await deleteAccountRemote(account.id, true)
         removeAccountsLocally([account.id])
       } catch (e) {
         // 错误已通过 showError 显示
@@ -547,7 +558,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
       if (!confirmed) return
     }
 
-    await invoke('delete_accounts', { ids: selectedIds })
+    await deleteAccounts(selectedIds)
     removeAccountsLocally(selectedIds)
     setSelectedIds([]) // 清除选中状态
   }, [accounts, selectedIds, localToken, removeAccountsLocally, showConfirm, t])

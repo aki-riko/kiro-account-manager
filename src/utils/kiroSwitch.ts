@@ -1,16 +1,15 @@
-import { invoke } from '@tauri-apps/api/core'
+import { updateAccount } from '../api/accountApi'
+import { generateMachineGuid, setCustomMachineGuid as setCustomMachineGuidApi } from '../api/kiroApi'
 
 export async function applyMachineGuid(account, _settings: Record<string, any> = {}) {
   try {
     let machineId = account.machineId
 
     if (!machineId) {
-      machineId = await invoke('generate_machine_guid')
-      await invoke('update_account', {
-        params: {
-          id: account.id,
-          machine_id: machineId
-        }
+      machineId = await generateMachineGuid()
+      await updateAccount({
+        id: account.id,
+        machine_id: machineId
       })
     }
 
@@ -23,7 +22,7 @@ export async function applyMachineGuid(account, _settings: Record<string, any> =
 }
 
 async function setCustomMachineGuid(account, machineId) {
-  await invoke('set_custom_machine_guid', { newGuid: machineId })
+  await setCustomMachineGuidApi(machineId)
   return { ...account, machineId }
 }
 

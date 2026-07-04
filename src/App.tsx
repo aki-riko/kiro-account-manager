@@ -1,5 +1,6 @@
 import { useState, useEffect, Suspense, useMemo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentUser, logout as apiLogout } from './api/accountApi'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { Toaster } from 'react-hot-toast'
 import Sidebar from './components/features/Layout'
@@ -116,7 +117,7 @@ function App() {
 
   const checkAuth = async () => {
     try {
-      const currentUser = await invoke<any>('get_current_user')
+      const currentUser = await getCurrentUser<any>()
       setUser(currentUser)
     } catch (e) {
       console.error('Auth check failed:', e)
@@ -128,7 +129,7 @@ function App() {
   }
 
   const handleLogout = async () => {
-    await invoke('logout')
+    await apiLogout()
     setUser(null)
   }
 

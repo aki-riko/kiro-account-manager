@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getAccounts, getUsageLimits } from '../api/accountApi'
+import { getKiroLocalToken } from '../api/kiroApi'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { calcAccountStats, getQuota, getUsed } from '../utils/accountStats'
 import { Account } from '../types/account'
@@ -60,8 +61,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     try {
       setError(null)
       const [accountsData, localData] = await Promise.all([
-        invoke<Account[]>('get_accounts'),
-        invoke<LocalToken>('get_kiro_local_token').catch(() => null)
+        getAccounts(),
+        getKiroLocalToken<LocalToken>().catch(() => null)
       ])
       setAccounts(accountsData || [])
       setLocalToken(localData as LocalToken | null)
@@ -121,7 +122,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   // 刷新单个账号
   const refreshAccount = useCallback(async (id: string) => {
     try {
-      const result = await invoke<{ warning?: string }>('get_usage_limits', { id })
+      const result = await getUsageLimits<{ warning?: string }>(id)
       if (result.warning) {
         console.warn(`[账号同步警告] ${result.warning}`)
       }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Terminal, AlertCircle, Wand2, ClipboardPaste, Check, AlertTriangle } from 'lucide-react'
-import { invoke } from '@tauri-apps/api/core'
+import { getMcpConfig, saveMcpServer } from '../../../api/mcpApi'
 import { useApp } from '../../../hooks/useApp'
 import { MCP_TEMPLATES } from './MCPTemplates'
 import { showSuccess } from '../../../utils/toast'
@@ -40,7 +40,7 @@ function AddMCPModal({ onClose, onSuccess, projectDir }: any) {
 
   // 加载现有服务列表
   useEffect(() => {
-    invoke<any>('get_mcp_config', { projectDir: projectDir || null }).then(config => {
+    getMcpConfig(projectDir || null).then(config => {
       setExistingServers(Object.keys(config.mcpServers || {}))
     }).catch(() => {})
   }, [projectDir])
@@ -142,7 +142,7 @@ function AddMCPModal({ onClose, onSuccess, projectDir }: any) {
 
     let latestServers = existingServers
     try {
-      const latestConfig = await invoke<any>('get_mcp_config', { projectDir: projectDir || null })
+      const latestConfig = await getMcpConfig(projectDir || null)
       latestServers = Object.keys(latestConfig.mcpServers || {})
       setExistingServers(latestServers)
     } catch {
@@ -174,7 +174,7 @@ function AddMCPModal({ onClose, onSuccess, projectDir }: any) {
           disabled: config.disabled ?? false,
           autoApprove: config.autoApprove || []
         }
-        await invoke('save_mcp_server', { name: targetName, config: finalConfig, projectDir: projectDir || null })
+        await saveMcpServer(targetName, finalConfig, projectDir || null)
         results.success.push(targetName)
         occupiedNames.add(targetName)
       } catch (e) {

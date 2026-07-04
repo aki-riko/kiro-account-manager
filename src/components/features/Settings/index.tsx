@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { getKiroSettings, getAppSettings, getCustomKiroPath, checkIdeInstallation, getAppDataDir, setKiroProxy, setKiroModel, setCustomKiroPath, clearCustomKiroPath, setKiroTrustedCommands, detectInstalledBrowsers, detectSystemProxy, openAppDataDir } from '../../../api/settingsApi'
+import { getSystemMachineGuid, resetSystemMachineGuid } from '../../../api/kiroApi'
 import { emit } from '@tauri-apps/api/event'
 import { Palette, Settings as SettingsIcon, LayoutDashboard, Cpu, Bell } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs'
@@ -76,12 +78,12 @@ function Settings() {
         try {
             // 先加载核心设置（快速）
             const [kiroSettings, appSettings, sysMachine, kiroPath, ideInfo, dataDir] = await Promise.all([
-                invoke<any>('get_kiro_settings').catch(() => null),
-                invoke<any>('get_app_settings').catch(() => null),
-                invoke<any>('get_system_machine_guid').catch(() => null),
-                invoke<string | null>('get_custom_kiro_path').catch(() => null),
-                invoke<any>('check_ide_installation').catch(() => null),
-                invoke<string>('get_app_data_dir').catch(() => '')
+                getKiroSettings().catch(() => null),
+                getAppSettings().catch(() => null),
+                getSystemMachineGuid().catch(() => null),
+                getCustomKiroPath().catch(() => null),
+                checkIdeInstallation().catch(() => null),
+                getAppDataDir().catch(() => '')
             ])
             setSystemMachineInfo(sysMachine)
             // 优先显示自定义路径，否则显示检测到的默认路径
@@ -160,7 +162,7 @@ function Settings() {
 
         setSavingProxy(true)
         try {
-            await invoke('set_kiro_proxy', { proxy: httpProxy })
+            await setKiroProxy(httpProxy)
             setOriginalProxy(httpProxy)
             await showSuccess(t('settings.saveSuccess'), httpProxy ? t('settings.proxyApplied') : t('settings.proxyCleared'))
         } catch (err: any) {
@@ -179,7 +181,7 @@ function Settings() {
         setAiModel(model)
         setSavingModel(true)
         try {
-            await invoke('set_kiro_model', { model })
+            await setKiroModel(model)
             if (lockModel) {
                 await saveAppSettings({ lockedModel: model })
             }
@@ -233,7 +235,7 @@ function Settings() {
             })
 
             if (selected) {
-                await invoke('set_custom_kiro_path', { path: selected })
+                await setCustomKiroPath(selected)
                 setCustomKiroPath(selected)
                 showSuccess(t('settings.kiroPathSaved'))
             }
@@ -244,7 +246,7 @@ function Settings() {
 
     const handleClearKiroPath = async () => {
         try {
-            await invoke('clear_custom_kiro_path')
+            await clearCustomKiroPath()
             setCustomKiroPath(null)
             showSuccess(t('settings.kiroPathCleared'))
         } catch (error) {
@@ -266,7 +268,7 @@ function Settings() {
         }
         setTrustedCommandsMode(mode)
         try {
-            await invoke('set_kiro_trusted_commands', { mode, customCommands: customTrustedCommands })
+            await setKiroTrustedCommands(mode, customTrustedCommands)
         } catch (err: any) {
             await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
         }
@@ -276,7 +278,7 @@ function Settings() {
         setCustomTrustedCommands(commands)
         if (trustedCommandsMode === 'common') {
             try {
-                await invoke('set_kiro_trusted_commands', { mode: 'common', customCommands: commands })
+                await setKiroTrustedCommands('common', commands)
             } catch (err: any) {
                 await showError(t('settings.saveFailed'), t('settings.saveFailed') + ': ' + err)
             }
@@ -327,7 +329,7 @@ function Settings() {
 
     const handleDetectBrowsers = async () => {
         try {
-            const browsers = await invoke<any[]>('detect_installed_browsers')
+            const browsers = await detectInstalledBrowsers()
             setDetectedBrowsers(browsers)
             setShowBrowserList(true)
         } catch (err: any) {
@@ -338,7 +340,7 @@ function Settings() {
     const handleDetectProxy = async () => {
         setDetectingProxy(true)
         try {
-            const proxyInfo = await invoke<any>('detect_system_proxy')
+            const proxyInfo = await detectSystemProxy()
             if (proxyInfo.enabled && proxyInfo.httpProxy) {
                 setHttpProxy(proxyInfo.httpProxy)
                 await showSuccess(t('settings.detectSuccess'), `${t('settings.systemProxyDetected')}: ${proxyInfo.httpProxy}`)
@@ -362,7 +364,7 @@ function Settings() {
 
         setMachineGuidAction('reset')
         try {
-            const newGuid = await invoke<string>('reset_system_machine_guid')
+            const newGuid = await resetSystemMachineGuid()
             setSystemMachineInfo((prev: any) => ({ ...prev, machineGuid: newGuid }))
             await showSuccess(t('settings.resetSuccess'), `${t('settings.newMachineGuid')}: ${newGuid}`)
         } catch (err: any) {
@@ -373,7 +375,7 @@ function Settings() {
 
     const handleOpenAppDataDir = async () => {
         try {
-            await invoke('open_app_data_dir')
+            await openAppDataDir()
         } catch (err: any) {
             await showError(t('settings.openFailed'), err.toString())
         }

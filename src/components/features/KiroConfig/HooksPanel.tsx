@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getHooks, saveHook, deleteHook, createHook } from '../../../api/kiroConfigApi'
 import { FolderOpen, Link2, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
@@ -46,7 +46,7 @@ function HooksPanel({ onCountChange, projectDir }: any) {
 
     setLoading(true)
     try {
-      const data = await invoke<any[]>('get_hooks', { projectDir })
+      const data = await getHooks(projectDir)
       setHooks(data)
       onCountChange?.(data?.length || 0)
     } catch (e) {
@@ -75,11 +75,7 @@ function HooksPanel({ onCountChange, projectDir }: any) {
 
     setSaving(true)
     try {
-      await invoke('save_hook', {
-        fileName: selectedHook.fileName,
-        content: editContent,
-        projectDir
-      })
+      await saveHook(selectedHook.fileName, editContent, projectDir)
       const newList = hooks.map(h => (h.fileName === selectedHook.fileName)
         ? { ...h, content: editContent }
         : h)
@@ -97,10 +93,7 @@ function HooksPanel({ onCountChange, projectDir }: any) {
     if (!projectDir) return
     if (!await showConfirm(t('hooks.confirmDelete'), t('hooks.confirmDeleteFile', { fileName: hookFile.fileName }))) return
     try {
-      await invoke('delete_hook', {
-        fileName: hookFile.fileName,
-        projectDir
-      })
+      await deleteHook(hookFile.fileName, projectDir)
       const next = hooks.filter(h => h.fileName !== hookFile.fileName)
       setHooks(next)
       onCountChange?.(next.length)
@@ -155,11 +148,7 @@ function HooksPanel({ onCountChange, projectDir }: any) {
 }
 `
     try {
-      const newHook = await invoke<any>('create_hook', {
-        fileName: normalized,
-        content: template,
-        projectDir
-      })
+      const newHook = await createHook(normalized, template, projectDir)
       const next = [...hooks, newHook]
       setHooks(next)
       onCountChange?.(next.length)

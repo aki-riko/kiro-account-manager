@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getMcpConfig, toggleMcpServer, deleteMcpServer } from '../../../api/mcpApi'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { Server, Plus, Sparkles } from 'lucide-react'
@@ -23,7 +23,7 @@ function MCPManager() {
   // 加载配置
   const loadConfig = useCallback(async () => {
     try {
-      const config = await invoke<any>('get_mcp_config', { projectDir: null })
+      const config = await getMcpConfig(null)
       setServers(config.mcpServers || {})
     } catch (e) {
       handleUiError('加载 MCP 配置失败', e, { userMessage: '加载 MCP 配置失败' })
@@ -39,7 +39,7 @@ function MCPManager() {
   // 切换启用/禁用
   const handleToggle = async (name: string, disabled: boolean) => {
     try {
-      await invoke('toggle_mcp_server', { name, disabled, projectDir: null })
+      await toggleMcpServer(name, disabled, null)
       setServers((prev: any) => ({
         ...prev,
         [name]: { ...prev[name], disabled }
@@ -54,7 +54,7 @@ function MCPManager() {
     const confirmed = await showConfirm(t('mcpManager.deleteServer'), `${t('mcpManager.confirmDelete')} ${name}？`)
     if (confirmed) {
       try {
-        await invoke('delete_mcp_server', { name, projectDir: null })
+        await deleteMcpServer(name, null)
         setServers((prev: any) => {
           const next = { ...prev }
           delete next[name]

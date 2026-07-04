@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Users, Zap, Shield, TrendingUp, Sparkles, Server, RefreshCw, ArrowRightLeft, Terminal } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
+import { quickSwitchNext } from '../../../api/accountApi'
+import { checkIdeInstallation as checkIdeInstallationApi } from '../../../api/settingsApi'
+import { getMcpToolStats } from '../../../api/mcpApi'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { showSuccess } from '../../../utils/toast'
@@ -51,7 +54,7 @@ function Home({ onNavigate }: HomeProps) {
   useEffect(() => {
     const checkIdeInstallation = async () => {
       try {
-        const info = await invoke<any>('check_ide_installation')
+        const info = await checkIdeInstallationApi<any>()
         setIdeInstallInfo(info)
       } catch (e) {
         console.error('检测 IDE 安装状态失败:', e)
@@ -64,7 +67,7 @@ function Home({ onNavigate }: HomeProps) {
   useEffect(() => {
     const loadMcpToolCount = async () => {
       try {
-        const statsResult = await invoke<any>('get_mcp_tool_stats', { projectDir: null })
+        const statsResult = await getMcpToolStats(null)
         setMcpToolCount(statsResult.estimatedTools)
       } catch (e) {
         // 静默处理
@@ -103,7 +106,7 @@ function Home({ onNavigate }: HomeProps) {
     if (switching) return
     setSwitching(true)
     try {
-      const email = await invoke<string>('quick_switch_next')
+      const email = await quickSwitchNext()
       showSuccess(`已切换到 ${email}`)
       refresh()
     } catch (e: any) {

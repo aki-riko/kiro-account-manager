@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getAppSettings, saveAppSettings } from '../api/settingsApi'
 
 interface PrivacyContextValue {
     privacyMode: boolean;
@@ -15,7 +15,7 @@ export function PrivacyProvider({ children }: { children: ReactNode }) {
 
   // 从后端加载设置
   useEffect(() => {
-    invoke<any>('get_app_settings').then(settings => {
+    getAppSettings<any>().then(settings => {
       setPrivacyModeState(settings?.privacyMode ?? true) // 默认 true
     }).catch(() => {})
   }, [])
@@ -24,7 +24,7 @@ export function PrivacyProvider({ children }: { children: ReactNode }) {
   const setPrivacyMode = useCallback(async (enabled: boolean) => {
     setPrivacyModeState(enabled)
     try {
-      await invoke('save_app_settings', { settings: { privacyMode: enabled } })
+      await saveAppSettings({ privacyMode: enabled })
     } catch (err) {
       console.error('Failed to save privacy mode:', err)
     }

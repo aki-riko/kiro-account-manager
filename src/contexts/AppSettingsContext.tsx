@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getAppSettings, saveAppSettings } from '../api/settingsApi'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 
 export interface AppSettings {
@@ -77,7 +77,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   // 加载设置
   const loadSettings = async () => {
     try {
-      const appSettings = await invoke<AppSettings>('get_app_settings')
+      const appSettings = await getAppSettings<AppSettings>()
       setSettings(appSettings || DEFAULT_SETTINGS)
     } catch (err) {
       console.error('[AppSettings] 加载失败:', err)
@@ -90,7 +90,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   // 更新设置
   const updateSettings = async (updates: Partial<AppSettings>) => {
     try {
-      await invoke('save_app_settings', { settings: updates })
+      await saveAppSettings(updates)
       let nextSettings: AppSettings | null = null
       setSettings(prev => {
         nextSettings = { ...(prev || DEFAULT_SETTINGS), ...updates }

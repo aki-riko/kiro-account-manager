@@ -1,6 +1,6 @@
 
 import { useState, useEffect, ReactNode } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getKiroLocalToken } from '../../../api/kiroApi'
 import { getVersion } from '@tauri-apps/api/app'
 import { User, Sun, Moon, Palette, ChevronLeft, ChevronRight, LucideIcon } from 'lucide-react'
 import { Button } from '../../ui/button'
@@ -38,7 +38,7 @@ function Sidebar({ activeMenu, onMenuChange }: SidebarProps) {
   const menuItems = useMenuItems()
 
   useEffect(() => {
-    invoke<LocalToken>('get_kiro_local_token').then(setLocalToken).catch(() => {})
+    getKiroLocalToken<LocalToken>().then(setLocalToken).catch(() => {})
     getVersion().then(setVersion)
     const saved = localStorage.getItem('sidebar-collapsed')
     if (saved === 'true') setCollapsed(true)

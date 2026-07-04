@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getMcpConfig, getMcpToolStats, toggleMcpServer, deleteMcpServer } from '../../../api/mcpApi'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { Server, Plus, Edit2, Trash2, Terminal, Search, X } from 'lucide-react'
@@ -62,13 +62,13 @@ function MCPPanel({ onCountChange, projectDir }: any) {
 
   const loadConfig = useCallback(async () => {
     try {
-      const config = await invoke<any>('get_mcp_config', { projectDir: projectDir || null })
+      const config = await getMcpConfig(projectDir || null)
       const mcpServers = config.mcpServers || {}
       setServers(mcpServers)
       onCountChange?.(Object.keys(mcpServers).length)
       
       // 加载工具统计
-      const stats = await invoke<any>('get_mcp_tool_stats', { projectDir: projectDir || null })
+      const stats = await getMcpToolStats(projectDir || null)
       setToolCount(stats.estimatedTools)
     } catch (e) {
       handleUiError('加载 MCP 配置失败', e, { userMessage: '加载 MCP 配置失败' })
@@ -83,7 +83,7 @@ function MCPPanel({ onCountChange, projectDir }: any) {
     const oldDisabled = servers[name]?.disabled
     setServers((prev: any) => ({ ...prev, [name]: { ...prev[name], disabled } }))
     try {
-      await invoke('toggle_mcp_server', { name, disabled, projectDir: projectDir || null })
+      await toggleMcpServer(name, disabled, projectDir || null)
     } catch (e) {
       setServers((prev: any) => ({ ...prev, [name]: { ...prev[name], disabled: oldDisabled } }))
       handleUiError('切换 MCP 状态失败', e, { userMessage: '切换状态失败' })
@@ -93,7 +93,7 @@ function MCPPanel({ onCountChange, projectDir }: any) {
   const handleDelete = async (name: string) => {
     if (!await showConfirm(t('mcp.confirmDelete'), `${t('common.confirm')} ${name}?`)) return
     try {
-      await invoke('delete_mcp_server', { name, projectDir: projectDir || null })
+      await deleteMcpServer(name, projectDir || null)
       setServers((prev: any) => { const next = { ...prev }; delete next[name]; return next })
     } catch (e) {
       handleUiError('删除 MCP 服务失败', e, { userMessage: '删除失败' })
