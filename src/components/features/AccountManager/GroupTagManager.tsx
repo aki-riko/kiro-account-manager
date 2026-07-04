@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
-import { invoke } from '@tauri-apps/api/core'
 import { X, Tag, Plus, Trash2, Edit2, Check, Folder } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
-import { getTags, getGroups } from '../../../api/groupTag'
+import { getTags, getGroups, addTag, addGroup, updateTag, updateGroup, deleteTag, deleteGroup } from '../../../api/groupTag'
 
 
 // 预设颜色
@@ -64,7 +63,7 @@ export function TagSelector({ selectedTagIds, onChange, allTags = null }) {
     } else {
       const color = PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)]
       try {
-        const newTag = await invoke('add_tag', { name: trimmed, color }) as { id: string; name: string; color: string }
+        const newTag = await addTag(trimmed, color) as { id: string; name: string; color: string }
         setTags([...actualTags, newTag])
         onChange([...selectedTagIds, newTag.id])
       } catch (e) {
@@ -203,8 +202,7 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
       return
     }
     try {
-      const cmd = isTagMode ? 'add_tag' : 'add_group'
-      const newItem = await invoke(cmd, { name: trimmed, color: newColor })
+      const newItem = await (isTagMode ? addTag(trimmed, newColor) : addGroup(trimmed, newColor))
       setItems([...items, newItem])
       setNewName('')
       setNewColor(PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)])
@@ -223,8 +221,7 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
     const confirmed = await showConfirm(title, msg)
     if (!confirmed) return
     try {
-      const cmd = isTagMode ? 'delete_tag' : 'delete_group'
-      await invoke(cmd, { id })
+      await (isTagMode ? deleteTag(id) : deleteGroup(id))
       setItems(items.filter(i => i.id !== id))
     } catch (e) {
       await showError(t('common.error'), e.toString())
@@ -246,8 +243,7 @@ function GroupTagManager({ onClose, onSuccess, defaultTab = 'tags' }) {
       return
     }
     try {
-      const cmd = isTagMode ? 'update_tag' : 'update_group'
-      await invoke(cmd, { id: editingId, name: trimmed, color: editForm.color })
+      await (isTagMode ? updateTag(editingId, trimmed, editForm.color) : updateGroup(editingId, trimmed, editForm.color))
       setItems(items.map(i => i.id === editingId ? { ...i, name: trimmed, color: editForm.color } : i))
       setEditingId(null)
     } catch (e) {

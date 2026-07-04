@@ -66,3 +66,13 @@ export function getCurrentUser<T = any>() {
 export function logout() {
   return invoke('logout')
 }
+
+// 测试账号代理连通性
+export function testAccountProxy<T = any>(proxyConfig: any) {
+  return invoke<T>('test_account_proxy', { proxyConfig })
+}
+
+// 校验账号（params 为待校验的 token/凭据字段）
+export function verifyAccount<T = any>(params: Record<string, any>) {
+  return invoke<T>('verify_account', { params })
+}

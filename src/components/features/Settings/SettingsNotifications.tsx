@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getKiroSettings, setKiroNotification, setKiroTelemetry } from '../../../api/settingsApi'
 import { Bell, ShieldQuestion } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
@@ -46,7 +46,7 @@ function SettingsNotifications() {
 
   useEffect(() => {
     let cancelled = false
-    invoke<any>('get_kiro_settings').then(s => {
+    getKiroSettings<any>().then(s => {
       if (cancelled || !s) return
       setNotifications({
         notifyActionRequired: s.notifyActionRequired ?? true,
@@ -71,7 +71,7 @@ function SettingsNotifications() {
   const handleNotificationChange = async (key: string, checked: boolean, field: keyof NotificationState) => {
     setNotifications(prev => ({ ...prev, [field]: checked }))
     try {
-      await invoke('set_kiro_notification', { key, enabled: checked })
+      await setKiroNotification(key, checked)
       const appField = (NOTIFICATION_SETTINGS_FIELD_MAP as any)[key]
       if (appField) {
         await updateAppSettings({ [appField]: checked })
@@ -84,7 +84,7 @@ function SettingsNotifications() {
   const handleTelemetryChange = async (ideKey: string, checked: boolean, field: keyof TelemetryState) => {
     setTelemetry(prev => ({ ...prev, [field]: checked }))
     try {
-      await invoke('set_kiro_telemetry', { key: ideKey, enabled: checked })
+      await setKiroTelemetry(ideKey, checked)
       await updateAppSettings({ [field]: checked })
     } catch (err) {
       await showSaveError(err)

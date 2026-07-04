@@ -5,7 +5,9 @@ import { Stack, Group } from '@/components/shared/layout'
 import { Progress } from '@/components/ui/progress'
 import { Alert } from '@/components/ui/alert'
 import { Upload, FileJson, AlertCircle, CheckCircle, Loader2, Database, RefreshCw } from 'lucide-react'
-import { invoke } from '@tauri-apps/api/core'
+import { getSystemMachineGuid } from '../../../api/kiroApi'
+import { getKiroCliDefaultPath } from '../../../api/systemApi'
+import { readKiroAccounts, addAccountBySocial, addAccountByIdc, importFromKiroCli } from '../../../api/importApi'
 import { useApp } from '../../../hooks/useApp'
 
 import { getConcurrency } from '../../../utils/concurrency'
@@ -171,7 +173,7 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
 
     const detectOsType = async () => {
       try {
-        const info = await invoke<any>('get_system_machine_guid')
+        const info = await getSystemMachineGuid<any>()
         if (isMounted && info?.osType) {
           setOsType(info.osType)
           return
@@ -208,7 +210,7 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
   const detectKiroCliPath = async () => {
     setKiroCliDetecting(true)
     try {
-      const defaultPath = await invoke<string>('get_kiro_cli_default_path')
+      const defaultPath = await getKiroCliDefaultPath()
       if (defaultPath) {
         setKiroCliDbPath(defaultPath)
         setKiroCliDetected(true)
@@ -234,7 +236,7 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
     setKiroLoading(true)
     setKiroError(null)
     try {
-      const accounts = await invoke<any[]>('read_kiro_accounts')
+      const accounts = await readKiroAccounts()
       setKiroAccounts(accounts)
     } catch (e) {
       setKiroError(String(e))
@@ -316,7 +318,7 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
         let result: any
         const provider = item._inferredProvider || item.provider
         if (item._type === 'social') {
-          result = await invoke('add_account_by_social', {
+          result = await addAccountBySocial({
             refreshToken: item.refreshToken,
             provider: provider,
             machineId: item.machineId || null,
@@ -337,7 +339,7 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
             clientIdHash: item.clientIdHash || null  // Enterprise 可用 clientIdHash 替代 startUrl
           }
 
-          result = await invoke('add_account_by_idc', params)
+          result = await addAccountByIdc(params)
         }
 
         const account = result.account
@@ -405,9 +407,9 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
             clientIdHash: account.clientIdHash || null  // 使用 Kiro 提供的 clientIdHash
           }
 
-          result = await invoke('add_account_by_idc', params)
+          result = await addAccountByIdc(params)
         } else {
-          result = await invoke('add_account_by_social', {
+          result = await addAccountBySocial({
             refreshToken: account.refreshToken,
             provider: account.provider,
             machineId: null,
@@ -462,9 +464,7 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
     setKiroCliResult(null)
 
     try {
-      const result = await invoke<any>('import_from_kiro_cli', {
-        dbPath: kiroCliDbPath
-      })
+      const result = await importFromKiroCli(kiroCliDbPath)
 
       if (result.success) {
         setKiroCliResult({

@@ -48,6 +48,16 @@ export function setKiroTrustedCommands(mode: string, customCommands: string) {
   return invoke('set_kiro_trusted_commands', { mode, customCommands })
 }
 
+// 设置 Kiro IDE 通知开关
+export function setKiroNotification(key: string, enabled: boolean) {
+  return invoke('set_kiro_notification', { key, enabled })
+}
+
+// 设置 Kiro IDE 遥测开关
+export function setKiroTelemetry(key: string, enabled: boolean) {
+  return invoke('set_kiro_telemetry', { key, enabled })
+}
+
 // ============================================================
 // 自定义 Kiro 安装路径
 // ============================================================

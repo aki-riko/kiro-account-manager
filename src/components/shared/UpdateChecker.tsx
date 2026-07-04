@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { checkUpdate } from '../../api/systemApi'
 import { check } from '@tauri-apps/plugin-updater'
 import { useDialog } from '../../contexts/DialogContext'
 
@@ -10,7 +10,7 @@ function UpdateChecker() {
   const checkForUpdate = async () => {
     try {
       // 先用自定义命令检查（支持代理）
-      const result = await invoke('check_update')
+      const result = await checkUpdate()
 
       if (result.has_update && result.latest_version) {
         // 有更新，再用 Tauri updater 获取完整的 update 对象

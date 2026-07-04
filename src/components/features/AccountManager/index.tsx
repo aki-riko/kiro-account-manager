@@ -367,7 +367,8 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
       advancedFilters?.usageRange ||
       advancedFilters?.subscriptions?.length ||
       advancedFilters?.statuses?.length ||
-      advancedFilters?.providers?.length
+      advancedFilters?.providers?.length ||
+      advancedFilters?.enabledStatus
     )
 
     if (hasAdvancedFilters) {

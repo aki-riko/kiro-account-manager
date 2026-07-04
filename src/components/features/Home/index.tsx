@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Users, Zap, Shield, TrendingUp, Sparkles, Server, RefreshCw, ArrowRightLeft, Terminal } from 'lucide-react'
-import { invoke } from '@tauri-apps/api/core'
+import { checkCliInstallation, getKiroCliDefaultPath, readCliDbSnapshot } from '../../../api/systemApi'
 import { quickSwitchNext } from '../../../api/accountApi'
 import { checkIdeInstallation as checkIdeInstallationApi } from '../../../api/settingsApi'
 import { getMcpToolStats } from '../../../api/mcpApi'
@@ -127,15 +127,15 @@ function Home({ onNavigate }: HomeProps) {
     const loadCliData = async () => {
       setCliLoading(true)
       try {
-        const info = await invoke<any>('check_cli_installation')
+        const info = await checkCliInstallation()
         // 只根据可执行文件是否存在判断 CLI 是否安装
         setCliInstalled(info?.cli_installed || false)
 
-        const path = await invoke<string>('get_kiro_cli_default_path')
+        const path = await getKiroCliDefaultPath()
         if (path) {
           setCliPath(path)
           try {
-            const snapshot = await invoke<any>('read_cli_db_snapshot', { dbPath: path })
+            const snapshot = await readCliDbSnapshot(path)
             setCliSnapshot(snapshot)
           } catch {
             // 数据库存在但读取失败，或未登录

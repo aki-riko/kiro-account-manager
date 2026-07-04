@@ -5,6 +5,7 @@ import { Copy, Check, Folder, Plus, X, RefreshCw, Loader2, CheckCircle, Network,
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { setAccountTags, setAccountGroup, getGroups, addGroup } from '../../../api/groupTag'
+import { testAccountProxy, verifyAccount } from '../../../api/accountApi'
 import { getAccountDisplayName } from '../../../utils/accountStats'
 import { TagSelector } from './GroupTagManager'
 import {
@@ -317,9 +318,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
 
     setTestingProxy(true)
     try {
-      const result = await invoke<AccountProxyTestResult>('test_account_proxy', {
-        proxyConfig: config
-      })
+      const result = await testAccountProxy<AccountProxyTestResult>(config)
       if (result.success) {
         await showSuccess(t('editAccount.proxyTestSuccess'), result.message)
       } else {
@@ -344,15 +343,13 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
 
     setVerifying(true)
     try {
-      const result = await invoke<VerifyAccountResponse>('verify_account', {
-        params: {
-          accessToken: form.accessToken,
-          refreshToken: form.refreshToken,
-          provider: account.provider,
-          clientId: isIdCAccount ? form.clientId : null,
-          clientSecret: isIdCAccount ? form.clientSecret : null,
-          region: null
-        }
+      const result = await verifyAccount<VerifyAccountResponse>({
+        accessToken: form.accessToken,
+        refreshToken: form.refreshToken,
+        provider: account.provider,
+        clientId: isIdCAccount ? form.clientId : null,
+        clientSecret: isIdCAccount ? form.clientSecret : null,
+        region: null
       })
 
       // 更新表单中的 token

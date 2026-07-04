@@ -2,7 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useState, useEffect } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getUsageHistory, saveUsageHistoryEntry } from '../../../api/usageApi'
 import { Calendar } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
@@ -19,26 +19,24 @@ export default function UsageTrendChart({ accounts, stats }) {
     const loadAndSaveHistory = async () => {
       try {
         // 加载历史记录
-        const history = await invoke('get_usage_history').catch(() => ({ entries: [] }))
+        const history = await getUsageHistory().catch(() => ({ entries: [] }))
 
         // 记录当天的使用量
         if (accounts.length > 0) {
           const now = new Date()
           const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-          await invoke('save_usage_history_entry', {
-            entry: {
+          await saveUsageHistoryEntry({
               date: today,
               totalQuota: Math.round(stats.totalQuota),
               totalUsed: Math.round(stats.totalUsed),
               accountCount: accounts.length
-            }
-          }).catch(console.error)
+            }).catch(console.error)
 
           // 重新加载历史
-          const updatedHistory = await invoke('get_usage_history').catch(() => ({ entries: [] })) as { entries: any[] }
+          const updatedHistory = await getUsageHistory().catch(() => ({ entries: [] })) as { entries: any[] }
           setUsageHistory(updatedHistory.entries || [])
         } else {
-          const history = await invoke('get_usage_history').catch(() => ({ entries: [] })) as { entries: any[] }
+          const history = await getUsageHistory().catch(() => ({ entries: [] })) as { entries: any[] }
           setUsageHistory(history.entries || [])
         }
       } catch (e) {

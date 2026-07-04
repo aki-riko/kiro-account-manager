@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getSupportedProviders, kiroLogin, cancelKiroLogin } from '../../../api/authApi'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { Loader } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
@@ -109,7 +109,7 @@ function Login({ onLogin }: LoginProps) {
 
     const loadSupportedProviders = async () => {
       try {
-        const providers = await invoke<string[]>('get_supported_providers')
+        const providers = await getSupportedProviders()
         if (!mounted || !Array.isArray(providers) || providers.length === 0) return
 
         const normalizedProviders = [
@@ -151,7 +151,7 @@ function Login({ onLogin }: LoginProps) {
     setError('')
 
     try {
-      await invoke('kiro_login', { provider })
+      await kiroLogin({ provider })
       onLogin?.()
     } catch (e) {
       console.error('Login error:', e)
@@ -171,7 +171,7 @@ function Login({ onLogin }: LoginProps) {
     }
     setCanceling(true)
     try {
-      await invoke('cancel_kiro_login')
+      await cancelKiroLogin()
     } catch (e) {
       console.error('Cancel login error:', e)
       setCanceling(false)
@@ -200,7 +200,7 @@ function Login({ onLogin }: LoginProps) {
     setError('')
 
     try {
-      await invoke('kiro_login', {
+      await kiroLogin({
         provider: 'Enterprise',
         startUrl: normalizedStartUrl,
         region: normalizedRegion,

@@ -3,7 +3,7 @@ import { X, Tag, Plus, Folder, Check, Edit, Power } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { getTags, getGroups, setAccountTags, setAccountGroup, addTag, addGroup } from '../../../api/groupTag'
-import { invoke } from '@tauri-apps/api/core'
+import { updateAccount } from '../../../api/accountApi'
 import {
   DialogRoot,
   DialogContent,
@@ -115,7 +115,7 @@ function BatchEditModal({ accountIds, accounts = [], onClose, onSuccess }: Batch
     
     const color = PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)]
     try {
-      const newTag = await invoke<TagDefinition>('add_tag', { name: safeName, color })
+      const newTag = await addTag(safeName, color) as TagDefinition
       setTags([...tags, newTag])
       setSelectedTagIds([...selectedTagIds, newTag.id])
       setNewTagName('')
@@ -158,7 +158,7 @@ function BatchEditModal({ accountIds, accounts = [], onClose, onSuccess }: Batch
         ...accountIds.map(id => setAccountTags(id, selectedTagIds)),
         ...accountIds.map(id => setAccountGroup(id, selectedGroupId || null)),
         ...(enabledChange !== null
-          ? accountIds.map(id => invoke('update_account', { params: { id, enabled: enabledChange } }))
+          ? accountIds.map(id => updateAccount({ id, enabled: enabledChange }))
           : [])
       ])
       onSuccess?.({ accountIds, selectedTagIds, selectedGroupId: selectedGroupId || null, enabledChange })

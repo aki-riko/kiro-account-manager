@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { showMainWindow } from './api/systemApi'
 import { getCurrentUser, logout as apiLogout } from './api/accountApi'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { Toaster } from 'react-hot-toast'
@@ -57,7 +57,7 @@ function App() {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         dismissBootSplash()
-        invoke('show_main_window').catch((e) => {
+        showMainWindow().catch((e) => {
           console.error('Failed to show main window:', e)
         })
       })

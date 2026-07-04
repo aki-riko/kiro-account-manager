@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, memo, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { invoke } from '@tauri-apps/api/core'
+import { listAvailableModels, syncAccount } from '../../../api/accountApi'
 import { Copy, Check, RefreshCw, User, CreditCard, Shield, Cpu, Loader2, FileText, Image as ImageIcon, Zap, Hash, ChevronDown, X } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
@@ -146,10 +146,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
     setModelsError(null)
     try {
       console.log('[AccountDetailModal] Fetching models for account:', account.id, 'forceRefresh:', forceRefresh)
-      const response = await invoke<ListAvailableModelsResponse>('list_available_models', {
-        id: account.id,
-        forceRefresh
-      })
+      const response = await listAvailableModels(account.id, forceRefresh)
       console.log('[AccountDetailModal] Models response:', response)
       const modelsList = response.availableModels
       console.log('[AccountDetailModal] Models list:', modelsList.length, 'models')
@@ -195,7 +192,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      const result = await invoke<{ account: Account, warning?: string }>('sync_account', { id: account.id })
+      const result = await syncAccount(account.id)
       const updated = result.account
       setCurrentAccount(updated)
 

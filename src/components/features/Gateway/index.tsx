@@ -2,7 +2,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { Play, Square, ScrollText, Copy, Zap } from 'lucide-react'
 import { Alert as AlertPrimitive, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { invoke } from '@tauri-apps/api/core'
+import { configureProxyClients } from '../../../api/gatewayApi'
 import { useApp } from '../../../hooks/useApp'
 import { Stack, Group, Badge, Card, Text } from '@/components/shared/layout'
 import {
@@ -460,7 +460,7 @@ function GatewayPage() {
     setClientConfigLoading(true)
     try {
       const apiKey = effectiveConfig.clientApiKeysText || effectiveConfig.apiKey || ''
-      const results = await invoke<any[]>('configure_proxy_clients', {
+      const results = await configureProxyClients({
         clients: selectedClients,
         host: effectiveConfig.host,
         port: effectiveConfig.port,

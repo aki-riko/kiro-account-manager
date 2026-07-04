@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Github, Heart, Coffee, ExternalLink, Code2, Palette, Cpu, RefreshCw, X, Link2, Gift, Sparkles, Info, Users } from 'lucide-react'
 import { getVersion } from '@tauri-apps/api/app'
-import { invoke } from '@tauri-apps/api/core'
+import { checkUpdate as checkUpdateApi } from '../../../api/systemApi'
 import { check } from '@tauri-apps/plugin-updater'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -124,7 +124,7 @@ function About() {
   const checkUpdate = useCallback(async () => {
     setChecking(true)
     try {
-      const result = await invoke<any>('check_update')
+      const result = await checkUpdateApi<any>()
       if (result.has_update && result.latest_version) {
         const updateResult = await check()
         if (updateResult) {
