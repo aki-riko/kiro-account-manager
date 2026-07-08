@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { invoke } from '@tauri-apps/api/core'
 import { Copy, Check, Folder, Plus, X, RefreshCw, Loader2, CheckCircle, Network, PlugZap, Tag } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { setAccountTags, setAccountGroup, getGroups, addGroup } from '../../../api/groupTag'
-import { testAccountProxy, verifyAccount } from '../../../api/accountApi'
+import { testAccountProxy, verifyAccount, updateAccount } from '../../../api/accountApi'
 import { getAccountDisplayName } from '../../../utils/accountStats'
 import { TagSelector } from './GroupTagManager'
 import {
@@ -401,7 +400,7 @@ function EditAccountModal({ account, onClose, onSuccess }: EditAccountModalProps
         params.clientId = form.clientId || null
         params.clientSecret = form.clientSecret || null
       }
-      const updatedAccount = await invoke<Account>('update_account', { params })
+      const updatedAccount = await updateAccount<Account>(params)
       await setAccountGroup(account.id, selectedGroupId || null)
       await setAccountTags(account.id, selectedTagIds)
       onSuccess?.(updatedAccount)
