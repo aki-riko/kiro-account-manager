@@ -1,3 +1,5 @@
+import { invoke } from '@tauri-apps/api/core'
+
 export const buildSettingsErrorMessage = (t, err, titleKey = 'settings.saveFailed') => {
   const title = t(titleKey)
   return {
@@ -35,12 +37,11 @@ export const runKiroCommandWithAppSettings = async ({
   commandArgs,
   appSettingsUpdates,
   notifyChange = false,
-  invokeFn,
   persistSettings,
   showError,
   t}) => {
   try {
-    await invokeFn(command, commandArgs)
+    await invoke(command, commandArgs)
     if (appSettingsUpdates) {
       return await persistSettings({
         updates: appSettingsUpdates,

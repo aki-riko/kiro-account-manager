@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { getKiroSettings, getAppSettings, getCustomKiroPath, checkIdeInstallation, getAppDataDir, setKiroProxy, setKiroModel, setCustomKiroPath, clearCustomKiroPath, setKiroTrustedCommands, detectInstalledBrowsers, detectSystemProxy, openAppDataDir } from '../../../api/settingsApi'
 import { getSystemMachineGuid, resetSystemMachineGuid } from '../../../api/kiroApi'
 import { emit } from '@tauri-apps/api/event'
@@ -149,7 +148,6 @@ function Settings() {
         commandArgs,
         appSettingsUpdates,
         notifyChange,
-        invokeFn: invoke,
         persistSettings: ({ updates, notifyChange: shouldNotify }: any) => saveAppSettings(updates, shouldNotify),
         showError,
         t})

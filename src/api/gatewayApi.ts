@@ -49,6 +49,11 @@ export function clearAllCache() {
   return invoke('clear_all_cache')
 }
 
+// 获取可用模型列表
+export function getAvailableModels() {
+  return invoke<string[]>('get_available_models')
+}
+
 // 为选中的客户端写入反代配置
 export function configureProxyClients(args: {
   clients: string[]

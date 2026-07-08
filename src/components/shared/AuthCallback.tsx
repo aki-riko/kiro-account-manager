@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { useApp } from '../../hooks/useApp'
 
 export default function AuthCallback() {

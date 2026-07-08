@@ -14,7 +14,7 @@ import {
   DialogBody
 } from '@/components/shared/dialog'
 import { toast } from 'sonner'
-import { invoke } from '@tauri-apps/api/core'
+import { getAvailableModels } from '../../../api/gatewayApi'
 import { ModelMappingRule } from './gatewayPageState'
 
 // 常见源模型名 — 用于源模型下拉（包含 GPT 和 Claude）
@@ -91,7 +91,7 @@ export function ModelMappingDialog({ open, onOpenChange, modelMappings, setField
   // 弹窗打开时获取可用模型列表
   useEffect(() => {
     if (open) {
-      invoke<string[]>('get_available_models')
+      getAvailableModels()
         .then(models => setTargetModels(models))
         .catch(err => {
           console.error('获取可用模型失败:', err)
