@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Terminal, AlertCircle, Wand2 } from 'lucide-react'
-import { invoke } from '@tauri-apps/api/core'
+import { saveMcpServer } from '../../../api/kiroConfigApi'
 import { Textarea } from '@/components/ui/textarea'
 import { useApp } from '../../../hooks/useApp'
 import { getThemeAccent, getGradientAccentButton } from './themeAccent'
@@ -86,7 +86,7 @@ function EditMCPModal({ name, config, onClose, onSuccess, projectDir }: any) {
         autoApprove: parsed.autoApprove || []
       }
 
-      await invoke('save_mcp_server', { name, config: newConfig, projectDir: projectDir || null })
+      await saveMcpServer(name, newConfig, projectDir || null)
       onSuccess()
     } catch (e) {
       setError(String(e))
