@@ -57,6 +57,31 @@ export function quickSwitchNext() {
   return invoke<string>('quick_switch_next')
 }
 
+// 同步切换账号到 Kiro IDE
+export function switchKiroAccount(params: Record<string, any>) {
+  return invoke('switch_kiro_account', { params })
+}
+
+// 清除 Kiro IDE 登录态
+export function logoutKiroAccount() {
+  return invoke('logout_kiro_account')
+}
+
+// 同步切换账号到 Kiro CLI
+export function switchToCliAccount(accountId: string, dbPath: string) {
+  return invoke('switch_to_cli_account', { accountId, dbPath })
+}
+
+// 清除 Kiro CLI 登录态
+export function logoutCliAccount(dbPath: string) {
+  return invoke('logout_cli_account', { dbPath })
+}
+
+// 导出账号 JSON
+export function exportAccounts(ids: string[]) {
+  return invoke<string>('export_accounts', { ids })
+}
+
 // 获取当前登录用户
 export function getCurrentUser<T = any>() {
   return invoke<T>('get_current_user')

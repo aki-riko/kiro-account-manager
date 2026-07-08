@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import {
+  exportAccounts,
+  getAccounts,
+  getUsageLimits,
+  syncAccount,
+  updateAccount
+} from '../../../../api/accountApi'
+import { addAccountBySocial } from '../../../../api/importApi'
 import { listen, emit, UnlistenFn } from '@tauri-apps/api/event'
 import { isUnavailableStatus } from '../../../../utils/accountStatus'
 import { normalizeAccountForUi, getSafeAccountDisplayName } from '../utils/accountRuntime'
@@ -48,7 +55,7 @@ export function useAccounts() {
   const loadAccounts = useCallback(async () => {
     try {
       setLoading(true)
-      const loadedAccounts = await invoke<any[]>('get_accounts')
+      const loadedAccounts = await getAccounts()
       const normalizedAccounts = Array.isArray(loadedAccounts)
         ? loadedAccounts.map(normalizeAccountForUi)
         : []
@@ -84,7 +91,7 @@ export function useAccounts() {
     const refreshOne = async (account: Account) => {
       let success = false, message = ''
       try {
-        const syncResult = await invoke<{ account: any }>('sync_account', { id: account.id })
+        const syncResult = await syncAccount(account.id)
         const updated = normalizeAccountForUi(syncResult.account)
         const idx = updatedAccounts.findIndex(a => a.id === account.id)
         if (idx !== -1) updatedAccounts[idx] = updated
@@ -131,7 +138,7 @@ export function useAccounts() {
   const handleRefreshStatus = useCallback(async (id: string) => {
     setRefreshingId(id)
     try {
-      const syncResult = await invoke<{ account: any }>('get_usage_limits', { id })
+      const syncResult = await getUsageLimits<{ account: any }>(id)
       const updated = normalizeAccountForUi(syncResult.account)
       setAccounts(prev => prev.map(a => a.id === id ? updated : a))
       return { success: true, data: updated }
@@ -139,12 +146,12 @@ export function useAccounts() {
       const errorMsg = String(e)
       if (errorMsg.includes('BANNED')) {
         try {
-          await invoke('update_account', { params: { id, status: 'banned' } })
+          await updateAccount({ id, status: 'banned' })
           setAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'banned' } : a))
         } catch (updateErr) {}
       } else if (errorMsg.includes('AUTH_ERROR') || errorMsg.includes('401') || errorMsg.includes('invalid')) {
         try {
-          await invoke('update_account', { params: { id, status: 'invalid' } })
+          await updateAccount({ id, status: 'invalid' })
           setAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'invalid' } : a))
         } catch (updateErr) {}
       }
@@ -174,7 +181,7 @@ export function useAccounts() {
       
       if (!filePath) return
       
-      const json = await invoke<string>('export_accounts', { ids: selectedIds })
+      const json = await exportAccounts(selectedIds)
       await writeTextFile(filePath, json)
     } catch (e) {}
   }, [])
@@ -197,7 +204,7 @@ export function useAccounts() {
         try {
           const data = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload
           if (data?.refreshToken) {
-            await invoke('add_account_by_social', {
+            await addAccountBySocial({
               refreshToken: data.refreshToken,
               provider: data.idp || data.provider || null
             })

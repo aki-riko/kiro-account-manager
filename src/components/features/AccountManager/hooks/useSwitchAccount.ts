@@ -1,5 +1,14 @@
 import { useState, useCallback, useEffect } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import {
+  logoutCliAccount,
+  logoutKiroAccount,
+  switchKiroAccount,
+  switchToCliAccount,
+  syncAccount
+} from '../../../../api/accountApi'
+import { getKiroLocalToken } from '../../../../api/kiroApi'
+import { checkIdeInstallation } from '../../../../api/settingsApi'
+import { getKiroCliDefaultPath } from '../../../../api/systemApi'
 import { useApp } from '../../../../hooks/useApp'
 import { useAppSettings } from '../../../../contexts/AppSettingsContext'
 import { applyMachineGuid, buildSwitchParams } from '../../../../utils/kiroSwitch'
@@ -77,13 +86,13 @@ export function useSwitchAccount(onLocalTokenChange) {
     if (mode === 'logout') {
       try {
         if (switchTarget === 'ide' || switchTarget === 'both') {
-          await invoke('logout_kiro_account')
+          await logoutKiroAccount()
         }
         if (switchTarget === 'cli' || switchTarget === 'both') {
           try {
-            const cliPath = await invoke<string>('get_kiro_cli_default_path')
+            const cliPath = await getKiroCliDefaultPath()
             if (cliPath) {
-              await invoke('logout_cli_account', { dbPath: cliPath })
+              await logoutCliAccount(cliPath)
             }
           } catch (e) {
             console.warn('[Logout] CLI 退出登录失败:', e)
@@ -91,7 +100,7 @@ export function useSwitchAccount(onLocalTokenChange) {
         }
 
         // 刷新本地 token，使 LIVE 标识消失（账号记录仍留在列表中）
-        invoke('get_kiro_local_token').then(onLocalTokenChange).catch(() => onLocalTokenChange(null))
+        getKiroLocalToken().then(onLocalTokenChange).catch(() => onLocalTokenChange(null))
 
         const targetLabel = switchTarget === 'both' ? 'IDE + CLI' : switchTarget === 'cli' ? 'CLI' : 'IDE'
         setSwitchDialog({
@@ -118,7 +127,7 @@ export function useSwitchAccount(onLocalTokenChange) {
       // 及 IdC 的 {clientIdHash}.json，切换本身就等同于首次登录。
       // 旧逻辑用 ide_installed（= 可执行文件存在「且」已有有效 token 文件）当门槛，
       // 因果倒置：要求文件先存在，却又让切换去创建它，导致未登录时被「请先首次登录」拦死。
-      const ideInfo = await invoke<InstallationInfo>('check_ide_installation')
+      const ideInfo = await checkIdeInstallation<InstallationInfo>()
       const ideExecExists = ideInfo?.ide_executable_exists ?? ideInfo?.ide_installed ?? ideInfo?.ideInstalled ?? ideInfo?.installed
       if (!ideExecExists) {
         // 仅当可执行文件确实缺失时才阻断（IDE 未安装 / 自定义路径错误）。
@@ -155,7 +164,7 @@ export function useSwitchAccount(onLocalTokenChange) {
       }
 
       // 同步账号（智能同步：如果 token 失效会自动刷新，否则只获取配额）
-      const syncResult = await invoke<SyncResult>('sync_account', { id: account.id })
+      const syncResult = await syncAccount(account.id)
       let refreshedAccount = syncResult.account
 
       const settings = appSettings || {}
@@ -166,15 +175,15 @@ export function useSwitchAccount(onLocalTokenChange) {
       // IDE 切号
       if (switchTarget === 'ide' || switchTarget === 'both') {
         const params = buildSwitchParams(refreshedAccount)
-        await invoke('switch_kiro_account', { params })
+        await switchKiroAccount(params)
       }
 
       // CLI 切号
       if (switchTarget === 'cli' || switchTarget === 'both') {
         try {
-          const cliPath = await invoke<string>('get_kiro_cli_default_path')
+          const cliPath = await getKiroCliDefaultPath()
           if (cliPath) {
-            await invoke('switch_to_cli_account', { accountId: refreshedAccount.id, dbPath: cliPath })
+            await switchToCliAccount(refreshedAccount.id, cliPath)
           }
         } catch (e) {
           console.warn('[Switch] CLI 切号失败:', e)
@@ -182,7 +191,7 @@ export function useSwitchAccount(onLocalTokenChange) {
       }
 
       // 更新当前账号标识
-      invoke('get_kiro_local_token').then(onLocalTokenChange).catch(() => onLocalTokenChange(null))
+      getKiroLocalToken().then(onLocalTokenChange).catch(() => onLocalTokenChange(null))
 
       // 从 usageData 获取配额信息（API 原始响应）
       const usageData = refreshedAccount.usageData

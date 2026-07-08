@@ -1,4 +1,16 @@
-import { invoke } from '@tauri-apps/api/core'
+import { getAccounts } from '../../../api/accountApi'
+import {
+  clearGatewayRequestLogs as clearGatewayRequestLogsApi,
+  getGatewayConfig,
+  getGatewayLogDir,
+  getGatewayRequestLogs,
+  getGatewayStatus,
+  openGatewayLogDir as openGatewayLogDirApi,
+  saveGatewayConfig as saveGatewayConfigApi,
+  startGateway as startGatewayApi,
+  stopGateway as stopGatewayApi
+} from '../../../api/gatewayApi'
+import { getGroups } from '../../../api/groupTag'
 import { getPrimaryClientApiKey, parseAllowedIps, parseClientApiKeys } from './gatewayPageUtils'
 
 export interface GatewayConfig {
@@ -213,11 +225,11 @@ export const buildGatewayPayload = (config: GatewayConfig) => ({
 
 export const loadGatewayPageData = async () => {
   const [gatewayConfig, gatewayStatus, accounts, groups, logDir] = await Promise.all([
-    invoke<any>('get_gateway_config'),
-    invoke<any>('get_gateway_status'),
-    invoke<any[]>('get_accounts'),
-    invoke<any[]>('get_groups'),
-    invoke<string>('get_gateway_log_dir'),
+    getGatewayConfig<any>(),
+    getGatewayStatus<any>(),
+    getAccounts(),
+    getGroups(),
+    getGatewayLogDir(),
   ])
 
   return {
@@ -228,21 +240,19 @@ export const loadGatewayPageData = async () => {
     logDir: String(logDir || '')}
 }
 
-export const fetchGatewayStatus = async () => invoke<any>('get_gateway_status')
+export const fetchGatewayStatus = async () => getGatewayStatus<any>()
 
 export const fetchGatewayRequestLogs = async (limit = 120) => {
-  const logs = await invoke<any[]>('get_gateway_request_logs', { limit })
+  const logs = await getGatewayRequestLogs<any[]>(limit)
   return Array.isArray(logs) ? logs : []
 }
 
-export const saveGatewayConfig = async (config: GatewayConfig) => invoke('save_gateway_config', {
-  config: buildGatewayPayload(config)})
+export const saveGatewayConfig = async (config: GatewayConfig) => saveGatewayConfigApi(buildGatewayPayload(config))
 
-export const startGateway = async (config: GatewayConfig) => invoke<any>('start_gateway', {
-  config: buildGatewayPayload(config)})
+export const startGateway = async (config: GatewayConfig) => startGatewayApi<any>(buildGatewayPayload(config))
 
-export const stopGateway = async () => invoke('stop_gateway')
+export const stopGateway = async () => stopGatewayApi()
 
-export const openGatewayLogDir = async () => invoke<string>('open_gateway_log_dir')
+export const openGatewayLogDir = async () => openGatewayLogDirApi()
 
-export const clearGatewayRequestLogs = async () => invoke('clear_gateway_request_logs')
+export const clearGatewayRequestLogs = async () => clearGatewayRequestLogsApi()

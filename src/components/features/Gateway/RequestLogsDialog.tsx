@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import {
+  clearAllCache,
+  clearGatewayRequestLogs,
+  getCacheStats,
+  getGatewayRequestLogs,
+  getGatewayRequestStats,
+  openGatewayLogDir
+} from '../../../api/gatewayApi'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -131,9 +138,9 @@ export function RequestLogsDialog({
     setIsRefreshing(true)
     try {
       const [logs, stats, cache] = await Promise.all([
-        invoke<any[]>('get_gateway_request_logs', { limit: limit || displayLimit }),
-        invoke<GatewayRequestStats>('get_gateway_request_stats'),
-        invoke<CacheStats>('get_cache_stats').catch(() => null)
+        getGatewayRequestLogs<any[]>(limit || displayLimit),
+        getGatewayRequestStats<GatewayRequestStats>(),
+        getCacheStats<CacheStats>().catch(() => null)
       ])
 
       setRequestLogs(logs.map(log => ({
@@ -166,7 +173,7 @@ export function RequestLogsDialog({
 
   const handleClearCache = async () => {
     try {
-      await invoke('clear_all_cache')
+      await clearAllCache()
       setCacheStats(prev => prev ? { ...prev, delta_cache_size: 0, lru_cache_size: 0 } : null)
       toast.success('系统缓存已清理')
     } catch (err) {
@@ -181,7 +188,7 @@ export function RequestLogsDialog({
       return
     }
     try {
-      await invoke('clear_gateway_request_logs')
+      await clearGatewayRequestLogs()
       setRequestLogs([])
       setRequestStats(null)
       setClearConfirm(false)
@@ -354,7 +361,7 @@ export function RequestLogsDialog({
                 variant="outline"
                 size="sm"
                 className="h-8 px-2 gap-1 text-xs"
-                onClick={() => invoke('open_gateway_log_dir')}
+                onClick={() => openGatewayLogDir()}
                 title="打开本地日志文件夹"
               >
                 <FolderOpen size={12} />

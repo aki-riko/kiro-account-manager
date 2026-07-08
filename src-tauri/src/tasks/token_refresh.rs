@@ -118,6 +118,14 @@ impl TokenRefreshService {
                             }
                         }
                         Err(e) => {
+                            if e.starts_with("UPSTREAM_BLOCKED:") {
+                                log::debug!(
+                                    "Token refresh loop: upstream blocked refresh for {}",
+                                    email_display
+                                );
+                                continue;
+                            }
+
                             log::error!(
                                 "Token refresh loop: refresh failed for {}: {}",
                                 email_display,

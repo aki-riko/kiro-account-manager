@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { getSkills, saveSkill, deleteSkill, createSkill, importSkillLocal, importSkillFromGithub } from '../../../api/kiroConfigApi'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
@@ -82,7 +82,7 @@ function SkillsPanel({ onCountChange, projectDir }: any) {
   const loadSkills = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await invoke<any[]>('get_skills', { projectDir: projectDir || null })
+      const data = await getSkills(projectDir || null)
       setSkills(data)
       onCountChange?.(data?.length || 0)
     } catch (e) {
@@ -121,12 +121,7 @@ function SkillsPanel({ onCountChange, projectDir }: any) {
     setSaving(true)
     try {
       const fullContent = buildSkillContent(editState.name, editState.description, editState.body)
-      await invoke('save_skill', {
-        name: selectedSkill.name,
-        content: fullContent,
-        scope: selectedSkill.scope,
-        projectDir: projectDir || null
-      })
+      await saveSkill(selectedSkill.name, fullContent, selectedSkill.scope, projectDir || null)
       setSkills(skills.map(s => (s.name === selectedSkill.name && s.scope === selectedSkill.scope) ? { ...s, content: fullContent } : s))
       setSelectedSkill({ ...selectedSkill, content: fullContent })
       setHasChanges(false)
@@ -140,11 +135,7 @@ function SkillsPanel({ onCountChange, projectDir }: any) {
   const handleDelete = async (skill: any) => {
     if (!await showConfirm(t('skills.confirmDelete'), t('skills.confirmDeleteSkill', { name: skill.name }))) return
     try {
-      await invoke('delete_skill', {
-        name: skill.name,
-        scope: skill.scope,
-        projectDir: projectDir || null
-      })
+      await deleteSkill(skill.name, skill.scope, projectDir || null)
       const newSkills = skills.filter(s => !(s.name === skill.name && s.scope === skill.scope))
       setSkills(newSkills)
       onCountChange?.(newSkills.length)
@@ -162,12 +153,7 @@ function SkillsPanel({ onCountChange, projectDir }: any) {
     const body = '\n<!-- 在此编写 Skill 指令 -->\n'
     const content = buildSkillContent(skillName, description, body)
     try {
-      const newSkill = await invoke<any>('create_skill', {
-        name: skillName,
-        content,
-        scope,
-        projectDir: projectDir || null
-      })
+      const newSkill = await createSkill(skillName, content, scope, projectDir || null)
       const newSkills = [...skills, newSkill]
       setSkills(newSkills)
       onCountChange?.(newSkills.length)
@@ -209,11 +195,7 @@ function SkillsPanel({ onCountChange, projectDir }: any) {
       if (!selected) return
 
       const scope = await resolveImportScope()
-      const imported = await invoke<any>('import_skill_local', {
-        sourcePath: selected as string,
-        scope,
-        projectDir: projectDir || null,
-        overwrite: false})
+      const imported = await importSkillLocal(selected as string, scope, projectDir || null, false)
       upsertImportedSkill(imported)
       showSuccess(t('skills.importSuccess'), `${imported.name}`)
     } catch (e) {
@@ -224,7 +206,7 @@ function SkillsPanel({ onCountChange, projectDir }: any) {
   const handleImportGithub = async ({ repoUrl, pathInRepo, branch, targetName }: any) => {
     try {
       const scope = await resolveImportScope()
-      const imported = await invoke<any>('import_skill_from_github', {
+      const imported = await importSkillFromGithub({
         repoUrl: repoUrl.trim(),
         pathInRepo: pathInRepo.trim() || null,
         branch: branch.trim() || null,

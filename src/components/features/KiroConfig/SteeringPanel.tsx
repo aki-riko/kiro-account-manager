@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import {
+  createSteeringFile,
+  createDefaultSteeringFile,
+  createInitialProjectSteering,
+  refineSteeringFile,
+  deleteSteeringFile,
+  getSteeringFiles,
+  saveSteeringFile
+} from '../../../api/kiroConfigApi'
 import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { FileText, RefreshCw, Trash2, Save, Plus, X, Globe, FolderOpen, Wand2, Sparkles } from 'lucide-react'
@@ -84,7 +92,7 @@ function SteeringPanel({ onCountChange, projectDir }: any) {
   const loadFiles = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await invoke<any[]>('get_steering_files', { projectDir: projectDir || null })
+      const data = await getSteeringFiles<any[]>(projectDir || null)
       setFiles(data)
       onCountChange?.(data?.length || 0)
     } catch (e) {
@@ -123,12 +131,12 @@ function SteeringPanel({ onCountChange, projectDir }: any) {
     setSaving(true)
     try {
       const fullContent = buildContent(editState.inclusion, editState.filePattern, editState.content, editState.name, editState.description)
-      await invoke('save_steering_file', {
-        fileName: selectedFile.fileName,
-        content: fullContent,
-        scope: selectedFile.scope,
-        projectDir: projectDir || null
-      })
+      await saveSteeringFile(
+        selectedFile.fileName,
+        fullContent,
+        selectedFile.scope,
+        projectDir || null
+      )
       setFiles(files.map(f => (f.fileName === selectedFile.fileName && f.scope === selectedFile.scope) ? { ...f, content: fullContent } : f))
       setSelectedFile({ ...selectedFile, content: fullContent })
       setHasChanges(false)
@@ -142,11 +150,7 @@ function SteeringPanel({ onCountChange, projectDir }: any) {
   const handleDelete = async (file: any) => {
     if (!await showConfirm(t('steering.confirmDelete'), t('steering.confirmDeleteFile', { fileName: file.fileName }))) return
     try {
-      await invoke('delete_steering_file', {
-        fileName: file.fileName,
-        scope: file.scope,
-        projectDir: projectDir || null
-      })
+      await deleteSteeringFile(file.fileName, file.scope, projectDir || null)
       const newFiles = files.filter(f => !(f.fileName === file.fileName && f.scope === file.scope))
       setFiles(newFiles)
       onCountChange?.(newFiles.length)
@@ -164,12 +168,7 @@ function SteeringPanel({ onCountChange, projectDir }: any) {
     const fName = fileName.endsWith('.md') ? fileName : `${fileName}.md`
     const content = buildContent(inclusion, filePattern, '\n<!-- 在此添加你的 steering 规则 -->\n', name, description)
     try {
-      const newFile = await invoke<any>('create_steering_file', {
-        fileName: fName,
-        content,
-        scope,
-        projectDir: projectDir || null
-      })
+      const newFile = await createSteeringFile<any>(fName, content, scope, projectDir || null)
       const newFiles = [...files, newFile]
       setFiles(newFiles)
       onCountChange?.(newFiles.length)
@@ -206,9 +205,7 @@ function SteeringPanel({ onCountChange, projectDir }: any) {
     setCreatingDefault(true)
     try {
       const scope = await resolveScope()
-      const created = await invoke<any>('create_default_steering_file', {
-        scope,
-        projectDir: projectDir || null})
+      const created = await createDefaultSteeringFile(scope, projectDir || null)
       upsertFile(created)
       showSuccess(t('steering.defaultCreated'), created.fileName)
     } catch (e) {
@@ -222,7 +219,7 @@ function SteeringPanel({ onCountChange, projectDir }: any) {
     if (!projectDir) return
     setInitializingProject(true)
     try {
-      const created = await invoke<any>('create_initial_project_steering', { projectDir })
+      const created = await createInitialProjectSteering(projectDir)
       const createdFiles = Array.isArray(created) ? created : []
       if (createdFiles.length > 0) {
         const merged = [...files]
@@ -250,10 +247,7 @@ function SteeringPanel({ onCountChange, projectDir }: any) {
     if (!selectedFile) return
     setRefining(true)
     try {
-      const refined = await invoke<any>('refine_steering_file', {
-        fileName: selectedFile.fileName,
-        scope: selectedFile.scope,
-        projectDir: projectDir || null})
+      const refined = await refineSteeringFile(selectedFile.fileName, selectedFile.scope, projectDir || null)
       upsertFile(refined)
       showSuccess(t('steering.refineSuccess'), refined.fileName)
     } catch (e) {
