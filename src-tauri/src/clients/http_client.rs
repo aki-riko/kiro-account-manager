@@ -425,7 +425,7 @@ fn resolve_app_proxy_url() -> Option<String> {
 
     match mode.as_str() {
         "disabled" => {
-            log::debug!("[HttpClient] 代理已禁用");
+            // 代理已禁用（生产环境静默）
             None
         }
         "followKiro" | _ => {
@@ -435,7 +435,7 @@ fn resolve_app_proxy_url() -> Option<String> {
                 return Some(proxy);
             }
 
-            log::debug!("[HttpClient] Kiro IDE 未配置代理，尝试系统环境变量");
+            // Kiro IDE 未配置代理，尝试系统环境变量（生产环境静默）
             // 回退到系统环境变量（HTTP_PROXY, HTTPS_PROXY）
             get_proxy_from_env()
         }
@@ -455,7 +455,7 @@ pub fn apply_app_proxy(builder: ClientBuilder) -> Result<ClientBuilder, String> 
             Ok(builder.no_proxy().proxy(proxy))
         }
         None => {
-            log::debug!("[HttpClient] 未配置代理，直连");
+            // 未配置代理，直连（生产环境静默）
             Ok(builder)
         }
     }

@@ -154,12 +154,12 @@ fn setup_log_plugin() -> tauri_plugin_log::Builder {
     let log_level = gateway::load_gateway_config()
         .ok()
         .map(|config| match config.log_level.as_str() {
-            "info" => log::LevelFilter::Info,
+            "debug" => log::LevelFilter::Debug,
             "warn" => log::LevelFilter::Warn,
             "error" => log::LevelFilter::Error,
-            _ => log::LevelFilter::Debug,
+            _ => log::LevelFilter::Info,
         })
-        .unwrap_or(log::LevelFilter::Debug);
+        .unwrap_or(log::LevelFilter::Info);
 
     tauri_plugin_log::Builder::new()
         .level(log_level)
