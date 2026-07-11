@@ -786,12 +786,30 @@ fn ensure_citation_target_supported(target: &serde_json::Value) -> Option<()> {
 }
 
 use crate::gateway::models::{
-    OpenAIChatChoice, OpenAIChatChunk, OpenAIChatChunkChoice, OpenAIChatDelta, OpenAIChatResponse,
-    OpenAIChatResponseMessage, OpenAIChatUsage, OpenAIResponseToolCall, OpenAIToolCallFunction,
-    OpenAIUsage,
+    OpenAIChatChoice, OpenAIChatChunk, OpenAIChatChunkChoice, OpenAIChatCompletionTokensDetails,
+    OpenAIChatDelta, OpenAIChatPromptTokensDetails, OpenAIChatResponse, OpenAIChatResponseMessage,
+    OpenAIChatUsage, OpenAIResponseToolCall, OpenAIToolCallFunction,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+
+pub fn build_openai_chat_usage(prompt_tokens: i32, completion_tokens: i32) -> OpenAIChatUsage {
+    OpenAIChatUsage {
+        prompt_tokens,
+        completion_tokens,
+        total_tokens: prompt_tokens + completion_tokens,
+        prompt_tokens_details: OpenAIChatPromptTokensDetails {
+            cached_tokens: 0,
+            audio_tokens: 0,
+        },
+        completion_tokens_details: OpenAIChatCompletionTokensDetails {
+            reasoning_tokens: 0,
+            audio_tokens: 0,
+            accepted_prediction_tokens: 0,
+            rejected_prediction_tokens: 0,
+        },
+    }
+}
 
 pub fn build_openai_chunk(
     completion_id: &str,
@@ -806,12 +824,34 @@ pub fn build_openai_chunk(
         object: "chat.completion.chunk".to_string(),
         created,
         model: model.to_string(),
+        system_fingerprint: None,
         choices: vec![OpenAIChatChunkChoice {
             index: 0,
             delta,
+            logprobs: None,
             finish_reason,
         }],
         usage,
+        service_tier: None,
+    }
+}
+
+/// OpenAI stream_options.include_usage：finish 帧之后的空 choices + usage 帧
+pub fn build_openai_usage_chunk(
+    completion_id: &str,
+    created: i64,
+    model: &str,
+    usage: OpenAIChatUsage,
+) -> OpenAIChatChunk {
+    OpenAIChatChunk {
+        id: completion_id.to_string(),
+        object: "chat.completion.chunk".to_string(),
+        created,
+        model: model.to_string(),
+        system_fingerprint: None,
+        choices: vec![],
+        usage: Some(usage),
+        service_tier: None,
     }
 }
 
@@ -832,7 +872,11 @@ pub fn build_openai_response(
         } else {
             Some(aggregated.text.clone())
         },
+        refusal: None,
+        annotations: vec![],
         tool_calls: None,
+        audio: None,
+        function_call: None,
     };
 
     let finish_reason = if !aggregated.tool_calls.is_empty() {
@@ -862,15 +906,15 @@ pub fn build_openai_response(
         choices: vec![OpenAIChatChoice {
             index: 0,
             message,
+            logprobs: None,
             finish_reason: Some(finish_reason),
         }],
-        usage: OpenAIUsage {
-            input_tokens: aggregated.input_tokens,
-            output_tokens: aggregated.output_tokens,
-        },
+        usage: build_openai_chat_usage(aggregated.input_tokens, aggregated.output_tokens),
+        service_tier: None,
+        system_fingerprint: None,
+        moderation: None,
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

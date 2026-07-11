@@ -91,6 +91,7 @@ pub fn normalize_anthropic_request(request: &AnthropicMessagesRequest) -> Normal
         tool_choice: request.tool_choice.clone(),
         previous_response_id: None,
         thinking: request.thinking.clone(),
+        include_usage: false,
         tool_name_map,
     };
 
@@ -141,6 +142,8 @@ pub fn normalize_openai_responses_request(payload: &Value) -> Result<NormalizedR
 }
 
 pub fn normalize_openai_chat_payload(payload: &Value) -> Result<NormalizedRequest, String> {
+    reject_unsupported_openai_chat_fields(payload)?;
+
     let model = payload
         .get("model")
         .and_then(Value::as_str)
@@ -162,7 +165,9 @@ pub fn normalize_openai_chat_payload(payload: &Value) -> Result<NormalizedReques
     ))
 }
 
-pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> NormalizedRequest {
+pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> Result<NormalizedRequest, String> {
+    reject_unsupported_openai_chat_request(request)?;
+
     let mut messages = Vec::new();
     let mut pending_tool_results = Vec::new();
 
@@ -249,7 +254,13 @@ pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> NormalizedR
             .collect()
     });
 
-    NormalizedRequest {
+    let include_usage = request
+        .stream_options
+        .as_ref()
+        .map(|opts| opts.include_usage)
+        .unwrap_or(false);
+
+    Ok(NormalizedRequest {
         model: request.model.clone(),
         messages,
         stream: request.stream,
@@ -261,8 +272,49 @@ pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> NormalizedR
         tool_choice: request.tool_choice.clone(),
         previous_response_id: None,
         thinking: None,
+        include_usage,
         tool_name_map,
+    })
+}
+
+/// Kiro 网关仅支持文本输出；官方 modalities/audio/prediction 有契约但本网关无法兑现。
+fn reject_unsupported_openai_chat_request(request: &OpenAIChatRequest) -> Result<(), String> {
+    if let Some(modalities) = &request.modalities {
+        for modality in modalities {
+            if modality != "text" {
+                return Err(format!(
+                    "不支持的 modalities 值: {modality}（当前仅支持 text）"
+                ));
+            }
+        }
     }
+    if request.audio.is_some() {
+        return Err("不支持 audio 参数（Kiro 上游无法生成音频输出）".to_string());
+    }
+    if request.prediction.is_some() {
+        return Err("不支持 prediction 参数（Predicted Outputs）".to_string());
+    }
+    Ok(())
+}
+
+fn reject_unsupported_openai_chat_fields(payload: &Value) -> Result<(), String> {
+    if let Some(modalities) = payload.get("modalities").and_then(Value::as_array) {
+        for modality in modalities {
+            let name = modality.as_str().unwrap_or_default();
+            if name != "text" {
+                return Err(format!(
+                    "不支持的 modalities 值: {name}（当前仅支持 text）"
+                ));
+            }
+        }
+    }
+    if payload.get("audio").is_some_and(|v| !v.is_null()) {
+        return Err("不支持 audio 参数（Kiro 上游无法生成音频输出）".to_string());
+    }
+    if payload.get("prediction").is_some_and(|v| !v.is_null()) {
+        return Err("不支持 prediction 参数（Predicted Outputs）".to_string());
+    }
+    Ok(())
 }
 
 fn create_tool_results_message(tool_results: &[(String, String)]) -> NormalizedMessage {
@@ -331,6 +383,11 @@ fn build_normalized_request_from_payload(
             .filter(|value| !value.is_empty())
             .map(str::to_string),
         thinking: None,
+        include_usage: payload
+            .get("stream_options")
+            .and_then(|opts| opts.get("include_usage"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         tool_name_map,
     }
 }
@@ -1103,7 +1160,7 @@ pub async fn build_kiro_payload(
                     // 始终传递工具定义,让 AI 能够调用工具
                     // 只有当工具列表真的为空时,才会返回 None
                     let tools_for_context = convert_tools(&processed_tools);
-                    
+
                     history_items.push(HistoryItem::User {
                         user_input_message: HistoryUserMessage {
                             content: if Some(index) == first_user_index && !system_prompt.is_empty()
@@ -3103,6 +3160,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3174,6 +3232,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3211,6 +3270,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3441,6 +3501,7 @@ mod tests {
             tool_choice: Some(json!({ "type": "function", "name": "search_docs" })),
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3497,6 +3558,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3593,6 +3655,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3648,6 +3711,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: Some("resp_prev_123".to_string()),
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3689,6 +3753,7 @@ mod tests {
             tool_choice: Some(json!({ "type": "function", "name": "missing_tool" })),
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3732,6 +3797,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3823,6 +3889,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3871,6 +3938,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
@@ -3953,6 +4021,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: None,
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 

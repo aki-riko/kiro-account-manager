@@ -2270,6 +2270,7 @@ pub async fn proxy_handler(
             request.tool_choice.clone(),
             request.previous_response_id.clone(),
             request.tool_name_map.clone(),
+            request.include_usage,
             static_log_context,
         );
     }
@@ -2779,9 +2780,7 @@ fn normalize_request(format: ResponseFormat, payload: &Value) -> Result<Normaliz
         ResponseFormat::OpenAI => {
             let request: OpenAIChatRequest = serde_json::from_value(payload.clone())
                 .map_err(|error| format!("OpenAI 请求解析失败: {error}"))?;
-            Ok(crate::gateway::converter::normalize_openai_chat_request(
-                &request,
-            ))
+            crate::gateway::converter::normalize_openai_chat_request(&request)
         }
     }
 }
@@ -3352,6 +3351,7 @@ fn build_anthropic_content_blocks(
             block_type: "thinking".to_string(),
             text: None,
             thinking: Some(aggregated.thinking.clone()),
+            signature: aggregated.thinking_signature.clone(),
             id: None,
             name: None,
             input: None,
@@ -3365,6 +3365,7 @@ fn build_anthropic_content_blocks(
             block_type: "text".to_string(),
             text: Some(aggregated.text.clone()),
             thinking: None,
+            signature: None,
             id: None,
             name: None,
             input: None,
@@ -3378,6 +3379,7 @@ fn build_anthropic_content_blocks(
             block_type: "tool_use".to_string(),
             text: None,
             thinking: None,
+            signature: None,
             id: Some(id.clone()),
             name: Some(name.clone()),
             input: Some(serde_json::from_str(arguments).unwrap_or_else(|_| json!({}))),
@@ -3786,6 +3788,7 @@ fn stream_proxy_response(
     request_tool_choice: Option<Value>,
     previous_response_id: Option<String>,
     tool_name_map: std::collections::HashMap<String, String>,
+    include_usage: bool,
     log_context: RequestLogContext<'static>,
 ) -> Response {
     let (tx, rx) = mpsc::channel::<Result<Bytes, Infallible>>(2048);
@@ -3859,6 +3862,8 @@ fn stream_proxy_response(
                 role: Some("assistant".to_string()),
                 content: Some("".to_string()),
                 tool_calls: None,
+audio: None,
+function_call: None,
             };
             let chunk =
                 stream::build_openai_chunk(&completion_id, created, &model, delta, None, None);
@@ -4151,6 +4156,8 @@ fn stream_proxy_response(
                                                                     },
                                                                 }
                                                             ]),
+                                                            audio: None,
+                                                            function_call: None,
                                                         },
                                                         None,
                                                         None,
@@ -4300,6 +4307,8 @@ fn stream_proxy_response(
                                                                                 },
                                                                             }
                                                                         ]),
+                                                                        audio: None,
+                                                                        function_call: None,
                                                                     },
                                                                     None,
                                                                     None,
@@ -4437,6 +4446,8 @@ fn stream_proxy_response(
                                                                         },
                                                                     }
                                                                 ]),
+                                                                audio: None,
+                                                                function_call: None,
                                                             },
                                                             None,
                                                             None,
@@ -4861,10 +4872,9 @@ fn stream_proxy_response(
                 send_data(&tx, "[DONE]").await;
             }
             ResponseFormat::OpenAI => {
-                // OpenAI Chat Completions: 工具调用已在流式过程中增量发送
-                // 这里只需要发送最终 chunk（带 finish_reason 和 usage）
+                // OpenAI: finish 帧只带 finish_reason；include_usage 时再发空 choices + usage
                 let finish_reason = if saw_tool_calls { "tool_calls" } else { "stop" };
-                let final_chunk = stream::build_openai_chunk(
+                let finish_chunk = stream::build_openai_chunk(
                     &completion_id,
                     created_at,
                     &model,
@@ -4872,16 +4882,27 @@ fn stream_proxy_response(
                         role: None,
                         content: None,
                         tool_calls: None,
+                        audio: None,
+                        function_call: None,
                     },
                     Some(finish_reason.to_string()),
-                    Some(crate::gateway::models::OpenAIChatUsage {
-                        prompt_tokens: aggregated.input_tokens,
-                        completion_tokens: aggregated.output_tokens,
-                        total_tokens: aggregated.input_tokens + aggregated.output_tokens,
-                    }),
+                    None,
                 );
-                let final_json = serde_json::to_string(&final_chunk).unwrap_or_default();
-                send_data(&tx, &final_json).await;
+                let finish_json = serde_json::to_string(&finish_chunk).unwrap_or_default();
+                send_data(&tx, &finish_json).await;
+                if include_usage {
+                    let usage_chunk = stream::build_openai_usage_chunk(
+                        &completion_id,
+                        created_at,
+                        &model,
+                        stream::build_openai_chat_usage(
+                            aggregated.input_tokens,
+                            aggregated.output_tokens,
+                        ),
+                    );
+                    let usage_json = serde_json::to_string(&usage_chunk).unwrap_or_default();
+                    send_data(&tx, &usage_json).await;
+                }
                 send_data(&tx, "[DONE]").await;
             }
         }
@@ -5107,6 +5128,8 @@ async fn handle_stream_text(
                 },
                 content: Some(text.to_string()),
                 tool_calls: None,
+audio: None,
+function_call: None,
             };
             let chunk = crate::gateway::stream::build_openai_chunk(
                 completion_id,
@@ -5733,6 +5756,7 @@ mod tests {
             tool_choice: None,
             previous_response_id: Some("resp_prev_123".to_string()),
             thinking: None,
+            include_usage: false,
             tool_name_map: Default::default(),
         };
 
