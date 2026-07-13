@@ -14,4 +14,5 @@ test('KSK IDE uses a persistent route and keeps manual KSK behind the page', asy
   assert.match(page, /高级入口：使用已有 KSK 手工启动/)
   assert.doesNotMatch(page, /DialogRoot/)
   assert.doesNotMatch(accountManager, /KskIsolatedIdeModal|showKskIdeModal/)
+  assert.match(accountManager, /emit\('accounts-updated'\)/)
 })

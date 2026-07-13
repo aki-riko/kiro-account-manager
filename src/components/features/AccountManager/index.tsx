@@ -18,6 +18,7 @@ import {
 } from '../../../api/accountApi'
 import { getKiroLocalToken } from '../../../api/kiroApi'
 import { startKskIdeFromAccount } from '../../../api/kskIdeApi'
+import { emit } from '@tauri-apps/api/event'
 import { applyFilters } from './utils/filterUtils'
 import { cn } from '../../../utils/cn'
 import { showSuccess, showError } from '../../../utils/toast'
@@ -757,6 +758,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
               updated.forEach(upsert)
               return next
             })
+            void emit('accounts-updated')
           }}
           onNavigate={onNavigate}
         />
