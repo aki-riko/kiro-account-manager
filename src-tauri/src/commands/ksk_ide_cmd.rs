@@ -9,8 +9,9 @@ use tauri::State;
 use crate::{
     commands::{
         account_cmd::refresh_token_inner,
+        account_models::resolve_available_profile_arn,
         app_settings_cmd::{get_app_settings_inner, AppSettings},
-        common::{find_account_by_id, KIRO_SOCIAL_PROFILE_ARN},
+        common::{find_account_by_id, lock_store, save_store, KIRO_SOCIAL_PROFILE_ARN},
     },
     core::account::Account,
     ksk_ide::{
@@ -92,7 +93,20 @@ pub async fn start_ksk_ide_from_account(
         .as_deref()
         .filter(|token| !token.trim().is_empty())
         .ok_or_else(|| "账号刷新后仍缺少 access_token".to_string())?;
-    let profile_arn = issuable_profile_arn(&account)?;
+    let profile_arn = match issuable_profile_arn(&account) {
+        Ok(profile_arn) => profile_arn,
+        Err(missing_profile_error) => {
+            let resolved = resolve_available_profile_arn(&account, access_token)
+                .await?
+                .ok_or_else(|| {
+                    format!(
+                        "{missing_profile_error}；ListAvailableProfiles 也未返回可用 profileArn"
+                    )
+                })?;
+            persist_profile_arn(&state, &account.id, &resolved)?;
+            resolved
+        }
+    };
     let (ttl_hours, fallback_control_plane_region) = managed_key_settings()?;
     let control_plane_region = crate::clients::http_client::resolve_kiro_upstream_region(
         Some(&profile_arn),
@@ -273,6 +287,30 @@ fn managed_key_settings() -> Result<(i64, String), String> {
     Ok((ttl_hours, control_plane_region))
 }
 
+fn persist_profile_arn(
+    state: &AppState,
+    account_id: &str,
+    profile_arn: &str,
+) -> Result<(), String> {
+    let mut store = lock_store(&state.store, "store")?;
+    let account = store
+        .accounts
+        .iter_mut()
+        .find(|account| account.id == account_id)
+        .ok_or_else(|| "账号不存在，无法保存在线解析的 profileArn".to_string())?;
+    if account
+        .profile_arn
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+    {
+        account.profile_arn = Some(profile_arn.to_string());
+        save_store(&store)?;
+    }
+    Ok(())
+}
+
 fn ensure_account_can_issue_ksk(account: &Account) -> Result<(), String> {
     if account
         .auth_method
@@ -356,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn external_idp_and_idc_without_profile_are_rejected() {
+    fn external_idp_is_rejected_and_idc_needs_online_profile_resolution() {
         let mut external = Account::new("user@example.com".to_string(), "external".to_string());
         external.auth_method = Some("external_idp".to_string());
         external.refresh_token = Some("refresh-fixture".to_string());

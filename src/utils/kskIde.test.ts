@@ -18,13 +18,13 @@ test('managed KSK accepts social accounts with refresh credentials', () => {
   assert.deepEqual(getManagedKskEligibility(account()), { eligible: true, reason: '' })
 })
 
-test('managed KSK rejects external_idp and incomplete IdC accounts', () => {
+test('managed KSK rejects external_idp but allows IdC profile self-healing', () => {
   assert.equal(getManagedKskEligibility(account({ authMethod: 'external_idp' })).eligible, false)
   assert.equal(getManagedKskEligibility(account({
     provider: 'Enterprise',
     authMethod: 'IdC',
     profileArn: '',
-  })).eligible, false)
+  })).eligible, true)
   assert.equal(getManagedKskEligibility(account({
     provider: 'Enterprise',
     authMethod: 'IdC',

@@ -19,12 +19,5 @@ export function getManagedKskEligibility(account: Account): ManagedKskEligibilit
       reason: '账号缺少 refresh token，无法签发 KSK',
     }
   }
-  const isIdc = authMethod === 'idc' || account.provider?.trim().toLowerCase() === 'enterprise'
-  if (isIdc && !account.profileArn?.trim()) {
-    return {
-      eligible: false,
-      reason: 'IdC 账号缺少 profileArn，请先刷新或重新导入',
-    }
-  }
   return { eligible: true, reason: '' }
 }

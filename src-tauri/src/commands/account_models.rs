@@ -264,6 +264,28 @@ fn first_available_profile_arn(response: ListAvailableProfilesResponse) -> Optio
     })
 }
 
+fn parse_available_profile_arn(value: serde_json::Value) -> Result<Option<String>, String> {
+    let profiles: ListAvailableProfilesResponse = serde_json::from_value(value)
+        .map_err(|error| format!("解析 ListAvailableProfiles 响应失败: {error}"))?;
+    Ok(first_available_profile_arn(profiles))
+}
+
+pub async fn resolve_available_profile_arn(
+    account: &Account,
+    access_token: &str,
+) -> Result<Option<String>, String> {
+    use crate::clients::kiro_client::KiroClient;
+
+    let ctx = resolve_kiro_call_context(account, "us-east-1");
+    if ctx.profile_arn.is_some() {
+        return Ok(ctx.profile_arn);
+    }
+    let value = KiroClient::new()?
+        .list_available_profiles(access_token, &ctx.region)
+        .await?;
+    parse_available_profile_arn(value)
+}
+
 /// 获取账号可用模型列表（直接使用 KiroClient，无需重复实现）
 pub async fn fetch_all_available_models(
     account: &Account,
@@ -277,17 +299,16 @@ pub async fn fetch_all_available_models(
     let resolved_profile_arn = if ctx.profile_arn.is_some() {
         ctx.profile_arn.clone()
     } else {
-        match client.list_available_profiles(access_token, &ctx.region).await {
-            Ok(value) => {
-                let profiles: ListAvailableProfilesResponse = serde_json::from_value(value)
-                    .map_err(|error| format!("解析 ListAvailableProfiles 响应失败: {error}"))?;
-                first_available_profile_arn(profiles)
-            }
+        match client
+            .list_available_profiles(access_token, &ctx.region)
+            .await
+        {
+            Ok(value) => parse_available_profile_arn(value)?,
             Err(error) => {
                 log::warn!(
-                    "[ListAvailableModels] ListAvailableProfiles 兜底失败，继续使用现有 profileArn 解析结果: {}",
-                    error
-                );
+                "[ListAvailableModels] ListAvailableProfiles 兜底失败，继续使用现有 profileArn 解析结果: {}",
+                error
+            );
                 ctx.profile_arn.clone()
             }
         }
