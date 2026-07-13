@@ -42,6 +42,9 @@ pub struct AppSettings {
     pub close_to_tray: Option<bool>, // true=最小化到托盘, false=直接退出
     // 软件自身接口代理：followKiro=跟随 Kiro IDE 代理, disabled=强制直连
     pub app_proxy_mode: Option<String>,
+    // KSK 隔离 IDE 的短期 Key 租约配置
+    pub ksk_ide_key_ttl_hours: Option<i64>,
+    pub ksk_ide_control_plane_region: Option<String>,
 }
 
 // 兼容旧配置文件中的 redeem_server 字段（已废弃）
@@ -81,6 +84,8 @@ impl Default for AppSettings {
             custom_kiro_path: None,
             close_to_tray: Some(false), // 默认直接退出，由用户主动开启最小化到托盘
             app_proxy_mode: Some("followKiro".to_string()),
+            ksk_ide_key_ttl_hours: Some(24),
+            ksk_ide_control_plane_region: Some("us-east-1".to_string()),
         }
     }
 }
@@ -123,6 +128,8 @@ impl AppSettings {
         apply_if_some!(custom_kiro_path);
         apply_if_some!(close_to_tray);
         apply_if_some!(app_proxy_mode);
+        apply_if_some!(ksk_ide_key_ttl_hours);
+        apply_if_some!(ksk_ide_control_plane_region);
     }
 }
 

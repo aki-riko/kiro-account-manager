@@ -391,7 +391,11 @@ pub async fn refresh_token(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<Account, String> {
-    let mut account = find_account_by_id(&state, &id)?;
+    refresh_token_inner(&state, &id).await
+}
+
+pub(crate) async fn refresh_token_inner(state: &AppState, id: &str) -> Result<Account, String> {
+    let mut account = find_account_by_id(state, id)?;
     let generated_machine_id = if account
         .machine_id
         .as_ref()

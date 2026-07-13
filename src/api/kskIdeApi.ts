@@ -6,6 +6,24 @@ export interface KskIdeStatus {
   pid: number | null
   sessionId: string | null
   startedAt: string | null
+  managedKey: boolean
+  sourceAccountId: string | null
+  sourceAccountLabel: string | null
+  keyPrefix: string | null
+  keyExpiresAt: string | null
+}
+
+export const IDLE_KSK_IDE_STATUS: KskIdeStatus = {
+  running: false,
+  region: null,
+  pid: null,
+  sessionId: null,
+  startedAt: null,
+  managedKey: false,
+  sourceAccountId: null,
+  sourceAccountLabel: null,
+  keyPrefix: null,
+  keyExpiresAt: null,
 }
 
 export interface StartKskIdeRequest {
@@ -13,8 +31,17 @@ export interface StartKskIdeRequest {
   region: string
 }
 
+export interface StartKskIdeFromAccountRequest {
+  accountId: string
+  region: string
+}
+
 export function startKskIde(request: StartKskIdeRequest) {
   return invoke<KskIdeStatus>('start_ksk_ide', { request })
+}
+
+export function startKskIdeFromAccount(request: StartKskIdeFromAccountRequest) {
+  return invoke<KskIdeStatus>('start_ksk_ide_from_account', { request })
 }
 
 export function stopKskIde() {

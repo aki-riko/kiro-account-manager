@@ -94,7 +94,7 @@ use commands::kiro_cli_cmd::{
 };
 use commands::ksk_ide_cmd::{
     get_ksk_ide_regions, get_ksk_ide_status, recover_ksk_ide_settings,
-    shutdown_ksk_ide_runtime, start_ksk_ide, stop_ksk_ide,
+    shutdown_ksk_ide_runtime, start_ksk_ide, start_ksk_ide_from_account, stop_ksk_ide,
 };
 //kiroshe
 use commands::kiro_settings_cmd::{
@@ -410,7 +410,7 @@ fn setup_window_close_handler(app: &mut tauri::App) -> Result<(), Box<dyn std::e
 
 fn cleanup_ksk_ide_on_exit(app_handle: &tauri::AppHandle) {
     let state = app_handle.state::<AppState>();
-    match tauri::async_runtime::block_on(shutdown_ksk_ide_runtime(&state.ksk_ide)) {
+    match tauri::async_runtime::block_on(shutdown_ksk_ide_runtime(&state)) {
         Ok(true) => log::info!("[KskIde] 应用退出前已停止隔离实例并完成清理"),
         Ok(false) => {}
         Err(error) => log::error!("[KskIde] 应用退出清理失败: {error}"),
@@ -514,6 +514,7 @@ fn main() {
             is_kiro_ide_running,
             // KSK 隔离 Kiro IDE 命令
             start_ksk_ide,
+            start_ksk_ide_from_account,
             stop_ksk_ide,
             get_ksk_ide_status,
             get_ksk_ide_regions,

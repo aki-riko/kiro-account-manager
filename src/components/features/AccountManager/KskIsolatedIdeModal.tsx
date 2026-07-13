@@ -4,6 +4,7 @@ import { Copy, KeyRound, Loader2, Play, Square } from 'lucide-react'
 import {
   getKskIdeRegions,
   getKskIdeStatus,
+  IDLE_KSK_IDE_STATUS,
   KskIdeStatus,
   startKskIde,
   stopKskIde,
@@ -30,19 +31,11 @@ interface KskIsolatedIdeModalProps {
   onClose: () => void
 }
 
-const IDLE_STATUS: KskIdeStatus = {
-  running: false,
-  region: null,
-  pid: null,
-  sessionId: null,
-  startedAt: null,
-}
-
 function KskIsolatedIdeModal({ onClose }: KskIsolatedIdeModalProps) {
   const [ksk, setKsk] = useState('')
   const [region, setRegion] = useState('')
   const [regions, setRegions] = useState<string[]>([])
-  const [status, setStatus] = useState<KskIdeStatus>(IDLE_STATUS)
+  const [status, setStatus] = useState<KskIdeStatus>(IDLE_KSK_IDE_STATUS)
   const [loading, setLoading] = useState(true)
   const [action, setAction] = useState<'start' | 'stop' | null>(null)
   const [error, setError] = useState('')

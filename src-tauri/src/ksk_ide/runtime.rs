@@ -12,6 +12,7 @@ use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 
 use super::{
     config::{KiroService, KskProxyConfig},
+    control_plane::ManagedKskLease,
     launcher::{ensure_isolated_launch_available, KiroIsolatedProcess},
     profile::{IsolatedIdeEndpoints, IsolatedIdeProfile, KiroUserDataPaths},
     proxy,
@@ -131,6 +132,11 @@ pub struct KskIdeStatus {
     pub pid: Option<u32>,
     pub session_id: Option<String>,
     pub started_at: Option<String>,
+    pub managed_key: bool,
+    pub source_account_id: Option<String>,
+    pub source_account_label: Option<String>,
+    pub key_prefix: Option<String>,
+    pub key_expires_at: Option<String>,
 }
 
 impl KskIdeStatus {
@@ -141,6 +147,11 @@ impl KskIdeStatus {
             pid: None,
             session_id: None,
             started_at: None,
+            managed_key: false,
+            source_account_id: None,
+            source_account_label: None,
+            key_prefix: None,
+            key_expires_at: None,
         }
     }
 }
@@ -151,6 +162,7 @@ pub struct KskIdeRuntime {
     proxies: KskProxySet,
     profile: Option<IsolatedIdeProfile>,
     process: Option<KiroIsolatedProcess>,
+    managed_lease: Option<ManagedKskLease>,
 }
 
 impl KskIdeRuntime {
@@ -189,6 +201,7 @@ impl KskIdeRuntime {
             proxies,
             profile: Some(profile),
             process: Some(process),
+            managed_lease: None,
         })
     }
 
@@ -208,7 +221,32 @@ impl KskIdeRuntime {
                 .as_ref()
                 .map(|profile| profile.session_id().simple().to_string()[..8].to_string()),
             started_at: Some(self.started_at.to_rfc3339_opts(SecondsFormat::Millis, true)),
+            managed_key: self.managed_lease.is_some(),
+            source_account_id: self
+                .managed_lease
+                .as_ref()
+                .map(|lease| lease.source_account_id.clone()),
+            source_account_label: self
+                .managed_lease
+                .as_ref()
+                .map(|lease| lease.source_account_label.clone()),
+            key_prefix: self
+                .managed_lease
+                .as_ref()
+                .map(|lease| lease.key_prefix.clone()),
+            key_expires_at: self
+                .managed_lease
+                .as_ref()
+                .map(ManagedKskLease::expires_at_rfc3339),
         })
+    }
+
+    pub fn attach_managed_lease(&mut self, lease: ManagedKskLease) {
+        self.managed_lease = Some(lease);
+    }
+
+    pub fn managed_lease(&self) -> Option<ManagedKskLease> {
+        self.managed_lease.clone()
     }
 
     pub async fn stop(&mut self, process_timeout: StdDuration) -> Result<(), String> {
