@@ -93,7 +93,8 @@ use commands::kiro_cli_cmd::{
     read_cli_db_snapshot, rollback_cli_switch, switch_to_cli_account,
 };
 use commands::ksk_ide_cmd::{
-    get_ksk_ide_regions, get_ksk_ide_status, shutdown_ksk_ide_runtime, start_ksk_ide, stop_ksk_ide,
+    get_ksk_ide_regions, get_ksk_ide_status, recover_ksk_ide_settings,
+    shutdown_ksk_ide_runtime, start_ksk_ide, stop_ksk_ide,
 };
 //kiroshe
 use commands::kiro_settings_cmd::{
@@ -254,6 +255,12 @@ fn show_main_window(app: tauri::AppHandle) {
 
 /// 应用 setup 回调
 fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    match recover_ksk_ide_settings() {
+        Ok(0) => {}
+        Ok(count) => log::warn!("[KskIde] 已从 {count} 个异常退出会话恢复正式 Kiro settings"),
+        Err(error) => log::error!("[KskIde] 启动时恢复正式 Kiro settings 失败: {error}"),
+    }
+
     // 初始化 deep link 处理器
     core::deep_link_handler::init();
 

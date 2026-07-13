@@ -116,7 +116,7 @@ function KskIsolatedIdeModal({ onClose }: KskIsolatedIdeModalProps) {
         <DialogHeader icon={KeyRound} iconColor="text-amber-400" iconBg="bg-amber-500/10">
           <DialogTitle>KSK 隔离 Kiro IDE</DialogTitle>
           <DialogDescription>
-            KSK 仅保存在 KAM 当前运行时内存中，并使用独立配置目录启动 Kiro。
+            保留正式 Kiro 的对话、工作区和插件，仅隔离登录凭据；KSK 只存在于 KAM 当前运行时内存中。
           </DialogDescription>
         </DialogHeader>
 
@@ -162,7 +162,7 @@ function KskIsolatedIdeModal({ onClose }: KskIsolatedIdeModalProps) {
                 <div className="mt-1 text-xs text-muted-foreground">
                   {status.running
                     ? `${status.region} · 会话 ${status.sessionId} · PID ${status.pid}`
-                    : '启动后 KAM 会创建独立 profile 和动态 loopback 代理。'}
+                    : '启动后复用正式用户数据，仅创建隔离认证目录和动态 loopback 代理。'}
                 </div>
               </div>
               <span className={`h-2.5 w-2.5 rounded-full ${status.running ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />

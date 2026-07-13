@@ -13,7 +13,7 @@ use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 use super::{
     config::{KiroService, KskProxyConfig},
     launcher::{ensure_isolated_launch_available, KiroIsolatedProcess},
-    profile::{IsolatedIdeEndpoints, IsolatedIdeProfile},
+    profile::{IsolatedIdeEndpoints, IsolatedIdeProfile, KiroUserDataPaths},
     proxy,
 };
 
@@ -162,17 +162,23 @@ impl KskIdeRuntime {
     ) -> Result<Self, String> {
         ensure_isolated_launch_available()?;
         let shared_ksk: Arc<str> = Arc::from(ksk.trim());
+        let shared_data = KiroUserDataPaths::discover()?;
         let http = crate::clients::http_client::build_streaming_http_client()?;
         let mut proxies = KskProxySet::spawn(region, shared_ksk, http).await?;
         let endpoints = match proxies.endpoints() {
             Ok(endpoints) => endpoints,
             Err(error) => return Err(proxies.cleanup_start_failure(error).await),
         };
-        let profile =
-            match IsolatedIdeProfile::create(isolation_root, region, endpoints, placeholder_ttl) {
-                Ok(profile) => profile,
-                Err(error) => return Err(proxies.cleanup_start_failure(error).await),
-            };
+        let profile = match IsolatedIdeProfile::create(
+            isolation_root,
+            &shared_data,
+            region,
+            endpoints,
+            placeholder_ttl,
+        ) {
+            Ok(profile) => profile,
+            Err(error) => return Err(proxies.cleanup_start_failure(error).await),
+        };
         let process = match KiroIsolatedProcess::launch(&profile) {
             Ok(process) => process,
             Err(error) => return Err(cleanup_launch_failure(error, &profile, &mut proxies).await),

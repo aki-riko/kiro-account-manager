@@ -10,6 +10,7 @@ use tokio::net::TcpStream;
 use uuid::Uuid;
 
 use super::KskIdeRuntime;
+use crate::ksk_ide::{launcher::PROCESS_STOP_TIMEOUT, profile::KiroUserDataPaths};
 
 #[tokio::test]
 #[ignore = "launches the installed Kiro IDE; run only for explicit local lifecycle validation"]
@@ -23,25 +24,27 @@ async fn installed_kiro_lifecycle_with_fake_ksk() {
         !crate::kiro::process::check_kiro_running(),
         "close formal Kiro before running the isolated lifecycle test"
     );
+    let formal_state = FormalStateSnapshot::capture();
     let root = std::env::temp_dir().join(format!("kam-ksk-lifecycle-{}", Uuid::new_v4()));
     let fake_ksk = "ksk_kam-lifecycle-fixture-not-a-real-key";
-    let mut runtime = KskIdeRuntime::start(
-        &root,
-        "us-east-1",
-        fake_ksk,
-        ChronoDuration::hours(1),
-    )
-    .await
-    .expect("start installed Kiro with isolated lifecycle fixture");
+    let mut runtime = KskIdeRuntime::start(&root, "us-east-1", fake_ksk, ChronoDuration::hours(1))
+        .await
+        .expect("start installed Kiro with isolated lifecycle fixture");
 
     let verification = verify_running_lifecycle(&mut runtime, fake_ksk).await;
-    let process_stop_result = runtime.stop_process(Duration::from_secs(5));
+    let process_stop_result = runtime.stop_process(PROCESS_STOP_TIMEOUT);
     let leak_scan_result = lifecycle_leak_scan(&verification, &process_stop_result, fake_ksk);
-    let stop_result = runtime.stop(Duration::from_secs(5)).await;
+    let stop_result = runtime.stop(PROCESS_STOP_TIMEOUT).await;
     let remove_root_result = fs::remove_dir(&root);
-    assert_lifecycle_cleanup(process_stop_result, leak_scan_result, stop_result, remove_root_result);
+    assert_lifecycle_cleanup(
+        process_stop_result,
+        leak_scan_result,
+        stop_result,
+        remove_root_result,
+    );
     let snapshot = verification.expect("verify running isolated lifecycle");
 
+    formal_state.assert_unchanged();
     assert!(!snapshot.session_root.exists());
     for endpoint in snapshot.endpoints {
         assert!(TcpStream::connect(endpoint).await.is_err());
@@ -53,6 +56,53 @@ struct LifecycleSnapshot {
     pid: u32,
     session_root: PathBuf,
     endpoints: [std::net::SocketAddr; 3],
+}
+
+struct FormalStateSnapshot {
+    settings_path: PathBuf,
+    settings_bytes: Option<Vec<u8>>,
+    token_path: PathBuf,
+    token_bytes: Option<Vec<u8>>,
+}
+
+impl FormalStateSnapshot {
+    fn capture() -> Self {
+        let shared = KiroUserDataPaths::discover().expect("discover formal Kiro user data");
+        let sessions = shared
+            .user_data_dir()
+            .join("User/globalStorage/kiro.kiroagent/sessions");
+        assert!(
+            sessions.is_dir(),
+            "formal Kiro sessions directory must exist"
+        );
+        assert!(
+            shared.extensions_dir().is_dir(),
+            "formal Kiro extensions directory must exist"
+        );
+        let settings_path = shared.settings_path();
+        let token_path = dirs::home_dir()
+            .expect("discover formal home")
+            .join(".aws/sso/cache/kiro-auth-token.json");
+        Self {
+            settings_bytes: read_optional(&settings_path),
+            token_bytes: read_optional(&token_path),
+            settings_path,
+            token_path,
+        }
+    }
+
+    fn assert_unchanged(&self) {
+        assert_eq!(
+            read_optional(&self.settings_path),
+            self.settings_bytes,
+            "formal Kiro settings must be restored byte-for-byte"
+        );
+        assert_eq!(
+            read_optional(&self.token_path),
+            self.token_bytes,
+            "formal Kiro token must remain untouched"
+        );
+    }
 }
 
 async fn verify_running_lifecycle(
@@ -68,6 +118,16 @@ async fn verify_running_lifecycle(
         .profile
         .as_ref()
         .ok_or_else(|| "隔离 profile 不存在".to_string())?;
+    let shared = KiroUserDataPaths::discover()?;
+    if profile.user_data_dir() != shared.user_data_dir()
+        || profile.extensions_dir() != shared.extensions_dir()
+        || !profile
+            .user_data_dir()
+            .join("User/globalStorage/kiro.kiroagent/sessions")
+            .is_dir()
+    {
+        return Err("隔离 Kiro 未复用正式对话或插件数据目录".to_string());
+    }
     let endpoints = runtime.proxies.endpoints()?;
     let addresses = [endpoints.generic, endpoints.runtime, endpoints.management];
     for endpoint in addresses {
@@ -75,6 +135,7 @@ async fn verify_running_lifecycle(
             .await
             .map_err(|error| format!("连接 lifecycle loopback {endpoint} 失败: {error}"))?;
     }
+    verify_endpoint_overlay(profile.settings_path(), endpoints)?;
     let pid = status.pid.ok_or_else(|| "隔离 Kiro PID 缺失".to_string())?;
     let command_line = process_command_line(pid)?;
     if command_line.contains(fake_ksk)
@@ -88,6 +149,34 @@ async fn verify_running_lifecycle(
         session_root: profile.session_root().to_path_buf(),
         endpoints: addresses,
     })
+}
+
+fn verify_endpoint_overlay(
+    settings_path: &Path,
+    endpoints: crate::ksk_ide::profile::IsolatedIdeEndpoints,
+) -> Result<(), String> {
+    let content = fs::read(settings_path)
+        .map_err(|error| format!("读取运行中 Kiro settings 失败: {error}"))?;
+    let settings: serde_json::Value = serde_json::from_slice(&content)
+        .map_err(|error| format!("解析运行中 Kiro settings 失败: {error}"))?;
+    let expected = [
+        ("codewhisperer.config.endpoints", endpoints.generic),
+        ("codewhisperer.config.krsEndpoints", endpoints.runtime),
+        ("codewhisperer.config.cpsEndpoints", endpoints.management),
+    ];
+    for (key, endpoint) in expected {
+        let actual = settings[key][0]["endpoint"].as_str();
+        let expected = format!("http://{endpoint}");
+        if actual != Some(expected.as_str()) {
+            return Err(format!("运行中 Kiro settings 的 {key} 未指向当前 loopback"));
+        }
+    }
+    Ok(())
+}
+
+fn read_optional(path: &Path) -> Option<Vec<u8>> {
+    path.exists()
+        .then(|| fs::read(path).expect("read formal Kiro state file"))
 }
 
 fn lifecycle_leak_scan(
@@ -116,7 +205,10 @@ fn assert_lifecycle_cleanup(
         leak_scan_result.is_ok(),
         "scan stopped lifecycle profile: {leak_scan_result:?}"
     );
-    assert!(stop_result.is_ok(), "stop isolated lifecycle: {stop_result:?}");
+    assert!(
+        stop_result.is_ok(),
+        "stop isolated lifecycle: {stop_result:?}"
+    );
     assert!(
         remove_root_result.is_ok(),
         "remove empty lifecycle root: {remove_root_result:?}"
@@ -133,12 +225,8 @@ fn assert_tree_excludes(path: &Path, needle: &[u8]) -> Result<(), String> {
             assert_tree_excludes(&entry_path, needle)?;
             continue;
         }
-        let content = fs::read(&entry_path).map_err(|error| {
-            format!(
-                "读取生命周期文件 {} 失败: {error}",
-                entry_path.display()
-            )
-        })?;
+        let content = fs::read(&entry_path)
+            .map_err(|error| format!("读取生命周期文件 {} 失败: {error}", entry_path.display()))?;
         if content.windows(needle.len()).any(|window| window == needle) {
             return Err(format!("生命周期文件包含假 KSK: {}", entry_path.display()));
         }
@@ -147,9 +235,7 @@ fn assert_tree_excludes(path: &Path, needle: &[u8]) -> Result<(), String> {
 }
 
 fn process_command_line(pid: u32) -> Result<String, String> {
-    let script = format!(
-        "(Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}').CommandLine"
-    );
+    let script = format!("(Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}').CommandLine");
     let output = Command::new("powershell.exe")
         .args(["-NoLogo", "-NoProfile", "-Command", &script])
         .output()

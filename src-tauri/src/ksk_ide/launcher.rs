@@ -15,6 +15,8 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const PROCESS_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const GRACEFUL_STOP_WINDOW: Duration = Duration::from_secs(5);
+pub const PROCESS_STOP_TIMEOUT: Duration = Duration::from_secs(45);
 const INHERITED_AWS_CREDENTIAL_ENV: &[&str] = &[
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
@@ -69,21 +71,23 @@ impl KiroIsolatedProcess {
             .map_err(|error| format!("检查隔离 Kiro 进程失败: {error}"))
     }
 
-    pub fn stop(&mut self, graceful_timeout: Duration) -> Result<(), String> {
+    pub fn stop(&mut self, total_timeout: Duration) -> Result<(), String> {
         if !self.is_running()? {
             return Ok(());
         }
+        let deadline = Instant::now() + total_timeout;
         request_process_tree_stop(self.pid, false).unwrap_or_else(|error| {
             log::warn!(
                 "[KskIdeLauncher] 请求 PID {} 优雅退出失败: {error}",
                 self.pid
             );
         });
-        if wait_for_exit(&mut self.child, graceful_timeout)? {
+        let graceful_deadline = (Instant::now() + GRACEFUL_STOP_WINDOW).min(deadline);
+        if wait_for_exit_until(&mut self.child, graceful_deadline)? {
             return Ok(());
         }
         request_process_tree_stop(self.pid, true)?;
-        if wait_for_exit(&mut self.child, graceful_timeout)? {
+        if wait_for_exit_until(&mut self.child, deadline)? {
             return Ok(());
         }
         Err(format!("隔离 Kiro 进程树未在期限内退出，PID={}", self.pid))
@@ -134,8 +138,7 @@ pub fn build_launch_command(executable: &Path, profile: &IsolatedIdeProfile) -> 
     command
 }
 
-fn wait_for_exit(child: &mut Child, timeout: Duration) -> Result<bool, String> {
-    let deadline = Instant::now() + timeout;
+fn wait_for_exit_until(child: &mut Child, deadline: Instant) -> Result<bool, String> {
     loop {
         if child
             .try_wait()
@@ -147,7 +150,7 @@ fn wait_for_exit(child: &mut Child, timeout: Duration) -> Result<bool, String> {
         if Instant::now() >= deadline {
             return Ok(false);
         }
-        thread::sleep(PROCESS_POLL_INTERVAL.min(timeout));
+        thread::sleep(PROCESS_POLL_INTERVAL);
     }
 }
 
@@ -166,8 +169,20 @@ fn request_process_tree_stop(pid: u32, force: bool) -> Result<(), String> {
     if output.status.success() {
         return Ok(());
     }
+    let stdout = decode_cmd_output(&output.stdout);
     let stderr = decode_cmd_output(&output.stderr);
-    Err(format!("PID 定向 taskkill 失败: {}", stderr.trim()))
+    let message = format!("{} {}", stdout.trim(), stderr.trim());
+    if taskkill_reports_missing_process(&message) {
+        return Ok(());
+    }
+    Err(format!("PID 定向 taskkill 失败: {}", message.trim()))
+}
+
+fn taskkill_reports_missing_process(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("there is no running instance of the task")
+        || normalized.contains("no running instance")
+        || message.contains("没有运行的任务实例")
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -178,9 +193,10 @@ fn request_process_tree_stop(_pid: u32, _force: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_launch_command, validate_no_existing_kiro, INHERITED_AWS_CREDENTIAL_ENV,
+        build_launch_command, taskkill_reports_missing_process, validate_no_existing_kiro,
+        INHERITED_AWS_CREDENTIAL_ENV,
     };
-    use crate::ksk_ide::profile::{IsolatedIdeEndpoints, IsolatedIdeProfile};
+    use crate::ksk_ide::profile::{IsolatedIdeEndpoints, IsolatedIdeProfile, KiroUserDataPaths};
     use chrono::Duration;
     use std::{
         collections::HashMap,
@@ -192,13 +208,26 @@ mod tests {
 
     fn test_profile() -> (PathBuf, IsolatedIdeProfile) {
         let root = std::env::temp_dir().join(format!("kam-ksk-launcher-{}", Uuid::new_v4()));
+        let user_data = root.join("formal-user-data");
+        let extensions = root.join("formal-extensions");
+        std::fs::create_dir_all(user_data.join("User")).expect("create user data");
+        std::fs::create_dir_all(&extensions).expect("create extensions");
+        std::fs::write(user_data.join("User/settings.json"), "{}").expect("write settings");
+        let shared = KiroUserDataPaths::new(user_data, extensions).expect("create shared paths");
+        let isolation_root = root.join("isolated");
         let endpoints = IsolatedIdeEndpoints {
             generic: SocketAddr::from(([127, 0, 0, 1], 32_001)),
             runtime: SocketAddr::from(([127, 0, 0, 1], 32_002)),
             management: SocketAddr::from(([127, 0, 0, 1], 32_003)),
         };
-        let profile = IsolatedIdeProfile::create(&root, "us-east-1", endpoints, Duration::hours(1))
-            .expect("create launcher profile");
+        let profile = IsolatedIdeProfile::create(
+            &isolation_root,
+            &shared,
+            "us-east-1",
+            endpoints,
+            Duration::hours(1),
+        )
+        .expect("create launcher profile");
         (root, profile)
     }
 
@@ -235,7 +264,7 @@ mod tests {
             .any(|arg| arg.to_string_lossy().contains("ksk_")));
 
         profile.cleanup().expect("cleanup launcher profile");
-        std::fs::remove_dir(&root).expect("remove launcher test root");
+        std::fs::remove_dir_all(&root).expect("remove launcher test root");
     }
 
     #[test]
@@ -243,5 +272,15 @@ mod tests {
         assert!(validate_no_existing_kiro(false).is_ok());
         let error = validate_no_existing_kiro(true).expect_err("parallel Kiro must be rejected");
         assert!(error.contains("请先完全退出正式 Kiro"));
+    }
+
+    #[test]
+    fn taskkill_missing_process_output_is_not_a_hard_failure() {
+        assert!(taskkill_reports_missing_process(
+            "ERROR: The process with PID 41416 could not be terminated.\nReason: There is no running instance of the task."
+        ));
+        assert!(!taskkill_reports_missing_process(
+            "ERROR: Access is denied."
+        ));
     }
 }
