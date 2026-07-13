@@ -463,7 +463,7 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 
 ### 阶段 2：隔离 Profile 与 Launcher
 
-状态：共享数据修订与假 KSK 实机回归均已完成；真实 KSK 聊天仍待用户验收。
+状态：共享数据修订、假 KSK 实机回归和真实 KSK 核心聊天均已完成。
 
 - 创建会话目录。
 - 原子写占位 token，并对正式 settings 事务化覆盖三个 endpoint 键。
@@ -513,7 +513,7 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 
 ### 阶段 5：真实 KSK 验证
 
-状态：待执行。前置条件是正式 Kiro 已完全退出。
+状态：核心聊天已完成；最终安装版 UI 模型下拉待用户下一次输入 KSK 后复核。
 
 必须使用用户提供的同一个真实 KSK 会话完成：
 
@@ -527,7 +527,16 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 8. 验证代理端口关闭、进程树退出、隔离目录清理。
 9. 再次核对正式 token 和配置哈希未改变。
 
-只有以上同一真实会话全部通过，才能声明“核心聊天 PoC 已验证”。
+2026-07-14 同一真实 KSK 会话验证结果：
+
+- management 模型接口返回 HTTP 200、15 个模型，默认模型为 `auto`。
+- runtime 核心聊天返回 HTTP 200 和 `application/vnd.amazon.eventstream`。
+- EventStream 7 帧、1007 字节全部解析，助手精确返回非敏感测试标记。
+- 正式 token 在整个会话中未变化；停止后 settings 恢复原 SHA256。
+- Kiro/KAM 进程、三个 loopback 代理、隔离目录和 endpoint 残留均清零。
+- KSK 未写入 token、settings、命令行、Git diff 或测试夹具。
+
+因此可以声明“核心聊天 PoC 已验证”。最终安装版包含模型 RPC 修复，但因为 KSK 按设计只驻留内存且已在清理时释放，仍需用户下一次从 UI 输入 KSK，复核模型下拉展示与同一路径聊天。
 
 如果失败：
 
@@ -538,7 +547,7 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 
 ### 阶段 6：Review 与收尾
 
-状态：进行中。共享数据修订的自动化门禁和新版假 KSK 生命周期已通过；安装包和真实 KSK 聊天尚未验收。
+状态：自动化、最终安装包、真实 KSK 核心聊天和最终假 KSK lifecycle 均已完成；仅剩最终安装版 UI 复核。
 
 - 检查是否存在 KSK、Authorization、占位 token 泄漏。
 - 检查所有错误分支是否有脱敏日志。
@@ -558,6 +567,19 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 - 假 KSK 实机 lifecycle：通过，耗时 19.36 秒。
 - lifecycle 验证：正式 user-data、sessions 和 extensions 路径被复用；正式 token 未变化；正式 settings 停止后逐字节恢复；三个代理端口关闭；Kiro 进程退出；临时目录清理；假 KSK 未落盘。
 - 首次 lifecycle 暴露真实 Windows 退出时序：5 秒门限过短，`taskkill` 在进程终止中返回 `There is no running instance of the task`。已改为单一 45 秒总截止时间，并将该实测返回视为继续等待条件；同一测试复跑通过。
+
+2026-07-14 模型 RPC 与最终安装验证结果：
+
+- 真实失败先复现：官方模型请求收到本地 403，模型列表回退为空。
+- 二次逆向修正第一轮误判：官方实际为 `POST /` + `KiroControlPlaneBearerService.ListAvailableModels`，参数位于 JSON body。
+- 最小白名单仅放行该精确 RPC；顶层占位 `profileArn` 在上游前删除。
+- 真实 KSK management：HTTP 200，15 个模型，默认模型 `auto`。
+- 真实 KSK runtime：HTTP 200，EventStream 7 帧，助手返回精确测试标记。
+- 最终 Rust 261 项通过，1 项显式实机测试默认忽略；`cargo check` 通过。
+- Bun 29 项通过；TypeScript 和 Vite production build 通过，1908 模块完成转换。
+- 最终 MSI SHA256：`E0C47072EBFB1FDEE8F7A4F7E040AE0489A78EB16D24C145A7967F94DD03B6D0`。
+- MSI 解包 EXE 与 Program Files 安装 EXE SHA256 同为 `59A685904405A968C8F4A2E9C96D1E83C94FDA91F456CC8B56722CBAF9253C78`。
+- 最终安装版假 KSK lifecycle：19.75 秒通过；清理后正式 settings/token 恢复、进程/目录/endpoint 残留为 0。
 
 ## 14. 测试命令
 
@@ -654,9 +676,10 @@ npm run build
 
 ## 18. 当前下一步
 
-当前下一步按顺序执行：
+当前仅剩：
 
-1. 提交并推送私人远端。
-2. 重建并安装 KAM，确认新界面明确提示“保留正式数据、只隔离凭据”。
-3. 再用安装版执行一次假 KSK UI 生命周期，核对正式 token/settings、进程、端口和目录清理。
-4. 最终由用户在 UI 输入真实 KSK 完成同一真实聊天链路验收；真实 KSK 不得进入聊天记录、日志、命令行或测试夹具。
+1. 用户下一次在最终安装版 KAM 的 UI 输入真实 KSK。
+2. 确认模型下拉展示真实模型并从 Kiro UI 发起一次聊天。
+3. 通过 KAM 停止隔离实例，再核对正式 token/settings、进程、端口和目录清理。
+
+真实 KSK 不得进入聊天记录、日志、命令行或测试夹具；因此不会为了无人值守复测而绕过内存隔离边界持久化 KSK。
