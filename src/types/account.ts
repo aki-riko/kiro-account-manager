@@ -118,9 +118,13 @@ export interface AccountProxyConfig {
 export interface Account {
     id: string;
     email?: string;
+    userId?: string;
     provider: string;
+    authMethod?: string;
     refreshToken: string;
     accessToken?: string;
+    profileArn?: string;
+    region?: string;
     label?: string;
     machineId?: string;
     groupId?: string;

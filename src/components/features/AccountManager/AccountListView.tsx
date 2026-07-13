@@ -1,6 +1,6 @@
 import { useRef, useMemo, memo, useState, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Users, Plus, RefreshCw, Eye, Edit2, Trash2, Copy, UserX, ChevronUp, ChevronDown, Key, LogIn, LogOut } from 'lucide-react'
+import { Users, Plus, RefreshCw, Eye, Edit2, Trash2, Copy, UserX, ChevronUp, ChevronDown, Key, LogIn, LogOut, Rocket } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useApp } from '../../../hooks/useApp'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
@@ -10,6 +10,7 @@ import { getProviderDisplayName, isGitHubProvider } from '../../../utils/account
 import ContextMenu from './ContextMenu'
 import { buildAccountListMaps } from './utils/accountListMaps'
 import type { Account, TagDefinition, GroupDefinition } from '../../../types/account'
+import { getManagedKskEligibility } from '../../../utils/kskIde'
 
 const ROW_HEIGHT = 48
 
@@ -52,6 +53,7 @@ interface ListRowProps {
   onLogout: (account: Account) => void
   onRefresh: (id: string) => void
   onRefreshToken: (id: string) => void
+  onStartKskIde: (account: Account) => void
   onEdit: (account: Account) => void
   onEditLabel: (account: Account) => void
   onDelete: (id: string) => void
@@ -59,6 +61,7 @@ interface ListRowProps {
   onToggleEnabled?: (account: Account, enabled: boolean) => void
   onToggleOverage?: (account: Account, enabled: boolean) => void
   onCopy: (text: string, id: string) => void
+  isStartingKskIde: boolean
 }
 
 const ListRow = memo(function ListRow({
@@ -78,6 +81,7 @@ const ListRow = memo(function ListRow({
   onLogout,
   onRefresh,
   onRefreshToken,
+  onStartKskIde,
   onEdit,
   onEditLabel,
   onDelete,
@@ -85,6 +89,7 @@ const ListRow = memo(function ListRow({
   onToggleEnabled,
   onToggleOverage,
   onCopy,
+  isStartingKskIde,
 }: ListRowProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const used = getUsed(account)
@@ -98,6 +103,7 @@ const ListRow = memo(function ListRow({
   const isBanned = isBannedStatus(account)
   const isUnavailable = isUnavailableStatus(account)
   const statusMeta = getAccountStatusMeta(account, t)
+  const kskEligibility = useMemo(() => getManagedKskEligibility(account), [account])
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -115,6 +121,7 @@ const ListRow = memo(function ListRow({
     { divider: true },
     { icon: RefreshCw, label: t('accountCard.refresh'), onClick: () => onRefresh(account.id), disabled: isRefreshing },
     { icon: Key, label: t('accountCard.refreshToken'), onClick: () => onRefreshToken?.(account.id), disabled: isRefreshingToken },
+    { icon: Rocket, label: '签发 KSK 并启动隔离 Kiro', onClick: () => onStartKskIde(account), disabled: isStartingKskIde || isUnavailable || !kskEligibility.eligible },
     isCurrent
       ? { icon: LogOut, label: t('accountCard.LogOut'), onClick: () => onLogout(account), disabled: isSwitching, danger: true }
       : { icon: LogIn, label: t('accountCard.LogIn'), onClick: () => onLogin(account), disabled: isSwitching || isUnavailable },
@@ -127,7 +134,7 @@ const ListRow = memo(function ListRow({
     ...(account.provider !== 'Enterprise' && !isBanned && onDeleteRemote ? [
       { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
     ] : []),
-  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onLogin, onLogout, onDelete, onDeleteRemote, onToggleEnabled, onToggleOverage, isRefreshing, isRefreshingToken, isSwitching, isTogglingOverage, isBanned, isUnavailable, isCurrent, overageCapability, overageStatus])
+  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onStartKskIde, onLogin, onLogout, onDelete, onDeleteRemote, onToggleEnabled, onToggleOverage, isRefreshing, isRefreshingToken, isStartingKskIde, isSwitching, isTogglingOverage, isBanned, isUnavailable, isCurrent, kskEligibility, overageCapability, overageStatus])
 
   const subscriptionTitle = account.usageData?.subscriptionInfo?.subscriptionTitle || ''
   const subscriptionTone: Parameters<typeof Pill>[0]['tone'] =
@@ -303,6 +310,14 @@ const ListRow = memo(function ListRow({
           </button>
         )}
         <button
+          onClick={(e) => { e.stopPropagation(); onStartKskIde(account) }}
+          disabled={isStartingKskIde || isUnavailable || !kskEligibility.eligible}
+          className="h-7 w-7 rounded-md inline-flex items-center justify-center border border-primary/20 text-primary hover:bg-primary/10 transition-colors disabled:opacity-40"
+          title={kskEligibility.eligible ? '签发 KSK 并启动隔离 Kiro IDE' : kskEligibility.reason}
+        >
+          <Rocket size={13} className={isStartingKskIde ? 'animate-pulse' : ''} />
+        </button>
+        <button
           onClick={(e) => { e.stopPropagation(); onEdit(account) }}
           className="h-7 w-7 rounded-md inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           title={t('accountCard.viewDetails')}
@@ -341,6 +356,7 @@ const ListRow = memo(function ListRow({
   prev.isRefreshing === next.isRefreshing &&
   prev.isRefreshingToken === next.isRefreshingToken &&
   prev.isSwitching === next.isSwitching &&
+  prev.isStartingKskIde === next.isStartingKskIde &&
   prev.tagMap === next.tagMap &&
   prev.groupMap === next.groupMap
 ))
@@ -356,6 +372,7 @@ interface AccountListViewProps {
   onLogout: (account: Account) => void
   onRefresh: (id: string) => void
   onRefreshToken: (id: string) => void
+  onStartKskIde: (account: Account) => void
   onEdit: (account: Account) => void
   onEditLabel: (account: Account) => void
   onDelete: (id: string) => void
@@ -364,7 +381,7 @@ interface AccountListViewProps {
   onToggleOverage?: (account: Account, enabled: boolean) => void
   onCopy: (text: string, id: string) => void
   onAdd: () => void
-  accountRowStateById?: Record<string, { isRefreshing?: boolean; isRefreshingToken?: boolean; isSwitching?: boolean; isTogglingOverage?: boolean }>
+  accountRowStateById?: Record<string, { isRefreshing?: boolean; isRefreshingToken?: boolean; isSwitching?: boolean; isTogglingOverage?: boolean; isStartingKskIde?: boolean }>
   localToken?: { refreshToken?: string } | null
   tagDefinitions?: TagDefinition[]
   groupDefinitions?: GroupDefinition[]
@@ -384,6 +401,7 @@ function AccountListView({
   onLogout,
   onRefresh,
   onRefreshToken,
+  onStartKskIde,
   onEdit,
   onEditLabel,
   onDelete,
@@ -516,6 +534,7 @@ function AccountListView({
                   isRefreshing={accountRowStateById[acc.id]?.isRefreshing ?? false}
                   isRefreshingToken={accountRowStateById[acc.id]?.isRefreshingToken ?? false}
                   isSwitching={accountRowStateById[acc.id]?.isSwitching ?? false}
+                  isStartingKskIde={accountRowStateById[acc.id]?.isStartingKskIde ?? false}
                   isTogglingOverage={accountRowStateById[acc.id]?.isTogglingOverage ?? false}
                   tagMap={tagMap}
                   groupMap={groupMap}
@@ -526,6 +545,7 @@ function AccountListView({
                   onLogout={onLogout}
                   onRefresh={onRefresh}
                   onRefreshToken={onRefreshToken}
+                  onStartKskIde={onStartKskIde}
                   onEdit={onEdit}
                   onEditLabel={onEditLabel}
                   onDelete={onDelete}

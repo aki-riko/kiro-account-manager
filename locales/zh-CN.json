@@ -4,6 +4,7 @@
   "language.russian": "Русский",
   "nav.home": "仪表盘",
   "nav.accounts": "账号管理",
+  "nav.kskIde": "KSK IDE",
   "nav.sessions": "会话管理",
     "nav.cliSessions": "CLI 会话",
   "nav.kiroConfig": "规则管理",

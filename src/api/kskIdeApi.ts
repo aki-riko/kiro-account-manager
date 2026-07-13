@@ -33,7 +33,7 @@ export interface StartKskIdeRequest {
 
 export interface StartKskIdeFromAccountRequest {
   accountId: string
-  region: string
+  region?: string
 }
 
 export function startKskIde(request: StartKskIdeRequest) {

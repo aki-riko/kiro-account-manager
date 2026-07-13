@@ -1,12 +1,13 @@
 import { useRef, useMemo, useState, useEffect, useCallback, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Users, Plus, Edit2, Copy, KeyRound , Eye , Key, Trash2, UserX, LogIn } from 'lucide-react'
+import { Users, Plus, Edit2, Copy, KeyRound , Eye , Key, Trash2, UserX, LogIn, Rocket } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useApp } from '../../../hooks/useApp'
 import { getAccountStatusMeta, isBannedStatus, isUnavailableStatus } from '../../../utils/accountStatus'
 import AccountCard from './AccountCard'
 import ContextMenu from './ContextMenu'
 import React from 'react'
+import { getManagedKskEligibility } from '../../../utils/kskIde'
 
 // 根据容器宽度计算列数
 function getColumnCount(width: number) {
@@ -28,6 +29,7 @@ const VirtualRow = memo(function VirtualRow({
   onLogout,
   onRefresh,
   onRefreshToken,
+  onStartKskIde,
   onEdit,
   onEditLabel,
   onToggleEnabled,
@@ -60,6 +62,7 @@ const VirtualRow = memo(function VirtualRow({
             onLogout={onLogout}
             onRefresh={onRefresh}
             onRefreshToken={onRefreshToken}
+            onStartKskIde={onStartKskIde}
             onEdit={onEdit}
             onEditLabel={onEditLabel}
             onToggleEnabled={onToggleEnabled}
@@ -69,6 +72,7 @@ const VirtualRow = memo(function VirtualRow({
             isRefreshingToken={Boolean(accountRowStateById?.[item.id]?.isRefreshingToken)}
             isSwitching={Boolean(accountRowStateById?.[item.id]?.isSwitching)}
             isTogglingOverage={Boolean(accountRowStateById?.[item.id]?.isTogglingOverage)}
+            isStartingKskIde={Boolean(accountRowStateById?.[item.id]?.isStartingKskIde)}
             isCurrentAccount={localToken?.refreshToken && item.refreshToken === localToken.refreshToken}
             tagDefinitions={tagDefinitions}
             groupDefinitions={groupDefinitions}
@@ -111,6 +115,7 @@ function AccountTable({
   onLogout,
   onRefresh,
   onRefreshToken,
+  onStartKskIde,
   onEdit,
   onEditLabel,
   onToggleEnabled,
@@ -144,6 +149,7 @@ function AccountTable({
     const isBanned = isBannedStatus(account)
     const isUnavailable = isUnavailableStatus(account)
     const statusMeta = getAccountStatusMeta(account, t)
+    const kskEligibility = getManagedKskEligibility(account)
     const rowState = accountRowStateById?.[account.id] ?? {}
 
     const items: any[] = [
@@ -153,6 +159,7 @@ function AccountTable({
       { divider: true },
       { icon: Key , label: t('accountCard.refreshQuota'), onClick: () => onRefresh(account.id), disabled: Boolean(rowState.isRefreshing) },
       { icon: KeyRound , label: t('accountCard.refreshToken'), onClick: () => onRefreshToken?.(account.id), disabled: Boolean(rowState.isRefreshingToken) },
+      { icon: Rocket, label: kskEligibility.eligible ? '签发 KSK 并启动隔离 Kiro' : kskEligibility.reason, onClick: () => onStartKskIde?.(account), disabled: Boolean(rowState.isStartingKskIde) || isUnavailable || !kskEligibility.eligible },
       { icon: LogIn, label: isUnavailable ? `${statusMeta.label}账号不可切换` : t('accountCard.LogIn'), onClick: () => onLogin(account), disabled: Boolean(rowState.isSwitching) || isUnavailable },
       { divider: true },
       { label: account.enabled === false ? '启用账号' : '禁用账号', onClick: () => onToggleEnabled?.(account, account.enabled === false) },
@@ -164,7 +171,7 @@ function AccountTable({
     }
 
     return items
-  }, [t, onEdit, onEditLabel, onCopy, onRefreshToken, onRefresh, onLogin, onDelete, onDeleteRemote, accountRowStateById])
+  }, [t, onEdit, onEditLabel, onCopy, onRefreshToken, onRefresh, onStartKskIde, onLogin, onDelete, onDeleteRemote, accountRowStateById])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -257,6 +264,7 @@ function AccountTable({
                     onLogout={onLogout}
                     onRefresh={onRefresh}
                     onRefreshToken={onRefreshToken}
+                    onStartKskIde={onStartKskIde}
                     onEdit={onEdit}
                     onEditLabel={onEditLabel}
                     onToggleEnabled={onToggleEnabled}

@@ -17,6 +17,7 @@ import {
   listAvailableModels,
 } from '../../../api/accountApi'
 import { getKiroLocalToken } from '../../../api/kiroApi'
+import { startKskIdeFromAccount } from '../../../api/kskIdeApi'
 import { applyFilters } from './utils/filterUtils'
 import { cn } from '../../../utils/cn'
 import { showSuccess, showError } from '../../../utils/toast'
@@ -32,7 +33,6 @@ import AccountDetailModal from './AccountDetailModal'
 import EditAccountModal from './EditAccountModal'
 import BatchEditModal from './BatchEditModal'
 import ConfirmModal from './ConfirmModal'
-import KskIsolatedIdeModal from './KskIsolatedIdeModal'
 import { AccountListSkeleton, AccountTableSkeleton } from '../../shared/Skeleton'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
 import { ListAvailableModelsResponse } from '../../../types/account'
@@ -56,7 +56,6 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   const [editingLabelAccount, setEditingLabelAccount] = useState<any>(null)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showBatchEditModal, setShowBatchEditModal] = useState(false)
-  const [showKskIdeModal, setShowKskIdeModal] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null)
@@ -78,6 +77,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   const [refreshingTokenId, setRefreshingTokenId] = useState<string | null>(null)
   const [refreshingQuotaId, setRefreshingQuotaId] = useState<string | null>(null)
   const [togglingOverageId, setTogglingOverageId] = useState<string | null>(null)
+  const [startingKskIdeId, setStartingKskIdeId] = useState<string | null>(null)
 
   // 当前登录的本地 token
   const [localToken, setLocalToken] = useState<any>(null)
@@ -414,13 +414,14 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
         isRefreshingQuota: refreshingQuotaId === id,
         isSwitching: switchingId === id,
         isTogglingOverage: togglingOverageId === id,
+        isStartingKskIde: startingKskIdeId === id,
         isCopied: copiedId === id,
         availableModels: availableModelsById[id] ?? null,
         availableModelsLoading: Boolean(availableModelsLoadingById[id]),
         availableModelsError: availableModelsErrorById[id] ?? ''}
     }
     return result
-  }, [filteredAccounts, refreshingId, refreshingTokenId, refreshingQuotaId, switchingId, togglingOverageId, copiedId, availableModelsById, availableModelsLoadingById, availableModelsErrorById])
+  }, [filteredAccounts, refreshingId, refreshingTokenId, refreshingQuotaId, switchingId, togglingOverageId, startingKskIdeId, copiedId, availableModelsById, availableModelsLoadingById, availableModelsErrorById])
 
 
   const handleSearchChange = useCallback((term: string) => { setSearchTerm(term) }, [])
@@ -505,6 +506,19 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
     }
   }, [updateAccountLocally])
 
+  const handleStartKskIde = useCallback(async (account: Account) => {
+    setStartingKskIdeId(account.id)
+    try {
+      await startKskIdeFromAccount({ accountId: account.id })
+      showSuccess('短期 KSK 已签发，隔离 Kiro IDE 已启动')
+      onNavigate('kskIde')
+    } catch (cause) {
+      showError(String(cause))
+    } finally {
+      setStartingKskIdeId(null)
+    }
+  }, [onNavigate])
+
   // 删除单个账号
   const handleDelete = useCallback(async (id: string) => {
     // 防呆：检查是否是当前账号
@@ -576,7 +590,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
         onBatchDelete={onBatchDelete}
         onBatchEdit={() => setShowBatchEditModal(true)}
         onImport={() => setShowImportModal(true)}
-        onKskIde={() => setShowKskIdeModal(true)}
+        onKskIde={() => onNavigate('kskIde')}
         onExport={async () => {
           if (selectedIds.length === 0) {
             showError(t('accounts.exportSelectFirst') || '请先选择要导出的账号')
@@ -657,6 +671,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onLogout={handleLogoutAccount}
           onRefresh={handleRefreshQuota}
           onRefreshToken={handleRefreshToken}
+          onStartKskIde={handleStartKskIde}
           onEdit={setEditingAccount}
           onEditLabel={setEditingLabelAccount}
           onToggleEnabled={handleToggleEnabled}
@@ -683,6 +698,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           onLogout={handleLogoutAccount}
           onRefresh={handleRefreshQuota}
           onRefreshToken={handleRefreshToken}
+          onStartKskIde={handleStartKskIde}
           onEdit={setEditingAccount}
           onEditLabel={setEditingLabelAccount}
           onToggleEnabled={handleToggleEnabled}
@@ -769,11 +785,6 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
           }}
         />
       )}
-      {showKskIdeModal && (
-        <KskIsolatedIdeModal onClose={() => setShowKskIdeModal(false)} />
-      )}
-
-
       {/* 切换账号弹窗 */}
       {switchDialog && (
         <ConfirmModal

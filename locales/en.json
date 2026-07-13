@@ -4,6 +4,7 @@
   "language.russian": "Русский",
   "nav.home": "Dashboard",
   "nav.accounts": "Account Management",
+  "nav.kskIde": "KSK IDE",
   "nav.sessions": "Session Management",
     "nav.cliSessions": "CLI Sessions",
   "nav.kiroConfig": "Rules Management",

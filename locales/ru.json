@@ -5,6 +5,7 @@
   "language.russian": "Русский",
   "nav.home": "Панель управления",
   "nav.accounts": "Управление аккаунтами",
+  "nav.kskIde": "KSK IDE",
   "nav.sessions": "Управление сессиями",
     "nav.cliSessions": "Сессии CLI",
   "nav.kiroConfig": "Управление правилами",

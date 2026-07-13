@@ -1,5 +1,5 @@
 import { lazy, LazyExoticComponent, ComponentType } from 'react'
-import { Home, Key, Settings2, LogIn, Settings, Info, Network, MessageSquare, Shield, LucideIcon } from 'lucide-react'
+import { Home, Key, Settings2, LogIn, Settings, Info, Network, MessageSquare, MonitorPlay, LucideIcon } from 'lucide-react'
 
 export interface RouteConfig {
   id: string;
@@ -13,6 +13,7 @@ export interface RouteConfig {
 export const routes: RouteConfig[] = [
   { id: 'home', icon: Home, nameKey: 'nav.home', component: lazy(() => import('./components/features/Home/index')) },
   { id: 'accounts', icon: Key, nameKey: 'nav.accounts', component: lazy(() => import('./components/features/AccountManager/index')) },
+  { id: 'kskIde', icon: MonitorPlay, nameKey: 'nav.kskIde', component: lazy(() => import('./components/features/KskIde/index')) },
   { id: 'desktopOAuth', icon: LogIn, nameKey: 'nav.desktopOAuth', descKey: 'nav.socialIdC', component: lazy(() => import('./components/features/Login/index')) },
   { id: 'kiroConfig', icon: Settings2, nameKey: 'nav.kiroConfig', component: lazy(() => import('./components/features/KiroConfig/KiroConfig')) },
   { id: 'sessions', icon: MessageSquare, nameKey: 'nav.sessions', component: lazy(() => import('./components/features/SessionManager/index')) },

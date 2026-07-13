@@ -35,7 +35,7 @@ pub struct StartKskIdeRequest {
 #[serde(rename_all = "camelCase")]
 pub struct StartKskIdeFromAccountRequest {
     pub account_id: String,
-    pub region: String,
+    pub region: Option<String>,
 }
 
 #[tauri::command]
@@ -80,9 +80,6 @@ pub async fn start_ksk_ide_from_account(
     if slot.is_some() {
         return Err("已有 KSK 隔离 Kiro 实例正在运行".to_string());
     }
-    if !crate::clients::http_client::is_supported_kiro_region(request.region.trim()) {
-        return Err(format!("KSK 代理不支持区域: {}", request.region.trim()));
-    }
     ensure_isolated_launch_available()?;
     recover_ksk_ide_settings()?;
 
@@ -102,6 +99,18 @@ pub async fn start_ksk_ide_from_account(
         account.region.as_deref(),
         &fallback_control_plane_region,
     );
+    let runtime_region = match request
+        .region
+        .as_deref()
+        .map(str::trim)
+        .filter(|region| !region.is_empty())
+    {
+        Some(region) if crate::clients::http_client::is_supported_kiro_region(region) => {
+            region.to_string()
+        }
+        Some(region) => return Err(format!("KSK 代理不支持区域: {region}")),
+        None => control_plane_region.clone(),
+    };
     let expires_at = Utc::now() + ChronoDuration::hours(ttl_hours);
     let label = managed_key_label(&account);
     let control_plane = KskControlPlaneClient::for_account(&account, &control_plane_region)?;
@@ -112,7 +121,7 @@ pub async fn start_ksk_ide_from_account(
     let isolation_root = isolated_ide_root()?;
     let mut runtime = match KskIdeRuntime::start(
         &isolation_root,
-        &request.region,
+        &runtime_region,
         &issued.raw_key,
         ChronoDuration::hours(ttl_hours),
     )
@@ -307,7 +316,10 @@ fn managed_key_label(account: &Account) -> String {
 mod tests {
     use tokio::sync::Mutex;
 
-    use super::{ensure_account_can_issue_ksk, issuable_profile_arn, stop_runtime_slot};
+    use super::{
+        ensure_account_can_issue_ksk, issuable_profile_arn, stop_runtime_slot,
+        StartKskIdeFromAccountRequest,
+    };
     use crate::{commands::common::KIRO_SOCIAL_PROFILE_ARN, core::account::Account};
 
     #[tokio::test]
@@ -355,5 +367,16 @@ mod tests {
         assert!(issuable_profile_arn(&idc).is_err());
         idc.profile_arn = Some("arn:aws:codewhisperer:us-east-1:1:profile/test".to_string());
         assert!(issuable_profile_arn(&idc).is_ok());
+    }
+
+    #[test]
+    fn account_launch_request_allows_backend_region_resolution() {
+        let request: StartKskIdeFromAccountRequest = serde_json::from_value(serde_json::json!({
+            "accountId": "account-id"
+        }))
+        .expect("deserialize account launch request without region");
+
+        assert_eq!(request.account_id, "account-id");
+        assert_eq!(request.region, None);
     }
 }
