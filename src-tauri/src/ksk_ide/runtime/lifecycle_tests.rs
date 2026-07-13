@@ -6,11 +6,18 @@ use std::{
 };
 
 use chrono::Duration as ChronoDuration;
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::broadcast};
 use uuid::Uuid;
 
 use super::KskIdeRuntime;
-use crate::ksk_ide::{launcher::PROCESS_STOP_TIMEOUT, profile::KiroUserDataPaths};
+use crate::ksk_ide::{
+    config::{KiroService, KskProxyOperation},
+    launcher::PROCESS_STOP_TIMEOUT,
+    profile::KiroUserDataPaths,
+    proxy::{subscribe_forwarded_request_observations, ForwardedRequestObservation},
+};
+
+const MODEL_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[tokio::test]
 #[ignore = "launches the installed Kiro IDE; run only for explicit local lifecycle validation"]
@@ -27,11 +34,12 @@ async fn installed_kiro_lifecycle_with_fake_ksk() {
     let formal_state = FormalStateSnapshot::capture();
     let root = std::env::temp_dir().join(format!("kam-ksk-lifecycle-{}", Uuid::new_v4()));
     let fake_ksk = "ksk_kam-lifecycle-fixture-not-a-real-key";
+    let mut observations = subscribe_forwarded_request_observations();
     let mut runtime = KskIdeRuntime::start(&root, "us-east-1", fake_ksk, ChronoDuration::hours(1))
         .await
         .expect("start installed Kiro with isolated lifecycle fixture");
 
-    let verification = verify_running_lifecycle(&mut runtime, fake_ksk).await;
+    let verification = verify_running_lifecycle(&mut runtime, fake_ksk, &mut observations).await;
     let process_stop_result = runtime.stop_process(PROCESS_STOP_TIMEOUT);
     let leak_scan_result = lifecycle_leak_scan(&verification, &process_stop_result, fake_ksk);
     let stop_result = runtime.stop(PROCESS_STOP_TIMEOUT).await;
@@ -108,6 +116,7 @@ impl FormalStateSnapshot {
 async fn verify_running_lifecycle(
     runtime: &mut KskIdeRuntime,
     fake_ksk: &str,
+    observations: &mut broadcast::Receiver<ForwardedRequestObservation>,
 ) -> Result<LifecycleSnapshot, String> {
     tokio::time::sleep(Duration::from_secs(2)).await;
     let status = runtime.status()?;
@@ -144,11 +153,45 @@ async fn verify_running_lifecycle(
     {
         return Err("隔离 Kiro 命令行边界验证失败".to_string());
     }
+    let model_status = wait_for_model_handshake(observations).await?;
+    if model_status.is_success() {
+        return Err(format!(
+            "生命周期假 KSK 不应被模型上游接受，实际状态: {model_status}"
+        ));
+    }
     Ok(LifecycleSnapshot {
         pid,
         session_root: profile.session_root().to_path_buf(),
         endpoints: addresses,
     })
+}
+
+async fn wait_for_model_handshake(
+    observations: &mut broadcast::Receiver<ForwardedRequestObservation>,
+) -> Result<axum::http::StatusCode, String> {
+    tokio::time::timeout(MODEL_HANDSHAKE_TIMEOUT, async {
+        loop {
+            match observations.recv().await {
+                Ok(observation)
+                    if observation.service == KiroService::Management
+                        && observation.operation == KskProxyOperation::ListAvailableModels =>
+                {
+                    return Ok(observation.status);
+                }
+                Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                Err(broadcast::error::RecvError::Closed) => {
+                    return Err("模型握手观测通道提前关闭".to_string());
+                }
+            }
+        }
+    })
+    .await
+    .map_err(|_| {
+        format!(
+            "等待官方 Kiro 模型握手超时（{} 秒）",
+            MODEL_HANDSHAKE_TIMEOUT.as_secs()
+        )
+    })?
 }
 
 fn verify_endpoint_overlay(

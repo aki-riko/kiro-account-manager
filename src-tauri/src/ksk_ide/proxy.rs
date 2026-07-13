@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+#[cfg(test)]
+use std::sync::OnceLock;
+
 use axum::{
     body::{Body, Bytes},
     extract::State,
@@ -10,6 +13,9 @@ use axum::{
 };
 use reqwest::Client;
 
+#[cfg(test)]
+use tokio::sync::broadcast;
+
 use super::{
     config::{classify_operation, KskProxyConfig, KskProxyOperation},
     security::{build_downstream_headers, build_upstream_headers},
@@ -19,6 +25,33 @@ use super::{
 struct ProxyState {
     config: Arc<KskProxyConfig>,
     http: Client,
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForwardedRequestObservation {
+    pub service: super::config::KiroService,
+    pub operation: KskProxyOperation,
+    pub status: StatusCode,
+}
+
+#[cfg(test)]
+static FORWARDED_REQUEST_OBSERVATIONS: OnceLock<broadcast::Sender<ForwardedRequestObservation>> =
+    OnceLock::new();
+
+#[cfg(test)]
+pub fn subscribe_forwarded_request_observations() -> broadcast::Receiver<ForwardedRequestObservation>
+{
+    FORWARDED_REQUEST_OBSERVATIONS
+        .get_or_init(|| broadcast::channel(32).0)
+        .subscribe()
+}
+
+#[cfg(test)]
+fn observe_forwarded_request(observation: ForwardedRequestObservation) {
+    if let Some(sender) = FORWARDED_REQUEST_OBSERVATIONS.get() {
+        let _ = sender.send(observation);
+    }
 }
 
 pub fn router(config: KskProxyConfig, http: Client) -> Router {
@@ -74,6 +107,12 @@ async fn proxy_request(
     };
 
     let status = upstream.status();
+    #[cfg(test)]
+    observe_forwarded_request(ForwardedRequestObservation {
+        service: state.config.service(),
+        operation,
+        status,
+    });
     let headers = build_downstream_headers(upstream.headers());
     let mut response = Response::new(Body::from_stream(upstream.bytes_stream()));
     *response.status_mut() = status;
