@@ -2749,25 +2749,32 @@ fn normalize_tool_choice(
             Ok(Some(json!({ "type": "required" })))
         }
         "function" => {
-            let name = choice
+            let requested_name = choice
                 .get("name")
                 .or_else(|| choice.pointer("/function/name"))
                 .and_then(Value::as_str)
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| "tool_choice.function.name 不能为空".to_string())?;
+            let normalized_name = shorten_tool_name(&sanitize_tool_name(requested_name));
 
             let tool_exists = tools
                 .as_ref()
-                .map(|items| items.iter().any(|tool| tool.function.name == name))
+                .map(|items| {
+                    items
+                        .iter()
+                        .any(|tool| tool.function.name == normalized_name)
+                })
                 .unwrap_or(false);
             if !tool_exists {
-                return Err(format!("tool_choice 指定的工具不存在: {name}"));
+                return Err(format!(
+                    "tool_choice 指定的工具不存在: {requested_name}"
+                ));
             }
 
             Ok(Some(json!({
                 "type": "function",
-                "name": name
+                "name": normalized_name
             })))
         }
         other => Err(format!("暂不支持的 tool_choice.type: {other}")),
@@ -3188,8 +3195,33 @@ mod tests {
             .conversation_state
             .history
             .expect("history should exist");
-        assert_eq!(history.len(), 2);
-        match &history[0] {
+        assert!(matches!(history.first(), Some(HistoryItem::User { .. })));
+        assert!(history.windows(2).all(|pair| {
+            matches!(
+                (&pair[0], &pair[1]),
+                (HistoryItem::User { .. }, HistoryItem::Assistant { .. })
+                    | (HistoryItem::Assistant { .. }, HistoryItem::User { .. })
+            )
+        }));
+
+        let tool_use_index = history
+            .iter()
+            .position(|item| match item {
+                HistoryItem::Assistant {
+                    assistant_response_message,
+                } => assistant_response_message
+                    .tool_uses
+                    .as_ref()
+                    .is_some_and(|tool_uses| {
+                        tool_uses
+                            .iter()
+                            .any(|tool_use| tool_use.tool_use_id == "call_1")
+                    }),
+                _ => false,
+            })
+            .expect("assistant tool use should exist");
+
+        match &history[tool_use_index] {
             HistoryItem::Assistant {
                 assistant_response_message,
             } => {
@@ -3197,11 +3229,19 @@ mod tests {
                     assistant_response_message.tool_uses.as_ref().map(Vec::len),
                     Some(1)
                 );
+                assert_eq!(
+                    assistant_response_message
+                        .tool_uses
+                        .as_ref()
+                        .and_then(|tool_uses| tool_uses.first())
+                        .map(|tool_use| tool_use.name.as_str()),
+                    Some("searchDocs")
+                );
             }
             other => panic!("unexpected history item: {other:?}"),
         }
-        match &history[1] {
-            HistoryItem::User { user_input_message } => {
+        match history.get(tool_use_index + 1) {
+            Some(HistoryItem::User { user_input_message }) => {
                 let context = user_input_message
                     .user_input_message_context
                     .as_ref()
@@ -3402,6 +3442,10 @@ mod tests {
                 .as_ref()
                 .and_then(|items| items.first())
                 .map(|tool| tool.function.name.as_str()),
+            Some("searchDocs")
+        );
+        assert_eq!(
+            converted.tool_name_map.get("searchDocs").map(String::as_str),
             Some("search_docs")
         );
         assert_eq!(converted.messages.len(), 3);
@@ -3471,7 +3515,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn build_kiro_payload_preserves_responses_tool_choice() {
+    async fn build_kiro_payload_accepts_original_responses_tool_choice_after_sanitization() {
         let request = NormalizedRequest {
             model: "claude-sonnet-4-5-20250929".to_string(),
             messages: vec![NormalizedMessage {
@@ -3489,7 +3533,7 @@ mod tests {
             tools: Some(vec![Tool {
                 tool_type: "function".to_string(),
                 function: crate::gateway::models::ToolFunction {
-                    name: "search_docs".to_string(),
+                    name: "searchDocs".to_string(),
                     description: Some("搜索文档".to_string()),
                     parameters: Some(json!({
                         "type": "object",
@@ -3502,7 +3546,10 @@ mod tests {
             previous_response_id: None,
             thinking: None,
             include_usage: false,
-            tool_name_map: Default::default(),
+            tool_name_map: std::collections::HashMap::from([(
+                "searchDocs".to_string(),
+                "search_docs".to_string(),
+            )]),
         };
 
         let payload = build_kiro_payload(&Client::new(), &request, None, None)
@@ -4033,58 +4080,63 @@ mod tests {
             .history
             .expect("history should exist");
 
-        match &history[0] {
-            HistoryItem::Assistant {
-                assistant_response_message,
-            } => {
-                assert_eq!(assistant_response_message.content, "历史回答");
-                assert_eq!(
-                    assistant_response_message.reasoning_content,
-                    Some(json!({
-                        "reasoningText": {
-                            "text": "内部推理",
-                            "signature": "sig_1"
-                        }
-                    }))
-                );
-                assert_eq!(
-                    assistant_response_message.references,
-                    Some(json!([
-                        {
-                            "licenseName": "MIT",
-                            "repository": "repo",
-                            "url": "https://example.com/ref"
-                        }
-                    ]))
-                );
-                assert_eq!(
-                    assistant_response_message.supplementary_web_links,
-                    Some(json!([
-                        {
-                            "url": "https://example.com",
-                            "title": "example",
-                            "snippet": "snippet"
-                        }
-                    ]))
-                );
-                assert_eq!(
-                    assistant_response_message.followup_prompt,
-                    Some(json!({
-                        "content": "继续",
-                        "userIntent": "SHOW_EXAMPLES"
-                    }))
-                );
-                assert_eq!(
-                    assistant_response_message.message_id.as_deref(),
-                    Some("msg_123")
-                );
-                assert_eq!(
-                    assistant_response_message.cache_point,
-                    Some(json!({ "type": "default" }))
-                );
-            }
-            other => panic!("unexpected history item: {other:?}"),
-        }
+        let assistant_response_message = history
+            .iter()
+            .find_map(|item| match item {
+                HistoryItem::Assistant {
+                    assistant_response_message,
+                } if assistant_response_message.message_id.as_deref() == Some("msg_123") => {
+                    Some(assistant_response_message)
+                }
+                _ => None,
+            })
+            .expect("assistant metadata history item should exist");
+
+        assert_eq!(assistant_response_message.content, "历史回答");
+        assert_eq!(
+            assistant_response_message.reasoning_content,
+            Some(json!({
+                "reasoningText": {
+                    "text": "内部推理",
+                    "signature": "sig_1"
+                }
+            }))
+        );
+        assert_eq!(
+            assistant_response_message.references,
+            Some(json!([
+                {
+                    "licenseName": "MIT",
+                    "repository": "repo",
+                    "url": "https://example.com/ref"
+                }
+            ]))
+        );
+        assert_eq!(
+            assistant_response_message.supplementary_web_links,
+            Some(json!([
+                {
+                    "url": "https://example.com",
+                    "title": "example",
+                    "snippet": "snippet"
+                }
+            ]))
+        );
+        assert_eq!(
+            assistant_response_message.followup_prompt,
+            Some(json!({
+                "content": "继续",
+                "userIntent": "SHOW_EXAMPLES"
+            }))
+        );
+        assert_eq!(
+            assistant_response_message.message_id.as_deref(),
+            Some("msg_123")
+        );
+        assert_eq!(
+            assistant_response_message.cache_point,
+            Some(json!({ "type": "default" }))
+        );
     }
 
     #[test]
@@ -4130,19 +4182,19 @@ mod tests {
     }
 
     #[test]
-    fn get_available_models_includes_claude_46_official_ids() {
+    fn get_available_models_only_includes_claude_46_thinking_ids() {
         let model_ids: Vec<_> = get_available_models()
             .into_iter()
             .map(|model| model.id)
             .collect();
 
-        // Kiro ListAvailableModels API 实际返回的是带点号的 ID
-        assert!(model_ids.iter().any(|id| id == "claude-opus-4.6"));
+        // 当前 Kiro ListAvailableModels API 只返回 Claude 的 thinking 变体
         assert!(model_ids.iter().any(|id| id == "claude-opus-4.6-thinking"));
-        assert!(model_ids.iter().any(|id| id == "claude-sonnet-4.6"));
         assert!(model_ids
             .iter()
             .any(|id| id == "claude-sonnet-4.6-thinking"));
+        assert!(!model_ids.iter().any(|id| id == "claude-opus-4.6"));
+        assert!(!model_ids.iter().any(|id| id == "claude-sonnet-4.6"));
     }
 
     #[test]
