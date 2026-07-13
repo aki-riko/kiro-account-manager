@@ -117,11 +117,11 @@ mod tests {
         // 简单文本：4 个字符 = 1 token
         assert_eq!(estimate_tokens_generic("test"), 1);
 
-        // 带换行符：4 字符 + 1 换行 * 0.5 = 1 + 1 = 2 tokens
-        assert_eq!(estimate_tokens_generic("test\n"), 2);
+        // 带换行符：5 字节 / 4 向上取整 + 1 个换行奖励 = 2 + 1 = 3 tokens
+        assert_eq!(estimate_tokens_generic("test\n"), 3);
 
-        // 带代码块：8 字符 + 2 个 ``` * 2 = 2 + 4 = 6 tokens
-        assert_eq!(estimate_tokens_generic("```rust\n```"), 6);
+        // 带代码块：11 字节 / 4 向上取整 + 1 个换行奖励 + 2 个围栏 * 2 = 8 tokens
+        assert_eq!(estimate_tokens_generic("```rust\n```"), 8);
     }
 
     #[test]

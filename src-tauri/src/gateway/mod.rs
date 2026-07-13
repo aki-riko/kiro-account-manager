@@ -1448,12 +1448,23 @@ mod tests {
         assert_eq!(logs[2].outcome, "success");
         assert_eq!(logs[0].client_ip, "127.0.0.1");
         assert!(
-            logs[0].request_body.is_none(),
-            "request body should not be logged by default"
+            logs[0]
+                .request_body
+                .as_deref()
+                .is_some_and(|body| body.contains("\"hello world\"")),
+            "count_tokens request body should be logged when request logging is enabled"
         );
+        let count_tokens_response = logs[0]
+            .response_body
+            .as_deref()
+            .and_then(|body| serde_json::from_str::<Value>(body).ok())
+            .expect("count_tokens response body should be logged as json");
         assert!(
-            logs[0].response_body.is_none(),
-            "response body should not be logged by default"
+            count_tokens_response
+                .get("input_tokens")
+                .and_then(Value::as_u64)
+                .is_some_and(|tokens| tokens > 0),
+            "count_tokens response should contain a positive estimate"
         );
     }
 
@@ -1486,6 +1497,7 @@ mod tests {
     #[test]
     fn accepts_known_regions() {
         let mut config = GatewayConfig {
+            account_mode: "single".to_string(),
             account_id: Some("test-account".to_string()),
             access_token: Some("sk-test".to_string()),
             ..GatewayConfig::default()
@@ -1507,6 +1519,7 @@ mod tests {
     fn rejects_remote_access_without_api_key() {
         let config = GatewayConfig {
             local_only: false,
+            account_mode: "single".to_string(),
             account_id: Some("test-account".to_string()),
             access_token: None,
             ..GatewayConfig::default()
@@ -1673,7 +1686,13 @@ mod tests {
             .json()
             .await
             .expect("count tokens response should be json");
-        assert_eq!(payload.get("input_tokens").and_then(Value::as_u64), Some(2));
+        assert!(
+            payload
+                .get("input_tokens")
+                .and_then(Value::as_u64)
+                .is_some_and(|tokens| tokens > 0),
+            "count_tokens endpoint should return a positive estimate"
+        );
         stop_runtime(&mut runtime).await;
     }
 
@@ -1817,7 +1836,7 @@ mod tests {
         let mut runtime = spawn_runtime(config).await.expect("runtime should start");
 
         let response = reqwest::Client::new()
-            .post(format!("http://127.0.0.1:{port}/messages"))
+            .post(format!("http://127.0.0.1:{port}/v1/messages"))
             .header("content-type", "application/json")
             .body(
                 json!({

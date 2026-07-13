@@ -192,8 +192,19 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::{handle_deep_link, register_waiter, DeepLinkCallbackWaiter};
+    use super::{cancel_waiter, handle_deep_link, register_waiter, DeepLinkCallbackWaiter};
+    use std::sync::{Mutex, MutexGuard};
     use std::time::Duration;
+
+    static DEEP_LINK_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn lock_deep_link_test() -> MutexGuard<'static, ()> {
+        let guard = DEEP_LINK_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        cancel_waiter();
+        guard
+    }
 
     #[test]
     fn deep_link_scheme_matches_registered_tauri_scheme() {
@@ -216,6 +227,7 @@ mod tests {
 
     #[test]
     fn registering_new_waiter_cancels_previous_waiter() {
+        let _test_guard = lock_deep_link_test();
         let mut first = register_waiter("first-state");
         first.timeout = Duration::from_millis(20);
         let _second = register_waiter("second-state");
@@ -227,6 +239,7 @@ mod tests {
 
     #[test]
     fn handle_deep_link_keeps_waiter_when_scheme_does_not_match() {
+        let _test_guard = lock_deep_link_test();
         let waiter = register_waiter("expected-state");
 
         assert!(!handle_deep_link("wrong-scheme://callback?code=ok&state=expected-state").0);

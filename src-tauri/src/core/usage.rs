@@ -142,14 +142,9 @@ impl UsageDetails {
     pub fn from_usage_data(usage_data: Option<&Value>) -> Option<Self> {
         let item = usage_data?.get("usageBreakdownList")?.as_array()?.first()?;
 
-        let main_limit = item
-            .get("usageLimit")
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0);
-        let main_usage = item
-            .get("currentUsage")
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0);
+        let main_limit = read_amount(item, "usageLimit", "usageLimitWithPrecision").unwrap_or(0.0);
+        let main_usage =
+            read_amount(item, "currentUsage", "currentUsageWithPrecision").unwrap_or(0.0);
 
         // 免费试用（仅 ACTIVE 时计入）
         let trial_info = item.get("freeTrialInfo");
@@ -159,12 +154,10 @@ impl UsageDetails {
             == Some("ACTIVE");
         let (trial_limit, trial_usage) = if trial_active {
             let l = trial_info
-                .and_then(|t| t.get("usageLimit"))
-                .and_then(Value::as_f64)
+                .and_then(|trial| read_amount(trial, "usageLimit", "usageLimitWithPrecision"))
                 .unwrap_or(0.0);
             let u = trial_info
-                .and_then(|t| t.get("currentUsage"))
-                .and_then(Value::as_f64)
+                .and_then(|trial| read_amount(trial, "currentUsage", "currentUsageWithPrecision"))
                 .unwrap_or(0.0);
             (l, u)
         } else {
@@ -188,8 +181,10 @@ impl UsageDetails {
                         .unwrap_or(i64::MAX);
                     let active = b.get("status").and_then(Value::as_str) == Some("ACTIVE");
                     if expiry_ms > now_ms && active {
-                        let bl = b.get("usageLimit").and_then(Value::as_f64).unwrap_or(0.0);
-                        let bu = b.get("currentUsage").and_then(Value::as_f64).unwrap_or(0.0);
+                        let bl =
+                            read_amount(b, "usageLimit", "usageLimitWithPrecision").unwrap_or(0.0);
+                        let bu = read_amount(b, "currentUsage", "currentUsageWithPrecision")
+                            .unwrap_or(0.0);
                         (l + bl, u + bu)
                     } else {
                         (l, u)
@@ -199,9 +194,7 @@ impl UsageDetails {
             .unwrap_or((0.0, 0.0));
 
         let overage_cap = if OverageStatus::from_usage_data(usage_data).is_enabled() {
-            item.get("overageCap")
-                .and_then(Value::as_f64)
-                .unwrap_or(0.0)
+            read_amount(item, "overageCap", "overageCapWithPrecision").unwrap_or(0.0)
         } else {
             0.0
         };
@@ -422,5 +415,39 @@ mod tests {
         });
         let details = UsageDetails::from_usage_data(Some(&d)).unwrap();
         assert!((details.remaining() - 50.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn details_reads_precision_fields_for_all_active_quota_sources() {
+        let d = json!({
+            "overageConfiguration": { "overageStatus": "ENABLED" },
+            "usageBreakdownList": [{
+                "usageLimitWithPrecision": 100.5,
+                "currentUsageWithPrecision": 30.25,
+                "overageCapWithPrecision": 50.75,
+                "freeTrialInfo": {
+                    "freeTrialStatus": "ACTIVE",
+                    "usageLimitWithPrecision": 20.5,
+                    "currentUsageWithPrecision": 5.25
+                },
+                "bonuses": [{
+                    "status": "ACTIVE",
+                    "expiresAt": i64::MAX / 1000,
+                    "usageLimitWithPrecision": 30.25,
+                    "currentUsageWithPrecision": 10.5
+                }]
+            }]
+        });
+
+        let details = UsageDetails::from_usage_data(Some(&d)).unwrap();
+
+        assert!((details.main_limit - 100.5).abs() < 0.01);
+        assert!((details.main_usage - 30.25).abs() < 0.01);
+        assert!((details.trial_limit - 20.5).abs() < 0.01);
+        assert!((details.trial_usage - 5.25).abs() < 0.01);
+        assert!((details.bonus_limit - 30.25).abs() < 0.01);
+        assert!((details.bonus_usage - 10.5).abs() < 0.01);
+        assert!((details.overage_cap - 50.75).abs() < 0.01);
+        assert!((details.remaining() - 156.0).abs() < 0.01);
     }
 }

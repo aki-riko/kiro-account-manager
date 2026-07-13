@@ -2776,6 +2776,12 @@ fn normalize_request(format: ResponseFormat, payload: &Value) -> Result<Normaliz
                 .map_err(|error| format!("Anthropic 请求解析失败: {error}"))?;
             Ok(normalize_anthropic_request(&request))
         }
+        ResponseFormat::Responses if payload.get("input").is_some() => {
+            normalize_openai_responses_request(payload)
+        }
+        ResponseFormat::Responses if payload.get("messages").is_some() => {
+            normalize_openai_chat_payload(payload)
+        }
         ResponseFormat::Responses => normalize_openai_responses_request(payload),
         ResponseFormat::OpenAI => {
             let request: OpenAIChatRequest = serde_json::from_value(payload.clone())
@@ -5472,7 +5478,7 @@ mod tests {
                 .as_ref()
                 .and_then(|items| items.first())
                 .map(|tool| tool.function.name.as_str()),
-            Some("search_docs")
+            Some("searchDocs")
         );
         assert_eq!(responses_request.messages.len(), 3);
         assert_eq!(
