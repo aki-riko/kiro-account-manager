@@ -51,9 +51,12 @@ async fn proxy_request(
             Ok(body) => body,
             Err(error) => return error_response(StatusCode::BAD_REQUEST, &error),
         },
-        KskProxyOperation::ListAvailableModels => body.to_vec(),
+        KskProxyOperation::ListAvailableModels => match rewrite_model_list_body(&body) {
+            Ok(body) => body,
+            Err(error) => return error_response(StatusCode::BAD_REQUEST, &error),
+        },
     };
-    let upstream_url = state.config.upstream_url_for_operation(&uri, operation);
+    let upstream_url = state.config.upstream_url(&uri);
 
     let upstream = match state
         .http
@@ -91,18 +94,26 @@ fn error_response(status: StatusCode, message: &str) -> Response {
 }
 
 pub fn rewrite_runtime_body(body: &[u8]) -> Result<Vec<u8>, String> {
+    rewrite_body_without_profile_arn(body, "Kiro runtime")
+}
+
+pub fn rewrite_model_list_body(body: &[u8]) -> Result<Vec<u8>, String> {
+    rewrite_body_without_profile_arn(body, "Kiro 模型列表")
+}
+
+fn rewrite_body_without_profile_arn(body: &[u8], context: &str) -> Result<Vec<u8>, String> {
     let mut value: serde_json::Value = serde_json::from_slice(body)
-        .map_err(|error| format!("Kiro runtime 请求体不是有效 JSON: {error}"))?;
+        .map_err(|error| format!("{context} 请求体不是有效 JSON: {error}"))?;
     let object = value
         .as_object_mut()
-        .ok_or_else(|| "Kiro runtime 请求体必须是 JSON 对象".to_string())?;
+        .ok_or_else(|| format!("{context} 请求体必须是 JSON 对象"))?;
     object.remove("profileArn");
-    serde_json::to_vec(&value).map_err(|error| format!("序列化 Kiro runtime 请求体失败: {error}"))
+    serde_json::to_vec(&value).map_err(|error| format!("序列化 {context} 请求体失败: {error}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::rewrite_runtime_body;
+    use super::{rewrite_model_list_body, rewrite_runtime_body};
     use serde_json::{json, Value};
 
     #[test]
@@ -135,5 +146,23 @@ mod tests {
     fn rejects_non_object_runtime_body() {
         assert!(rewrite_runtime_body(b"not-json").is_err());
         assert!(rewrite_runtime_body(br#"[1, 2, 3]"#).is_err());
+    }
+
+    #[test]
+    fn model_list_body_removes_only_top_level_profile_arn() {
+        let source = json!({
+            "origin": "AI_EDITOR",
+            "profileArn": "arn:aws:codewhisperer:us-east-1:000000000000:profile/KAM-LOCAL",
+            "nextToken": "page-2",
+            "filter": { "profileArn": "keep-nested" }
+        });
+
+        let rewritten = rewrite_model_list_body(source.to_string().as_bytes()).expect("rewrite");
+        let parsed: Value = serde_json::from_slice(&rewritten).expect("valid json");
+
+        assert!(parsed.get("profileArn").is_none());
+        assert_eq!(parsed["origin"], "AI_EDITOR");
+        assert_eq!(parsed["nextToken"], "page-2");
+        assert_eq!(parsed["filter"]["profileArn"], "keep-nested");
     }
 }

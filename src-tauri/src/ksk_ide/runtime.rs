@@ -309,16 +309,33 @@ mod tests {
         headers: HeaderMap,
         body: Bytes,
     ) -> Response {
+        let is_model_list = headers
+            .get("x-amz-target")
+            .and_then(|value| value.to_str().ok())
+            == Some("KiroControlPlaneBearerService.ListAvailableModels");
         *state.request.lock().await = Some((method, uri, headers, body));
-        let eventstream = Bytes::from_static(b"\x00\x00\x00\x10eventstream");
-        Response::builder()
-            .status(StatusCode::OK)
-            .header(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static("application/vnd.amazon.eventstream"),
-            )
-            .body(Body::from(eventstream))
-            .expect("mock response")
+        if is_model_list {
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/json"),
+                )
+                .body(Body::from(
+                    r#"{"models":[{"modelId":"auto"}],"defaultModel":{"modelId":"auto"}}"#,
+                ))
+                .expect("mock model response")
+        } else {
+            let eventstream = Bytes::from_static(b"\x00\x00\x00\x10eventstream");
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/vnd.amazon.eventstream"),
+                )
+                .body(Body::from(eventstream))
+                .expect("mock eventstream response")
+        }
     }
 
     #[tokio::test]
@@ -417,7 +434,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn forwards_only_model_list_management_operation() {
+    async fn forwards_only_rpc_model_list_management_operation() {
         let capture = CaptureState::default();
         let upstream_app = Router::new()
             .fallback(any(capture_request))
@@ -453,35 +470,38 @@ mod tests {
             .expect("caller client");
 
         let response = caller
-            .get(format!(
-                "http://{}/List-Available-Models/?origin=AI_EDITOR&profileArn=KAM-LOCAL&nextToken=page-2",
-                runtime.local_addr()
-            ))
+            .post(format!("http://{}/", runtime.local_addr()))
             .header(
                 "x-amz-target",
                 "KiroControlPlaneBearerService.ListAvailableModels",
             )
             .header(header::AUTHORIZATION.as_str(), "Bearer placeholder")
             .header("TokenType", "EXTERNAL_IDP")
-            .body("{}")
+            .json(&json!({
+                "origin": "AI_EDITOR",
+                "profileArn": "KAM-LOCAL",
+                "nextToken": "page-2"
+            }))
             .send()
             .await
             .expect("model list proxy request");
 
         assert_eq!(response.status(), StatusCode::OK);
+        let response_body: Value = response.json().await.expect("model list response");
+        assert_eq!(response_body["models"][0]["modelId"], "auto");
         let (method, uri, headers, body) = capture
             .request
             .lock()
             .await
             .clone()
             .expect("captured model request");
-        assert_eq!(method, Method::GET);
-        assert_eq!(uri.path(), "/List-Available-Models/");
-        let query = uri.query().expect("model query");
-        assert!(query.contains("origin=AI_EDITOR"));
-        assert!(query.contains("nextToken=page-2"));
-        assert!(!query.contains("profileArn"));
-        assert_eq!(body, Bytes::from_static(b"{}"));
+        assert_eq!(method, Method::POST);
+        assert_eq!(uri.path(), "/");
+        assert!(uri.query().is_none());
+        let upstream_body: Value = serde_json::from_slice(&body).expect("upstream model body");
+        assert_eq!(upstream_body["origin"], "AI_EDITOR");
+        assert_eq!(upstream_body["nextToken"], "page-2");
+        assert!(upstream_body.get("profileArn").is_none());
         assert_eq!(
             headers
                 .get(header::AUTHORIZATION)

@@ -92,27 +92,6 @@ impl KskProxyConfig {
         url.set_query(uri.query());
         url
     }
-
-    pub fn upstream_url_for_operation(&self, uri: &Uri, operation: KskProxyOperation) -> Url {
-        let mut url = self.upstream_url(uri);
-        if operation != KskProxyOperation::ListAvailableModels {
-            return url;
-        }
-
-        let query_pairs = url
-            .query_pairs()
-            .filter(|(name, _)| !name.eq_ignore_ascii_case("profileArn"))
-            .map(|(name, value)| (name.into_owned(), value.into_owned()))
-            .collect::<Vec<_>>();
-        url.set_query(None);
-        if !query_pairs.is_empty() {
-            let mut query = url.query_pairs_mut();
-            for (name, value) in query_pairs {
-                query.append_pair(&name, &value);
-            }
-        }
-        url
-    }
 }
 
 impl fmt::Debug for KskProxyConfig {
@@ -127,6 +106,7 @@ impl fmt::Debug for KskProxyConfig {
     }
 }
 
+#[cfg(test)]
 pub fn is_allowed_operation(
     service: KiroService,
     method: &Method,
@@ -146,7 +126,7 @@ pub fn classify_operation(
         KiroService::Runtime if method == Method::POST => {
             classify_generate_assistant_response(uri, headers)
         }
-        KiroService::Management if method == Method::GET => {
+        KiroService::Management if method == Method::POST => {
             classify_list_available_models(uri, headers)
         }
         KiroService::Runtime | KiroService::Generic | KiroService::Management => None,
@@ -171,10 +151,7 @@ fn classify_generate_assistant_response(
 }
 
 fn classify_list_available_models(uri: &Uri, headers: &HeaderMap) -> Option<KskProxyOperation> {
-    let path_matches = uri
-        .path()
-        .trim_matches('/')
-        .eq_ignore_ascii_case("List-Available-Models");
+    let path_matches = uri.path() == "/";
     let target_matches = headers
         .get("x-amz-target")
         .and_then(|target| target.to_str().ok())
@@ -189,7 +166,6 @@ mod tests {
         classify_operation, is_allowed_operation, KiroService, KskProxyConfig, KskProxyOperation,
     };
     use axum::http::{HeaderMap, HeaderValue, Method, Uri};
-    use url::Url;
 
     #[test]
     fn runtime_allows_only_generate_assistant_response() {
@@ -257,33 +233,29 @@ mod tests {
     }
 
     #[test]
-    fn management_allows_only_list_available_models() {
+    fn management_allows_only_rpc_list_available_models() {
         let mut headers = HeaderMap::new();
         headers.insert(
             "x-amz-target",
             HeaderValue::from_static("KiroControlPlaneBearerService.ListAvailableModels"),
         );
-        let with_slash: Uri = "/List-Available-Models/?origin=AI_EDITOR&profileArn=placeholder"
-            .parse()
-            .expect("model list uri");
-        let without_slash: Uri = "/List-Available-Models?origin=AI_EDITOR"
-            .parse()
-            .expect("model list uri");
+        let root: Uri = "/".parse().expect("root uri");
+        let schema_path: Uri = "/List-Available-Models".parse().expect("schema path uri");
 
         assert_eq!(
-            classify_operation(KiroService::Management, &Method::GET, &with_slash, &headers,),
+            classify_operation(KiroService::Management, &Method::POST, &root, &headers,),
             Some(KskProxyOperation::ListAvailableModels)
         );
-        assert!(is_allowed_operation(
+        assert!(!is_allowed_operation(
             KiroService::Management,
             &Method::GET,
-            &without_slash,
+            &schema_path,
             &headers,
         ));
         assert!(!is_allowed_operation(
             KiroService::Management,
             &Method::POST,
-            &with_slash,
+            &schema_path,
             &headers,
         ));
 
@@ -293,42 +265,16 @@ mod tests {
         );
         assert!(!is_allowed_operation(
             KiroService::Management,
-            &Method::GET,
-            &with_slash,
+            &Method::POST,
+            &root,
             &headers,
         ));
         assert!(!is_allowed_operation(
             KiroService::Generic,
-            &Method::GET,
-            &with_slash,
+            &Method::POST,
+            &root,
             &headers,
         ));
-    }
-
-    #[test]
-    fn model_list_upstream_url_removes_only_placeholder_profile() {
-        let config = KskProxyConfig::for_test(
-            KiroService::Management,
-            "us-east-1",
-            "ksk_fixture-secret",
-            Url::parse("https://management.us-east-1.kiro.dev/").expect("management url"),
-        );
-        let uri: Uri = "/List-Available-Models/?origin=AI_EDITOR&profileArn=KAM-LOCAL&nextToken=page-2&maxResults=20"
-            .parse()
-            .expect("model list uri");
-
-        let upstream =
-            config.upstream_url_for_operation(&uri, KskProxyOperation::ListAvailableModels);
-        let query = upstream
-            .query_pairs()
-            .map(|(name, value)| (name.into_owned(), value.into_owned()))
-            .collect::<Vec<_>>();
-
-        assert_eq!(upstream.path(), "/List-Available-Models/");
-        assert!(query.contains(&("origin".to_string(), "AI_EDITOR".to_string())));
-        assert!(query.contains(&("nextToken".to_string(), "page-2".to_string())));
-        assert!(query.contains(&("maxResults".to_string(), "20".to_string())));
-        assert!(!query.iter().any(|(name, _)| name == "profileArn"));
     }
 
     #[test]
