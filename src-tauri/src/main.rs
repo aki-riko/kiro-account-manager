@@ -92,6 +92,7 @@ use commands::kiro_cli_cmd::{
     check_cli_installation, get_kiro_cli_default_path, import_from_kiro_cli, logout_cli_account,
     read_cli_db_snapshot, rollback_cli_switch, switch_to_cli_account,
 };
+use commands::ksk_ide_cmd::{get_ksk_ide_status, start_ksk_ide, stop_ksk_ide};
 //kiroshe
 use commands::kiro_settings_cmd::{
     get_kiro_settings, set_kiro_agent_autonomy, set_kiro_codebase_indexing, set_kiro_configure_mcp,
@@ -419,6 +420,7 @@ fn main() {
             auth: AuthState::new(),
             pending_login: Mutex::new(None),
             gateway: Mutex::new(None),
+            ksk_ide: tokio::sync::Mutex::new(None),
         })
         .manage(SessionStorage::new().expect("Failed to initialize SessionStorage"))
         .manage(services::cli_session_storage::CliSessionStorage::new().expect("Failed to initialize CliSessionStorage"))
@@ -492,6 +494,10 @@ fn main() {
             close_kiro_ide,
             start_kiro_ide,
             is_kiro_ide_running,
+            // KSK 隔离 Kiro IDE 命令
+            start_ksk_ide,
+            stop_ksk_ide,
+            get_ksk_ide_status,
             // Kiro IDE 设置命令
             get_kiro_settings,
             set_kiro_proxy,

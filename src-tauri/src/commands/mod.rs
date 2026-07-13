@@ -15,6 +15,7 @@ pub mod group_tag_cmd;
 pub mod hooks_cmd;
 pub mod kiro_cli_cmd;
 pub mod kiro_settings_cmd;
+pub mod ksk_ide_cmd;
 pub mod machine_guid;
 pub mod mcp_cmd;
 pub mod powers_cmd;

@@ -21,13 +21,24 @@ pub struct KskProxyConfig {
 
 impl KskProxyConfig {
     pub fn new(service: KiroService, region: &str, ksk: &str) -> Result<Self, String> {
+        Self::from_shared(service, region, Arc::from(ksk.trim()))
+    }
+
+    pub(crate) fn from_shared(
+        service: KiroService,
+        region: &str,
+        ksk: Arc<str>,
+    ) -> Result<Self, String> {
         let region = region.trim();
         if !is_supported_kiro_region(region) {
             return Err(format!("KSK 代理不支持区域: {region}"));
         }
 
-        let ksk = ksk.trim();
-        if !ksk.starts_with("ksk_") || ksk.len() <= "ksk_".len() {
+        let ksk_value = ksk.as_ref();
+        if ksk_value != ksk_value.trim() {
+            return Err("KSK 不得包含首尾空白".to_string());
+        }
+        if !ksk_value.starts_with("ksk_") || ksk_value.len() <= "ksk_".len() {
             return Err("KSK 格式无效，必须使用 ksk_ 前缀".to_string());
         }
 
@@ -42,7 +53,7 @@ impl KskProxyConfig {
         Ok(Self {
             service,
             region: region.to_string(),
-            ksk: Arc::from(ksk),
+            ksk,
             upstream_base,
         })
     }

@@ -1,9 +1,21 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::Path,
+    sync::Arc,
+    time::Duration as StdDuration,
+};
 
+use chrono::{DateTime, Duration as ChronoDuration, SecondsFormat, Utc};
 use reqwest::Client;
+use serde::Serialize;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 
-use super::{config::KskProxyConfig, proxy};
+use super::{
+    config::{KiroService, KskProxyConfig},
+    launcher::KiroIsolatedProcess,
+    profile::{IsolatedIdeEndpoints, IsolatedIdeProfile},
+    proxy,
+};
 
 pub struct KskProxyRuntime {
     local_addr: SocketAddr,
@@ -55,9 +67,210 @@ impl KskProxyRuntime {
     }
 }
 
+struct KskProxySet {
+    runtimes: Vec<(KiroService, KskProxyRuntime)>,
+}
+
+impl KskProxySet {
+    async fn spawn(region: &str, ksk: Arc<str>, http: Client) -> Result<Self, String> {
+        let mut set = Self {
+            runtimes: Vec::new(),
+        };
+        for service in [
+            KiroService::Runtime,
+            KiroService::Generic,
+            KiroService::Management,
+        ] {
+            let config = KskProxyConfig::from_shared(service, region, ksk.clone())?;
+            match KskProxyRuntime::spawn(config, http.clone()).await {
+                Ok(runtime) => set.runtimes.push((service, runtime)),
+                Err(error) => return Err(set.cleanup_start_failure(error).await),
+            }
+        }
+        Ok(set)
+    }
+
+    fn endpoints(&self) -> Result<IsolatedIdeEndpoints, String> {
+        Ok(IsolatedIdeEndpoints {
+            generic: self.address(KiroService::Generic)?,
+            runtime: self.address(KiroService::Runtime)?,
+            management: self.address(KiroService::Management)?,
+        })
+    }
+
+    fn address(&self, service: KiroService) -> Result<SocketAddr, String> {
+        self.runtimes
+            .iter()
+            .find_map(|(candidate, runtime)| (*candidate == service).then(|| runtime.local_addr()))
+            .ok_or_else(|| format!("KSK {:?} 代理未启动", service))
+    }
+
+    async fn cleanup_start_failure(&mut self, error: String) -> String {
+        match self.stop().await {
+            Ok(()) => error,
+            Err(cleanup_error) => format!("{error}; 清理已启动代理失败: {cleanup_error}"),
+        }
+    }
+
+    async fn stop(&mut self) -> Result<(), String> {
+        let mut errors = Vec::new();
+        while let Some((service, mut runtime)) = self.runtimes.pop() {
+            if let Err(error) = runtime.stop().await {
+                errors.push(format!("停止 {:?} 代理失败: {error}", service));
+            }
+        }
+        combine_errors(errors)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct KskIdeStatus {
+    pub running: bool,
+    pub region: Option<String>,
+    pub pid: Option<u32>,
+    pub session_id: Option<String>,
+    pub started_at: Option<String>,
+}
+
+impl KskIdeStatus {
+    pub fn idle() -> Self {
+        Self {
+            running: false,
+            region: None,
+            pid: None,
+            session_id: None,
+            started_at: None,
+        }
+    }
+}
+
+pub struct KskIdeRuntime {
+    region: String,
+    started_at: DateTime<Utc>,
+    proxies: KskProxySet,
+    profile: Option<IsolatedIdeProfile>,
+    process: Option<KiroIsolatedProcess>,
+}
+
+impl KskIdeRuntime {
+    pub async fn start(
+        isolation_root: &Path,
+        region: &str,
+        ksk: &str,
+        placeholder_ttl: ChronoDuration,
+    ) -> Result<Self, String> {
+        let shared_ksk: Arc<str> = Arc::from(ksk.trim());
+        let http = crate::clients::http_client::build_streaming_http_client()?;
+        let mut proxies = KskProxySet::spawn(region, shared_ksk, http).await?;
+        let endpoints = match proxies.endpoints() {
+            Ok(endpoints) => endpoints,
+            Err(error) => return Err(proxies.cleanup_start_failure(error).await),
+        };
+        let profile =
+            match IsolatedIdeProfile::create(isolation_root, region, endpoints, placeholder_ttl) {
+                Ok(profile) => profile,
+                Err(error) => return Err(proxies.cleanup_start_failure(error).await),
+            };
+        let process = match KiroIsolatedProcess::launch(&profile) {
+            Ok(process) => process,
+            Err(error) => return Err(cleanup_launch_failure(error, &profile, &mut proxies).await),
+        };
+        Ok(Self {
+            region: region.trim().to_string(),
+            started_at: Utc::now(),
+            proxies,
+            profile: Some(profile),
+            process: Some(process),
+        })
+    }
+
+    pub fn status(&mut self) -> Result<KskIdeStatus, String> {
+        let running = self
+            .process
+            .as_mut()
+            .map(KiroIsolatedProcess::is_running)
+            .transpose()?
+            .unwrap_or(false);
+        Ok(KskIdeStatus {
+            running,
+            region: Some(self.region.clone()),
+            pid: self.process.as_ref().map(KiroIsolatedProcess::pid),
+            session_id: self
+                .profile
+                .as_ref()
+                .map(|profile| profile.session_id().simple().to_string()[..8].to_string()),
+            started_at: Some(self.started_at.to_rfc3339_opts(SecondsFormat::Millis, true)),
+        })
+    }
+
+    pub async fn stop(&mut self, process_timeout: StdDuration) -> Result<(), String> {
+        let mut errors = Vec::new();
+        let process_stopped = match self.stop_process(process_timeout) {
+            Ok(()) => true,
+            Err(error) => {
+                errors.push(error);
+                false
+            }
+        };
+        if let Err(error) = self.proxies.stop().await {
+            errors.push(error);
+        }
+        if process_stopped {
+            if let Err(error) = self.cleanup_profile() {
+                errors.push(error);
+            }
+        } else {
+            errors.push("隔离 Kiro 仍在运行，已保留其 profile 以便再次停止".to_string());
+        }
+        combine_errors(errors)
+    }
+
+    fn stop_process(&mut self, timeout: StdDuration) -> Result<(), String> {
+        let Some(process) = self.process.as_mut() else {
+            return Ok(());
+        };
+        process.stop(timeout)?;
+        self.process = None;
+        Ok(())
+    }
+
+    fn cleanup_profile(&mut self) -> Result<(), String> {
+        let Some(profile) = self.profile.as_ref() else {
+            return Ok(());
+        };
+        profile.cleanup()?;
+        self.profile = None;
+        Ok(())
+    }
+}
+
+async fn cleanup_launch_failure(
+    error: String,
+    profile: &IsolatedIdeProfile,
+    proxies: &mut KskProxySet,
+) -> String {
+    let mut errors = vec![error];
+    if let Err(cleanup_error) = profile.cleanup() {
+        errors.push(format!("清理隔离 profile 失败: {cleanup_error}"));
+    }
+    if let Err(cleanup_error) = proxies.stop().await {
+        errors.push(cleanup_error);
+    }
+    errors.join("; ")
+}
+
+fn combine_errors(errors: Vec<String>) -> Result<(), String> {
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashSet, sync::Arc};
 
     use axum::{
         body::{Body, Bytes},
@@ -71,7 +284,7 @@ mod tests {
     use tokio::{net::TcpListener, sync::Mutex};
     use url::Url;
 
-    use super::KskProxyRuntime;
+    use super::{KskProxyRuntime, KskProxySet};
     use crate::ksk_ide::config::{KiroService, KskProxyConfig};
 
     #[derive(Clone, Default)]
@@ -189,5 +402,30 @@ mod tests {
 
         runtime.stop().await.expect("stop proxy runtime");
         upstream_task.abort();
+    }
+
+    #[tokio::test]
+    async fn proxy_set_uses_three_distinct_loopback_ports() {
+        let http = reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test http client");
+        let mut set = KskProxySet::spawn("us-east-1", Arc::from("ksk_proxy-set-fixture"), http)
+            .await
+            .expect("spawn proxy set");
+        let endpoints = set.endpoints().expect("proxy endpoints");
+        let addresses = [endpoints.generic, endpoints.runtime, endpoints.management];
+
+        assert!(addresses.iter().all(|address| address.ip().is_loopback()));
+        assert_eq!(
+            addresses
+                .into_iter()
+                .map(|address| address.port())
+                .collect::<HashSet<_>>()
+                .len(),
+            3
+        );
+
+        set.stop().await.expect("stop proxy set");
     }
 }
