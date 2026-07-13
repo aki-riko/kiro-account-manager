@@ -12,7 +12,7 @@ use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
 
 use super::{
     config::{KiroService, KskProxyConfig},
-    launcher::KiroIsolatedProcess,
+    launcher::{ensure_isolated_launch_available, KiroIsolatedProcess},
     profile::{IsolatedIdeEndpoints, IsolatedIdeProfile},
     proxy,
 };
@@ -160,6 +160,7 @@ impl KskIdeRuntime {
         ksk: &str,
         placeholder_ttl: ChronoDuration,
     ) -> Result<Self, String> {
+        ensure_isolated_launch_available()?;
         let shared_ksk: Arc<str> = Arc::from(ksk.trim());
         let http = crate::clients::http_client::build_streaming_http_client()?;
         let mut proxies = KskProxySet::spawn(region, shared_ksk, http).await?;
@@ -267,6 +268,9 @@ fn combine_errors(errors: Vec<String>) -> Result<(), String> {
         Err(errors.join("; "))
     }
 }
+
+#[cfg(all(test, target_os = "windows"))]
+mod lifecycle_tests;
 
 #[cfg(test)]
 mod tests {

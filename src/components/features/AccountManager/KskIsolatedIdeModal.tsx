@@ -116,13 +116,13 @@ function KskIsolatedIdeModal({ onClose }: KskIsolatedIdeModalProps) {
         <DialogHeader icon={KeyRound} iconColor="text-amber-400" iconBg="bg-amber-500/10">
           <DialogTitle>KSK 隔离 Kiro IDE</DialogTitle>
           <DialogDescription>
-            KSK 仅保存在 KAM 当前运行时内存中；正式 Kiro 配置和登录态不会被修改。
+            KSK 仅保存在 KAM 当前运行时内存中，并使用独立配置目录启动 Kiro。
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody>
           <div className="rounded-xl border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
-            首版仅保证核心聊天链路。用量、订阅、MCP、自动补全等功能可能显示不可用。
+            启动前必须完全退出正式 Kiro；当前版本禁止两个 Kiro 实例并行运行。首版仅保证核心聊天链路，用量、订阅、MCP、自动补全等功能可能显示不可用。
           </div>
 
           <label className="block space-y-1.5">

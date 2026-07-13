@@ -36,6 +36,7 @@ pub struct KiroIsolatedProcess {
 
 impl KiroIsolatedProcess {
     pub fn launch(profile: &IsolatedIdeProfile) -> Result<Self, String> {
+        ensure_isolated_launch_available()?;
         let executable = discover_kiro_executable()?;
         Self::launch_with_executable(&executable, profile)
     }
@@ -87,6 +88,20 @@ impl KiroIsolatedProcess {
         }
         Err(format!("隔离 Kiro 进程树未在期限内退出，PID={}", self.pid))
     }
+}
+
+pub fn ensure_isolated_launch_available() -> Result<(), String> {
+    validate_no_existing_kiro(crate::kiro::process::check_kiro_running())
+}
+
+fn validate_no_existing_kiro(kiro_running: bool) -> Result<(), String> {
+    if kiro_running {
+        return Err(
+            "检测到正式 Kiro IDE 正在运行；官方单实例行为可能影响现有进程，请先完全退出正式 Kiro 后再启动 KSK 隔离实例"
+                .to_string(),
+        );
+    }
+    Ok(())
 }
 
 pub fn discover_kiro_executable() -> Result<PathBuf, String> {
@@ -162,7 +177,9 @@ fn request_process_tree_stop(_pid: u32, _force: bool) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_launch_command, INHERITED_AWS_CREDENTIAL_ENV};
+    use super::{
+        build_launch_command, validate_no_existing_kiro, INHERITED_AWS_CREDENTIAL_ENV,
+    };
     use crate::ksk_ide::profile::{IsolatedIdeEndpoints, IsolatedIdeProfile};
     use chrono::Duration;
     use std::{
@@ -219,5 +236,12 @@ mod tests {
 
         profile.cleanup().expect("cleanup launcher profile");
         std::fs::remove_dir(&root).expect("remove launcher test root");
+    }
+
+    #[test]
+    fn parallel_launch_requires_formal_kiro_to_be_closed() {
+        assert!(validate_no_existing_kiro(false).is_ok());
+        let error = validate_no_existing_kiro(true).expect_err("parallel Kiro must be rejected");
+        assert!(error.contains("请先完全退出正式 Kiro"));
     }
 }
