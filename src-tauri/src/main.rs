@@ -10,6 +10,7 @@ mod clients;
 mod commands;
 mod gateway;
 mod kiro;
+mod ksk_ide;
 mod model_lock;
 mod models;
 mod services;
