@@ -15,6 +15,7 @@ pub enum KiroService {
 pub enum KskProxyOperation {
     GenerateAssistantResponse,
     ListAvailableModels,
+    GetUsageLimits,
 }
 
 #[derive(Clone)]
@@ -129,6 +130,7 @@ pub fn classify_operation(
         KiroService::Management if method == Method::POST => {
             classify_list_available_models(uri, headers)
         }
+        KiroService::Management if method == Method::GET => classify_get_usage_limits(uri),
         KiroService::Runtime | KiroService::Generic | KiroService::Management => None,
     }
 }
@@ -158,6 +160,34 @@ fn classify_list_available_models(uri: &Uri, headers: &HeaderMap) -> Option<KskP
         == Some("KiroControlPlaneBearerService.ListAvailableModels");
 
     (path_matches && target_matches).then_some(KskProxyOperation::ListAvailableModels)
+}
+
+fn classify_get_usage_limits(uri: &Uri) -> Option<KskProxyOperation> {
+    if uri.path() != "/getUsageLimits" {
+        return None;
+    }
+
+    let mut origin = false;
+    let mut resource_type = false;
+    let mut profile_arn = false;
+    let mut is_email_required = false;
+    for (key, value) in url::form_urlencoded::parse(uri.query()?.as_bytes()) {
+        match key.as_ref() {
+            "origin" if !origin && value == "AI_EDITOR" => origin = true,
+            "resourceType" if !resource_type && value == "AGENTIC_REQUEST" => {
+                resource_type = true;
+            }
+            "profileArn" if !profile_arn && !value.trim().is_empty() => profile_arn = true,
+            "isEmailRequired"
+                if !is_email_required && matches!(value.as_ref(), "true" | "false") =>
+            {
+                is_email_required = true;
+            }
+            _ => return None,
+        }
+    }
+
+    (origin && resource_type && profile_arn).then_some(KskProxyOperation::GetUsageLimits)
 }
 
 #[cfg(test)]
@@ -233,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn management_allows_only_rpc_list_available_models() {
+    fn management_allows_only_model_rpc_and_exact_usage_query() {
         let mut headers = HeaderMap::new();
         headers.insert(
             "x-amz-target",
@@ -274,6 +304,49 @@ mod tests {
             &Method::POST,
             &root,
             &headers,
+        ));
+
+        let usage: Uri = "/getUsageLimits?profileArn=arn%3Aaws%3Acodewhisperer%3Aus-east-1%3A000000000000%3Aprofile%2FKAM-LOCAL&origin=AI_EDITOR&resourceType=AGENTIC_REQUEST&isEmailRequired=true"
+            .parse()
+            .expect("usage uri");
+        assert_eq!(
+            classify_operation(
+                KiroService::Management,
+                &Method::GET,
+                &usage,
+                &HeaderMap::new(),
+            ),
+            Some(KskProxyOperation::GetUsageLimits)
+        );
+        assert!(!is_allowed_operation(
+            KiroService::Management,
+            &Method::POST,
+            &usage,
+            &HeaderMap::new(),
+        ));
+        assert!(!is_allowed_operation(
+            KiroService::Generic,
+            &Method::GET,
+            &usage,
+            &HeaderMap::new(),
+        ));
+        let incomplete_usage: Uri = "/getUsageLimits?origin=AI_EDITOR&resourceType=AGENTIC_REQUEST"
+            .parse()
+            .expect("incomplete usage uri");
+        assert!(!is_allowed_operation(
+            KiroService::Management,
+            &Method::GET,
+            &incomplete_usage,
+            &HeaderMap::new(),
+        ));
+        let unknown_query: Uri = "/getUsageLimits?profileArn=KAM-LOCAL&origin=AI_EDITOR&resourceType=AGENTIC_REQUEST&extra=true"
+            .parse()
+            .expect("unknown usage query");
+        assert!(!is_allowed_operation(
+            KiroService::Management,
+            &Method::GET,
+            &unknown_query,
+            &HeaderMap::new(),
         ));
     }
 

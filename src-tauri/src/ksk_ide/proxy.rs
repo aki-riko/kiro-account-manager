@@ -75,11 +75,8 @@ async fn proxy_request(
         return error_response(StatusCode::FORBIDDEN, "KSK 本地代理拒绝未授权操作");
     };
 
-    let upstream_headers = match build_upstream_headers(&headers, state.config.ksk()) {
-        Ok(headers) => headers,
-        Err(error) => return error_response(StatusCode::BAD_REQUEST, &error),
-    };
     let upstream_body = match operation {
+        KskProxyOperation::GetUsageLimits => return unavailable_usage_response(),
         KskProxyOperation::GenerateAssistantResponse => match rewrite_runtime_body(&body) {
             Ok(body) => body,
             Err(error) => return error_response(StatusCode::BAD_REQUEST, &error),
@@ -88,6 +85,10 @@ async fn proxy_request(
             Ok(body) => body,
             Err(error) => return error_response(StatusCode::BAD_REQUEST, &error),
         },
+    };
+    let upstream_headers = match build_upstream_headers(&headers, state.config.ksk()) {
+        Ok(headers) => headers,
+        Err(error) => return error_response(StatusCode::BAD_REQUEST, &error),
     };
     let upstream_url = state.config.upstream_url(&uri);
 
@@ -117,6 +118,21 @@ async fn proxy_request(
     let mut response = Response::new(Body::from_stream(upstream.bytes_stream()));
     *response.status_mut() = status;
     *response.headers_mut() = headers;
+    response
+}
+
+fn unavailable_usage_response() -> Response {
+    let body = serde_json::json!({
+        "usageBreakdownList": [],
+        "subscriptionInfo": {},
+        "overageConfiguration": {},
+        "userInfo": {},
+    });
+    let mut response = Response::new(Body::from(body.to_string()));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
     response
 }
 

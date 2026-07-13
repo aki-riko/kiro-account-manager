@@ -515,6 +515,35 @@ mod tests {
             Some("API_KEY")
         );
 
+        let usage = caller
+            .get(format!(
+                "http://{}/getUsageLimits?profileArn=KAM-LOCAL&origin=AI_EDITOR&resourceType=AGENTIC_REQUEST&isEmailRequired=true",
+                runtime.local_addr()
+            ))
+            .send()
+            .await
+            .expect("local usage response");
+        assert_eq!(usage.status(), StatusCode::OK);
+        assert_eq!(
+            usage
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("application/json")
+        );
+        let usage_body: Value = usage.json().await.expect("valid usage json");
+        assert_eq!(usage_body["usageBreakdownList"], json!([]));
+        assert_eq!(usage_body["subscriptionInfo"], json!({}));
+
+        let (method, uri, _, _) = capture
+            .request
+            .lock()
+            .await
+            .clone()
+            .expect("model request remains the only upstream request");
+        assert_eq!(method, Method::POST);
+        assert_eq!(uri.path(), "/");
+
         let denied = caller
             .get(format!(
                 "http://{}/getUsageLimits?origin=AI_EDITOR",
@@ -522,7 +551,7 @@ mod tests {
             ))
             .send()
             .await
-            .expect("denied management request");
+            .expect("denied incomplete usage request");
         assert_eq!(denied.status(), StatusCode::FORBIDDEN);
         assert_eq!(
             denied

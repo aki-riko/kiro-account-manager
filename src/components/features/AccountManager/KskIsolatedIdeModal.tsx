@@ -122,7 +122,7 @@ function KskIsolatedIdeModal({ onClose }: KskIsolatedIdeModalProps) {
 
         <DialogBody>
           <div className="rounded-xl border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
-            启动前必须完全退出正式 Kiro；当前版本禁止两个 Kiro 实例并行运行。首版仅保证核心聊天链路，用量、订阅、MCP、自动补全等功能可能显示不可用。
+            启动前必须完全退出正式 Kiro；当前版本禁止两个 Kiro 实例并行运行。已支持模型列表、模型切换和对话；KSK 不提供额度或订阅信息，MCP、远程工具及自动补全暂未开放。
           </div>
 
           <label className="block space-y-1.5">
