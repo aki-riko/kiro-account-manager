@@ -440,6 +440,9 @@ mod tests {
     #[test]
     fn test_response_cache_lru_eviction() {
         let mut config = CacheConfig::default();
+        // 只验证第二层 LRU；关闭可独立命中的增量缓存和持久化缓存。
+        config.summary_cache_enabled = false;
+        config.persistent_cache_enabled = false;
         config.lru_cache_capacity = 2;
         let mut cache = ResponseCache::new(config, None);
 
