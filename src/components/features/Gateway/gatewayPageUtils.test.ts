@@ -25,8 +25,9 @@ test('formatGatewayAccountOptionLabel shows email with quota and status', () => 
     userId: 'user-id-foo',
     id: 'abc',
     status: 'active',
-    quota: 100,
-    used: 30
+    usageData: {
+      usageBreakdownList: [{ usageLimit: 100, currentUsage: 30 }]
+    }
   })
   assert.equal(label, 'foo@example.com 剩余 70/100')
 })
@@ -49,8 +50,9 @@ test('formatGatewayAccountOptionLabel falls back to userId when email is missing
     formatGatewayAccountOptionLabel({
       userId: 'builder-user-1',
       id: '0d24370c-1111-2222-3333-444455556666',
-      quota: 50,
-      used: 10
+      usageData: {
+        usageBreakdownList: [{ usageLimit: 50, currentUsage: 10 }]
+      }
     }),
     'builder-user-1 剩余 40/50'
   )

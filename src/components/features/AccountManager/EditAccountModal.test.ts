@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises'
 
 const source = await readFile(new URL('./EditAccountModal.tsx', import.meta.url), 'utf8')
 
-assert.match(source, /await invoke(?:<[^>]+>)?\('update_account',\s*\{\s*params\s*\}\s*\)/)
-assert.doesNotMatch(source, /await invoke(?:<[^>]+>)?\('update_account',\s*params\s*\)/)
+assert.match(source, /import \{[^}]*updateAccount[^}]*\} from '\.\.\/\.\.\/\.\.\/api\/accountApi'/s)
+assert.match(source, /await updateAccount(?:<[^>]+>)?\(params\)/)
+assert.doesNotMatch(source, /invoke(?:<[^>]+>)?\('update_account'/)
 
 console.log('EditAccountModal update_account wiring looks correct')
