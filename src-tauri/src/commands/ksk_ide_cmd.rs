@@ -51,15 +51,9 @@ pub async fn start_ksk_ide(
 
 #[tauri::command]
 pub async fn stop_ksk_ide(state: State<'_, AppState>) -> Result<KskIdeStatus, String> {
-    let mut slot = state.ksk_ide.lock().await;
-    let Some(runtime) = slot.as_mut() else {
-        return Ok(KskIdeStatus::idle());
-    };
-    runtime
-        .stop(StdDuration::from_secs(PROCESS_STOP_TIMEOUT_SECONDS))
-        .await?;
-    *slot = None;
-    log::info!("[KskIde] 隔离实例已停止并完成清理");
+    if shutdown_ksk_ide_runtime(&state.ksk_ide).await? {
+        log::info!("[KskIde] 隔离实例已停止并完成清理");
+    }
     Ok(KskIdeStatus::idle())
 }
 
@@ -81,4 +75,38 @@ fn isolated_ide_root() -> Result<PathBuf, String> {
     dirs::data_local_dir()
         .ok_or_else(|| "无法获取应用本地数据目录".to_string())
         .map(|path| path.join(".kiro-account-manager").join("isolated-ide"))
+}
+
+pub(crate) async fn shutdown_ksk_ide_runtime(
+    slot: &tokio::sync::Mutex<Option<KskIdeRuntime>>,
+) -> Result<bool, String> {
+    let mut runtime_slot = slot.lock().await;
+    let Some(runtime) = runtime_slot.as_mut() else {
+        return Ok(false);
+    };
+    runtime
+        .stop(StdDuration::from_secs(PROCESS_STOP_TIMEOUT_SECONDS))
+        .await?;
+    *runtime_slot = None;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::Mutex;
+
+    use super::shutdown_ksk_ide_runtime;
+
+    #[tokio::test]
+    async fn shutdown_empty_runtime_slot_is_idempotent() {
+        let slot = Mutex::new(None);
+
+        assert!(!shutdown_ksk_ide_runtime(&slot)
+            .await
+            .expect("shutdown empty KSK runtime slot"));
+        assert!(!shutdown_ksk_ide_runtime(&slot)
+            .await
+            .expect("repeat shutdown empty KSK runtime slot"));
+        assert!(slot.lock().await.is_none());
+    }
 }

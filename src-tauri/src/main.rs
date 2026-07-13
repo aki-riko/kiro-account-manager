@@ -93,7 +93,7 @@ use commands::kiro_cli_cmd::{
     read_cli_db_snapshot, rollback_cli_switch, switch_to_cli_account,
 };
 use commands::ksk_ide_cmd::{
-    get_ksk_ide_regions, get_ksk_ide_status, start_ksk_ide, stop_ksk_ide,
+    get_ksk_ide_regions, get_ksk_ide_status, shutdown_ksk_ide_runtime, start_ksk_ide, stop_ksk_ide,
 };
 //kiroshe
 use commands::kiro_settings_cmd::{
@@ -401,6 +401,15 @@ fn setup_window_close_handler(app: &mut tauri::App) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+fn cleanup_ksk_ide_on_exit(app_handle: &tauri::AppHandle) {
+    let state = app_handle.state::<AppState>();
+    match tauri::async_runtime::block_on(shutdown_ksk_ide_runtime(&state.ksk_ide)) {
+        Ok(true) => log::info!("[KskIde] 应用退出前已停止隔离实例并完成清理"),
+        Ok(false) => {}
+        Err(error) => log::error!("[KskIde] 应用退出清理失败: {error}"),
+    }
+}
+
 #[allow(clippy::too_many_lines)] // Tauri 框架要求在 main 中注册所有命令，无法拆分
 fn main() {
     tauri::Builder::default()
@@ -634,6 +643,11 @@ fn main() {
             // 窗口显示命令
             show_main_window
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                cleanup_ksk_ide_on_exit(app_handle);
+            }
+        });
 }
