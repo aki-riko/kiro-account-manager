@@ -302,6 +302,13 @@ pub fn is_supported_kiro_region(region: &str) -> bool {
     normalize_kiro_region(Some(region)).is_some()
 }
 
+pub fn supported_kiro_regions() -> Vec<String> {
+    SUPPORTED_KIRO_REGIONS
+        .iter()
+        .map(|region| (*region).to_string())
+        .collect()
+}
+
 pub fn parse_region_from_profile_arn(profile_arn: Option<&str>) -> Option<String> {
     let profile_arn = profile_arn?.trim();
     if profile_arn.is_empty() {
@@ -580,7 +587,7 @@ mod tests {
     use super::{
         build_kiro_custom_user_agent, build_kiro_x_amz_user_agent, is_external_idp_auth_method,
         is_supported_kiro_region, parse_region_from_profile_arn, resolve_kiro_upstream_region,
-        should_add_redirect_for_internal,
+        should_add_redirect_for_internal, supported_kiro_regions,
     };
 
     #[test]
@@ -648,6 +655,14 @@ mod tests {
         assert!(is_supported_kiro_region("us-east-1"));
         assert!(is_supported_kiro_region("us-gov-west-1"));
         assert!(is_supported_kiro_region("eu-west-1"));
+    }
+
+    #[test]
+    fn supported_region_list_reuses_the_shared_allow_list() {
+        let regions = supported_kiro_regions();
+        assert!(regions.contains(&"us-east-1".to_string()));
+        assert!(regions.contains(&"eu-central-1".to_string()));
+        assert!(regions.iter().all(|region| is_supported_kiro_region(region)));
     }
 
     #[test]

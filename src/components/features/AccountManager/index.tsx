@@ -32,6 +32,7 @@ import AccountDetailModal from './AccountDetailModal'
 import EditAccountModal from './EditAccountModal'
 import BatchEditModal from './BatchEditModal'
 import ConfirmModal from './ConfirmModal'
+import KskIsolatedIdeModal from './KskIsolatedIdeModal'
 import { AccountListSkeleton, AccountTableSkeleton } from '../../shared/Skeleton'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
 import { ListAvailableModelsResponse } from '../../../types/account'
@@ -55,6 +56,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   const [editingLabelAccount, setEditingLabelAccount] = useState<any>(null)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showBatchEditModal, setShowBatchEditModal] = useState(false)
+  const [showKskIdeModal, setShowKskIdeModal] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null)
@@ -574,6 +576,7 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
         onBatchDelete={onBatchDelete}
         onBatchEdit={() => setShowBatchEditModal(true)}
         onImport={() => setShowImportModal(true)}
+        onKskIde={() => setShowKskIdeModal(true)}
         onExport={async () => {
           if (selectedIds.length === 0) {
             showError(t('accounts.exportSelectFirst') || '请先选择要导出的账号')
@@ -765,6 +768,9 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
             setSelectedIds([])
           }}
         />
+      )}
+      {showKskIdeModal && (
+        <KskIsolatedIdeModal onClose={() => setShowKskIdeModal(false)} />
       )}
 
 

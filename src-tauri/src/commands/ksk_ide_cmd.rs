@@ -72,6 +72,11 @@ pub async fn get_ksk_ide_status(state: State<'_, AppState>) -> Result<KskIdeStat
     }
 }
 
+#[tauri::command]
+pub fn get_ksk_ide_regions() -> Vec<String> {
+    crate::clients::http_client::supported_kiro_regions()
+}
+
 fn isolated_ide_root() -> Result<PathBuf, String> {
     dirs::data_local_dir()
         .ok_or_else(|| "无法获取应用本地数据目录".to_string())
