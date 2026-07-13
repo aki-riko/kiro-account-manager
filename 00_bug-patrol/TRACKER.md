@@ -3,19 +3,21 @@
 - 当前基线：`d16dc11`
 - 当前任务：修复 KAM 上游已有的 15 个基线测试失败
 - 工作分支：`codex/kam-baseline-tests`
-- 状态：排查完成，正在执行修复
+- 状态：已完成
 
-## 当前问题
+## 已修复问题
 
-- [P1] UsageDetails 未读取 WithPrecision 配额字段
-- [P1] Responses 路由不能兼容 Chat messages 载荷
-- [P1] tool_choice 原始名称与 Kiro camelCase 工具名校验不一致
-- [P2] converter history 测试仍依赖 sanitize 前的固定索引
-- [P2] 模型、缓存、日志、配置和 token 测试未跟随现行契约
-- [P2] messages 真实 HTTP 鉴权测试使用了未注册的 `/messages` 路径
+- [P1] UsageDetails 未读取 WithPrecision 配额字段 — `32a42ec`
+- [P1] Responses 路由不能兼容 Chat messages 载荷 — `c305bbe`
+- [P1] tool_choice 原始名称与 Kiro camelCase 工具名校验不一致 — `c305bbe`
+- [P2] converter history 测试仍依赖 sanitize 前的固定索引 — `c305bbe`
+- [P2] 模型、缓存、日志、配置和 token 测试未跟随现行契约 — `c305bbe`、`c70749b`、`a8780fb`
+- [P2] messages 真实 HTTP 鉴权测试使用了未注册的 `/messages` 路径 — `a8780fb`
 
-## 验收条件
+## 验收结果
 
-- `cargo test --bin kiro-account-manager`：239/239 通过
-- 不混入 `src-tauri/src/ksk_ide/` 和主工作区 `main.rs` 改动
-- 每组修改定向测试通过后提交
+- `cargo test --bin kiro-account-manager`：240/240 通过
+- 原始 239 项基线全部通过，另新增 1 项 precision 回归测试
+- 未混入 `src-tauri/src/ksk_ide/` 和主工作区 `main.rs` 改动
+- 四个修复组均已完成定向测试并独立提交
+- 推送 `origin/codex/kam-baseline-tests` 失败：当前 GitHub 凭据无上游仓库写权限
