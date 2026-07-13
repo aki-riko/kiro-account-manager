@@ -1,9 +1,17 @@
 # Bug Patrol Tracker
 
-- 当前基线：`d16dc11`
-- 当前任务：修复 KAM 上游已有的 15 个基线测试失败
-- 工作分支：`codex/kam-baseline-tests`
-- 状态：已完成
+- 当前基线：`d20497e`
+- 当前任务：修复 KSK 隔离 Kiro 的模型列表被本地代理拒绝
+- 工作分支：`codex/ksk-isolated-ide`
+- 状态：修复中
+
+## 当前问题
+
+- [P1] KSK 隔离 Kiro 的 `ListAvailableModels` 管理面请求被白名单拒绝，官方 SDK 回退为空模型列表 — 已确认
+
+## 当前会话
+
+- [2026-07-14 KSK 隔离 IDE 模型不可选择](sessions/2026-07-14_KSK隔离IDE模型不可选择.md)
 
 ## 已修复问题
 
