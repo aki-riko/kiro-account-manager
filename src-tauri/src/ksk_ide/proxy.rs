@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     body::{Body, Bytes},
     extract::State,
-    http::{HeaderMap, Method, StatusCode, Uri},
+    http::{header, HeaderMap, HeaderValue, Method, StatusCode, Uri},
     response::Response,
     routing::any,
     Router,
@@ -11,7 +11,7 @@ use axum::{
 use reqwest::Client;
 
 use super::{
-    config::{is_allowed_operation, KiroService, KskProxyConfig},
+    config::{classify_operation, KskProxyConfig, KskProxyOperation},
     security::{build_downstream_headers, build_upstream_headers},
 };
 
@@ -37,25 +37,27 @@ async fn proxy_request(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    if !is_allowed_operation(state.config.service(), &method, &uri, &headers) {
+    let Some(operation) = classify_operation(state.config.service(), &method, &uri, &headers)
+    else {
         return error_response(StatusCode::FORBIDDEN, "KSK 本地代理拒绝未授权操作");
-    }
+    };
 
     let upstream_headers = match build_upstream_headers(&headers, state.config.ksk()) {
         Ok(headers) => headers,
         Err(error) => return error_response(StatusCode::BAD_REQUEST, &error),
     };
-    let upstream_body = match state.config.service() {
-        KiroService::Runtime => match rewrite_runtime_body(&body) {
+    let upstream_body = match operation {
+        KskProxyOperation::GenerateAssistantResponse => match rewrite_runtime_body(&body) {
             Ok(body) => body,
             Err(error) => return error_response(StatusCode::BAD_REQUEST, &error),
         },
-        KiroService::Generic | KiroService::Management => body.to_vec(),
+        KskProxyOperation::ListAvailableModels => body.to_vec(),
     };
+    let upstream_url = state.config.upstream_url_for_operation(&uri, operation);
 
     let upstream = match state
         .http
-        .request(method, state.config.upstream_url(&uri))
+        .request(method, upstream_url)
         .headers(upstream_headers)
         .body(upstream_body)
         .send()
@@ -77,8 +79,14 @@ async fn proxy_request(
 }
 
 fn error_response(status: StatusCode, message: &str) -> Response {
-    let mut response = Response::new(Body::from(message.to_string()));
+    let mut response = Response::new(Body::from(
+        serde_json::json!({ "message": message }).to_string(),
+    ));
     *response.status_mut() = status;
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/x-amz-json-1.0"),
+    );
     response
 }
 

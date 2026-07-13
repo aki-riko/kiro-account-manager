@@ -285,7 +285,7 @@ mod tests {
     use axum::{
         body::{Body, Bytes},
         extract::State,
-        http::{header, HeaderMap, HeaderValue, StatusCode},
+        http::{header, HeaderMap, HeaderValue, Method, StatusCode, Uri},
         response::Response,
         routing::any,
         Router,
@@ -299,15 +299,17 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct CaptureState {
-        request: Arc<Mutex<Option<(HeaderMap, Bytes)>>>,
+        request: Arc<Mutex<Option<(Method, Uri, HeaderMap, Bytes)>>>,
     }
 
     async fn capture_request(
         State(state): State<CaptureState>,
+        method: Method,
+        uri: Uri,
         headers: HeaderMap,
         body: Bytes,
     ) -> Response {
-        *state.request.lock().await = Some((headers, body));
+        *state.request.lock().await = Some((method, uri, headers, body));
         let eventstream = Bytes::from_static(b"\x00\x00\x00\x10eventstream");
         Response::builder()
             .status(StatusCode::OK)
@@ -385,7 +387,7 @@ mod tests {
             Bytes::from_static(b"\x00\x00\x00\x10eventstream")
         );
 
-        let (headers, body) = capture
+        let (_, _, headers, body) = capture
             .request
             .lock()
             .await
@@ -409,6 +411,108 @@ mod tests {
             upstream_body["conversationState"]["conversationId"],
             "conversation-1"
         );
+
+        runtime.stop().await.expect("stop proxy runtime");
+        upstream_task.abort();
+    }
+
+    #[tokio::test]
+    async fn forwards_only_model_list_management_operation() {
+        let capture = CaptureState::default();
+        let upstream_app = Router::new()
+            .fallback(any(capture_request))
+            .with_state(capture.clone());
+        let upstream_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind mock upstream");
+        let upstream_addr = upstream_listener.local_addr().expect("mock upstream addr");
+        let upstream_task = tokio::spawn(async move {
+            axum::serve(upstream_listener, upstream_app)
+                .await
+                .expect("serve mock upstream");
+        });
+
+        let config = KskProxyConfig::for_test(
+            KiroService::Management,
+            "us-east-1",
+            "model-list-integration-secret",
+            Url::parse(&format!("http://{upstream_addr}/")).expect("upstream url"),
+        );
+        let mut runtime = KskProxyRuntime::spawn(
+            config,
+            reqwest::Client::builder()
+                .no_proxy()
+                .build()
+                .expect("test http client"),
+        )
+        .await
+        .expect("spawn proxy runtime");
+        let caller = reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("caller client");
+
+        let response = caller
+            .get(format!(
+                "http://{}/List-Available-Models/?origin=AI_EDITOR&profileArn=KAM-LOCAL&nextToken=page-2",
+                runtime.local_addr()
+            ))
+            .header(
+                "x-amz-target",
+                "KiroControlPlaneBearerService.ListAvailableModels",
+            )
+            .header(header::AUTHORIZATION.as_str(), "Bearer placeholder")
+            .header("TokenType", "EXTERNAL_IDP")
+            .body("{}")
+            .send()
+            .await
+            .expect("model list proxy request");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let (method, uri, headers, body) = capture
+            .request
+            .lock()
+            .await
+            .clone()
+            .expect("captured model request");
+        assert_eq!(method, Method::GET);
+        assert_eq!(uri.path(), "/List-Available-Models/");
+        let query = uri.query().expect("model query");
+        assert!(query.contains("origin=AI_EDITOR"));
+        assert!(query.contains("nextToken=page-2"));
+        assert!(!query.contains("profileArn"));
+        assert_eq!(body, Bytes::from_static(b"{}"));
+        assert_eq!(
+            headers
+                .get(header::AUTHORIZATION)
+                .and_then(|value| value.to_str().ok()),
+            Some("Bearer model-list-integration-secret")
+        );
+        assert_eq!(
+            headers
+                .get("tokentype")
+                .and_then(|value| value.to_str().ok()),
+            Some("API_KEY")
+        );
+
+        let denied = caller
+            .get(format!(
+                "http://{}/getUsageLimits?origin=AI_EDITOR",
+                runtime.local_addr()
+            ))
+            .send()
+            .await
+            .expect("denied management request");
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            denied
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("application/x-amz-json-1.0")
+        );
+        let denied_body: Value = denied.json().await.expect("valid json denial");
+        assert_eq!(denied_body["message"], "KSK 本地代理拒绝未授权操作");
 
         runtime.stop().await.expect("stop proxy runtime");
         upstream_task.abort();
