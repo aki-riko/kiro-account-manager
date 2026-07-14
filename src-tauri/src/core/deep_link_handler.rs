@@ -6,12 +6,50 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const DEEP_LINK_SCHEME: &str = "kiro";
-const DEEP_LINK_REDIRECT_URI: &str = "kiro.kiroAgent/authenticate-success";
+const SOCIAL_CALLBACK_AUTHORITY: &str = "kiro.kiroAgent";
+const SOCIAL_CALLBACK_PATH: &str = "/authenticate-success";
+const EXTERNAL_IDP_CALLBACK_AUTHORITY: &str = "kiro.oauth";
+const EXTERNAL_IDP_CALLBACK_PATH: &str = "/callback";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallbackRoute {
+    Social,
+    ExternalIdp,
+}
+
+impl CallbackRoute {
+    fn authority(self) -> &'static str {
+        match self {
+            Self::Social => SOCIAL_CALLBACK_AUTHORITY,
+            Self::ExternalIdp => EXTERNAL_IDP_CALLBACK_AUTHORITY,
+        }
+    }
+
+    fn path(self) -> &'static str {
+        match self {
+            Self::Social => SOCIAL_CALLBACK_PATH,
+            Self::ExternalIdp => EXTERNAL_IDP_CALLBACK_PATH,
+        }
+    }
+
+    fn matches(self, url: &url::Url) -> bool {
+        url.host_str()
+            .is_some_and(|authority| authority.eq_ignore_ascii_case(self.authority()))
+            && url.path() == self.path()
+    }
+
+    fn from_url(url: &url::Url) -> Option<Self> {
+        [Self::Social, Self::ExternalIdp]
+            .into_iter()
+            .find(|route| route.matches(url))
+    }
+}
 
 /// OAuth 回调结果（state 已在 `handle_deep_link` 中验证）
 #[derive(Debug, Clone)]
 pub struct OAuthCallbackResult {
     pub code: String,
+    pub iss: Option<String>,
 }
 
 /// 回调结果类型别名
@@ -19,7 +57,7 @@ type CallbackResult = Result<OAuthCallbackResult, String>;
 /// 回调接收器类型别名
 type CallbackReceiver = Arc<Mutex<Option<Receiver<CallbackResult>>>>;
 /// 待处理发送器类型别名
-type PendingSender = Mutex<Option<(String, Sender<CallbackResult>)>>;
+type PendingSender = Mutex<Option<(CallbackRoute, String, Sender<CallbackResult>)>>;
 
 /// Deep Link OAuth 回调等待器
 pub struct DeepLinkCallbackWaiter {
@@ -30,7 +68,16 @@ pub struct DeepLinkCallbackWaiter {
 impl DeepLinkCallbackWaiter {
     /// 获取 `redirect_uri` (根据环境自动选择协议)
     pub fn get_redirect_uri() -> String {
-        format!("{}://{}", DEEP_LINK_SCHEME, DEEP_LINK_REDIRECT_URI)
+        Self::get_redirect_uri_for(CallbackRoute::Social)
+    }
+
+    pub fn get_redirect_uri_for(route: CallbackRoute) -> String {
+        format!(
+            "{}://{}{}",
+            DEEP_LINK_SCHEME,
+            route.authority(),
+            route.path()
+        )
     }
 
     /// 获取当前环境的协议名称
@@ -62,7 +109,15 @@ pub fn init() {
 }
 
 /// 注册一个新的回调等待器，返回接收端
-pub fn register_waiter(state: &str) -> DeepLinkCallbackWaiter {
+pub fn register_waiter(route: CallbackRoute, state: &str) -> DeepLinkCallbackWaiter {
+    register_waiter_with_timeout(route, state, Duration::from_secs(300))
+}
+
+pub fn register_waiter_with_timeout(
+    route: CallbackRoute,
+    state: &str,
+    timeout: Duration,
+) -> DeepLinkCallbackWaiter {
     let (tx, rx) = mpsc::channel();
 
     // 存储发送端
@@ -70,14 +125,14 @@ pub fn register_waiter(state: &str) -> DeepLinkCallbackWaiter {
     let mut guard = storage
         .lock()
         .expect("Failed to acquire pending sender lock");
-    if let Some((_state, previous_tx)) = guard.take() {
+    if let Some((_route, _state, previous_tx)) = guard.take() {
         let _ = previous_tx.send(Err("登录已取消".to_string()));
     }
-    *guard = Some((state.to_string(), tx));
+    *guard = Some((route, state.to_string(), tx));
 
     DeepLinkCallbackWaiter {
         result_rx: Arc::new(Mutex::new(Some(rx))),
-        timeout: Duration::from_secs(300),
+        timeout,
     }
 }
 /// 取消当前等待中的 deep link 登录
@@ -89,7 +144,7 @@ pub fn cancel_waiter() -> bool {
     let mut guard = storage
         .lock()
         .expect("Failed to acquire pending sender lock");
-    let Some((_state, tx)) = guard.take() else {
+    let Some((_route, _state, tx)) = guard.take() else {
         return false;
     };
     let _ = tx.send(Err("登录已取消".to_string()));
@@ -119,7 +174,26 @@ pub fn get_app_callback_route(url: &str) -> Option<String> {
 /// 处理 deep link URL（由 main.rs 调用）
 /// 返回 (是否处理成功, 是否需要导航到 /callback)
 pub fn handle_deep_link(url: &str) -> (bool, bool) {
-    log::info!("[deep_link] Received URL: {}", url);
+    let parsed = match url::Url::parse(url) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            log::warn!("[deep_link] Invalid callback URL: {error}");
+            return (false, false);
+        }
+    };
+
+    log::info!(
+        "[deep_link] Received callback route: authority={}, path={}",
+        parsed.host_str().unwrap_or(""),
+        parsed.path()
+    );
+
+    if parsed.scheme() != DeepLinkCallbackWaiter::get_protocol_scheme() {
+        return (false, false);
+    }
+    let Some(callback_route) = CallbackRoute::from_url(&parsed) else {
+        return (false, false);
+    };
 
     let Some(storage) = PENDING_SENDER.get() else {
         log::warn!("[deep_link] PENDING_SENDER not initialized");
@@ -129,31 +203,19 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
     let mut guard = storage
         .lock()
         .expect("Failed to acquire pending sender lock");
-    let Some((expected_state, tx)) = guard.take() else {
+    let Some((expected_route, _, _)) = guard.as_ref() else {
         log::warn!("[deep_link] No pending login waiter");
         return (false, false);
     };
-
-    log::info!(
-        "[deep_link] Processing callback with expected state: {}",
-        expected_state
-    );
-
-    // 解析 URL
-    let parsed = match url::Url::parse(url) {
-        Ok(u) => u,
-        Err(e) => {
-            let _ = tx.send(Err(format!("Invalid URL: {e}")));
-            return (false, false);
-        }
-    };
-
-    // 检查协议是否匹配当前环境
-    let expected_scheme = DeepLinkCallbackWaiter::get_protocol_scheme();
-    if parsed.scheme() != expected_scheme {
-        *guard = Some((expected_state, tx)); // 放回去
+    if *expected_route != callback_route {
+        log::debug!("[deep_link] Callback route does not match pending login");
+        return (false, false);
+    }
+    let Some((_expected_route, expected_state, tx)) = guard.take() else {
         return (false, false);
     };
+
+    log::info!("[deep_link] Processing matched OAuth callback");
 
     // 提取参数
     let params: std::collections::HashMap<_, _> = parsed.query_pairs().collect();
@@ -186,13 +248,20 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
         return (true, true);
     }
 
-    let _ = tx.send(Ok(OAuthCallbackResult { code }));
+    let iss = params
+        .get("iss")
+        .map(std::string::ToString::to_string)
+        .filter(|value| !value.trim().is_empty());
+    let _ = tx.send(Ok(OAuthCallbackResult { code, iss }));
     (true, true) // 成功处理，需要导航到 /callback
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{cancel_waiter, handle_deep_link, register_waiter, DeepLinkCallbackWaiter};
+    use super::{
+        cancel_waiter, handle_deep_link, register_waiter, register_waiter_with_timeout,
+        CallbackRoute, DeepLinkCallbackWaiter,
+    };
     use std::sync::{Mutex, MutexGuard};
     use std::time::Duration;
 
@@ -223,14 +292,22 @@ mod tests {
             DeepLinkCallbackWaiter::get_redirect_uri().contains("/authenticate-success"),
             "redirect uri should keep callback path for social/idc compatibility"
         );
+        assert_eq!(
+            DeepLinkCallbackWaiter::get_redirect_uri(),
+            "kiro://kiro.kiroAgent/authenticate-success"
+        );
+        assert_eq!(
+            DeepLinkCallbackWaiter::get_redirect_uri_for(CallbackRoute::ExternalIdp),
+            "kiro://kiro.oauth/callback"
+        );
     }
 
     #[test]
     fn registering_new_waiter_cancels_previous_waiter() {
         let _test_guard = lock_deep_link_test();
-        let mut first = register_waiter("first-state");
+        let mut first = register_waiter(CallbackRoute::Social, "first-state");
         first.timeout = Duration::from_millis(20);
-        let _second = register_waiter("second-state");
+        let _second = register_waiter(CallbackRoute::ExternalIdp, "second-state");
 
         let result = first.wait_for_callback();
 
@@ -238,9 +315,21 @@ mod tests {
     }
 
     #[test]
+    fn waiter_can_use_flow_specific_timeout() {
+        let _test_guard = lock_deep_link_test();
+        let waiter = register_waiter_with_timeout(
+            CallbackRoute::ExternalIdp,
+            "expected-state",
+            Duration::from_secs(600),
+        );
+
+        assert_eq!(waiter.timeout, Duration::from_secs(600));
+    }
+
+    #[test]
     fn handle_deep_link_keeps_waiter_when_scheme_does_not_match() {
         let _test_guard = lock_deep_link_test();
-        let waiter = register_waiter("expected-state");
+        let waiter = register_waiter(CallbackRoute::Social, "expected-state");
 
         assert!(!handle_deep_link("wrong-scheme://callback?code=ok&state=expected-state").0);
 
@@ -255,6 +344,30 @@ mod tests {
                 .expect("callback should succeed")
                 .code,
             "ok"
+        );
+    }
+
+    #[test]
+    fn handle_deep_link_keeps_waiter_when_callback_route_does_not_match() {
+        let _test_guard = lock_deep_link_test();
+        let waiter = register_waiter(CallbackRoute::ExternalIdp, "expected-state");
+
+        assert!(
+            !handle_deep_link(
+                "kiro://kiro.kiroAgent/authenticate-success?code=social&state=expected-state"
+            )
+            .0
+        );
+
+        let handled = handle_deep_link(
+            "kiro://kiro.oauth/callback?code=external&state=expected-state&iss=https%3A%2F%2Flogin.example.test%2Ftenant%2Fv2.0",
+        );
+        assert!(handled.0);
+        let callback = waiter.wait_for_callback().unwrap();
+        assert_eq!(callback.code, "external");
+        assert_eq!(
+            callback.iss.as_deref(),
+            Some("https://login.example.test/tenant/v2.0")
         );
     }
 }

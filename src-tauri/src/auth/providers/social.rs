@@ -5,7 +5,7 @@ use super::{AuthProvider, AuthResult, RefreshMetadata};
 use crate::auth::auth_social;
 use crate::clients::kiro_auth_client::KiroAuthServiceClient;
 use crate::commands::machine_guid::generate_random_machine_id;
-use crate::core::deep_link_handler::{register_waiter, DeepLinkCallbackWaiter};
+use crate::core::deep_link_handler::{register_waiter, CallbackRoute, DeepLinkCallbackWaiter};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -65,7 +65,7 @@ impl AuthProvider for SocialProvider {
         let code_challenge = auth_social::generate_code_challenge_social(&code_verifier);
 
         // Step 3: 注册回调等待器
-        let waiter = register_waiter(&state);
+        let waiter = register_waiter(CallbackRoute::Social, &state);
 
         // Step 4: 打开浏览器登录
         let machine_id = generate_random_machine_id();

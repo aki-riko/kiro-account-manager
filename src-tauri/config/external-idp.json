@@ -1,0 +1,16 @@
+{
+  "portalBaseUrl": "https://app.kiro.dev",
+  "portalUrlEnv": "KIRO_AUTH_PORTAL_URL",
+  "signinPath": "/signin",
+  "redirectFrom": "KiroIDE",
+  "callbackBindHost": "127.0.0.1",
+  "callbackUrlHost": "localhost",
+  "callbackPorts": [3128, 4649, 6588, 8008, 9091, 49153, 50153, 51153, 52153, 53153],
+  "callbackPaths": ["/oauth/callback", "/signin/callback"],
+  "externalRedirectUri": "kiro://kiro.oauth/callback",
+  "flowTimeoutSeconds": 600,
+  "pollIntervalMillis": 100,
+  "httpTimeoutSeconds": 60,
+  "connectTimeoutSeconds": 15,
+  "defaultTokenLifetimeSeconds": 3600
+}

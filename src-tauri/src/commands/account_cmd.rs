@@ -812,31 +812,10 @@ pub async fn add_account_by_external_idp(
         ));
     }
 
-    let mut store = lock_store(&state.store, "store")?;
-    let existing_idx = find_existing_external_idp_account_idx(&store.accounts, &account);
-    let is_new = existing_idx.is_none();
-    let saved_account = if let Some(index) = existing_idx {
-        let existing = &mut store.accounts[index];
-        account.id = existing.id.clone();
-        account.added_at = existing.added_at.clone();
-        account.label = existing.label.clone();
-        account.password = existing.password.clone();
-        account.group_id = existing.group_id.clone();
-        account.tag_links = existing.tag_links.clone();
-        account.proxy_config = existing.proxy_config.clone();
-        account.success_count = existing.success_count;
-        account.failure_count = 0;
-        account.last_failure_at = None;
-        account.disabled_reason = None;
-        account.enabled = true;
-        *existing = account.clone();
-        existing.clone()
-    } else {
-        store.accounts.insert(0, account.clone());
-        account
-    };
-    save_store(&store)?;
-    drop(store);
+    let AddAccountResult {
+        account: saved_account,
+        is_new,
+    } = upsert_external_idp_account(state.inner(), account)?;
 
     let email = saved_account.email.clone();
     let user = User {
@@ -891,6 +870,40 @@ fn find_existing_external_idp_account_idx(
             .is_some_and(|(left, right)| left.trim().eq_ignore_ascii_case(right.trim()))
             && account.client_id == candidate.client_id
             && account.issuer_url == candidate.issuer_url
+    })
+}
+
+pub(crate) fn upsert_external_idp_account(
+    state: &AppState,
+    mut account: Account,
+) -> Result<AddAccountResult, String> {
+    let mut store = lock_store(&state.store, "store")?;
+    let existing_idx = find_existing_external_idp_account_idx(&store.accounts, &account);
+    let is_new = existing_idx.is_none();
+    let saved_account = if let Some(index) = existing_idx {
+        let existing = &mut store.accounts[index];
+        account.id = existing.id.clone();
+        account.added_at = existing.added_at.clone();
+        account.label = existing.label.clone();
+        account.password = existing.password.clone();
+        account.group_id = existing.group_id.clone();
+        account.tag_links = existing.tag_links.clone();
+        account.proxy_config = existing.proxy_config.clone();
+        account.success_count = existing.success_count;
+        account.failure_count = 0;
+        account.last_failure_at = None;
+        account.disabled_reason = None;
+        account.enabled = true;
+        *existing = account;
+        existing.clone()
+    } else {
+        store.accounts.insert(0, account.clone());
+        account
+    };
+    save_store(&store)?;
+    Ok(AddAccountResult {
+        account: saved_account,
+        is_new,
     })
 }
 

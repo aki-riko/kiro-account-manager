@@ -9,13 +9,12 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use url::Url;
 
-const EXTERNAL_IDP_HTTP_TIMEOUT_SECONDS: u64 = 60;
-const EXTERNAL_IDP_CONNECT_TIMEOUT_SECONDS: u64 = 15;
 const OIDC_DISCOVERY_PATH: &str = ".well-known/openid-configuration";
-const DEFAULT_TOKEN_LIFETIME_SECONDS: i64 = 3600;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct OidcDiscoveryDocument {
+    #[serde(default)]
+    pub issuer: Option<String>,
     pub authorization_endpoint: String,
     pub token_endpoint: String,
 }
@@ -68,16 +67,17 @@ impl ExternalIdpProvider {
     }
 
     fn build_client(metadata: &RefreshMetadata) -> Result<Client, String> {
+        let config = super::external_idp_portal::ExternalIdpAuthConfig::load()?;
         if let Some(account) = metadata.account.as_ref() {
             build_http_client_with_timeout_for_account(
                 account,
-                EXTERNAL_IDP_HTTP_TIMEOUT_SECONDS,
-                EXTERNAL_IDP_CONNECT_TIMEOUT_SECONDS,
+                config.http_timeout_seconds,
+                config.connect_timeout_seconds,
             )
         } else {
             build_http_client_with_timeout(
-                EXTERNAL_IDP_HTTP_TIMEOUT_SECONDS,
-                EXTERNAL_IDP_CONNECT_TIMEOUT_SECONDS,
+                config.http_timeout_seconds,
+                config.connect_timeout_seconds,
             )
         }
     }
@@ -173,7 +173,10 @@ impl AuthProvider for ExternalIdpProvider {
         let expires_in = token
             .expires_in
             .filter(|seconds| *seconds > 0)
-            .unwrap_or(DEFAULT_TOKEN_LIFETIME_SECONDS);
+            .unwrap_or(
+                super::external_idp_portal::ExternalIdpAuthConfig::load()?
+                    .default_token_lifetime_seconds,
+            );
         let expires_at = chrono::Local::now() + chrono::Duration::seconds(expires_in);
         let issuer_url = non_empty(metadata.issuer_url).or_else(|| self.issuer_url.clone());
         let audience = non_empty(metadata.audience).or_else(|| self.audience.clone());
@@ -220,15 +223,17 @@ pub async fn discover_oidc(
     account: Option<&crate::core::account::Account>,
 ) -> Result<OidcDiscoveryDocument, String> {
     let client = if let Some(account) = account {
+        let config = super::external_idp_portal::ExternalIdpAuthConfig::load()?;
         build_http_client_with_timeout_for_account(
             account,
-            EXTERNAL_IDP_HTTP_TIMEOUT_SECONDS,
-            EXTERNAL_IDP_CONNECT_TIMEOUT_SECONDS,
+            config.http_timeout_seconds,
+            config.connect_timeout_seconds,
         )?
     } else {
+        let config = super::external_idp_portal::ExternalIdpAuthConfig::load()?;
         build_http_client_with_timeout(
-            EXTERNAL_IDP_HTTP_TIMEOUT_SECONDS,
-            EXTERNAL_IDP_CONNECT_TIMEOUT_SECONDS,
+            config.http_timeout_seconds,
+            config.connect_timeout_seconds,
         )?
     };
     discover_oidc_with_client(&client, issuer_url).await

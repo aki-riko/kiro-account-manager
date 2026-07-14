@@ -4,7 +4,9 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递 State
 use crate::auth::auth_social;
 use crate::auth::providers::{
-    cancel_pending_idc_login, create_idc_provider, get_provider_config, AuthMethod, AuthProvider,
+    authenticate_external_idp, cancel_pending_idc_login, cancel_pending_portal_login,
+    create_idc_provider, extract_external_idp_email, generate_external_idp_machine_id,
+    get_provider_config, AuthMethod, AuthProvider,
 };
 use crate::auth::User;
 use crate::clients::kiro_auth_client::KiroAuthServiceClient;
@@ -82,6 +84,7 @@ fn clear_auth_state(auth: &crate::auth::AuthState) {
 pub fn cancel_kiro_login(state: State<'_, AppState>) -> bool {
     let cancelled_social = crate::core::deep_link_handler::cancel_waiter();
     let cancelled_idc = cancel_pending_idc_login();
+    let cancelled_external_portal = cancel_pending_portal_login();
     match lock_store(&state.pending_login, "pending_login") {
         Ok(mut pending_login) => {
             *pending_login = None;
@@ -90,7 +93,7 @@ pub fn cancel_kiro_login(state: State<'_, AppState>) -> bool {
             log::error!("[auth_cmd] Failed to cancel login");
         }
     }
-    cancelled_social || cancelled_idc
+    cancelled_social || cancelled_idc || cancelled_external_portal
 }
 
 #[tauri::command]
@@ -117,10 +120,55 @@ pub async fn kiro_login(
     match config.auth_method {
         AuthMethod::Social => login_social(app_handle, state, &config).await,
         AuthMethod::Idc => login_idc(app_handle, state, &config).await,
-        AuthMethod::ExternalIdp => {
-            Err("External IdP 在线登录需要先获取门户元数据".to_string())
-        }
+        AuthMethod::ExternalIdp => login_external_idp(app_handle, state).await,
     }
+}
+
+async fn login_external_idp(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let auth_result = authenticate_external_idp().await?;
+    let email = extract_external_idp_email(&auth_result.access_token);
+    let mut account = Account::new(
+        email
+            .clone()
+            .unwrap_or_else(|| "external-idp".to_string()),
+        "Kiro Azure / Entra 账号".to_string(),
+    );
+    account.email = email;
+    account.access_token = Some(auth_result.access_token.clone());
+    account.refresh_token = Some(auth_result.refresh_token.clone());
+    account.expires_at = Some(auth_result.expires_at.clone());
+    account.provider = Some(auth_result.provider.clone());
+    account.auth_method = Some(auth_result.auth_method.clone());
+    account.client_id = auth_result.client_id.clone();
+    account.region = auth_result.region.clone();
+    account.token_endpoint = auth_result.token_endpoint.clone();
+    account.issuer_url = auth_result.issuer_url.clone();
+    account.scopes = auth_result.scopes.clone();
+    account.audience = auth_result.audience.clone();
+    account.profile_arn = auth_result.profile_arn.clone();
+    account.profile_name = auth_result.profile_name.clone();
+    account.machine_id = auth_result.machine_id.clone().or_else(|| {
+        Some(generate_external_idp_machine_id(Some(
+            &auth_result.access_token,
+        )))
+    });
+
+    let result = crate::commands::account_cmd::upsert_external_idp_account(state.inner(), account)?;
+    let saved_account = result.account;
+    update_auth_state(
+        &state,
+        saved_account.email.as_ref(),
+        "ExternalIdp",
+        &auth_result.access_token,
+        &auth_result.refresh_token,
+    )?;
+    let _ = app_handle.emit("login-success", saved_account.id.clone());
+    let _ = app_handle.emit("accounts-updated", ());
+
+    Ok("External IdP login completed".to_string())
 }
 
 async fn login_social(
@@ -140,7 +188,10 @@ async fn login_social(
     *lock_store(&state.pending_login, "pending_login")? = Some(pending.clone());
 
     // 1. 注册 deep link 回调等待器
-    let waiter = crate::core::deep_link_handler::register_waiter(&pending.state);
+    let waiter = crate::core::deep_link_handler::register_waiter(
+        crate::core::deep_link_handler::CallbackRoute::Social,
+        &pending.state,
+    );
 
     // 2. 打开浏览器授权
     if let Err(err) = client

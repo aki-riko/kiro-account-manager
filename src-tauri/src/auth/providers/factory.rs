@@ -47,6 +47,12 @@ pub fn get_provider_config(provider: &str) -> Option<ProviderConfig> {
             region: "us-east-1".to_string(),
             start_url: Some("https://view.awsapps.com/start".to_string()), // 默认使用 BuilderId URL，用户可以自定义
         }),
+        "ExternalIdp" => Some(ProviderConfig {
+            provider_id: "ExternalIdp".to_string(),
+            auth_method: AuthMethod::ExternalIdp,
+            region: String::new(),
+            start_url: None,
+        }),
         _ => None,
     }
 }
