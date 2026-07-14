@@ -9,5 +9,11 @@ export function normalizeProviderId(provider: ProviderType): string {
 }
 
 export function getProviderDisplayName(provider: ProviderType): string {
-  return isGitHubProvider(provider) ? 'Github' : provider
+  if (isGitHubProvider(provider)) return 'Github'
+  return provider === 'ExternalIdp' ? 'Azure / Entra' : provider
+}
+
+export function isExternalIdpAccount(account: { provider?: string; authMethod?: string }): boolean {
+  return account.authMethod?.toLowerCase() === 'external_idp'
+    || account.provider?.toLowerCase() === 'externalidp'
 }

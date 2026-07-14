@@ -6,7 +6,7 @@ import { useApp } from '../../../hooks/useApp'
 import { usePrivacy } from '../../../contexts/PrivacyContext'
 import { getQuota, getUsed, formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
 import { getAccountStatusMeta, isBannedStatus, isUnavailableStatus } from '../../../utils/accountStatus'
-import { getProviderDisplayName, isGitHubProvider } from '../../../utils/accountProvider'
+import { getProviderDisplayName, isExternalIdpAccount, isGitHubProvider } from '../../../utils/accountProvider'
 import ContextMenu from './ContextMenu'
 import { buildAccountListMaps } from './utils/accountListMaps'
 import type { Account, TagDefinition, GroupDefinition } from '../../../types/account'
@@ -102,6 +102,7 @@ const ListRow = memo(function ListRow({
   const overageStatus = account.usageData?.overageConfiguration?.overageStatus
   const isBanned = isBannedStatus(account)
   const isUnavailable = isUnavailableStatus(account)
+  const isExternalIdp = isExternalIdpAccount(account)
   const statusMeta = getAccountStatusMeta(account, t)
   const kskEligibility = useMemo(() => getManagedKskEligibility(account), [account])
 
@@ -127,14 +128,14 @@ const ListRow = memo(function ListRow({
       : { icon: LogIn, label: t('accountCard.LogIn'), onClick: () => onLogin(account), disabled: isSwitching || isUnavailable },
     { divider: true },
     { label: account.enabled === false ? '启用账号' : '禁用账号', onClick: () => onToggleEnabled?.(account, account.enabled === false) },
-    ...(overageCapability === 'OVERAGE_CAPABLE' ? [
+    ...(!isExternalIdp && overageCapability === 'OVERAGE_CAPABLE' ? [
       { label: overageStatus === 'ENABLED' ? '关闭超额' : '开启超额', onClick: () => onToggleOverage?.(account, overageStatus !== 'ENABLED'), disabled: isTogglingOverage },
     ] : []),
     { icon: Trash2, label: t('accountCard.delete'), onClick: () => onDelete(account.id), danger: true },
-    ...(account.provider !== 'Enterprise' && !isBanned && onDeleteRemote ? [
+    ...(!isExternalIdp && account.provider !== 'Enterprise' && !isBanned && onDeleteRemote ? [
       { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
     ] : []),
-  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onStartKskIde, onLogin, onLogout, onDelete, onDeleteRemote, onToggleEnabled, onToggleOverage, isRefreshing, isRefreshingToken, isStartingKskIde, isSwitching, isTogglingOverage, isBanned, isUnavailable, isCurrent, kskEligibility, overageCapability, overageStatus])
+  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onStartKskIde, onLogin, onLogout, onDelete, onDeleteRemote, onToggleEnabled, onToggleOverage, isRefreshing, isRefreshingToken, isStartingKskIde, isSwitching, isTogglingOverage, isBanned, isUnavailable, isExternalIdp, isCurrent, kskEligibility, overageCapability, overageStatus])
 
   const subscriptionTitle = account.usageData?.subscriptionInfo?.subscriptionTitle || ''
   const subscriptionTone: Parameters<typeof Pill>[0]['tone'] =
@@ -218,7 +219,7 @@ const ListRow = memo(function ListRow({
             )}
           </div>
         )}
-        {!isOverage && overageCapability === 'OVERAGE_CAPABLE' && (
+        {!isExternalIdp && !isOverage && overageCapability === 'OVERAGE_CAPABLE' && (
           <span className={`text-[9px] mt-0.5 block ${overageStatus === 'ENABLED' ? 'text-green-500' : 'text-muted-foreground'}`}>
             {overageStatus === 'ENABLED' ? '⚡超额已开' : '⚡可开超额'}
           </span>

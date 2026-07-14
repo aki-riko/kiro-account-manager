@@ -33,6 +33,7 @@ const PROVIDER_OPTIONS = [
   { value: 'Github', label: 'Github' },
   { value: 'BuilderId', label: 'BuilderId' },
   { value: 'Enterprise', label: 'Enterprise' },
+  { value: 'ExternalIdp', label: 'Azure / Entra' },
 ]
 const ENABLED_OPTIONS = [
   { value: '', label: '全部' },

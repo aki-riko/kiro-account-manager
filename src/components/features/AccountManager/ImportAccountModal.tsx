@@ -718,6 +718,9 @@ return (
                   <LegacyButton color="grape" size="sm" onClick={() => { const text = JSON.stringify([{ refreshToken: "", clientId: "", clientSecret: "", provider: "Enterprise" }], null, 2); setJsonText(text); parseJson(text) }}>
                     Enterprise 模板
                   </LegacyButton>
+                  <LegacyButton color="cyan" size="sm" onClick={() => { const text = JSON.stringify([{ refreshToken: "", authMethod: "external_idp", provider: "ExternalIdp", issuerUrl: "", clientId: "", scopes: "openid profile offline_access" }], null, 2); setJsonText(text); parseJson(text) }}>
+                    Azure / Entra 模板
+                  </LegacyButton>
                 </Group>
 
                 <textarea

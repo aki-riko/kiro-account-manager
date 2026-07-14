@@ -16,7 +16,7 @@ import {
   DialogFooter
 } from '../../shared/dialog'
 
-const DEFAULT_PROVIDER_ORDER = ['Google', 'Github', 'BuilderId', 'Enterprise']
+const DEFAULT_PROVIDER_ORDER = ['Google', 'Github', 'BuilderId', 'Enterprise', 'ExternalIdp']
 
 interface ProviderMeta {
   name: string
@@ -51,6 +51,10 @@ function getProviderMeta(provider: string, t: any): ProviderMeta {
     Enterprise: {
       name: t('login.idc'),
       icon: <span className="text-[#ff9900] font-bold text-lg">aws</span>,
+    },
+    ExternalIdp: {
+      name: t('login.azure'),
+      icon: <span className="text-[#0078d4] font-bold text-lg">M</span>,
     },
   }
 

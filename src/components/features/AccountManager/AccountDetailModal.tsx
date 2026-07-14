@@ -6,7 +6,7 @@ import { useApp } from '../../../hooks/useApp'
 import { useDialog } from '../../../contexts/DialogContext'
 import { formatUsage, getAccountDisplayName, calcTotalUsageWithExtras } from '../../../utils/accountStats'
 import { getAccountStatusMeta, isBannedStatus } from '../../../utils/accountStatus'
-import { getProviderDisplayName, isGitHubProvider } from '../../../utils/accountProvider'
+import { getProviderDisplayName, isExternalIdpAccount, isGitHubProvider } from '../../../utils/accountProvider'
 import {
   DialogRoot,
   DialogContent,
@@ -113,6 +113,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
   const { t } = useApp()
   const { showError } = useDialog()
   const [currentAccount, setCurrentAccount] = useState<Account>(account)
+  const isExternalIdp = isExternalIdpAccount(currentAccount)
 
   // 样式定义
   const colors = useMemo(() => ({
@@ -617,6 +618,27 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                       {currentAccount.usageData?.userInfo?.userId || '-'}
                     </div>
                   </div>
+                  {isExternalIdp && (
+                    <div className="space-y-3 pt-3 border-t border-border/50">
+                      <div className="text-xs font-semibold text-primary">{t('detail.externalIdpMetadata')}</div>
+                      {[
+                        [t('detail.profileName'), currentAccount.profileName],
+                        ['Profile ARN', currentAccount.profileArn],
+                        ['Client ID', currentAccount.clientId],
+                        [t('detail.issuerUrl'), currentAccount.issuerUrl],
+                        [t('detail.tokenEndpoint'), currentAccount.tokenEndpoint],
+                        ['Scopes', currentAccount.scopes],
+                        ['Audience', currentAccount.audience],
+                      ].map(([label, value]) => (
+                        <div key={label} className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">{label}</label>
+                          <div className="text-xs font-mono break-all bg-background p-2 rounded border select-all">
+                            {value || '-'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </section>
 
@@ -629,7 +651,7 @@ function AccountDetailModal({ account, onClose, onRefresh }: AccountDetailModalP
                 <div className="bg-muted/30 border rounded-xl p-4 text-sm space-y-3">
                   <div className="flex justify-between items-center py-1 border-b border-border/50">
                     <span className="text-muted-foreground text-xs">Region</span>
-                    <span className="font-mono text-xs px-1.5 py-0.5 bg-muted rounded-md">us-east-1</span>
+                    <span className="font-mono text-xs px-1.5 py-0.5 bg-muted rounded-md">{currentAccount.region || '-'}</span>
                   </div>
                   <div className="flex justify-between items-center py-1 border-b border-border/50">
                     <span className="text-muted-foreground text-xs">Token 到期</span>

@@ -6,7 +6,7 @@ import { Switch } from '../../ui/switch'
 import { getUsagePercent, getProgressBarColor } from './hooks/useAccountStats'
 import { getQuota, getUsed, getSubType, getSubPlan, formatUsage, getAccountDisplayName } from '../../../utils/accountStats'
 import { getAccountStatusMeta, isBannedStatus, isUnavailableStatus } from '../../../utils/accountStatus'
-import { getProviderDisplayName, isGitHubProvider } from '../../../utils/accountProvider'
+import { getProviderDisplayName, isExternalIdpAccount, isGitHubProvider } from '../../../utils/accountProvider'
 import { Account, TagDefinition, GroupDefinition } from '../../../types/account'
 import { getManagedKskEligibility } from '../../../utils/kskIde'
 
@@ -146,7 +146,7 @@ const AccountCard = memo(function AccountCard({
             title={t('accountCard.enableDisableAccount')}
           />
         </div>
-        {account.usageData?.subscriptionInfo?.overageCapability === 'OVERAGE_CAPABLE' && (
+        {!isExternalIdpAccount(account) && account.usageData?.subscriptionInfo?.overageCapability === 'OVERAGE_CAPABLE' && (
           <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
             <span className="text-[9px] text-muted-foreground">⚡</span>
             <Switch
