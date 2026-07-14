@@ -3,7 +3,10 @@
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递 State
 #![allow(clippy::too_many_lines)] // 命令文件包含多个函数
 
-use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata};
+use crate::auth::providers::{
+    extract_external_idp_email, generate_external_idp_machine_id, normalize_external_idp_scopes,
+    AuthProvider, IdcProvider, RefreshMetadata,
+};
 use crate::auth::{refresh_token_desktop, User};
 use crate::commands::account_models::{
     clear_available_models_cache, fetch_all_available_models, read_available_models_cache,
@@ -80,10 +83,13 @@ pub struct VerifyAccountParams {
 }
 
 /// account_cmd 的扩展：在通用 token 应用之上额外做缓存清理 / status 重置
-fn apply_refreshed_account_tokens(account: &mut Account, refresh: &RefreshResult) {
+fn apply_refreshed_account_tokens(account: &mut Account, refresh: &RefreshResult) -> bool {
+    if !crate::commands::common::apply_refreshed_account_tokens(account, refresh) {
+        return false;
+    }
     clear_available_models_cache(account);
-    crate::commands::common::apply_refreshed_account_tokens(account, refresh);
     account.status = "active".to_string();
+    true
 }
 
 #[tauri::command]
@@ -447,14 +453,12 @@ pub(crate) async fn refresh_token_inner(state: &AppState, id: &str) -> Result<Ac
 
     let mut store = lock_store(&state.store, "store")?;
     if let Some(a) = store.accounts.iter_mut().find(|a| a.id == id) {
-        clear_available_models_cache(a);
         if a.machine_id.as_ref().is_none_or(|id| id.trim().is_empty()) {
             a.machine_id = generated_machine_id;
         }
-        // 直接移动所有权，避免 clone
-        a.access_token = Some(refresh_result.access_token);
-        a.refresh_token = refresh_result.refresh_token;
-        a.expires_at = Some(calc_expires_at(refresh_result.expires_in));
+        if !apply_refreshed_account_tokens(a, &refresh_result) {
+            return Ok(a.clone());
+        }
         if matches!(
             a.status.as_str(),
             "invalid" | "失效" | "已失效" | "Token已失效"
@@ -735,6 +739,161 @@ pub async fn add_account_by_social(
     Ok(AddAccountResult { account, is_new })
 }
 
+/// 导入 Azure / Microsoft Entra 等 External IdP 账号。
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn add_account_by_external_idp(
+    state: State<'_, AppState>,
+    refresh_token: String,
+    client_id: String,
+    issuer_url: Option<String>,
+    token_endpoint: Option<String>,
+    scopes: String,
+    audience: Option<String>,
+    region: Option<String>,
+    profile_arn: Option<String>,
+    profile_name: Option<String>,
+    machine_id: Option<String>,
+    access_token: Option<String>,
+) -> Result<AddAccountResult, String> {
+    let refresh_token = refresh_token.trim().to_string();
+    if refresh_token.is_empty() {
+        return Err("External IdP 账号缺少 refreshToken".to_string());
+    }
+    let client_id = client_id.trim().to_string();
+    if client_id.is_empty() {
+        return Err("External IdP 账号缺少 clientId".to_string());
+    }
+    let issuer_url = non_empty_string(issuer_url);
+    let token_endpoint = non_empty_string(token_endpoint);
+    if issuer_url.is_none() && token_endpoint.is_none() {
+        return Err("External IdP 账号必须提供 issuerUrl 或 tokenEndpoint".to_string());
+    }
+    if scopes.trim().is_empty() {
+        return Err("External IdP 账号缺少 scopes".to_string());
+    }
+
+    let initial_email = access_token
+        .as_deref()
+        .and_then(extract_external_idp_email);
+    let mut account = Account::new(
+        initial_email
+            .clone()
+            .unwrap_or_else(|| "external-idp".to_string()),
+        "Kiro Azure / Entra 账号".to_string(),
+    );
+    account.email = initial_email;
+    account.access_token = non_empty_string(access_token);
+    account.refresh_token = Some(refresh_token);
+    account.provider = Some("ExternalIdp".to_string());
+    account.auth_method = Some("external_idp".to_string());
+    account.client_id = Some(client_id);
+    account.issuer_url = issuer_url;
+    account.token_endpoint = token_endpoint;
+    account.scopes = Some(normalize_external_idp_scopes(&scopes));
+    account.audience = non_empty_string(audience);
+    account.region = non_empty_string(region);
+    account.profile_arn = non_empty_string(profile_arn);
+    account.profile_name = non_empty_string(profile_name);
+    account.machine_id = non_empty_string(machine_id);
+
+    let refresh = refresh_token_by_provider(&account).await?;
+    if !apply_refreshed_account_tokens(&mut account, &refresh) {
+        return Err("External IdP 凭据在导入期间已被更新，请重试".to_string());
+    }
+    account.email = extract_external_idp_email(&refresh.access_token).or(account.email);
+    if account
+        .machine_id
+        .as_ref()
+        .is_none_or(|value| value.trim().is_empty())
+    {
+        account.machine_id = Some(generate_external_idp_machine_id(
+            account.access_token.as_deref(),
+        ));
+    }
+
+    let mut store = lock_store(&state.store, "store")?;
+    let existing_idx = find_existing_external_idp_account_idx(&store.accounts, &account);
+    let is_new = existing_idx.is_none();
+    let saved_account = if let Some(index) = existing_idx {
+        let existing = &mut store.accounts[index];
+        account.id = existing.id.clone();
+        account.added_at = existing.added_at.clone();
+        account.label = existing.label.clone();
+        account.password = existing.password.clone();
+        account.group_id = existing.group_id.clone();
+        account.tag_links = existing.tag_links.clone();
+        account.proxy_config = existing.proxy_config.clone();
+        account.success_count = existing.success_count;
+        account.failure_count = 0;
+        account.last_failure_at = None;
+        account.disabled_reason = None;
+        account.enabled = true;
+        *existing = account.clone();
+        existing.clone()
+    } else {
+        store.accounts.insert(0, account.clone());
+        account
+    };
+    save_store(&store)?;
+    drop(store);
+
+    let email = saved_account.email.clone();
+    let user = User {
+        id: uuid::Uuid::new_v4().to_string(),
+        email: email.clone(),
+        name: email
+            .as_deref()
+            .and_then(|value| value.split('@').next())
+            .unwrap_or("External IdP")
+            .to_string(),
+        avatar: None,
+        provider: "ExternalIdp".to_string(),
+    };
+    *lock_store(&state.auth.user, "auth user")? = Some(user);
+    *lock_store(&state.auth.access_token, "auth access_token")? =
+        saved_account.access_token.clone();
+
+    Ok(AddAccountResult {
+        account: saved_account,
+        is_new,
+    })
+}
+
+fn non_empty_string(value: Option<String>) -> Option<String> {
+    value
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty())
+}
+
+fn find_existing_external_idp_account_idx(
+    accounts: &[Account],
+    candidate: &Account,
+) -> Option<usize> {
+    accounts.iter().position(|account| {
+        if !account.is_external_idp() {
+            return false;
+        }
+
+        let same_machine_id = account
+            .machine_id
+            .as_deref()
+            .zip(candidate.machine_id.as_deref())
+            .is_some_and(|(left, right)| left.trim().eq_ignore_ascii_case(right.trim()));
+        if same_machine_id {
+            return true;
+        }
+
+        account
+            .email
+            .as_deref()
+            .zip(candidate.email.as_deref())
+            .is_some_and(|(left, right)| left.trim().eq_ignore_ascii_case(right.trim()))
+            && account.client_id == candidate.client_id
+            && account.issuer_url == candidate.issuer_url
+    })
+}
+
 #[tauri::command]
 pub fn import_accounts(state: State<AppState>, json: &str) -> Result<usize, String> {
     let mut store = lock_store(&state.store, "store")?;
@@ -840,7 +999,23 @@ pub async fn add_local_kiro_account(
         .unwrap_or_else(|| "Google".to_string());
 
     // 根据 auth_method 调用对应的添加函数
-    if auth_method == "IdC" {
+    if auth_method.eq_ignore_ascii_case("external_idp") {
+        add_account_by_external_idp(
+            state,
+            refresh_token,
+            local_token.client_id.ok_or("External IdP 账号缺少 clientId")?,
+            local_token.issuer_url,
+            local_token.token_endpoint,
+            local_token.scopes.ok_or("External IdP 账号缺少 scopes")?,
+            local_token.audience,
+            local_token.region,
+            local_token.profile_arn,
+            local_token.profile_name,
+            None,
+            local_token.access_token,
+        )
+        .await
+    } else if auth_method == "IdC" {
         let hash = local_token
             .client_id_hash
             .clone()
@@ -1840,30 +2015,20 @@ pub async fn refresh_all_expiring_tokens(
             .unwrap_or("Unknown")
             .to_string();
 
-        log::debug!("Token refresh result for {}: {:?}", email_display, result);
+        log::debug!(
+            "Token refresh completed for {}: success={}",
+            email_display,
+            result.is_ok()
+        );
 
         match result {
             Ok(refresh_result) => {
                 // 更新数据库
                 let mut store = lock_store(&state.store, "store")?;
                 if let Some(acc) = store.accounts.iter_mut().find(|a| a.id == account.id) {
-                    acc.access_token = Some(refresh_result.access_token);
-                    acc.refresh_token = refresh_result.refresh_token;
-                    acc.expires_at = Some(calc_expires_at(refresh_result.expires_in));
-
-                    // IdC 账号更新额外字段
-                    if let Some(id_token) = refresh_result.id_token {
-                        acc.id_token = Some(id_token);
+                    if apply_refreshed_account_tokens(acc, &refresh_result) {
+                        save_store(&store)?;
                     }
-                    if let Some(sso_session_id) = refresh_result.sso_session_id {
-                        acc.sso_session_id = Some(sso_session_id);
-                    }
-                    // Social 账号更新 profile_arn
-                    if let Some(profile_arn) = refresh_result.profile_arn {
-                        acc.profile_arn = Some(profile_arn);
-                    }
-
-                    save_store(&store)?;
                 }
 
                 log::info!(

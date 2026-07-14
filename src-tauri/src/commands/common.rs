@@ -1,6 +1,8 @@
 // 公共工具函数 - 提取重复逻辑
 
-use crate::auth::providers::{AuthProvider, IdcProvider, RefreshMetadata, SocialProvider};
+use crate::auth::providers::{
+    AuthProvider, ExternalIdpProvider, IdcProvider, RefreshMetadata, SocialProvider,
+};
 use crate::commands::machine_guid::generate_random_machine_id;
 use crate::core::account::Account;
 use crate::utils::client_id_hash::calculate_client_id_hash;
@@ -340,6 +342,7 @@ where
 /// Token 刷新结果
 #[derive(Debug)]
 pub struct RefreshResult {
+    pub source_refresh_token: String,
     pub access_token: String,
     pub refresh_token: Option<String>,
     pub expires_in: i64,
@@ -347,6 +350,11 @@ pub struct RefreshResult {
     pub id_token: Option<String>,
     pub sso_session_id: Option<String>,
     pub machine_id: Option<String>,
+    pub token_endpoint: Option<String>,
+    pub issuer_url: Option<String>,
+    pub scopes: Option<String>,
+    pub audience: Option<String>,
+    pub profile_name: Option<String>,
 }
 
 /// 保存账号 store 到文件，统一错误信息
@@ -363,7 +371,19 @@ pub fn save_store(store: &crate::core::account::AccountStore) -> Result<(), Stri
 /// - refresh_token / profile_arn / id_token / sso_session_id：仅当返回了新值才覆盖
 ///   （避免 social refresh 没返回某字段时把已有的清掉）
 /// - expires_at：根据 expires_in 重算
-pub fn apply_refreshed_account_tokens(account: &mut Account, refresh: &RefreshResult) {
+/// - External IdP：仅当账号当前 refresh_token 仍等于本次请求使用值时写回，防止旧并发结果覆盖轮换后的 token
+pub fn apply_refreshed_account_tokens(account: &mut Account, refresh: &RefreshResult) -> bool {
+    if account.is_external_idp()
+        && account.refresh_token.as_deref().map(str::trim)
+            != Some(refresh.source_refresh_token.trim())
+    {
+        log::warn!(
+            "[token_refresh] 忽略账号 {} 的过期 External IdP 刷新结果",
+            account.id
+        );
+        return false;
+    }
+
     account.access_token = Some(refresh.access_token.clone());
     if let Some(refresh_token) = refresh.refresh_token.clone() {
         account.refresh_token = Some(refresh_token);
@@ -380,7 +400,23 @@ pub fn apply_refreshed_account_tokens(account: &mut Account, refresh: &RefreshRe
     if let Some(machine_id) = refresh.machine_id.clone() {
         account.machine_id = Some(machine_id);
     }
+    if let Some(token_endpoint) = refresh.token_endpoint.clone() {
+        account.token_endpoint = Some(token_endpoint);
+    }
+    if let Some(issuer_url) = refresh.issuer_url.clone() {
+        account.issuer_url = Some(issuer_url);
+    }
+    if let Some(scopes) = refresh.scopes.clone() {
+        account.scopes = Some(scopes);
+    }
+    if let Some(audience) = refresh.audience.clone() {
+        account.audience = Some(audience);
+    }
+    if let Some(profile_name) = refresh.profile_name.clone() {
+        account.profile_name = Some(profile_name);
+    }
     account.expires_at = Some(calc_expires_at(refresh.expires_in));
+    true
 }
 
 /// Usage 获取结果
@@ -397,7 +433,44 @@ async fn refresh_token_by_provider_inner(
     let provider = account.provider.as_deref().unwrap_or("Google");
     let refresh_token = account.refresh_token.as_ref().ok_or("No refresh token")?;
 
-    if provider == "BuilderId" || provider == "Enterprise" {
+    if account.is_external_idp() {
+        let metadata = RefreshMetadata {
+            client_id: account.client_id.clone(),
+            region: account.region.clone(),
+            profile_arn: account.profile_arn.clone(),
+            token_endpoint: account.token_endpoint.clone(),
+            issuer_url: account.issuer_url.clone(),
+            scopes: account.scopes.clone(),
+            audience: account.audience.clone(),
+            account: use_account_proxy.then(|| account.clone()),
+            ..Default::default()
+        };
+        let external_provider = ExternalIdpProvider::new(
+            account.client_id.clone().unwrap_or_default(),
+            account.issuer_url.clone(),
+            account.token_endpoint.clone(),
+            account.scopes.clone(),
+            account.audience.clone(),
+        );
+        let auth = external_provider
+            .refresh_token(refresh_token, metadata)
+            .await?;
+        Ok(RefreshResult {
+            source_refresh_token: refresh_token.to_string(),
+            access_token: auth.access_token,
+            refresh_token: Some(auth.refresh_token),
+            expires_in: auth.expires_in,
+            profile_arn: auth.profile_arn,
+            id_token: auth.id_token,
+            sso_session_id: None,
+            machine_id: auth.machine_id,
+            token_endpoint: auth.token_endpoint,
+            issuer_url: auth.issuer_url,
+            scopes: auth.scopes,
+            audience: auth.audience,
+            profile_name: auth.profile_name,
+        })
+    } else if provider == "BuilderId" || provider == "Enterprise" {
         let metadata = RefreshMetadata {
             client_id: account.client_id.clone(),
             client_secret: account.client_secret.clone(),
@@ -415,6 +488,7 @@ async fn refresh_token_by_provider_inner(
         let idc_provider = IdcProvider::new(provider, region, start_url);
         let auth = idc_provider.refresh_token(refresh_token, metadata).await?;
         Ok(RefreshResult {
+            source_refresh_token: refresh_token.to_string(),
             access_token: auth.access_token,
             refresh_token: Some(auth.refresh_token),
             expires_in: auth.expires_in,
@@ -422,6 +496,11 @@ async fn refresh_token_by_provider_inner(
             id_token: auth.id_token,
             sso_session_id: auth.sso_session_id,
             machine_id: None,
+            token_endpoint: None,
+            issuer_url: None,
+            scopes: None,
+            audience: None,
+            profile_name: None,
         })
     } else {
         let metadata = RefreshMetadata {
@@ -435,6 +514,7 @@ async fn refresh_token_by_provider_inner(
             .refresh_token(refresh_token, metadata)
             .await?;
         Ok(RefreshResult {
+            source_refresh_token: refresh_token.to_string(),
             access_token: auth.access_token,
             refresh_token: Some(auth.refresh_token),
             expires_in: auth.expires_in,
@@ -442,6 +522,11 @@ async fn refresh_token_by_provider_inner(
             id_token: None,
             sso_session_id: None,
             machine_id: auth.machine_id,
+            token_endpoint: None,
+            issuer_url: None,
+            scopes: None,
+            audience: None,
+            profile_name: None,
         })
     }
 }
@@ -708,12 +793,75 @@ pub fn find_existing_account_idx(
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_user_info, find_existing_account_idx, parse_usage_result,
+        apply_refreshed_account_tokens, extract_user_info, find_existing_account_idx,
+        parse_usage_result, RefreshResult,
         resolve_kiro_call_context, resolve_profile_arn_from_candidates,
         resolve_profile_arn_with_fallback,
     };
     use super::{is_client_registration_expiring, is_token_expired, is_token_expiring_soon};
     use crate::core::account::Account;
+
+    fn external_refresh_result(source: &str, rotated: &str) -> RefreshResult {
+        RefreshResult {
+            source_refresh_token: source.to_string(),
+            access_token: "new-access-token".to_string(),
+            refresh_token: Some(rotated.to_string()),
+            expires_in: 3600,
+            profile_arn: None,
+            id_token: None,
+            sso_session_id: None,
+            machine_id: None,
+            token_endpoint: None,
+            issuer_url: None,
+            scopes: None,
+            audience: None,
+            profile_name: None,
+        }
+    }
+
+    #[test]
+    fn external_idp_refresh_rejects_stale_rotation_writeback() {
+        let mut account = Account::new("azure@example.com".to_string(), "azure".to_string());
+        account.auth_method = Some("external_idp".to_string());
+        account.provider = Some("ExternalIdp".to_string());
+        account.access_token = Some("current-access-token".to_string());
+        account.refresh_token = Some("already-rotated-token".to_string());
+
+        let applied = apply_refreshed_account_tokens(
+            &mut account,
+            &external_refresh_result("old-refresh-token", "stale-result-token"),
+        );
+
+        assert!(!applied);
+        assert_eq!(
+            account.refresh_token.as_deref(),
+            Some("already-rotated-token")
+        );
+        assert_eq!(
+            account.access_token.as_deref(),
+            Some("current-access-token")
+        );
+    }
+
+    #[test]
+    fn external_idp_refresh_applies_when_source_token_is_current() {
+        let mut account = Account::new("azure@example.com".to_string(), "azure".to_string());
+        account.auth_method = Some("external_idp".to_string());
+        account.provider = Some("ExternalIdp".to_string());
+        account.refresh_token = Some("current-refresh-token".to_string());
+
+        let applied = apply_refreshed_account_tokens(
+            &mut account,
+            &external_refresh_result("current-refresh-token", "rotated-refresh-token"),
+        );
+
+        assert!(applied);
+        assert_eq!(
+            account.refresh_token.as_deref(),
+            Some("rotated-refresh-token")
+        );
+        assert_eq!(account.access_token.as_deref(), Some("new-access-token"));
+    }
 
     #[test]
     fn builder_id_client_id_hash_constant_matches_algorithm() {

@@ -45,8 +45,15 @@ pub struct KiroLocalToken {
     pub expires_at: Option<String>,
     pub auth_method: Option<String>,
     pub provider: Option<String>,
+    // External IdP 专用
+    pub client_id: Option<String>,
+    pub token_endpoint: Option<String>,
+    pub issuer_url: Option<String>,
+    pub scopes: Option<String>,
+    pub audience: Option<String>,
     // Social 专用
     pub profile_arn: Option<String>,
+    pub profile_name: Option<String>,
     // IdC 专用
     pub client_id_hash: Option<String>,
     pub region: Option<String>,
@@ -125,8 +132,14 @@ pub struct KiroAccountInfo {
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
     pub expires_at: Option<String>,
+    // External IdP 专用
+    pub token_endpoint: Option<String>,
+    pub issuer_url: Option<String>,
+    pub scopes: Option<String>,
+    pub audience: Option<String>,
     // Social 专用
     pub profile_arn: Option<String>,
+    pub profile_name: Option<String>,
     // IdC 专用
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
@@ -168,14 +181,23 @@ pub async fn read_kiro_accounts() -> Result<Vec<KiroAccountInfo>, String> {
                         .unwrap_or_else(|| "Google".to_string());
 
                     let mut account = KiroAccountInfo {
-                        email: String::new(), // 需要通过 API 获取
+                        email: token
+                            .access_token
+                            .as_deref()
+                            .and_then(crate::auth::providers::extract_external_idp_email)
+                            .unwrap_or_default(),
                         provider: provider.clone(),
                         auth_method: auth_method.to_string(),
                         access_token: token.access_token.clone(),
                         refresh_token: token.refresh_token.clone(),
                         expires_at: token.expires_at.clone(),
+                        token_endpoint: token.token_endpoint.clone(),
+                        issuer_url: token.issuer_url.clone(),
+                        scopes: token.scopes.clone(),
+                        audience: token.audience.clone(),
                         profile_arn: token.profile_arn.clone(),
-                        client_id: None,
+                        profile_name: token.profile_name.clone(),
+                        client_id: token.client_id.clone(),
                         client_secret: None,
                         client_id_hash: token.client_id_hash.clone(),
                         region: token.region.clone(),

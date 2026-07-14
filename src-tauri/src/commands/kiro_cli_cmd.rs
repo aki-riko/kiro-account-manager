@@ -383,23 +383,27 @@ pub async fn switch_to_cli_account(
         match crate::commands::common::refresh_token_by_provider(&account).await {
             Ok(refresh_result) => {
                 log::info!("[CLI Switch] Token 刷新成功");
-                // 更新 store 中的 token
-                {
+                // 更新 store 中的 token，并使用实际持久化后的账号继续切号。
+                // External IdP 并发刷新时，旧结果会被拒绝，此处不能再用旧结果覆盖 CLI。
+                let persisted_account = {
                     let mut store = lock_account_store(&state.store)?;
-                    if let Some(a) = store.accounts.iter_mut().find(|a| a.id == account_id) {
-                        crate::commands::common::apply_refreshed_account_tokens(a, &refresh_result);
-                        let _ = crate::commands::common::save_store(&store);
+                    let (persisted, applied) = if let Some(a) =
+                        store.accounts.iter_mut().find(|a| a.id == account_id)
+                    {
+                        let applied = crate::commands::common::apply_refreshed_account_tokens(
+                            a,
+                            &refresh_result,
+                        );
+                        (a.clone(), applied)
+                    } else {
+                        return Err(format!("账号不存在: {account_id}"));
+                    };
+                    if applied {
+                        crate::commands::common::save_store(&store)?;
                     }
-                }
-                // 构造刷新后的账号对象
-                let mut updated = account.clone();
-                updated.access_token = Some(refresh_result.access_token);
-                updated.refresh_token = refresh_result.refresh_token;
-                // 根据 expires_in 计算 expires_at
-                let expires_at =
-                    chrono::Utc::now() + chrono::Duration::seconds(refresh_result.expires_in);
-                updated.expires_at = Some(expires_at.to_rfc3339());
-                updated
+                    persisted
+                };
+                persisted_account
             }
             Err(e) => {
                 log::warn!("[CLI Switch] Token 刷新失败: {}, 使用现有 token", e);

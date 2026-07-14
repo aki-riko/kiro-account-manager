@@ -199,9 +199,20 @@ pub struct Account {
     pub id_token: Option<String>,
     #[serde(default)]
     pub start_url: Option<String>, // Enterprise 的 Start URL
+    // External IdP（Azure / Microsoft Entra 等）专用
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_endpoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issuer_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scopes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
     // Social 专用
     #[serde(default)]
     pub profile_arn: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_name: Option<String>,
     // 原始 usage API 响应
     pub usage_data: Option<serde_json::Value>,
     // 分组
@@ -259,7 +270,12 @@ impl Account {
             sso_session_id: None,
             id_token: None,
             start_url: None,
+            token_endpoint: None,
+            issuer_url: None,
+            scopes: None,
+            audience: None,
             profile_arn: None,
+            profile_name: None,
             usage_data: None,
             group_id: None,
             tag_links: Vec::new(),
@@ -297,7 +313,12 @@ impl Account {
             sso_session_id: None,
             id_token: None,
             start_url: None,
+            token_endpoint: None,
+            issuer_url: None,
+            scopes: None,
+            audience: None,
             profile_arn: None,
+            profile_name: None,
             usage_data: None,
             group_id: None,
             tag_links: Vec::new(),
@@ -316,6 +337,17 @@ impl Account {
     /// 判断是否是 Enterprise 账号
     pub fn is_enterprise(&self) -> bool {
         self.provider.as_deref() == Some("Enterprise")
+    }
+
+    /// 判断是否为外部身份提供商账号（Azure / Microsoft Entra 等）。
+    pub fn is_external_idp(&self) -> bool {
+        self.auth_method
+            .as_deref()
+            .is_some_and(|method| method.eq_ignore_ascii_case("external_idp"))
+            || self
+                .provider
+                .as_deref()
+                .is_some_and(|provider| provider.eq_ignore_ascii_case("ExternalIdp"))
     }
 
     /// 获取显示用的标识（Enterprise 用 `user_id`，其他用 email）
@@ -345,6 +377,16 @@ fn infer_auth_method(account: &Account) -> Option<String> {
     if account
         .provider
         .as_deref()
+        .is_some_and(|provider| provider.eq_ignore_ascii_case("ExternalIdp"))
+        || has_value(account.token_endpoint.as_ref())
+        || has_value(account.issuer_url.as_ref())
+    {
+        return Some("external_idp".to_string());
+    }
+
+    if account
+        .provider
+        .as_deref()
         .is_some_and(|provider| provider == "BuilderId" || provider == "Enterprise")
         || (account.client_id.is_some() && account.client_secret.is_some())
     {
@@ -365,6 +407,19 @@ fn infer_auth_method(account: &Account) -> Option<String> {
 
 fn normalize_account(account: &mut Account) -> bool {
     let mut changed = false;
+
+    let has_external_idp_metadata = has_value(account.token_endpoint.as_ref())
+        || has_value(account.issuer_url.as_ref());
+    if account.is_external_idp() || has_external_idp_metadata {
+        if account.auth_method.as_deref() != Some("external_idp") {
+            account.auth_method = Some("external_idp".to_string());
+            changed = true;
+        }
+        if account.provider.as_deref() != Some("ExternalIdp") {
+            account.provider = Some("ExternalIdp".to_string());
+            changed = true;
+        }
+    }
 
     if !has_value(account.auth_method.as_ref()) {
         if let Some(auth_method) = infer_auth_method(account) {
@@ -402,7 +457,12 @@ fn account_quality_score(account: &Account) -> usize {
         account.client_id.as_ref(),
         account.client_secret.as_ref(),
         account.client_id_hash.as_ref(),
+        account.token_endpoint.as_ref(),
+        account.issuer_url.as_ref(),
+        account.scopes.as_ref(),
+        account.audience.as_ref(),
         account.profile_arn.as_ref(),
+        account.profile_name.as_ref(),
         account.machine_id.as_ref(),
     ];
 
@@ -441,7 +501,12 @@ fn merge_accounts(preferred: &mut Account, candidate: Account) -> bool {
     fill_option!(sso_session_id);
     fill_option!(id_token);
     fill_option!(start_url);
+    fill_option!(token_endpoint);
+    fill_option!(issuer_url);
+    fill_option!(scopes);
+    fill_option!(audience);
     fill_option!(profile_arn);
+    fill_option!(profile_name);
     fill_option!(usage_data);
     fill_option!(group_id);
     fill_option!(machine_id);
@@ -502,7 +567,13 @@ fn normalize_accounts(accounts: Vec<Account>) -> (Vec<Account>, bool) {
 
     for account in &mut normalized {
         if !has_value(account.machine_id.as_ref()) {
-            account.machine_id = Some(Uuid::new_v4().to_string().to_lowercase());
+            account.machine_id = Some(if account.is_external_idp() {
+                crate::auth::providers::generate_external_idp_machine_id(
+                    account.access_token.as_deref(),
+                )
+            } else {
+                Uuid::new_v4().to_string().to_lowercase()
+            });
             changed = true;
         }
     }
@@ -532,7 +603,11 @@ fn normalize_accounts(accounts: Vec<Account>) -> (Vec<Account>, bool) {
             .unwrap_or(false);
 
         if is_duplicate {
-            account.machine_id = Some(Uuid::new_v4().to_string().to_lowercase());
+            account.machine_id = Some(if account.is_external_idp() {
+                crate::auth::providers::generate_external_idp_machine_id(None)
+            } else {
+                Uuid::new_v4().to_string().to_lowercase()
+            });
             changed = true;
         }
     }
@@ -787,7 +862,16 @@ impl AccountStore {
                 let mut added = 0;
                 for mut account in imported {
                     // 修复导入账号的 provider（如果为 null）
-                    if account.provider.is_none() && account.auth_method.as_deref() == Some("IdC") {
+                    if account.provider.is_none()
+                        && account
+                            .auth_method
+                            .as_deref()
+                            .is_some_and(|method| method.eq_ignore_ascii_case("external_idp"))
+                    {
+                        account.provider = Some("ExternalIdp".to_string());
+                    } else if account.provider.is_none()
+                        && account.auth_method.as_deref() == Some("IdC")
+                    {
                         // IdC 账号：根据 start_url 或 client_secret（JWT）判断是否 Enterprise
                         // BuilderId: https://view.awsapps.com/start
                         // Enterprise: d-xxx.awsapps.com
@@ -830,16 +914,36 @@ impl AccountStore {
 
                     // 修复导入账号的 authMethod（如果为 null）
                     if account.auth_method.is_none() {
-                        if account.client_id.is_some() && account.client_secret.is_some() {
+                        if account
+                            .provider
+                            .as_deref()
+                            .is_some_and(|provider| provider.eq_ignore_ascii_case("ExternalIdp"))
+                            || has_value(account.token_endpoint.as_ref())
+                            || has_value(account.issuer_url.as_ref())
+                        {
+                            account.auth_method = Some("external_idp".to_string());
+                        } else if account.client_id.is_some() && account.client_secret.is_some() {
                             account.auth_method = Some("IdC".to_string());
                         } else {
                             account.auth_method = Some("social".to_string());
                         }
                     }
 
+                    normalize_account(&mut account);
+
                     let exists = self.accounts.iter().any(|a| {
                         if let (Some(a_uid), Some(acc_uid)) = (&a.user_id, &account.user_id) {
                             return a_uid == acc_uid;
+                        }
+
+                        if a.is_external_idp() && account.is_external_idp() {
+                            return a
+                                .machine_id
+                                .as_deref()
+                                .zip(account.machine_id.as_deref())
+                                .is_some_and(|(left, right)| {
+                                    left.trim().eq_ignore_ascii_case(right.trim())
+                                });
                         }
 
                         false
@@ -848,8 +952,13 @@ impl AccountStore {
                     if !exists {
                         // 如果没有 machine_id，生成一个
                         if account.machine_id.is_none() {
-                            account.machine_id =
-                                Some(uuid::Uuid::new_v4().to_string().to_lowercase());
+                            account.machine_id = Some(if account.is_external_idp() {
+                                crate::auth::providers::generate_external_idp_machine_id(
+                                    account.access_token.as_deref(),
+                                )
+                            } else {
+                                uuid::Uuid::new_v4().to_string().to_lowercase()
+                            });
                         }
                         self.accounts.push(account);
                         added += 1;
@@ -1273,6 +1382,33 @@ mod tests {
         assert!(changed);
         assert_eq!(normalized.len(), 1);
         assert_eq!(normalized[0].auth_method.as_deref(), Some("IdC"));
+    }
+
+    #[test]
+    fn normalize_accounts_canonicalizes_external_idp_metadata() {
+        let mut external = Account::new("azure@example.com".to_string(), "azure".to_string());
+        external.provider = Some("externalidp".to_string());
+        external.auth_method = None;
+        external.client_id = Some("public-client".to_string());
+        external.issuer_url = Some("https://login.example.test/tenant/v2.0".to_string());
+        external.token_endpoint = Some("https://login.example.test/tenant/token".to_string());
+        external.scopes = Some("openid offline_access".to_string());
+
+        let (normalized, changed) = normalize_accounts(vec![external]);
+
+        assert!(changed);
+        assert_eq!(normalized.len(), 1);
+        assert!(normalized[0].is_external_idp());
+        assert_eq!(
+            normalized[0].auth_method.as_deref(),
+            Some("external_idp")
+        );
+        assert_eq!(normalized[0].provider.as_deref(), Some("ExternalIdp"));
+        assert_eq!(
+            normalized[0].token_endpoint.as_deref(),
+            Some("https://login.example.test/tenant/token")
+        );
+        assert_eq!(normalized[0].machine_id.as_deref().map(str::len), Some(64));
     }
 
     #[test]

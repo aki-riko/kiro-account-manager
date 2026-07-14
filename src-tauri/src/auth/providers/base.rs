@@ -15,7 +15,7 @@ pub struct AuthResult {
     pub expires_at: String,
     pub expires_in: i64,
     pub provider: String,
-    pub auth_method: String, // "social" / "IdC"
+    pub auth_method: String, // "social" / "IdC" / "external_idp"
     pub token_type: Option<String>,
 
     // IdC (BuilderId) 专用
@@ -27,8 +27,15 @@ pub struct AuthResult {
     pub sso_session_id: Option<String>,
     pub start_url: Option<String>, // Enterprise 的 Start URL
 
+    // External IdP 专用
+    pub token_endpoint: Option<String>,
+    pub issuer_url: Option<String>,
+    pub scopes: Option<String>,
+    pub audience: Option<String>,
+
     // Social (Google/Github) 专用
     pub profile_arn: Option<String>,
+    pub profile_name: Option<String>,
     #[serde(default)]
     pub machine_id: Option<String>,
 }
@@ -41,6 +48,10 @@ pub struct RefreshMetadata {
     pub region: Option<String>,
     pub client_id_hash: Option<String>,
     pub profile_arn: Option<String>,
+    pub token_endpoint: Option<String>,
+    pub issuer_url: Option<String>,
+    pub scopes: Option<String>,
+    pub audience: Option<String>,
     pub machine_id: Option<String>,
     pub account: Option<Account>,
 }

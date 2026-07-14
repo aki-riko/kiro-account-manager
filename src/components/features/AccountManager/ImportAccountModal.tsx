@@ -7,7 +7,7 @@ import { Alert } from '@/components/ui/alert'
 import { Upload, FileJson, AlertCircle, CheckCircle, Loader2, Database, RefreshCw } from 'lucide-react'
 import { getSystemMachineGuid } from '../../../api/kiroApi'
 import { getKiroCliDefaultPath } from '../../../api/systemApi'
-import { readKiroAccounts, addAccountBySocial, addAccountByIdc, importFromKiroCli } from '../../../api/importApi'
+import { readKiroAccounts, addAccountBySocial, addAccountByIdc, addAccountByExternalIdp, importFromKiroCli } from '../../../api/importApi'
 import { useApp } from '../../../hooks/useApp'
 
 import { getConcurrency } from '../../../utils/concurrency'
@@ -71,6 +71,27 @@ function validateAccount(item: any, index: number) {
   if (!refreshToken) {
     errors.push(`第 ${index + 1} 条: 缺少 refreshToken`)
     return { valid: false, errors, type: null }
+  }
+
+  const authMethod = String(item.authMethod || '').toLowerCase()
+  const providerName = String(item.provider || '').toLowerCase()
+  const isExternalIdp = authMethod === 'external_idp'
+    || providerName === 'externalidp'
+    || Boolean(item.tokenEndpoint || item.issuerUrl)
+
+  if (isExternalIdp) {
+    if (!item.clientId || !String(item.clientId).trim()) {
+      errors.push(`第 ${index + 1} 条: External IdP 账号缺少 clientId`)
+    }
+    if (!item.scopes || !String(item.scopes).trim()) {
+      errors.push(`第 ${index + 1} 条: External IdP 账号缺少 scopes`)
+    }
+    if (!item.issuerUrl && !item.tokenEndpoint) {
+      errors.push(`第 ${index + 1} 条: External IdP 账号必须提供 issuerUrl 或 tokenEndpoint`)
+    }
+    return errors.length > 0
+      ? { valid: false, errors, type: null }
+      : { valid: true, errors: [] as string[], type: 'external_idp', inferredProvider: 'ExternalIdp' }
   }
 
   if (!refreshToken.startsWith('aor')) {
@@ -317,7 +338,21 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
       try {
         let result: any
         const provider = item._inferredProvider || item.provider
-        if (item._type === 'social') {
+        if (item._type === 'external_idp') {
+          result = await addAccountByExternalIdp({
+            refreshToken: item.refreshToken,
+            clientId: item.clientId,
+            issuerUrl: item.issuerUrl || null,
+            tokenEndpoint: item.tokenEndpoint || null,
+            scopes: item.scopes,
+            audience: item.audience || null,
+            region: item.region || null,
+            profileArn: item.profileArn || null,
+            profileName: item.profileName || null,
+            machineId: item.machineId || null,
+            accessToken: item.accessToken || null
+          })
+        } else if (item._type === 'social') {
           result = await addAccountBySocial({
             refreshToken: item.refreshToken,
             provider: provider,
@@ -392,7 +427,21 @@ function ImportAccountModal({ onClose, onSuccess, onNavigate }: ImportAccountMod
     const importOne = async (account: any) => {
       try {
         let result: any
-        if (account.authMethod === 'IdC') {
+        if (String(account.authMethod).toLowerCase() === 'external_idp') {
+          result = await addAccountByExternalIdp({
+            refreshToken: account.refreshToken,
+            clientId: account.clientId,
+            issuerUrl: account.issuerUrl || null,
+            tokenEndpoint: account.tokenEndpoint || null,
+            scopes: account.scopes,
+            audience: account.audience || null,
+            region: account.region || null,
+            profileArn: account.profileArn || null,
+            profileName: account.profileName || null,
+            machineId: null,
+            accessToken: account.accessToken || null
+          })
+        } else if (account.authMethod === 'IdC') {
           // IdC 账号：统一调用 add_account_by_idc
           const params = {
             provider: account.provider,  // BuilderId 或 Enterprise

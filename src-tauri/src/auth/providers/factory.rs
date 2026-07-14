@@ -8,6 +8,7 @@ use super::IdcProvider;
 pub enum AuthMethod {
     Social,
     Idc,
+    ExternalIdp,
 }
 
 /// Provider 配置

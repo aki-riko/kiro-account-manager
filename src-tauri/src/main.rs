@@ -29,11 +29,12 @@ use utils::browser::detect_installed_browsers;
 
 //账号管理页面
 use commands::account_cmd::{
-    add_account_by_idc, add_account_by_social, add_local_kiro_account, check_all_tokens_status,
-    check_token_status, delete_account, delete_account_remote, delete_accounts, export_accounts,
-    get_account_usage, get_accounts, get_accounts_by_group, get_accounts_by_tag,
-    get_available_accounts, get_usage_limits, import_accounts, list_available_models,
-    refresh_token, refresh_all_expiring_tokens, set_overage_status, sync_account,
+    add_account_by_external_idp, add_account_by_idc, add_account_by_social,
+    add_local_kiro_account, check_all_tokens_status, check_token_status, delete_account,
+    delete_account_remote, delete_accounts, export_accounts, get_account_usage, get_accounts,
+    get_accounts_by_group, get_accounts_by_tag, get_available_accounts, get_usage_limits,
+    import_accounts, list_available_models, refresh_all_expiring_tokens, refresh_token,
+    set_overage_status, sync_account,
     update_account, verify_account,
 };
 //应用设置
@@ -455,6 +456,7 @@ fn main() {
             refresh_token,
             verify_account,
             add_account_by_social,
+            add_account_by_external_idp,
             add_local_kiro_account,
             add_account_by_idc,
             import_accounts,

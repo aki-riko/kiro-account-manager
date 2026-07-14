@@ -21,6 +21,11 @@ export function addAccountByIdc(params: Record<string, any>) {
   return invoke('add_account_by_idc', params)
 }
 
+// External IdP（Azure / Microsoft Entra 等）账号导入
+export function addAccountByExternalIdp(params: Record<string, any>) {
+  return invoke('add_account_by_external_idp', params)
+}
+
 // 从 Kiro CLI 数据库导入账号
 export function importFromKiroCli(dbPath: string) {
   return invoke<any>('import_from_kiro_cli', { dbPath })

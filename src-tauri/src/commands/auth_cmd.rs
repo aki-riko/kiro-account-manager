@@ -117,6 +117,9 @@ pub async fn kiro_login(
     match config.auth_method {
         AuthMethod::Social => login_social(app_handle, state, &config).await,
         AuthMethod::Idc => login_idc(app_handle, state, &config).await,
+        AuthMethod::ExternalIdp => {
+            Err("External IdP 在线登录需要先获取门户元数据".to_string())
+        }
     }
 }
 
