@@ -1,10 +1,12 @@
-# KSK 隔离 Kiro IDE 实施计划
+# KSK 隔离 Kiro IDE 实施与验收记录
 
 ## 1. 文档目的
 
-本文档是 KAM 中实现“KSK-only 隔离 Kiro IDE”的持续执行基线。
+本文档是 KAM 中“KSK-only 隔离 Kiro IDE”的实施、验收和后续维护基线。
 
 后续开发、上下文压缩恢复、测试和代码审查均以本文档为准。任何改变安全边界、凭据落盘策略、代理协议或正式 Kiro 隔离方式的决策，都必须先更新本文档并单独提交。
+
+最终状态（2026-07-14）：功能已完成。主入口是独立的 `KSK IDE` 侧边栏；KAM 账号可刷新凭据、签发短期 KSK 并直接启动官方 Kiro，账号卡片、紧凑列表和右键菜单也提供快捷启动。手工已有 KSK 仅保留为页面内的高级入口，不再使用阻塞式弹窗。
 
 ## 2. 当前基线
 
@@ -22,9 +24,9 @@
 
 ## 3. 目标
 
-首版 PoC 必须实现：
+最终交付已实现：
 
-1. 用户在 KAM 中输入一个有效 KSK 和目标区域。
+1. 用户从 KAM 账号直接签发短期 KSK；IdC 账号缺少 `profileArn` 时先在线解析并写回，再继续签发。手工 KSK 只作为高级入口。
 2. 正式 Kiro 完全退出后，KAM 启动一个复用正式 user-data 和扩展目录、但使用隔离认证 HOME 的 Kiro IDE 实例。
 3. 隔离 IDE 只持有无权限占位登录态，不持有真实 KSK、OAuth access token 或 refresh token。
 4. 真实 KSK 只存在于 KAM Rust 后端的当前运行时内存中。
@@ -33,13 +35,12 @@
 7. `GenerateAssistantResponse` 的 AWS EventStream 响应按字节流返回给 IDE。
 8. 正式 Kiro 的对话、工作区、历史和扩展连续可用；正式登录 token 不得被读取或修改，endpoint 设置只允许事务化临时覆盖并在停止或下次 KAM 启动时恢复。
 9. 停止隔离实例后，代理监听、隔离进程、内存 KSK 和临时目录全部清理。
-10. 使用同一个真实 KSK 会话验证核心聊天成功后，才允许声明 PoC 可用。
+10. 使用账号签发的真实 KSK 会话完成官方模型切换、真实聊天、撤销和清理验证后，才允许声明功能可用。
 
 ## 4. 非目标
 
-首版不承诺：
+当前仍不承诺：
 
-- 创建、续期、删除或管理 KSK。
 - KSK 永久保存或跨 KAM 重启恢复。
 - 使用量、订阅、超额用量和支付门户可用。
 - 所有自动补全、MCP、WebSearch、Profile 管理功能可用。
@@ -100,7 +101,7 @@ KAM 已有：
 - API Key runtime 请求体不携带顶层 `profileArn`。
 - KSK 没有 OAuth refresh token，不进入 OAuth 刷新路径。
 
-KAM PoC 必须复用这些规则，但仍需真实 KSK 请求验证当前服务端行为。
+KAM 当前实现复用这些规则，并已用账号签发的真实 KSK 请求验证当前服务端行为。
 
 ### 5.6 官方 Windows 单实例边界与 2026-07-14 实机观察
 
@@ -210,7 +211,7 @@ KAM 前端
 
 ### 7.4 子进程环境和参数
 
-Windows 首版启动参数：
+Windows 当前启动参数：
 
 - Kiro 可执行文件使用 KAM 已有安装路径发现逻辑。
 - `USERPROFILE` 指向隔离 `home`。
@@ -254,7 +255,7 @@ pub struct KskIdeRuntime {
 pub ksk_ide: Mutex<Option<KskIdeRuntime>>
 ```
 
-首版只允许同时存在一个 KSK 隔离实例。重复启动必须明确报错，不能覆盖旧 runtime。
+当前版本只允许同时存在一个 KSK 隔离实例。重复启动必须明确报错，不能覆盖旧 runtime。
 
 ### 8.2 监听安全
 
@@ -321,24 +322,25 @@ Q/generic：
 
 CPS/management：
 
-- 首版不假设 KSK 支持使用量、Profile、订阅或超额管理。
-- 先记录脱敏操作名和失败状态。
-- 如核心聊天不依赖该操作，返回明确的功能不可用响应。
-- 如核心聊天被某个管理调用阻断，必须先取得同一真实会话的失败请求和日志，再设计最小兼容响应。
+- 精确放行已验证的 `ListAvailableModels` RPC，并在上游前删除顶层占位 `profileArn`。
+- `GetUsageLimits` 返回本地空额度，避免官方 IDE 弹出额度错误，同时不伪造付费或订阅数据。
+- Profile 在线解析仅用于账号签发 KSK 前补全真实 `profileArn`；订阅、超额管理和支付能力不在隔离代理范围内。
+- 新增 management 操作前必须先取得同一真实会话的失败请求和日志，再设计最小兼容响应。
 - 禁止凭空构造未验证的 JSON 字段。
 
 ## 9. KSK 生命周期和存储
 
-PoC：
+当前实现：
 
-- 前端使用密码输入框接收 KSK。
-- KSK 通过一次 Tauri IPC 请求交给 Rust 后端。
+- 默认从 KAM 账号刷新凭据并签发短期 KSK；手工密码输入框仅保留在高级入口。
+- 账号签发的完整 KSK 不进入前端状态，直接由 Rust 控制面客户端交给 `KskIdeRuntime`。
+- 手工 KSK 通过一次 Tauri IPC 请求交给 Rust 后端。
 - KSK 只保存在 `KskIdeRuntime` 内存中。
-- 前端启动成功后立即清空输入状态。
+- 手工启动成功后立即清空输入状态。
 - 停止 runtime 后释放 KSK。
 - 不写入 `accounts.json`、settings、token 文件、日志或命令行。
 
-MVP 后续阶段：
+可选后续阶段：
 
 - 如果用户确认需要跨重启保存，再接 Windows Credential Manager 或 DPAPI。
 - `accounts.json` 只保存非敏感元数据和 secret reference。
@@ -346,7 +348,7 @@ MVP 后续阶段：
 
 ## 10. 日志和观测
 
-PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
+当前实现保留足够观测能力完成真实复现，但必须默认脱敏。
 
 允许记录：
 
@@ -369,12 +371,13 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 
 ## 11. 前端设计
 
-在 Account Manager 增加“KSK 隔离启动”入口，不混入现有 OAuth 导入校验。
+使用独立的 `KSK IDE` 侧边栏页面，不阻塞账号管理页。账号卡片、紧凑列表和右键菜单可一键签发并启动，成功后导航到状态页。
 
-首版弹窗字段：
+账号启动入口：
 
-- KSK：密码输入框，必填，不回显。
-- 区域：从后端允许区域列表选择，不允许自由输入未知区域。
+- 账号下拉：展示可签发账号，`external_idp` 和缺少 refresh token 的账号明确禁用并显示原因。
+- 启动按钮：刷新账号、签发默认 24 小时的短期 KSK，并直接启动隔离 Kiro。
+- 高级入口：已有 KSK 的密码输入框和受支持区域下拉，不回显、不持久化。
 
 显示状态：
 
@@ -388,8 +391,8 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 可用操作：
 
 - 启动隔离 Kiro
-- 停止隔离 Kiro
-- 复制脱敏诊断摘要
+- 停止并撤销临时 KSK
+- 刷新运行状态
 
 禁止把 KSK 放进 React Query 缓存、localStorage、sessionStorage、URL、日志或错误提示。
 
@@ -408,7 +411,8 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 - `src-tauri/src/ksk_ide/profile/shared_data_tests.rs`：共享数据、隔离认证和恢复行为测试。
 - `src-tauri/src/commands/ksk_ide_cmd.rs`：Tauri 启动、停止、状态命令。
 - `src/api/kskIdeApi.ts`：前端 Tauri API 包装。
-- `src/components/features/AccountManager/KskIsolatedIdeModal.tsx`：KSK 隔离启动界面。
+- `src/components/features/KskIde/index.tsx`：非模态侧边栏页面、账号签发入口和手工高级入口。
+- `src/utils/kskIde.ts`：账号签发资格判断。
 
 测试优先放在对应 Rust 模块的 `#[cfg(test)]` 中；如果集成测试体积明显增大，再新增 `src-tauri/tests/ksk_ide_proxy.rs`。
 
@@ -417,9 +421,10 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 - `src-tauri/src/main.rs`：注册 runtime 状态和 Tauri 命令。
 - `src-tauri/src/state.rs`：增加独立 `KskIdeRuntime` 状态。
 - `src-tauri/src/commands/mod.rs`：导出 KSK IDE 命令模块。
-- `src/components/features/AccountManager/index.tsx`：添加入口并维护弹窗状态。
+- `src/components/features/AccountManager/index.tsx`：账号快捷启动、导入后全局账号同步和侧边栏导航。
+- `src/routes.tsx`：注册持久化的 `KSK IDE` 路由。
 
-首版不修改：
+本功能不修改：
 
 - `src-tauri/src/core/account.rs`
 - `src/types/account.ts`
@@ -498,11 +503,13 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 
 ### 阶段 4：前端入口
 
-状态：已完成，并明确提示当前禁止并行启动。
+状态：已完成。入口为独立侧边栏，不阻塞账号管理操作，并明确提示当前禁止并行启动。
 
-- 增加 KSK 隔离启动弹窗。
-- 接入启动、停止、状态展示。
-- 启动成功后清空前端 KSK。
+- 增加 `KSK IDE` 独立侧边栏页面。
+- 账号卡片、紧凑列表和右键菜单接入签发并启动。
+- 账号导入成功后广播 `accounts-updated`，侧边栏无需重启即可读取新账号。
+- 接入启动、停止撤销、状态展示和高级手工入口。
+- 手工启动成功后清空前端 KSK。
 - 错误信息脱敏。
 
 门禁：
@@ -513,7 +520,7 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 
 ### 阶段 5：真实 KSK 验证
 
-状态：核心聊天和“最终代理代码 + 本机安装 Kiro”的官方模型握手均已完成；最终 KAM UI 模型下拉的视觉验收待用户下一次输入 KSK 后复核。
+状态：已完成。账号签发、官方模型下拉、模型切换、真实聊天、停止撤销和清理均已用本机安装 Kiro 完成。
 
 必须使用用户提供的同一个真实 KSK 会话完成：
 
@@ -544,7 +551,18 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 - 正式 settings/token 的 SHA256 在测试前后完全一致，Kiro/KAM 进程、三个 loopback 端口和隔离目录残留均为 0。
 - 上游响应观测代码仅在 `cfg(test)` 下编译，生产构建和运行时安全边界不变。
 
-因此可以声明“核心聊天 PoC 与最终代理代码的模型 RPC 转发链已验证”。因为 KSK 按设计只驻留内存且已在清理时释放，仍需用户下一次从最终安装版 KAM UI 输入 KSK，完成模型下拉展示和同一路径聊天的最终人工验收；不会为了无人值守复测绕过安全边界持久化 KSK。
+2026-07-14 账号签发与最终 UI 端到端验证：
+
+- 从本机官方 Kiro 导入真实 Enterprise IdC 账号；真实失败输入为账号缺少 `profileArn`、状态为 `invalid`。
+- KAM 在线调用 `ListAvailableProfiles` 补全 `profileArn`，刷新账号为 `active`，随后 `CreateApiKey` 成功并启动官方 Kiro。
+- `KSK IDE` 侧边栏显示账号签发入口；导入后侧边栏不同步的真实问题已用 `accounts-updated` 事件修复并回归。
+- 官方模型下拉可展开，实测包含 Claude Sonnet 5、Claude Opus 4.8、Claude Opus 4.7、Claude Opus 4.6、Claude Sonnet 4.6、Claude Opus 4.5、Claude Sonnet 4.5、Claude Sonnet 4 和 Claude Haiku 4.5。
+- 模型从 Claude Opus 4.8 切换到 Claude Sonnet 5 后发送固定验收问题，6 秒返回精确 `KSK_CHAT_OK`；未出现额度弹窗。
+- 停止按钮成功返回“临时 KSK 已撤销”，对应后端仅在 `DeleteApiKey` 成功后清除 managed lease 并返回 idle。
+- 最终 Kiro/KAM 进程、KAM 监听端口、隔离会话目录、磁盘 KSK 痕迹和命令行 KSK 痕迹均为 0。
+- 正式 token SHA256 始终为 `3AEFD6393E15F25B9D1EAF184A424232B45EC3921F9E0B117BF3F25D25E3A064`；恢复模型偏好后 settings SHA256 精确回到 `105EC0EB1714BD200B314677F87A87CDEF474037A4A15FDDB2412DF518E0382B`。
+
+因此可以声明：账号签发到官方 Kiro 模型选择、真实对话、撤销和清理的完整路径已经验证，不再需要用户手工输入 KSK 完成二次验收。
 
 如果失败：
 
@@ -555,7 +573,7 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 
 ### 阶段 6：Review 与收尾
 
-状态：自动化、最终安装包、真实 KSK 核心聊天、最终代理代码驱动的官方模型握手和清理回归均已完成；仅剩最终 KAM UI 人工复核。
+状态：已完成。自动化、账号签发、最终 UI、真实聊天、模型切换、撤销和清理回归均已闭环。
 
 - 检查是否存在 KSK、Authorization、占位 token 泄漏。
 - 检查所有错误分支是否有脱敏日志。
@@ -589,6 +607,17 @@ PoC 需要足够观测能力完成真实复现，但必须默认脱敏。
 - MSI 解包 EXE 与 Program Files 安装 EXE SHA256 同为 `59A685904405A968C8F4A2E9C96D1E83C94FDA91F456CC8B56722CBAF9253C78`。
 - 最终安装版假 KSK lifecycle：19.75 秒通过；清理后正式 settings/token 恢复、进程/目录/endpoint 残留为 0。
 - 增强后的“最终代理代码 + 安装版 Kiro”模型握手 lifecycle：21.45 秒通过；官方 Kiro 的 `ListAvailableModels` 已取得官方上游 HTTP 响应，提交 `744c2f0`。
+
+2026-07-14 `bbfd199` 最终回归与构建结果：
+
+- Rust 单元测试：266 通过、0 失败、1 个显式实机测试默认忽略。
+- Rust 集成测试：3 + 9 + 10 全部通过；合计 288 项通过、0 项失败、1 项忽略。
+- `cargo check`：通过，仅保留 2 组既有 dead-code 警告。
+- Bun：32 项通过、0 项失败；TypeScript `--noEmit` 通过。
+- Vite production build：1909 个模块完成转换。
+- release EXE SHA256：`1E5FF450968992C0E07D077C04059787D92B7562FFE59F22A1E515BB8ECC9474`。
+- MSI SHA256：`0651FC907CA7EF1B313402A8210B1D9F0B1DAF230751549984B8F8CCC71F8DB2`。
+- MSI 仍因当前进程不是管理员而无法替换旧的系统级安装，错误为 1603 / 1730；release EXE 已完成真实端到端验证，不能把该权限阻塞描述为“已安装”。
 
 ## 14. 测试命令
 
@@ -640,7 +669,7 @@ npm run build
 
 ### 风险 1：KSK 不支持某些 IDE 初始化接口
 
-处理：首版以核心聊天为验收边界。management 操作先观测，不猜字段；只对真实阻断调用做最小兼容。
+处理：当前以模型列表和核心聊天为验收边界。management 操作先观测，不猜字段；只对真实阻断调用做最小兼容。
 
 ### 风险 2：占位登录态触发 OAuth refresh 或自动登出
 
@@ -656,7 +685,7 @@ npm run build
 
 ### 风险 5：KSK 明文持久化
 
-处理：PoC 完全不持久化。需要持久化时单独设计 Windows Credential Manager/DPAPI 阶段，不复用明文 `accounts.json`。
+处理：当前版本完全不持久化完整 KSK。需要持久化时单独设计 Windows Credential Manager/DPAPI 阶段，不复用明文 `accounts.json`。
 
 ### 风险 6：官方 Kiro 更新改变内部配置或认证门禁
 
@@ -685,10 +714,8 @@ npm run build
 
 ## 18. 当前下一步
 
-协议与核心功能证据已经闭环，当前仅剩用户侧最终验收：
+核心功能和真实验收已经完成。可选后续仅包括：
 
-1. 用户下一次在最终安装版 KAM 的 UI 输入真实 KSK。
-2. 确认模型下拉展示真实模型并从 Kiro UI 发起一次聊天。
-3. 通过 KAM 停止隔离实例，再核对正式 token/settings、进程、端口和目录清理。
-
-真实 KSK 不得进入聊天记录、日志、命令行或测试夹具；因此不会为了无人值守复测而绕过内存隔离边界持久化 KSK。
+1. 使用管理员权限运行最终 MSI，替换当前系统级安装。
+2. 若未来需要支持正式 Kiro 与隔离 Kiro 并行，再单独设计 Windows Job Object、独立用户数据目录和真实并行回归；当前版本继续明确拒绝并行启动。
+3. 若未来需要跨 KAM 重启保留 KSK，再单独设计 Windows Credential Manager / DPAPI；当前版本继续只在 Rust 运行时内存中持有完整 KSK。
