@@ -1,8 +1,10 @@
 // 公共工具函数 - 提取重复逻辑
 
 use crate::auth::providers::{
-    AuthProvider, ExternalIdpProvider, IdcProvider, RefreshMetadata, SocialProvider,
+    AuthProvider, ExternalIdpAuthConfig, ExternalIdpProvider, IdcProvider, RefreshMetadata,
+    SocialProvider,
 };
+use crate::clients::kiro_client::{KiroClient, KiroProfile};
 use crate::commands::machine_guid::generate_random_machine_id;
 use crate::core::account::Account;
 use crate::utils::client_id_hash::calculate_client_id_hash;
@@ -159,6 +161,7 @@ pub fn ensure_account_machine_id(account: &mut Account) -> String {
 /// - 其他 provider: 账号 profileArn → 默认 profileArn（根据 provider）
 pub fn resolve_profile_arn_with_fallback(
     account_profile_arn: Option<&str>,
+    auth_method: Option<&str>,
     provider: Option<&str>,
 ) -> Option<String> {
     // 过滤空白字符串
@@ -166,31 +169,18 @@ pub fn resolve_profile_arn_with_fallback(
         .map(str::trim)
         .filter(|value| !value.is_empty());
 
+    if crate::clients::http_client::is_external_idp_auth_method(auth_method)
+        || provider.is_some_and(|value| value.eq_ignore_ascii_case("ExternalIdp"))
+    {
+        return account_profile_arn.map(String::from);
+    }
+
     match provider {
         Some("Enterprise") => None,
         provider => account_profile_arn
             .map(String::from)
             .or_else(|| Some(resolve_default_profile_arn(provider).to_string())),
     }
-}
-
-/// 统一解析带“优先候选”的 profileArn。
-///
-/// 用于 token refresh 之后的调用：上游刷新结果返回的 profileArn 优先，其次账号保存值，
-/// 最后按 provider 降级到默认 profileArn；Enterprise 始终返回 None。
-pub fn resolve_profile_arn_from_candidates(
-    preferred_profile_arn: Option<&str>,
-    account_profile_arn: Option<&str>,
-    provider: Option<&str>,
-) -> Option<String> {
-    let preferred_profile_arn = preferred_profile_arn
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    let account_profile_arn = account_profile_arn
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-
-    resolve_profile_arn_with_fallback(preferred_profile_arn.or(account_profile_arn), provider)
 }
 
 // ===== Mutex 锁辅助 =====
@@ -242,6 +232,7 @@ pub fn resolve_kiro_call_context(account: &Account, fallback_region: &str) -> Ki
 
     let profile_arn = resolve_profile_arn_with_fallback(
         account.profile_arn.as_deref(),
+        account.auth_method.as_deref(),
         account.provider.as_deref(),
     );
 
@@ -256,6 +247,74 @@ pub fn resolve_kiro_call_context(account: &Account, fallback_region: &str) -> Ki
         region,
         profile_arn,
     }
+}
+
+pub async fn resolve_account_profile_with_client(
+    account: &Account,
+    access_token: &str,
+    client: &KiroClient,
+) -> Result<Option<KiroProfile>, String> {
+    let ctx = resolve_kiro_call_context(account, "us-east-1");
+    let existing = ctx.profile_arn.map(|arn| KiroProfile {
+        arn,
+        name: account
+            .profile_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_default()
+            .to_string(),
+        region: ctx.region.clone(),
+    });
+
+    if !account.is_external_idp() {
+        if existing.is_some() {
+            return Ok(existing);
+        }
+        return client
+            .discover_available_profile(
+                access_token,
+                account.auth_method.as_deref(),
+                &[ctx.region],
+            )
+            .await;
+    }
+    if existing
+        .as_ref()
+        .is_some_and(|profile| !profile.name.is_empty())
+    {
+        return Ok(existing);
+    }
+
+    let config = ExternalIdpAuthConfig::load()?;
+    let regions = config.ordered_profile_regions(account.region.as_deref());
+    match client
+        .discover_available_profile(access_token, account.auth_method.as_deref(), &regions)
+        .await
+    {
+        Ok(Some(profile)) => Ok(Some(profile)),
+        Ok(None) => existing
+            .map(Some)
+            .ok_or_else(|| "External IdP 账号未返回可用 profile".to_string()),
+        Err(error) => match existing {
+            Some(profile) => {
+                log::warn!(
+                    "[ExternalIdP] 在线补全 profileName 失败，继续使用已有 profileArn: {}",
+                    error
+                );
+                Ok(Some(profile))
+            }
+            None => Err(error),
+        },
+    }
+}
+
+pub fn apply_resolved_profile(account: &mut Account, profile: &KiroProfile) {
+    account.profile_arn = Some(profile.arn.clone());
+    if !profile.name.trim().is_empty() {
+        account.profile_name = Some(profile.name.clone());
+    }
+    account.region = Some(profile.region.clone());
 }
 
 // ===== 时间常量（参考 Kiro IDE 源码）=====
@@ -551,13 +610,18 @@ async fn get_usage_by_account_inner(
     use crate::clients::http_client::build_http_client_with_timeout_for_account;
     use crate::clients::kiro_client::KiroClient;
 
-    let ctx = resolve_kiro_call_context(account, "us-east-1");
-
     let client = if use_account_proxy {
         KiroClient::from_client(build_http_client_with_timeout_for_account(account, 30, 10)?)
     } else {
         KiroClient::new()?
     };
+    let mut resolved_account = account.clone();
+    if let Some(profile) =
+        resolve_account_profile_with_client(account, access_token, &client).await?
+    {
+        apply_resolved_profile(&mut resolved_account, &profile);
+    }
+    let ctx = resolve_kiro_call_context(&resolved_account, "us-east-1");
     let usage_call = client
         .get_usage_limits(
             access_token,
@@ -580,6 +644,7 @@ async fn get_usage_by_account_inner(
                 &ctx.machine_id,
                 &ctx.region,
                 ctx.profile_arn.as_deref(),
+                account.auth_method.as_deref(),
             )
             .await
         {
@@ -793,13 +858,14 @@ pub fn find_existing_account_idx(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_refreshed_account_tokens, extract_user_info, find_existing_account_idx,
-        parse_usage_result, RefreshResult,
-        resolve_kiro_call_context, resolve_profile_arn_from_candidates,
+        apply_refreshed_account_tokens, apply_resolved_profile, extract_user_info,
+        find_existing_account_idx,
+        parse_usage_result, RefreshResult, resolve_kiro_call_context,
         resolve_profile_arn_with_fallback,
     };
     use super::{is_client_registration_expiring, is_token_expired, is_token_expiring_soon};
     use crate::core::account::Account;
+    use crate::clients::kiro_client::KiroProfile;
 
     fn external_refresh_result(source: &str, rotated: &str) -> RefreshResult {
         RefreshResult {
@@ -997,6 +1063,7 @@ mod tests {
     fn resolve_profile_arn_with_fallback_prefers_trimmed_account_value() {
         let resolved = resolve_profile_arn_with_fallback(
             Some("  arn:aws:codewhisperer:us-west-2:123456789012:profile/CUSTOM  "),
+            Some("IdC"),
             Some("BuilderId"),
         );
 
@@ -1009,15 +1076,16 @@ mod tests {
     #[test]
     fn resolve_profile_arn_with_fallback_uses_provider_defaults() {
         assert_eq!(
-            resolve_profile_arn_with_fallback(None, Some("BuilderId")).as_deref(),
+            resolve_profile_arn_with_fallback(None, Some("IdC"), Some("BuilderId")).as_deref(),
             Some(super::KIRO_BUILDER_ID_PROFILE_ARN)
         );
         assert_eq!(
-            resolve_profile_arn_with_fallback(Some("   "), Some("Google")).as_deref(),
+            resolve_profile_arn_with_fallback(Some("   "), Some("social"), Some("Google"))
+                .as_deref(),
             Some(super::KIRO_SOCIAL_PROFILE_ARN)
         );
         assert_eq!(
-            resolve_profile_arn_with_fallback(None, Some("Github")).as_deref(),
+            resolve_profile_arn_with_fallback(None, Some("social"), Some("Github")).as_deref(),
             Some(super::KIRO_SOCIAL_PROFILE_ARN)
         );
     }
@@ -1027,6 +1095,7 @@ mod tests {
         assert_eq!(
             resolve_profile_arn_with_fallback(
                 Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/IGNORED"),
+                Some("IdC"),
                 Some("Enterprise"),
             ),
             None
@@ -1034,41 +1103,36 @@ mod tests {
     }
 
     #[test]
-    fn resolve_profile_arn_from_candidates_prefers_refresh_then_account_then_default() {
+    fn external_idp_profile_never_falls_back_to_placeholder_arn() {
         assert_eq!(
-            resolve_profile_arn_from_candidates(
-                Some(" arn:aws:codewhisperer:us-west-2:123456789012:profile/REFRESHED "),
-                Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/ACCOUNT"),
-                Some("BuilderId"),
-            )
-            .as_deref(),
-            Some("arn:aws:codewhisperer:us-west-2:123456789012:profile/REFRESHED")
-        );
-        assert_eq!(
-            resolve_profile_arn_from_candidates(
-                Some("   "),
-                Some(" arn:aws:codewhisperer:us-east-1:123456789012:profile/ACCOUNT "),
-                Some("BuilderId"),
-            )
-            .as_deref(),
-            Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/ACCOUNT")
-        );
-        assert_eq!(
-            resolve_profile_arn_from_candidates(None, Some("   "), Some("Google")).as_deref(),
-            Some(super::KIRO_SOCIAL_PROFILE_ARN)
+            resolve_profile_arn_with_fallback(
+                None,
+                Some("external_idp"),
+                Some("ExternalIdp")
+            ),
+            None
         );
     }
 
     #[test]
-    fn resolve_profile_arn_from_candidates_omits_enterprise_even_with_candidates() {
-        assert_eq!(
-            resolve_profile_arn_from_candidates(
-                Some("arn:aws:codewhisperer:us-west-2:123456789012:profile/REFRESHED"),
-                Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/ACCOUNT"),
-                Some("Enterprise"),
-            ),
-            None
+    fn apply_resolved_profile_persists_arn_name_and_region_together() {
+        let mut account = Account::new("azure@example.com".to_string(), "azure".to_string());
+        apply_resolved_profile(
+            &mut account,
+            &KiroProfile {
+                arn: "arn:aws:codewhisperer:eu-central-1:123456789012:profile/EXTERNAL"
+                    .to_string(),
+                name: "Azure Profile".to_string(),
+                region: "eu-central-1".to_string(),
+            },
         );
+
+        assert_eq!(account.profile_name.as_deref(), Some("Azure Profile"));
+        assert_eq!(account.region.as_deref(), Some("eu-central-1"));
+        assert!(account
+            .profile_arn
+            .as_deref()
+            .is_some_and(|arn| arn.ends_with("profile/EXTERNAL")));
     }
 
     #[test]

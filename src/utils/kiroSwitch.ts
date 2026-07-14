@@ -27,8 +27,11 @@ async function setCustomMachineGuid(account, machineId) {
 }
 
 export function buildSwitchParams(account) {
-  const isIdC = account.provider === 'BuilderId' || account.provider === 'Enterprise' || account.clientIdHash
-  const authMethod = isIdC ? 'IdC' : 'social'
+  const isExternalIdp = account.authMethod?.toLowerCase() === 'external_idp'
+    || account.provider?.toLowerCase() === 'externalidp'
+  const isIdC = !isExternalIdp
+    && (account.provider === 'BuilderId' || account.provider === 'Enterprise' || account.clientIdHash)
+  const authMethod = isExternalIdp ? 'external_idp' : (isIdC ? 'IdC' : 'social')
 
   const params: Record<string, any> = {
     accessToken: account.accessToken,
@@ -38,7 +41,17 @@ export function buildSwitchParams(account) {
     email: account.email // 用于后端日志记录
   }
 
-  if (isIdC) {
+  if (isExternalIdp) {
+    params.provider = 'ExternalIdp'
+    params.clientId = account.clientId
+    params.tokenEndpoint = account.tokenEndpoint
+    params.issuerUrl = account.issuerUrl
+    params.scopes = account.scopes
+    params.audience = account.audience
+    params.profileArn = account.profileArn
+    params.profileName = account.profileName
+    params.region = account.region
+  } else if (isIdC) {
     params.region = account.region || 'us-east-1'
     params.clientId = account.clientId
     params.clientSecret = account.clientSecret

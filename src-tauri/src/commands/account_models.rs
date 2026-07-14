@@ -1,4 +1,7 @@
-use crate::commands::common::resolve_kiro_call_context;
+use crate::clients::kiro_client::KiroProfile;
+use crate::commands::common::{
+    apply_resolved_profile, resolve_account_profile_with_client, resolve_kiro_call_context,
+};
 use crate::core::account::{Account, AvailableModelsCacheEntry};
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -196,6 +199,7 @@ pub struct ListAvailableModelsResponse {
     pub default_model: Option<AvailableModel>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AvailableProfile {
@@ -203,6 +207,7 @@ struct AvailableProfile {
     arn: Option<String>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ListAvailableProfilesResponse {
@@ -213,7 +218,7 @@ struct ListAvailableProfilesResponse {
 #[derive(Debug, Clone)]
 pub struct FetchAvailableModelsResult {
     pub response: ListAvailableModelsResponse,
-    pub resolved_profile_arn: Option<String>,
+    pub resolved_profile: Option<KiroProfile>,
 }
 
 fn now_unix_timestamp() -> i64 {
@@ -255,6 +260,7 @@ pub fn clear_available_models_cache(account: &mut Account) {
     account.available_models_cache = None;
 }
 
+#[cfg(test)]
 fn first_available_profile_arn(response: ListAvailableProfilesResponse) -> Option<String> {
     response.profiles.into_iter().find_map(|profile| {
         profile
@@ -264,26 +270,16 @@ fn first_available_profile_arn(response: ListAvailableProfilesResponse) -> Optio
     })
 }
 
-fn parse_available_profile_arn(value: serde_json::Value) -> Result<Option<String>, String> {
-    let profiles: ListAvailableProfilesResponse = serde_json::from_value(value)
-        .map_err(|error| format!("解析 ListAvailableProfiles 响应失败: {error}"))?;
-    Ok(first_available_profile_arn(profiles))
-}
-
 pub async fn resolve_available_profile_arn(
     account: &Account,
     access_token: &str,
 ) -> Result<Option<String>, String> {
     use crate::clients::kiro_client::KiroClient;
 
-    let ctx = resolve_kiro_call_context(account, "us-east-1");
-    if ctx.profile_arn.is_some() {
-        return Ok(ctx.profile_arn);
-    }
-    let value = KiroClient::new()?
-        .list_available_profiles(access_token, &ctx.region)
-        .await?;
-    parse_available_profile_arn(value)
+    let client = KiroClient::new()?;
+    Ok(resolve_account_profile_with_client(account, access_token, &client)
+        .await?
+        .map(|profile| profile.arn))
 }
 
 /// 获取账号可用模型列表（直接使用 KiroClient，无需重复实现）
@@ -293,33 +289,23 @@ pub async fn fetch_all_available_models(
 ) -> Result<FetchAvailableModelsResult, String> {
     use crate::clients::kiro_client::KiroClient;
 
-    let ctx = resolve_kiro_call_context(account, "us-east-1");
     let client = KiroClient::new()?;
 
-    let resolved_profile_arn = if ctx.profile_arn.is_some() {
-        ctx.profile_arn.clone()
-    } else {
-        match client
-            .list_available_profiles(access_token, &ctx.region)
-            .await
-        {
-            Ok(value) => parse_available_profile_arn(value)?,
-            Err(error) => {
-                log::warn!(
-                "[ListAvailableModels] ListAvailableProfiles 兜底失败，继续使用现有 profileArn 解析结果: {}",
-                error
-            );
-                ctx.profile_arn.clone()
-            }
-        }
-    };
+    let resolved_profile =
+        resolve_account_profile_with_client(account, access_token, &client).await?;
+    let resolved_profile_arn = resolved_profile.as_ref().map(|profile| profile.arn.as_str());
+    let mut resolved_account = account.clone();
+    if let Some(profile) = resolved_profile.as_ref() {
+        apply_resolved_profile(&mut resolved_account, profile);
+    }
+    let ctx = resolve_kiro_call_context(&resolved_account, "us-east-1");
 
     log::info!(
         "[ListAvailableModels] Account: {} | Provider: {} | ProfileArn (Original): {} | ProfileArn (Used): {}",
         account.id,
         account.provider.as_deref().unwrap_or("None"),
         account.profile_arn.as_deref().unwrap_or("None"),
-        resolved_profile_arn.as_deref().unwrap_or("None")
+        resolved_profile_arn.unwrap_or("None")
     );
 
     let response_value = client
@@ -327,7 +313,8 @@ pub async fn fetch_all_available_models(
             access_token,
             &ctx.machine_id,
             &ctx.region,
-            resolved_profile_arn.as_deref(),
+            resolved_profile_arn,
+            account.auth_method.as_deref(),
         )
         .await?;
 
@@ -338,7 +325,7 @@ pub async fn fetch_all_available_models(
 
     Ok(FetchAvailableModelsResult {
         response,
-        resolved_profile_arn,
+        resolved_profile,
     })
 }
 
@@ -405,9 +392,10 @@ fn sort_available_models_for_display(models: &mut [AvailableModel]) {
 mod tests {
     use super::{
         clear_available_models_cache, ensure_default_model_present, first_available_profile_arn,
-        is_available_models_cache_fresh, mark_default_model, normalize_list_available_models_response,
-        read_available_models_cache, sort_available_models_for_display, write_available_models_cache,
-        AvailableModel, ListAvailableModelsResponse, ListAvailableProfilesResponse,
+        is_available_models_cache_fresh, mark_default_model,
+        normalize_list_available_models_response, read_available_models_cache,
+        sort_available_models_for_display, write_available_models_cache, AvailableModel,
+        ListAvailableModelsResponse, ListAvailableProfilesResponse,
         AVAILABLE_MODELS_CACHE_TTL_SECONDS,
     };
     use crate::core::account::Account;

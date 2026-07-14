@@ -3,6 +3,7 @@ use super::{
     register_pending_portal_login, AuthResult, ExternalIdpAuthConfig, PortalAuthServer,
 };
 use crate::auth::auth_social::{generate_code_challenge_social, generate_code_verifier_social};
+use crate::clients::kiro_client::KiroClient;
 use crate::core::deep_link_handler::{
     register_waiter_with_timeout, CallbackRoute, DeepLinkCallbackWaiter,
 };
@@ -61,14 +62,26 @@ pub async fn authenticate_external_idp() -> Result<AuthResult, String> {
         .await
         .map_err(|error| format!("External IdP deep-link 回调任务失败: {error}"))??;
 
-    exchange_external_idp_authorization_code(
+    let mut result = exchange_external_idp_authorization_code(
         &authorization,
         &callback.code,
         &oidc_code_verifier,
         &redirect_uri,
         callback.iss.as_deref(),
     )
-    .await
+    .await?;
+    let profile = KiroClient::new()?
+        .discover_available_profile(
+            &result.access_token,
+            Some(&result.auth_method),
+            &config.ordered_profile_regions(result.region.as_deref()),
+        )
+        .await?
+        .ok_or("External IdP 登录后未返回可用 profile")?;
+    result.profile_arn = Some(profile.arn);
+    result.profile_name = Some(profile.name);
+    result.region = Some(profile.region);
+    Ok(result)
 }
 
 #[cfg(test)]

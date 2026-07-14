@@ -13,12 +13,13 @@ use crate::commands::account_models::{
     write_available_models_cache, ListAvailableModelsResponse,
 };
 use crate::commands::common::{
-    account_machine_id_or_new, calc_expires_at, ensure_account_machine_id, extract_user_info,
-    find_account_by_id, find_existing_account_idx, generate_account_machine_id,
+    account_machine_id_or_new, apply_resolved_profile, calc_expires_at, ensure_account_machine_id,
+    extract_user_info, find_account_by_id, find_existing_account_idx, generate_account_machine_id,
     get_enterprise_usage, get_usage_by_account,
     get_usage_by_provider_with_machine_id, is_auth_error_message, is_token_expired,
-    is_token_expiring_soon, lock_store, refresh_token_by_provider, save_store, token_needs_refresh,
-    update_account_status, RefreshResult,
+    is_token_expiring_soon, lock_store, refresh_token_by_provider,
+    resolve_account_profile_with_client, save_store, token_needs_refresh, update_account_status,
+    RefreshResult,
 };
 use crate::core::account::{Account, AccountProxyConfig};
 use crate::state::AppState;
@@ -811,6 +812,21 @@ pub async fn add_account_by_external_idp(
             account.access_token.as_deref(),
         ));
     }
+    let profile_client = crate::clients::kiro_client::KiroClient::new()?;
+    let profile = resolve_account_profile_with_client(
+        &account,
+        account
+            .access_token
+            .as_deref()
+            .ok_or("External IdP 账号刷新后缺少 accessToken")?,
+        &profile_client,
+    )
+    .await?
+    .ok_or("External IdP 账号未解析到可用 profile")?;
+    if profile.name.trim().is_empty() {
+        return Err("External IdP 账号未解析到 profileName".to_string());
+    }
+    apply_resolved_profile(&mut account, &profile);
 
     let AddAccountResult {
         account: saved_account,
@@ -1755,14 +1771,8 @@ pub async fn list_available_models(
         Ok(result) => {
             let mut store = lock_store(&state.store, "store")?;
             if let Some(stored_account) = store.accounts.iter_mut().find(|item| item.id == id) {
-                if stored_account
-                    .profile_arn
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .is_none()
-                {
-                    stored_account.profile_arn = result.resolved_profile_arn.clone();
+                if let Some(profile) = result.resolved_profile.as_ref() {
+                    apply_resolved_profile(stored_account, profile);
                 }
                 write_available_models_cache(stored_account, &result.response)?;
                 save_store(&store)?;
@@ -1787,14 +1797,8 @@ pub async fn list_available_models(
             {
                 let mut store = lock_store(&state.store, "store")?;
                 if let Some(stored_account) = store.accounts.iter_mut().find(|item| item.id == id) {
-                    if stored_account
-                        .profile_arn
-                        .as_deref()
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                        .is_none()
-                    {
-                        stored_account.profile_arn = result.resolved_profile_arn.clone();
+                    if let Some(profile) = result.resolved_profile.as_ref() {
+                        apply_resolved_profile(stored_account, profile);
                     }
                     write_available_models_cache(stored_account, &result.response)?;
                     save_store(&store)?;
@@ -2094,6 +2098,9 @@ pub async fn set_overage_status(
 
     // 1. 从 state 获取账号
     let mut account = find_account_by_id(&state, &id)?;
+    if account.is_external_idp() {
+        return Err("External IdP 账号不支持组织超额开关".to_string());
+    }
     let generated_machine_id = if account
         .machine_id
         .as_ref()
@@ -2167,6 +2174,7 @@ pub async fn set_overage_status(
             &ctx.region,
             ctx.profile_arn.as_deref(),
             overage_status,
+            account.auth_method.as_deref(),
         )
         .await;
 
@@ -2193,6 +2201,7 @@ pub async fn set_overage_status(
                     &ctx.region,
                     ctx.profile_arn.as_deref(),
                     overage_status,
+                    account.auth_method.as_deref(),
                 )
                 .await?;
         } else {

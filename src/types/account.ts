@@ -124,6 +124,7 @@ export interface Account {
     refreshToken: string;
     accessToken?: string;
     profileArn?: string;
+    profileName?: string;
     region?: string;
     label?: string;
     machineId?: string;
@@ -142,6 +143,12 @@ export interface Account {
     // 扩展字段
     clientId?: string;
     clientSecret?: string;
+    clientIdHash?: string;
+    startUrl?: string;
+    tokenEndpoint?: string;
+    issuerUrl?: string;
+    scopes?: string;
+    audience?: string;
     enabled?: boolean;
     proxyConfig?: AccountProxyConfig | null;
     _index?: number;

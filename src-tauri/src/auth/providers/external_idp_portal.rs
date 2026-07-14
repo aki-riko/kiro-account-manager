@@ -17,6 +17,7 @@ pub struct ExternalIdpAuthConfig {
     pub callback_ports: Vec<u16>,
     pub callback_paths: Vec<String>,
     pub external_redirect_uri: String,
+    pub profile_regions: Vec<String>,
     pub flow_timeout_seconds: u64,
     pub poll_interval_millis: u64,
     pub http_timeout_seconds: u64,
@@ -52,6 +53,7 @@ impl ExternalIdpAuthConfig {
             || self.callback_url_host.trim().is_empty()
             || self.callback_ports.is_empty()
             || self.callback_paths.is_empty()
+            || self.profile_regions.is_empty()
             || self.portal_url_env.trim().is_empty()
             || self.redirect_from.trim().is_empty()
             || self.flow_timeout_seconds == 0
@@ -74,6 +76,13 @@ impl ExternalIdpAuthConfig {
             return Err("External IdP callbackPorts 不能包含 0".to_string());
         }
         if self
+            .profile_regions
+            .iter()
+            .any(|region| !crate::clients::http_client::is_supported_kiro_region(region))
+        {
+            return Err("External IdP profileRegions 包含不支持的 region".to_string());
+        }
+        if self
             .callback_paths
             .iter()
             .any(|path| !path.starts_with('/'))
@@ -89,6 +98,22 @@ impl ExternalIdpAuthConfig {
             return Err("External IdP externalRedirectUri 与官方回调不一致".to_string());
         }
         Ok(())
+    }
+
+    pub fn ordered_profile_regions(&self, preferred_region: Option<&str>) -> Vec<String> {
+        let mut regions = Vec::new();
+        if let Some(region) = preferred_region
+            .map(str::trim)
+            .filter(|region| crate::clients::http_client::is_supported_kiro_region(region))
+        {
+            regions.push(region.to_string());
+        }
+        for region in &self.profile_regions {
+            if !regions.iter().any(|existing| existing == region) {
+                regions.push(region.clone());
+            }
+        }
+        regions
     }
 
     pub fn portal_signin_url(
@@ -391,6 +416,7 @@ mod tests {
             vec!["/oauth/callback", "/signin/callback"]
         );
         assert_eq!(config.external_redirect_uri, "kiro://kiro.oauth/callback");
+        assert_eq!(config.profile_regions, vec!["us-east-1", "eu-central-1"]);
     }
 
     #[test]
@@ -428,6 +454,16 @@ mod tests {
         config.callback_bind_host = "0.0.0.0".to_string();
 
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn profile_regions_prefer_account_region_and_deduplicate() {
+        let config = ExternalIdpAuthConfig::load_bundled().unwrap();
+
+        assert_eq!(
+            config.ordered_profile_regions(Some("eu-central-1")),
+            vec!["eu-central-1", "us-east-1"]
+        );
     }
 
     #[test]

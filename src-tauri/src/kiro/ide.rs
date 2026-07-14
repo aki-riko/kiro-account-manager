@@ -83,7 +83,25 @@ pub async fn get_kiro_local_token() -> Option<KiroLocalToken> {
             .join("kiro-auth-token.json");
 
         let content = std::fs::read_to_string(&path).ok()?;
-        serde_json::from_str(&content).ok()
+        let mut token = serde_json::from_str::<KiroLocalToken>(&content).ok()?;
+        let is_external = token
+            .auth_method
+            .as_deref()
+            .is_some_and(|value| value.eq_ignore_ascii_case("external_idp"))
+            || token
+                .provider
+                .as_deref()
+                .is_some_and(|value| value.eq_ignore_ascii_case("ExternalIdp"));
+        if is_external {
+            if let Ok(Some(profile)) = crate::kiro::profile_storage::read_profile() {
+                token.region = crate::clients::http_client::parse_region_from_profile_arn(Some(
+                    &profile.arn,
+                ));
+                token.profile_arn = Some(profile.arn);
+                token.profile_name = Some(profile.name);
+            }
+        }
+        Some(token)
     })
     .await
     .ok()
@@ -254,6 +272,17 @@ pub struct SwitchAccountParams {
     // Social 专用
     #[serde(default)]
     pub profile_arn: Option<String>,
+    #[serde(default)]
+    pub profile_name: Option<String>,
+    // External IdP 专用
+    #[serde(default)]
+    pub token_endpoint: Option<String>,
+    #[serde(default)]
+    pub issuer_url: Option<String>,
+    #[serde(default)]
+    pub scopes: Option<String>,
+    #[serde(default)]
+    pub audience: Option<String>,
     // IdC 专用
     #[serde(default)]
     pub start_url: Option<String>, // Enterprise 必须提供，BuilderId 不需要
@@ -270,13 +299,97 @@ pub struct SwitchAccountParams {
     pub email: Option<String>,
 }
 
+struct ExternalIdpIdeWrite {
+    token_data: serde_json::Value,
+    profile: crate::kiro::profile_storage::KiroIdeProfile,
+}
+
+fn required_switch_value<'a>(value: Option<&'a str>, field: &str) -> Result<&'a str, String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("External IdP 切号缺少 {field}"))
+}
+
+fn build_external_idp_ide_write(
+    params: &SwitchAccountParams,
+    expires_at: &str,
+) -> Result<ExternalIdpIdeWrite, String> {
+    let client_id = required_switch_value(params.client_id.as_deref(), "clientId")?;
+    let token_endpoint =
+        required_switch_value(params.token_endpoint.as_deref(), "tokenEndpoint")?;
+    let issuer_url = required_switch_value(params.issuer_url.as_deref(), "issuerUrl")?;
+    let scopes = required_switch_value(params.scopes.as_deref(), "scopes")?;
+    let profile_arn = required_switch_value(params.profile_arn.as_deref(), "profileArn")?;
+    let profile_name = required_switch_value(params.profile_name.as_deref(), "profileName")?;
+    let profile_region = crate::clients::http_client::parse_region_from_profile_arn(Some(
+        profile_arn,
+    ))
+    .ok_or("External IdP profileArn 缺少受支持的 region")?;
+    if params
+        .region
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_some_and(|region| region != profile_region)
+    {
+        return Err("External IdP profileArn 与 region 不一致".to_string());
+    }
+    if params.access_token.trim().is_empty() || params.refresh_token.trim().is_empty() {
+        return Err("External IdP 切号缺少 accessToken 或 refreshToken".to_string());
+    }
+
+    let mut token_data = serde_json::json!({
+        "accessToken": params.access_token,
+        "refreshToken": params.refresh_token,
+        "expiresAt": expires_at,
+        "authMethod": "external_idp",
+        "provider": "ExternalIdp",
+        "tokenEndpoint": token_endpoint,
+        "issuerUrl": issuer_url,
+        "clientId": client_id,
+        "scopes": scopes,
+    });
+    if let Some(audience) = params
+        .audience
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        token_data["audience"] = serde_json::Value::String(audience.to_string());
+    }
+
+    Ok(ExternalIdpIdeWrite {
+        token_data,
+        profile: crate::kiro::profile_storage::KiroIdeProfile {
+            arn: profile_arn.to_string(),
+            name: profile_name.to_string(),
+        },
+    })
+}
+
 /// 切换 Kiro 账号（原子写入 Token 文件，无需重启 IDE）
 #[tauri::command]
 pub async fn switch_kiro_account(
     params: SwitchAccountParams,
 ) -> Result<SwitchAccountResult, String> {
     tokio::task::spawn_blocking(move || {
-        let auth_method = params.auth_method.unwrap_or_else(|| "social".to_string());
+        let requested_auth_method = params.auth_method.as_deref().unwrap_or("social");
+        let is_external_idp = requested_auth_method.eq_ignore_ascii_case("external_idp")
+            || params.provider.eq_ignore_ascii_case("ExternalIdp");
+        let auth_method = if is_external_idp {
+            "external_idp".to_string()
+        } else {
+            requested_auth_method.to_string()
+        };
+        let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
+        let expires_at_text =
+            expires_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let external_idp_write = if is_external_idp {
+            Some(build_external_idp_ide_write(&params, &expires_at_text)?)
+        } else {
+            None
+        };
         let access_token = params.access_token;
         let refresh_token = params.refresh_token;
         let provider = params.provider;
@@ -302,7 +415,6 @@ pub async fn switch_kiro_account(
             .map_err(|e| format!("Failed to create directory: {e}"))?;
 
         let file_path = dir_path.join("kiro-auth-token.json");
-        let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
 
         // 切换前先记下「当前登录账号」的 IdC clientIdHash（若有）。
         // 对齐 Kiro IDE 行为：IDE 切号 = 先 logout（deleteClientRegistration 删旧 {hash}.json）
@@ -383,7 +495,9 @@ pub async fn switch_kiro_account(
         }
 
         // 根据 auth_method 构建 token 数据
-        let token_data = if auth_method == "IdC" {
+        let token_data = if let Some(write) = external_idp_write.as_ref() {
+            write.token_data.clone()
+        } else if auth_method == "IdC" {
             let hash = idc_hash.clone().ok_or("IdC 账号缺少 clientIdHash")?;
             let region_value = region.ok_or("IdC 账号必须提供 region")?;
 
@@ -488,6 +602,10 @@ pub async fn switch_kiro_account(
             }
         }
 
+        if let Some(write) = external_idp_write.as_ref() {
+            crate::kiro::profile_storage::write_profile(&write.profile)?;
+        }
+
         // 第二步：最后写 kiro-auth-token.json（触发器），让 IDE 感知到登录态变化。
         // 安全检查：确保目标文件不是符号链接
         assert_not_symlink(&file_path)?;
@@ -526,6 +644,12 @@ pub async fn switch_kiro_account(
 
         // 设置文件权限为 0600（仅 Unix 系统）
         set_file_permissions(&file_path).ok();
+
+        if !is_external_idp {
+            if let Err(error) = crate::kiro::profile_storage::remove_profile() {
+                log::warn!("[switch] 清理旧 External IdP profile 失败: {error}");
+            }
+        }
 
         // 对齐 IDE：清理「被切走账号」遗留的旧 {clientIdHash}.json，避免客户端注册堆积。
         // 仅当旧 hash 存在、且与本次写入的新 hash 不同才删（切到同一 client 的账号时新旧
@@ -605,6 +729,7 @@ pub async fn logout_kiro_account() -> Result<SwitchAccountResult, String> {
 
         // 文件不存在 = 本来就没登录，幂等返回成功
         if !file_path.exists() {
+            crate::kiro::profile_storage::remove_profile()?;
             return Ok(SwitchAccountResult {
                 success: true,
                 message: "Already logged out".to_string(),
@@ -654,6 +779,7 @@ pub async fn logout_kiro_account() -> Result<SwitchAccountResult, String> {
                 log::warn!("[logout] 检测到非法的 clientIdHash，跳过删除客户端注册: {hash}");
             }
         }
+        crate::kiro::profile_storage::remove_profile()?;
 
         Ok(SwitchAccountResult {
             success: true,
@@ -866,4 +992,56 @@ pub fn get_kiro_ide_paths() -> Vec<std::path::PathBuf> {
     }
 
     paths
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_external_idp_ide_write, SwitchAccountParams};
+
+    fn external_params() -> SwitchAccountParams {
+        SwitchAccountParams {
+            access_token: "access-fixture".to_string(),
+            refresh_token: "refresh-fixture".to_string(),
+            provider: "ExternalIdp".to_string(),
+            auth_method: Some("external_idp".to_string()),
+            profile_arn: Some(
+                "arn:aws:codewhisperer:eu-central-1:123456789012:profile/external"
+                    .to_string(),
+            ),
+            profile_name: Some("Azure Profile".to_string()),
+            token_endpoint: Some("token-endpoint-fixture".to_string()),
+            issuer_url: Some("issuer-fixture".to_string()),
+            scopes: Some("openid profile offline_access".to_string()),
+            audience: Some("audience-fixture".to_string()),
+            start_url: None,
+            client_id_hash: None,
+            client_id: Some("client-fixture".to_string()),
+            client_secret: None,
+            region: Some("eu-central-1".to_string()),
+            email: Some("azure@example.test".to_string()),
+        }
+    }
+
+    #[test]
+    fn external_idp_token_uses_official_split_profile_shape() {
+        let write =
+            build_external_idp_ide_write(&external_params(), "expires-fixture").unwrap();
+
+        assert_eq!(write.token_data["authMethod"], "external_idp");
+        assert_eq!(write.token_data["provider"], "ExternalIdp");
+        assert_eq!(write.token_data["clientId"], "client-fixture");
+        assert!(write.token_data.get("profileArn").is_none());
+        assert_eq!(
+            write.profile.arn,
+            "arn:aws:codewhisperer:eu-central-1:123456789012:profile/external"
+        );
+        assert_eq!(write.profile.name, "Azure Profile");
+    }
+
+    #[test]
+    fn external_idp_switch_rejects_missing_profile_name() {
+        let mut params = external_params();
+        params.profile_name = None;
+        assert!(build_external_idp_ide_write(&params, "expires-fixture").is_err());
+    }
 }

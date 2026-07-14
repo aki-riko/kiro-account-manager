@@ -21,14 +21,14 @@ use crate::{
     clients::{
         http_client::{
             build_kiro_custom_user_agent, build_kiro_x_amz_user_agent,
-            build_streaming_http_client_for_account, resolve_kiro_upstream_region,
+            build_streaming_http_client_for_account, is_external_idp_auth_method,
             should_add_redirect_for_internal, should_send_codewhisperer_optout,
         },
         kiro_client::{build_generate_assistant_response_url, build_kiro_runtime_host, KiroClient},
     },
     commands::common::{
-        account_machine_id_or_new, get_usage_by_account, is_token_expired,
-        refresh_token_by_provider_with_account_proxy, resolve_profile_arn_from_candidates,
+        apply_resolved_profile, get_usage_by_account, is_token_expired,
+        refresh_token_by_provider_with_account_proxy, resolve_account_profile_with_client,
         update_account_status, RefreshResult,
     },
     core::account::{Account, AccountStore},
@@ -320,6 +320,7 @@ async fn get_available_models_for_upstream(
             machine_id,
             &upstream.region,
             profile_arn,
+            upstream.auth_method.as_deref(),
         )
         .await?;
 
@@ -2736,6 +2737,9 @@ fn add_kiro_upstream_headers(
     if include_opt_out && upstream.send_opt_out {
         builder = builder.header("x-amzn-codewhisperer-optout", "true");
     }
+    if is_external_idp_auth_method(upstream.auth_method.as_deref()) {
+        builder = builder.header("TokenType", "EXTERNAL_IDP");
+    }
     if include_agent_mode {
         builder = builder.header("x-amzn-kiro-agent-mode", DEFAULT_AGENT_MODE);
     }
@@ -2938,11 +2942,6 @@ async fn resolve_managed_account_credentials(
             if !access_token.is_empty() {
                 // token 未过期，不需要 refresh，释放连接计数
                 state.load_balancer.decrement_connections(&account.id).await;
-                let ctx = crate::commands::common::resolve_kiro_call_context(
-                    &account,
-                    &state.config.region,
-                );
-                let available_models_profile_arn = ctx.profile_arn.clone();
                 let http = match build_streaming_http_client_for_account(&account) {
                     Ok(http) => http,
                     Err(error) => {
@@ -2954,17 +2953,37 @@ async fn resolve_managed_account_credentials(
                         ));
                     }
                 };
+                let profile_client = KiroClient::from_client(http.clone());
+                let mut resolved_account = account.clone();
+                if let Some(profile) = resolve_account_profile_with_client(
+                    &account,
+                    access_token,
+                    &profile_client,
+                )
+                .await?
+                {
+                    apply_resolved_profile(&mut resolved_account, &profile);
+                    persist_account_profile(&account.id, &profile)?;
+                }
+                let ctx = crate::commands::common::resolve_kiro_call_context(
+                    &resolved_account,
+                    &state.config.region,
+                );
+                let available_models_profile_arn = ctx.profile_arn.clone();
                 return Ok(UpstreamCredentials {
                     account_id: account.id.clone(),
                     access_token: access_token.clone(),
                     machine_id: ctx.machine_id.clone(),
                     profile_arn: ctx.profile_arn,
                     available_models_profile_arn,
-                    provider: account.provider.clone(),
+                    provider: resolved_account.provider.clone(),
                     region: ctx.region,
-                    source_label: format_managed_upstream_source(&state.config, &account),
+                    source_label: format_managed_upstream_source(
+                        &state.config,
+                        &resolved_account,
+                    ),
                     user_agent: build_kiro_custom_user_agent(&ctx.machine_id),
-                    auth_method: account.auth_method.clone(),
+                    auth_method: resolved_account.auth_method.clone(),
                     send_opt_out: should_send_codewhisperer_optout(),
                     http,
                 });
@@ -3029,7 +3048,7 @@ async fn resolve_managed_account_credentials(
                 .record_success(&account.id, response_time_ms)
                 .await;
 
-            build_upstream_credentials_from_refresh(config, &account, refresh)
+            build_upstream_credentials_from_refresh(config, &account, refresh).await
         }
         Err(error) => {
             // 减少连接计数
@@ -3104,26 +3123,14 @@ async fn force_refresh_upstream_credentials(
         }
     }
 
-    build_upstream_credentials_from_refresh(config, &account, refresh)
+    build_upstream_credentials_from_refresh(config, &account, refresh).await
 }
 
-fn build_upstream_credentials_from_refresh(
+async fn build_upstream_credentials_from_refresh(
     config: &GatewayConfig,
     account: &Account,
     refresh: RefreshResult,
 ) -> Result<UpstreamCredentials, String> {
-    let machine_id = account_machine_id_or_new(&account.machine_id);
-    let profile_arn = resolve_profile_arn_from_candidates(
-        refresh.profile_arn.as_deref(),
-        account.profile_arn.as_deref(),
-        account.provider.as_deref(),
-    );
-    let region = resolve_kiro_upstream_region(
-        profile_arn.as_deref(),
-        account.region.as_deref(),
-        &config.region,
-    );
-
     let http = build_streaming_http_client_for_account(account).map_err(|error| {
         format!(
             "创建账号 {} 的2API HTTP 客户端失败: {}",
@@ -3131,21 +3138,57 @@ fn build_upstream_credentials_from_refresh(
             sanitize_error(&error)
         )
     })?;
+    let mut resolved_account = account.clone();
+    crate::commands::common::apply_refreshed_account_tokens(&mut resolved_account, &refresh);
+    let profile_client = KiroClient::from_client(http.clone());
+    if let Some(profile) = resolve_account_profile_with_client(
+        &resolved_account,
+        &refresh.access_token,
+        &profile_client,
+    )
+    .await?
+    {
+        apply_resolved_profile(&mut resolved_account, &profile);
+        persist_account_profile(&account.id, &profile)?;
+    }
+    let ctx = crate::commands::common::resolve_kiro_call_context(&resolved_account, &config.region);
 
     Ok(UpstreamCredentials {
         account_id: account.id.clone(),
         access_token: refresh.access_token,
-        machine_id: machine_id.clone(),
-        profile_arn: profile_arn.clone(),
-        available_models_profile_arn: profile_arn,
-        provider: account.provider.clone(),
-        region,
-        source_label: format_managed_upstream_source(config, account),
-        user_agent: build_kiro_custom_user_agent(&machine_id),
-        auth_method: account.auth_method.clone(),
+        machine_id: ctx.machine_id.clone(),
+        profile_arn: ctx.profile_arn.clone(),
+        available_models_profile_arn: ctx.profile_arn,
+        provider: resolved_account.provider.clone(),
+        region: ctx.region,
+        source_label: format_managed_upstream_source(config, &resolved_account),
+        user_agent: build_kiro_custom_user_agent(&ctx.machine_id),
+        auth_method: resolved_account.auth_method.clone(),
         send_opt_out: should_send_codewhisperer_optout(),
         http,
     })
+}
+
+fn persist_account_profile(
+    account_id: &str,
+    profile: &crate::clients::kiro_client::KiroProfile,
+) -> Result<(), String> {
+    let mut store = AccountStore::new();
+    let account = store
+        .accounts
+        .iter_mut()
+        .find(|candidate| candidate.id == account_id)
+        .ok_or_else(|| format!("账号 {account_id} 不存在，无法保存 profile"))?;
+    let changed = account.profile_arn.as_deref() != Some(profile.arn.as_str())
+        || account.profile_name.as_deref() != Some(profile.name.as_str())
+        || account.region.as_deref() != Some(profile.region.as_str());
+    if changed {
+        apply_resolved_profile(account, profile);
+        if !store.save_to_file() {
+            return Err(format!("保存账号 {account_id} 的 profile 失败"));
+        }
+    }
+    Ok(())
 }
 /// 根据账号 provider 返回默认的 profileArn
 /// BuilderId 账号和 Social 账号（Github/Google）使用不同的 profileArn
@@ -6143,8 +6186,13 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some(DEFAULT_AGENT_MODE)
         );
-        // TokenType header 已移除（会导致某些接口 403 错误）
-        assert!(request.headers().get("TokenType").is_none());
+        assert_eq!(
+            request
+                .headers()
+                .get("TokenType")
+                .and_then(|value| value.to_str().ok()),
+            Some("EXTERNAL_IDP")
+        );
         assert!(request.headers().get("x-amzn-kiro-profile-arn").is_none());
         assert!(request.headers().get("redirect-for-internal").is_none());
     }

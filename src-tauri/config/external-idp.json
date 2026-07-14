@@ -8,6 +8,7 @@
   "callbackPorts": [3128, 4649, 6588, 8008, 9091, 49153, 50153, 51153, 52153, 53153],
   "callbackPaths": ["/oauth/callback", "/signin/callback"],
   "externalRedirectUri": "kiro://kiro.oauth/callback",
+  "profileRegions": ["us-east-1", "eu-central-1"],
   "flowTimeoutSeconds": 600,
   "pollIntervalMillis": 100,
   "httpTimeoutSeconds": 60,

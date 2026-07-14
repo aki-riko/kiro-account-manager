@@ -59,7 +59,7 @@ pub fn get_provider_config(provider: &str) -> Option<ProviderConfig> {
 
 /// 获取支持的 providers
 pub fn get_supported_providers() -> Vec<&'static str> {
-    vec!["Google", "Github", "BuilderId", "Enterprise"]
+    vec!["Google", "Github", "BuilderId", "Enterprise", "ExternalIdp"]
 }
 
 /// 创建 `IdC` Provider
@@ -69,4 +69,16 @@ pub fn create_idc_provider(config: &ProviderConfig) -> IdcProvider {
         &config.region,
         config.start_url.clone(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{get_provider_config, get_supported_providers, AuthMethod};
+
+    #[test]
+    fn exposes_external_idp_as_supported_login_provider() {
+        assert!(get_supported_providers().contains(&"ExternalIdp"));
+        let config = get_provider_config("ExternalIdp").unwrap();
+        assert_eq!(config.auth_method, AuthMethod::ExternalIdp);
+    }
 }

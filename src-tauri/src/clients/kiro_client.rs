@@ -2,15 +2,41 @@
 // 支持 management 与 runtime API 的 endpoint/header 构造，以及 getUsageLimits、ListAvailableModels、setUserPreference
 
 use crate::clients::http_client::{
-    build_http_client, build_kiro_control_plane_user_agent,
-    build_kiro_management_user_agent, build_kiro_management_x_amz_user_agent,
+    build_http_client, build_kiro_control_plane_user_agent, build_kiro_management_user_agent,
+    build_kiro_management_x_amz_user_agent, is_external_idp_auth_method,
+    parse_region_from_profile_arn,
 };
 use crate::commands::common::resolve_default_profile_arn;
+use futures_util::future::join_all;
 use reqwest::{Client, RequestBuilder};
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 pub struct KiroClient {
     client: reqwest::Client,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KiroProfile {
+    pub arn: String,
+    pub name: String,
+    pub region: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AvailableProfile {
+    arn: String,
+    profile_name: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AvailableProfilesPage {
+    #[serde(default)]
+    profiles: Vec<AvailableProfile>,
+    next_token: Option<String>,
 }
 
 pub fn build_kiro_runtime_host(region: &str) -> String {
@@ -46,12 +72,20 @@ fn build_kiro_management_service_url(region: &str) -> String {
     format!("https://{}", build_kiro_management_host(region))
 }
 
-fn effective_profile_arn<'a>(profile_arn: Option<&'a str>, provider: Option<&str>) -> String {
-    profile_arn
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| resolve_default_profile_arn(provider).to_string())
+fn effective_profile_arn(
+    profile_arn: Option<&str>,
+    auth_method: Option<&str>,
+    provider: Option<&str>,
+) -> Result<String, String> {
+    if let Some(profile_arn) = profile_arn.map(str::trim).filter(|value| !value.is_empty()) {
+        return Ok(profile_arn.to_string());
+    }
+    if is_external_idp_auth_method(auth_method)
+        || provider.is_some_and(|value| value.eq_ignore_ascii_case("ExternalIdp"))
+    {
+        return Err("External IdP 请求缺少已解析的 profileArn".to_string());
+    }
+    Ok(resolve_default_profile_arn(provider).to_string())
 }
 
 fn build_get_usage_limits_url(region: &str, profile_arn: &str) -> String {
@@ -72,8 +106,20 @@ fn build_list_available_models_body(profile_arn: Option<&str>) -> serde_json::Va
     body
 }
 
-fn build_list_available_profiles_body() -> serde_json::Value {
-    serde_json::json!({})
+fn build_list_available_profiles_body(next_token: Option<&str>) -> serde_json::Value {
+    let mut body = serde_json::json!({});
+    if let Some(next_token) = next_token.filter(|value| !value.trim().is_empty()) {
+        body["nextToken"] = serde_json::json!(next_token);
+    }
+    body
+}
+
+fn with_external_idp_token_type(req: RequestBuilder, auth_method: Option<&str>) -> RequestBuilder {
+    if is_external_idp_auth_method(auth_method) {
+        req.header("TokenType", "EXTERNAL_IDP")
+    } else {
+        req
+    }
 }
 
 /// 给 RequestBuilder 加上 Kiro Management API 通用 headers
@@ -84,32 +130,38 @@ fn with_kiro_runtime_management_headers(
     access_token: &str,
     machine_id: &str,
     region: &str,
+    auth_method: Option<&str>,
 ) -> RequestBuilder {
     let user_agent = build_kiro_management_user_agent(machine_id);
     let x_amz_user_agent = build_kiro_management_x_amz_user_agent(machine_id);
     let invocation_id = Uuid::new_v4().to_string();
-    req.header("Authorization", format!("Bearer {access_token}"))
+    let req = req
+        .header("Authorization", format!("Bearer {access_token}"))
         .header("host", build_kiro_management_host(region))
         .header("user-agent", user_agent.clone())
         .header("x-amz-user-agent", x_amz_user_agent)
         .header("amz-sdk-invocation-id", invocation_id)
         .header("amz-sdk-request", "attempt=1; max=1")
-        .header("connection", "close")
+        .header("connection", "close");
+    with_external_idp_token_type(req, auth_method)
 }
 
 fn with_kiro_control_plane_headers(
     req: RequestBuilder,
     access_token: &str,
     region: &str,
+    auth_method: Option<&str>,
 ) -> RequestBuilder {
     let invocation_id = Uuid::new_v4().to_string();
-    req.header("Authorization", format!("Bearer {access_token}"))
+    let req = req
+        .header("Authorization", format!("Bearer {access_token}"))
         .header("host", build_kiro_management_host(region))
         .header("user-agent", build_kiro_control_plane_user_agent())
         .header("x-amz-user-agent", "aws-sdk-js/1.0.0")
         .header("amz-sdk-invocation-id", invocation_id)
         .header("amz-sdk-request", "attempt=1; max=3")
-        .header("connection", "close")
+        .header("connection", "close");
+    with_external_idp_token_type(req, auth_method)
 }
 
 async fn classify_kiro_management_error(api: &str, resp: reqwest::Response) -> String {
@@ -163,10 +215,10 @@ impl KiroClient {
         machine_id: &str,
         region: &str,
         profile_arn: Option<&str>,
-        _auth_method: Option<&str>,
-        _provider: Option<&str>,
+        auth_method: Option<&str>,
+        provider: Option<&str>,
     ) -> Result<serde_json::Value, String> {
-        let profile_arn = effective_profile_arn(profile_arn, _provider);
+        let profile_arn = effective_profile_arn(profile_arn, auth_method, provider)?;
         let url = build_get_usage_limits_url(region, &profile_arn);
 
         log::info!(
@@ -180,6 +232,7 @@ impl KiroClient {
             access_token,
             machine_id,
             region,
+            auth_method,
         )
         .header("accept", "application/json");
 
@@ -208,7 +261,10 @@ impl KiroClient {
         let region = "us-east-1";
 
         // Enterprise 账号需要先调用 ListAvailableProfiles 获取动态 profileArn
-        let profile_arn = match self.list_available_profiles(access_token, region).await {
+        let profile_arn = match self
+            .list_available_profiles(access_token, region, Some("IdC"))
+            .await
+        {
             Ok(response) => {
                 // 从响应中提取 profiles[0].arn
                 response
@@ -220,7 +276,10 @@ impl KiroClient {
                     .map(|s| s.to_string())
             }
             Err(e) => {
-                log::warn!("[get_enterprise_usage_limits] ListAvailableProfiles 失败: {}", e);
+                log::warn!(
+                    "[get_enterprise_usage_limits] ListAvailableProfiles 失败: {}",
+                    e
+                );
                 None
             }
         };
@@ -243,17 +302,23 @@ impl KiroClient {
         _machine_id: &str,
         region: &str,
         profile_arn: Option<&str>,
+        auth_method: Option<&str>,
     ) -> Result<serde_json::Value, String> {
         let url = build_kiro_management_service_url(region);
         let body = build_list_available_models_body(profile_arn);
 
-        let request = with_kiro_control_plane_headers(self.client.post(&url), access_token, region)
-            .header("content-type", "application/x-amz-json-1.0")
-            .header(
-                "x-amz-target",
-                "KiroControlPlaneBearerService.ListAvailableModels",
-            )
-            .json(&body);
+        let request = with_kiro_control_plane_headers(
+            self.client.post(&url),
+            access_token,
+            region,
+            auth_method,
+        )
+        .header("content-type", "application/x-amz-json-1.0")
+        .header(
+            "x-amz-target",
+            "KiroControlPlaneBearerService.ListAvailableModels",
+        )
+        .json(&body);
 
         let response = request
             .send()
@@ -275,11 +340,21 @@ impl KiroClient {
         &self,
         access_token: &str,
         region: &str,
+        auth_method: Option<&str>,
     ) -> Result<serde_json::Value, String> {
         let url = build_kiro_management_service_url(region);
-        let body = build_list_available_profiles_body();
+        let mut next_token = None;
+        let mut seen_tokens = HashSet::new();
+        let mut profiles = Vec::new();
 
-        let request = with_kiro_control_plane_headers(self.client.post(&url), access_token, region)
+        loop {
+            let body = build_list_available_profiles_body(next_token.as_deref());
+            let request = with_kiro_control_plane_headers(
+                self.client.post(&url),
+                access_token,
+                region,
+                auth_method,
+            )
             .header("content-type", "application/x-amz-json-1.0")
             .header(
                 "x-amz-target",
@@ -287,19 +362,89 @@ impl KiroClient {
             )
             .json(&body);
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| format!("ListAvailableProfiles 请求失败: {e}"))?;
+            let response = request
+                .send()
+                .await
+                .map_err(|e| format!("ListAvailableProfiles 请求失败: {e}"))?;
 
-        if !response.status().is_success() {
-            return Err(classify_kiro_management_error("ListAvailableProfiles", response).await);
+            if !response.status().is_success() {
+                return Err(
+                    classify_kiro_management_error("ListAvailableProfiles", response).await,
+                );
+            }
+
+            let page = response
+                .json::<AvailableProfilesPage>()
+                .await
+                .map_err(|e| format!("ListAvailableProfiles 响应解析失败: {e}"))?;
+            profiles.extend(page.profiles);
+            next_token = page
+                .next_token
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty());
+            let Some(token) = next_token.as_ref() else {
+                break;
+            };
+            if !seen_tokens.insert(token.clone()) {
+                return Err("ListAvailableProfiles 返回了重复 nextToken".to_string());
+            }
         }
 
-        response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse JSON: {e}"))
+        serde_json::to_value(AvailableProfilesPage {
+            profiles,
+            next_token: None,
+        })
+        .map_err(|error| format!("ListAvailableProfiles 响应序列化失败: {error}"))
+    }
+
+    pub async fn discover_available_profile(
+        &self,
+        access_token: &str,
+        auth_method: Option<&str>,
+        regions: &[String],
+    ) -> Result<Option<KiroProfile>, String> {
+        let calls = regions.iter().map(|region| async move {
+            (
+                region.clone(),
+                self.list_available_profiles(access_token, region, auth_method)
+                    .await,
+            )
+        });
+        let results = join_all(calls).await;
+        let mut any_success = false;
+        let mut errors = Vec::new();
+
+        for (queried_region, result) in results {
+            match result {
+                Ok(value) => {
+                    any_success = true;
+                    let page: AvailableProfilesPage = serde_json::from_value(value)
+                        .map_err(|error| format!("解析 ListAvailableProfiles 响应失败: {error}"))?;
+                    if let Some(profile) = page.profiles.into_iter().find_map(|profile| {
+                        let arn = profile.arn.trim().to_string();
+                        let name = profile.profile_name.trim().to_string();
+                        if arn.is_empty() || name.is_empty() {
+                            return None;
+                        }
+                        let region = parse_region_from_profile_arn(Some(&arn))
+                            .unwrap_or_else(|| queried_region.clone());
+                        Some(KiroProfile { arn, name, region })
+                    }) {
+                        return Ok(Some(profile));
+                    }
+                }
+                Err(error) => errors.push(format!("{queried_region}: {error}")),
+            }
+        }
+
+        if any_success {
+            Ok(None)
+        } else {
+            Err(format!(
+                "ListAvailableProfiles 在所有候选 region 均失败: {}",
+                errors.join("; ")
+            ))
+        }
     }
 
     /// setUserPreference 接口 - 设置用户偏好（超额开关）
@@ -310,6 +455,7 @@ impl KiroClient {
         region: &str,
         profile_arn: Option<&str>,
         overage_status: &str,
+        auth_method: Option<&str>,
     ) -> Result<(), String> {
         let url = format!(
             "{}/setUserPreference",
@@ -328,6 +474,7 @@ impl KiroClient {
             access_token,
             machine_id,
             region,
+            auth_method,
         )
         .header("content-type", "application/json")
         .json(&body);
@@ -349,8 +496,9 @@ impl KiroClient {
 mod tests {
     use super::{
         build_get_usage_limits_url, build_kiro_management_host, build_kiro_management_service_url,
-        build_list_available_models_body, build_list_available_profiles_body, effective_profile_arn,
-        with_kiro_control_plane_headers, with_kiro_runtime_management_headers,
+        build_list_available_models_body, build_list_available_profiles_body,
+        effective_profile_arn, with_kiro_control_plane_headers,
+        with_kiro_runtime_management_headers,
     };
 
     #[test]
@@ -375,13 +523,14 @@ mod tests {
             "https://management.us-east-1.kiro.dev/getUsageLimits?isEmailRequired=true&origin=AI_EDITOR&profileArn=arn%3Aaws%3Acodewhisperer%3Aus-east-1%3A638616132270%3Aprofile%2FAAAACCCCXXXX&resourceType=AGENTIC_REQUEST"
         );
         assert_eq!(
-            effective_profile_arn(None, Some("BuilderId")),
-            crate::commands::common::KIRO_BUILDER_ID_PROFILE_ARN
+            effective_profile_arn(None, Some("IdC"), Some("BuilderId")),
+            Ok(crate::commands::common::KIRO_BUILDER_ID_PROFILE_ARN.to_string())
         );
         assert_eq!(
-            effective_profile_arn(None, Some("Github")),
-            crate::commands::common::KIRO_SOCIAL_PROFILE_ARN
+            effective_profile_arn(None, Some("social"), Some("Github")),
+            Ok(crate::commands::common::KIRO_SOCIAL_PROFILE_ARN.to_string())
         );
+        assert!(effective_profile_arn(None, Some("external_idp"), Some("ExternalIdp")).is_err());
     }
 
     #[test]
@@ -403,7 +552,14 @@ mod tests {
 
     #[test]
     fn builds_list_available_profiles_body_like_control_plane_schema() {
-        assert_eq!(build_list_available_profiles_body(), serde_json::json!({}));
+        assert_eq!(
+            build_list_available_profiles_body(None),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            build_list_available_profiles_body(Some("next-page")),
+            serde_json::json!({ "nextToken": "next-page" })
+        );
     }
 
     #[test]
@@ -412,13 +568,14 @@ mod tests {
             reqwest::Client::new().post("https://management.us-east-1.kiro.dev/"),
             "token-cp",
             "us-east-1",
+            Some("IdC"),
         )
         .header("content-type", "application/x-amz-json-1.0")
         .header(
             "x-amz-target",
             "KiroControlPlaneBearerService.ListAvailableProfiles",
         )
-        .json(&build_list_available_profiles_body())
+        .json(&build_list_available_profiles_body(None))
         .build()
         .expect("request should build");
 
@@ -434,6 +591,7 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("KiroControlPlaneBearerService.ListAvailableProfiles")
         );
+        assert!(request.headers().get("TokenType").is_none());
     }
 
     #[test]
@@ -445,6 +603,7 @@ mod tests {
             "token-ua",
             "machine-ua",
             "eu-central-1",
+            Some("external_idp"),
         )
         .build()
         .expect("request should build");
@@ -479,6 +638,13 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("close")
         );
+        assert_eq!(
+            request
+                .headers()
+                .get("TokenType")
+                .and_then(|value| value.to_str().ok()),
+            Some("EXTERNAL_IDP")
+        );
     }
 
     #[test]
@@ -487,6 +653,7 @@ mod tests {
             reqwest::Client::new().post("https://management.us-east-1.kiro.dev/"),
             "token-cp",
             "us-east-1",
+            Some("external_idp"),
         )
         .header("content-type", "application/x-amz-json-1.0")
         .header(
@@ -533,6 +700,13 @@ mod tests {
                 .get("amz-sdk-request")
                 .and_then(|value| value.to_str().ok()),
             Some("attempt=1; max=3")
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get("TokenType")
+                .and_then(|value| value.to_str().ok()),
+            Some("EXTERNAL_IDP")
         );
     }
 }
