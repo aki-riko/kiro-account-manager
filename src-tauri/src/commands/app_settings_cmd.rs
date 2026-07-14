@@ -294,8 +294,9 @@ pub async fn get_custom_kiro_path() -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn set_custom_kiro_path(path: String) -> Result<(), String> {
     run_blocking_io(move || {
+        let normalized = crate::kiro::executable::validate_custom_kiro_path(&path)?;
         save_app_settings_inner(AppSettings {
-            custom_kiro_path: Some(path),
+            custom_kiro_path: Some(normalized.to_string_lossy().to_string()),
             ..Default::default()
         })
     })

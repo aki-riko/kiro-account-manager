@@ -52,6 +52,7 @@ pub async fn start_ksk_ide(
         return Err(format!("KSK 代理不支持区域: {}", request.region.trim()));
     }
     ensure_isolated_launch_available()?;
+    crate::kiro::executable::resolve_kiro_executable()?;
     recover_ksk_ide_settings()?;
     let isolation_root = isolated_ide_root()?;
     let mut runtime = KskIdeRuntime::start(
@@ -82,6 +83,7 @@ pub async fn start_ksk_ide_from_account(
         return Err("已有 KSK 隔离 Kiro 实例正在运行".to_string());
     }
     ensure_isolated_launch_available()?;
+    crate::kiro::executable::resolve_kiro_executable()?;
     recover_ksk_ide_settings()?;
 
     let source_account = find_account_by_id(&state, request.account_id.trim())?;

@@ -940,11 +940,8 @@ fn check_kiro_config_dir() -> bool {
 
 /// 检测 IDE 可执行文件
 fn detect_kiro_ide_executable() -> (Option<String>, bool) {
-    let candidates = get_kiro_ide_paths();
-    for path in candidates {
-        if path.exists() {
-            return (Some(path.to_string_lossy().to_string()), true);
-        }
+    if let Some(path) = crate::kiro::executable::discover_kiro_executable() {
+        return (Some(path.to_string_lossy().to_string()), true);
     }
     (None, false)
 }
@@ -985,48 +982,6 @@ pub async fn check_kiro_config_files(
     })
     .await
     .map_err(|e| format!("Task failed: {e}"))?
-}
-
-/// 获取 Kiro IDE 候选路径
-pub fn get_kiro_ide_paths() -> Vec<std::path::PathBuf> {
-    let mut paths = Vec::new();
-
-    // 1. 优先检查自定义路径（如果用户在设置中配置了）
-    if let Ok(settings) = crate::commands::app_settings_cmd::get_app_settings_inner() {
-        if let Some(custom_path) = settings.custom_kiro_path {
-            let path_buf = std::path::PathBuf::from(&custom_path);
-            paths.push(path_buf);
-        }
-    }
-
-    // 2. 如果没有自定义路径，检查默认路径
-    if cfg!(target_os = "windows") {
-        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-            paths.push(
-                std::path::PathBuf::from(local_app_data)
-                    .join("Programs")
-                    .join("Kiro")
-                    .join("Kiro.exe"),
-            );
-        }
-    } else if cfg!(target_os = "macos") {
-        // macOS: Kiro.app 安装在 /Applications
-        paths.push(std::path::PathBuf::from("/Applications/Kiro.app"));
-    } else {
-        // Linux: 可能在多个位置
-        paths.push(std::path::PathBuf::from("/usr/bin/kiro"));
-
-        if let Ok(home) = std::env::var("HOME") {
-            paths.push(
-                std::path::PathBuf::from(&home)
-                    .join(".local")
-                    .join("bin")
-                    .join("kiro"),
-            );
-        }
-    }
-
-    paths
 }
 
 #[cfg(test)]

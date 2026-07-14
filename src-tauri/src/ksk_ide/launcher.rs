@@ -111,10 +111,7 @@ fn validate_no_existing_kiro(kiro_running: bool) -> Result<(), String> {
 pub fn discover_kiro_executable() -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
-        return crate::kiro::ide::get_kiro_ide_paths()
-            .into_iter()
-            .find(|path| path.is_file())
-            .ok_or_else(|| "未找到 Kiro IDE 可执行文件".to_string());
+        return crate::kiro::executable::resolve_kiro_executable();
     }
     #[cfg(not(target_os = "windows"))]
     {

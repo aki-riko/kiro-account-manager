@@ -110,16 +110,7 @@ pub fn kill_kiro() -> Result<(), String> {
 /// 启动 Kiro IDE（内部函数）
 #[cfg(target_os = "windows")]
 pub fn launch_kiro() -> Result<(), String> {
-    let localappdata = std::env::var("LOCALAPPDATA").map_err(|_| "Cannot find LOCALAPPDATA")?;
-
-    let kiro_path = std::path::Path::new(&localappdata)
-        .join("Programs")
-        .join("Kiro")
-        .join("Kiro.exe");
-
-    if !kiro_path.exists() {
-        return Err(format!("Kiro IDE not found at: {}", kiro_path.display()));
-    }
+    let kiro_path = crate::kiro::executable::resolve_kiro_executable()?;
 
     Command::new(&kiro_path)
         .spawn()

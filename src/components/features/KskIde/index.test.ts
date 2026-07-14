@@ -24,3 +24,14 @@ test('KSK IDE requires an explicit account selection before managed launch', asy
   assert.doesNotMatch(page, /const firstEligible/)
   assert.match(page, /!selectedAccount\s*\|\|\s*!selectedAccount\.eligibility\.eligible/)
 })
+
+test('KSK IDE exposes the shared Kiro executable path setting', async () => {
+  const page = await readFile(new URL('./index.tsx', import.meta.url), 'utf8')
+
+  assert.match(page, /checkIdeInstallation/)
+  assert.match(page, /getCustomKiroPath/)
+  assert.match(page, /setCustomKiroPath/)
+  assert.match(page, /clearCustomKiroPath/)
+  assert.match(page, /选择 Kiro\.exe/)
+  assert.match(page, /恢复自动检测/)
+})

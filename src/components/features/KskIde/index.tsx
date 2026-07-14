@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  FolderSearch,
   KeyRound,
   Loader2,
   MonitorPlay,
@@ -19,6 +20,12 @@ import {
   startKskIdeFromAccount,
   stopKskIde,
 } from '../../../api/kskIdeApi'
+import {
+  checkIdeInstallation,
+  clearCustomKiroPath,
+  getCustomKiroPath,
+  setCustomKiroPath,
+} from '../../../api/settingsApi'
 import { useAccount } from '../../../contexts/AccountContext'
 import { getManagedKskEligibility } from '../../../utils/kskIde'
 import { showError, showSuccess } from '../../../utils/toast'
@@ -39,6 +46,11 @@ import {
 } from '../../ui/select'
 
 type BusyAction = 'account' | 'manual' | 'stop' | 'refresh' | null
+
+interface IdeInstallationInfo {
+  ide_executable_exists: boolean
+  ide_path: string | null
+}
 
 function formatDate(value: string | null) {
   if (!value) return '—'
@@ -64,7 +76,10 @@ function KskIdePage() {
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [status, setStatus] = useState<KskIdeStatus>(IDLE_KSK_IDE_STATUS)
   const [busy, setBusy] = useState<BusyAction>('refresh')
+  const [pathBusy, setPathBusy] = useState(false)
   const [error, setError] = useState('')
+  const [kiroExecutablePath, setKiroExecutablePath] = useState<string | null>(null)
+  const [customKiroPath, setConfiguredKiroPath] = useState<string | null>(null)
 
   const accountOptions = useMemo(() => accounts.map(account => ({
     account,
@@ -96,12 +111,22 @@ function KskIdePage() {
 
   useEffect(() => {
     let active = true
-    Promise.all([getKskIdeRegions(), getKskIdeStatus()])
-      .then(([availableRegions, currentStatus]) => {
+    Promise.all([
+      getKskIdeRegions(),
+      getKskIdeStatus(),
+      checkIdeInstallation<IdeInstallationInfo>().catch(() => ({
+        ide_executable_exists: false,
+        ide_path: null,
+      })),
+      getCustomKiroPath().catch(() => null),
+    ])
+      .then(([availableRegions, currentStatus, ideInfo, configuredPath]) => {
         if (!active) return
         setRegions(availableRegions)
         setManualRegion(currentStatus.region || availableRegions[0] || '')
         setStatus(currentStatus)
+        setKiroExecutablePath(ideInfo.ide_executable_exists ? ideInfo.ide_path : null)
+        setConfiguredKiroPath(configuredPath?.trim() || null)
       })
       .catch(cause => {
         if (active) setError(String(cause))
@@ -151,6 +176,59 @@ function KskIdePage() {
       await refreshStatus().catch(() => {})
     } finally {
       setBusy(null)
+    }
+  }
+
+  const refreshKiroExecutable = async () => {
+    const [ideInfo, configuredPath] = await Promise.all([
+      checkIdeInstallation<IdeInstallationInfo>(),
+      getCustomKiroPath(),
+    ])
+    setKiroExecutablePath(ideInfo.ide_executable_exists ? ideInfo.ide_path : null)
+    setConfiguredKiroPath(configuredPath?.trim() || null)
+    return ideInfo
+  }
+
+  const handleBrowseKiroExecutable = async () => {
+    setPathBusy(true)
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog')
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        title: '选择 Kiro.exe',
+        filters: [{ name: 'Kiro IDE', extensions: ['exe'] }],
+      })
+      if (!selected) return
+      await setCustomKiroPath(selected)
+      const ideInfo = await refreshKiroExecutable()
+      if (!ideInfo.ide_executable_exists) {
+        throw new Error('已保存路径，但仍无法读取 Kiro.exe')
+      }
+      setError('')
+      showSuccess('Kiro IDE 路径已保存，KSK 隔离启动会立即使用该路径')
+    } catch (cause) {
+      const message = String(cause)
+      setError(message)
+      showError(message)
+    } finally {
+      setPathBusy(false)
+    }
+  }
+
+  const handleClearKiroExecutable = async () => {
+    setPathBusy(true)
+    try {
+      await clearCustomKiroPath()
+      await refreshKiroExecutable()
+      setError('')
+      showSuccess('已恢复自动检测 Kiro IDE 路径')
+    } catch (cause) {
+      const message = String(cause)
+      setError(message)
+      showError(message)
+    } finally {
+      setPathBusy(false)
     }
   }
 
@@ -225,6 +303,41 @@ function KskIdePage() {
             {error}
           </div>
         )}
+
+        <Card className="border border-border">
+          <CardHeader className="border-b border-border/60">
+            <CardTitle className="flex items-center gap-2">
+              <FolderSearch size={18} />Kiro IDE 可执行文件
+            </CardTitle>
+            <CardDescription>
+              自动读取自定义路径、Windows 安装信息、默认用户目录及本地磁盘根目录。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1 rounded-lg border border-border/70 bg-muted/25 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">
+                {customKiroPath ? '自定义路径' : '自动检测结果'}
+              </p>
+              <p
+                className={`mt-1 truncate text-sm font-mono ${kiroExecutablePath ? 'text-foreground' : 'text-red-500'}`}
+                title={kiroExecutablePath || '未找到 Kiro IDE 可执行文件'}
+              >
+                {kiroExecutablePath || '未找到 Kiro IDE 可执行文件'}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleBrowseKiroExecutable} disabled={pathBusy || occupied}>
+                {pathBusy ? <Loader2 className="animate-spin" /> : <FolderSearch />}
+                选择 Kiro.exe
+              </Button>
+              {customKiroPath && (
+                <Button variant="ghost" onClick={handleClearKiroExecutable} disabled={pathBusy || occupied}>
+                  恢复自动检测
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="border border-border">
           <CardHeader className="border-b border-border/60">
