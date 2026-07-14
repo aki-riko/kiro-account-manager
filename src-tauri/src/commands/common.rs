@@ -268,16 +268,7 @@ pub async fn resolve_account_profile_with_client(
     });
 
     if !account.is_external_idp() {
-        if existing.is_some() {
-            return Ok(existing);
-        }
-        return client
-            .discover_available_profile(
-                access_token,
-                account.auth_method.as_deref(),
-                &[ctx.region],
-            )
-            .await;
+        return Ok(existing);
     }
     if existing
         .as_ref()
@@ -289,13 +280,10 @@ pub async fn resolve_account_profile_with_client(
     let config = ExternalIdpAuthConfig::load()?;
     let regions = config.ordered_profile_regions(account.region.as_deref());
     match client
-        .discover_available_profile(access_token, account.auth_method.as_deref(), &regions)
+        .discover_available_profiles(access_token, account.auth_method.as_deref(), &regions)
         .await
     {
-        Ok(Some(profile)) => Ok(Some(profile)),
-        Ok(None) => existing
-            .map(Some)
-            .ok_or_else(|| "External IdP 账号未返回可用 profile".to_string()),
+        Ok(profiles) => resolve_external_idp_profile_candidate(existing, profiles),
         Err(error) => match existing {
             Some(profile) => {
                 log::warn!(
@@ -307,6 +295,79 @@ pub async fn resolve_account_profile_with_client(
             None => Err(error),
         },
     }
+}
+
+fn resolve_external_idp_profile_candidate(
+    existing: Option<KiroProfile>,
+    profiles: Vec<KiroProfile>,
+) -> Result<Option<KiroProfile>, String> {
+    if let Some(profile) = existing.as_ref() {
+        if let Some(matched) = profiles
+            .iter()
+            .find(|candidate| candidate.arn == profile.arn)
+        {
+            return Ok(Some(matched.clone()));
+        }
+        if profiles.is_empty() {
+            return Ok(existing);
+        }
+        return Err(format!(
+            "External IdP 指定的 profileArn 不在可用列表中: {}",
+            profile.arn
+        ));
+    }
+
+    match profiles.len() {
+        0 => Err("External IdP 账号未返回可用 profile".to_string()),
+        1 => Ok(profiles.into_iter().next()),
+        count => Err(format!(
+            "External IdP 账号返回 {count} 个可用 profile，请在导入数据中指定 profileArn"
+        )),
+    }
+}
+
+fn resolve_external_idp_import_profile_candidate(
+    requested_arn: Option<&str>,
+    profiles: Vec<KiroProfile>,
+) -> Result<KiroProfile, String> {
+    if let Some(requested_arn) = requested_arn
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return profiles
+            .into_iter()
+            .find(|profile| profile.arn == requested_arn)
+            .ok_or_else(|| {
+                format!("External IdP 指定的 profileArn 不在可用列表中: {requested_arn}")
+            });
+    }
+
+    match profiles.len() {
+        0 => Err("External IdP 账号未返回可用 profile".to_string()),
+        1 => profiles
+            .into_iter()
+            .next()
+            .ok_or("External IdP 账号未返回可用 profile".to_string()),
+        count => Err(format!(
+            "External IdP 账号返回 {count} 个可用 profile，请在导入数据中指定 profileArn"
+        )),
+    }
+}
+
+pub async fn resolve_external_idp_import_profile_with_client(
+    account: &Account,
+    access_token: &str,
+    client: &KiroClient,
+) -> Result<KiroProfile, String> {
+    if !account.is_external_idp() {
+        return Err("只有 External IdP 账号需要在线解析导入 profile".to_string());
+    }
+    let config = ExternalIdpAuthConfig::load()?;
+    let regions = config.ordered_profile_regions(account.region.as_deref());
+    let profiles = client
+        .discover_available_profiles(access_token, account.auth_method.as_deref(), &regions)
+        .await?;
+    resolve_external_idp_import_profile_candidate(account.profile_arn.as_deref(), profiles)
 }
 
 pub fn apply_resolved_profile(account: &mut Account, profile: &KiroProfile) {
@@ -860,10 +921,12 @@ mod tests {
     use super::{
         apply_refreshed_account_tokens, apply_resolved_profile, extract_user_info,
         find_existing_account_idx,
-        parse_usage_result, RefreshResult, resolve_kiro_call_context,
+        parse_usage_result, resolve_account_profile_with_client,
+        resolve_external_idp_import_profile_candidate, RefreshResult, resolve_kiro_call_context,
         resolve_profile_arn_with_fallback,
     };
     use super::{is_client_registration_expiring, is_token_expired, is_token_expiring_soon};
+    use crate::clients::kiro_client::KiroClient;
     use crate::core::account::Account;
     use crate::clients::kiro_client::KiroProfile;
 
@@ -1112,6 +1175,71 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[tokio::test]
+    async fn enterprise_profile_resolution_never_calls_list_available_profiles() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let unavailable_proxy = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+        let client = KiroClient::from_client(
+            reqwest::Client::builder()
+                .proxy(reqwest::Proxy::all(unavailable_proxy).unwrap())
+                .timeout(std::time::Duration::from_millis(250))
+                .build()
+                .unwrap(),
+        );
+        let account = Account::new_enterprise(
+            "enterprise-user".to_string(),
+            "Enterprise".to_string(),
+        );
+
+        assert_eq!(
+            resolve_account_profile_with_client(&account, "token", &client)
+                .await
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn external_idp_import_matches_requested_arn_exactly() {
+        let requested_arn =
+            "arn:aws:codewhisperer:eu-central-1:1:profile/second".to_string();
+        let profiles = vec![
+            KiroProfile {
+                arn: "arn:aws:codewhisperer:us-east-1:1:profile/first".to_string(),
+                name: "First".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            KiroProfile {
+                arn: requested_arn.clone(),
+                name: "Second".to_string(),
+                region: "eu-central-1".to_string(),
+            },
+        ];
+
+        let resolved =
+            resolve_external_idp_import_profile_candidate(Some(&requested_arn), profiles).unwrap();
+        assert_eq!(resolved.name, "Second");
+    }
+
+    #[test]
+    fn external_idp_import_rejects_ambiguous_profile_list() {
+        let profiles = vec![
+            KiroProfile {
+                arn: "arn:aws:codewhisperer:us-east-1:1:profile/first".to_string(),
+                name: "First".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            KiroProfile {
+                arn: "arn:aws:codewhisperer:eu-central-1:1:profile/second".to_string(),
+                name: "Second".to_string(),
+                region: "eu-central-1".to_string(),
+            },
+        ];
+
+        assert!(resolve_external_idp_import_profile_candidate(None, profiles).is_err());
     }
 
     #[test]

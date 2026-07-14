@@ -3,7 +3,7 @@ use super::{
     register_pending_portal_login, AuthResult, ExternalIdpAuthConfig, PortalAuthServer,
 };
 use crate::auth::auth_social::{generate_code_challenge_social, generate_code_verifier_social};
-use crate::clients::kiro_client::KiroClient;
+use crate::clients::kiro_client::{KiroClient, KiroProfile};
 use crate::core::deep_link_handler::{
     register_waiter_with_timeout, CallbackRoute, DeepLinkCallbackWaiter,
 };
@@ -13,7 +13,13 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
-pub async fn authenticate_external_idp() -> Result<AuthResult, String> {
+pub struct ExternalIdpAuthSession {
+    pub auth_result: AuthResult,
+    pub profiles: Vec<KiroProfile>,
+    pub selection_timeout_seconds: u64,
+}
+
+pub async fn authenticate_external_idp() -> Result<ExternalIdpAuthSession, String> {
     let config = ExternalIdpAuthConfig::load()?;
     let portal_state = uuid::Uuid::new_v4().to_string();
     let portal_code_verifier = generate_code_verifier_social();
@@ -62,7 +68,7 @@ pub async fn authenticate_external_idp() -> Result<AuthResult, String> {
         .await
         .map_err(|error| format!("External IdP deep-link 回调任务失败: {error}"))??;
 
-    let mut result = exchange_external_idp_authorization_code(
+    let result = exchange_external_idp_authorization_code(
         &authorization,
         &callback.code,
         &oidc_code_verifier,
@@ -70,18 +76,21 @@ pub async fn authenticate_external_idp() -> Result<AuthResult, String> {
         callback.iss.as_deref(),
     )
     .await?;
-    let profile = KiroClient::new()?
-        .discover_available_profile(
+    let profiles = KiroClient::new()?
+        .discover_available_profiles(
             &result.access_token,
             Some(&result.auth_method),
             &config.ordered_profile_regions(result.region.as_deref()),
         )
-        .await?
-        .ok_or("External IdP 登录后未返回可用 profile")?;
-    result.profile_arn = Some(profile.arn);
-    result.profile_name = Some(profile.name);
-    result.region = Some(profile.region);
-    Ok(result)
+        .await?;
+    if profiles.is_empty() {
+        return Err("External IdP 登录后未返回可用 profile".to_string());
+    }
+    Ok(ExternalIdpAuthSession {
+        auth_result: result,
+        profiles,
+        selection_timeout_seconds: config.flow_timeout_seconds,
+    })
 }
 
 #[cfg(test)]

@@ -17,7 +17,8 @@ pub struct KiroClient {
     client: reqwest::Client,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KiroProfile {
     pub arn: String,
     pub name: String,
@@ -397,12 +398,12 @@ impl KiroClient {
         .map_err(|error| format!("ListAvailableProfiles 响应序列化失败: {error}"))
     }
 
-    pub async fn discover_available_profile(
+    pub async fn discover_available_profiles(
         &self,
         access_token: &str,
         auth_method: Option<&str>,
         regions: &[String],
-    ) -> Result<Option<KiroProfile>, String> {
+    ) -> Result<Vec<KiroProfile>, String> {
         let calls = regions.iter().map(|region| async move {
             (
                 region.clone(),
@@ -413,6 +414,8 @@ impl KiroClient {
         let results = join_all(calls).await;
         let mut any_success = false;
         let mut errors = Vec::new();
+        let mut profiles = Vec::new();
+        let mut seen_arns = HashSet::new();
 
         for (queried_region, result) in results {
             match result {
@@ -420,17 +423,17 @@ impl KiroClient {
                     any_success = true;
                     let page: AvailableProfilesPage = serde_json::from_value(value)
                         .map_err(|error| format!("解析 ListAvailableProfiles 响应失败: {error}"))?;
-                    if let Some(profile) = page.profiles.into_iter().find_map(|profile| {
+                    for profile in page.profiles {
                         let arn = profile.arn.trim().to_string();
                         let name = profile.profile_name.trim().to_string();
                         if arn.is_empty() || name.is_empty() {
-                            return None;
+                            continue;
                         }
                         let region = parse_region_from_profile_arn(Some(&arn))
                             .unwrap_or_else(|| queried_region.clone());
-                        Some(KiroProfile { arn, name, region })
-                    }) {
-                        return Ok(Some(profile));
+                        if seen_arns.insert(arn.clone()) {
+                            profiles.push(KiroProfile { arn, name, region });
+                        }
                     }
                 }
                 Err(error) => errors.push(format!("{queried_region}: {error}")),
@@ -438,7 +441,7 @@ impl KiroClient {
         }
 
         if any_success {
-            Ok(None)
+            Ok(profiles)
         } else {
             Err(format!(
                 "ListAvailableProfiles 在所有候选 region 均失败: {}",

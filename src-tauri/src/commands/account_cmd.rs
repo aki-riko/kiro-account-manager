@@ -18,8 +18,8 @@ use crate::commands::common::{
     get_enterprise_usage, get_usage_by_account,
     get_usage_by_provider_with_machine_id, is_auth_error_message, is_token_expired,
     is_token_expiring_soon, lock_store, refresh_token_by_provider,
-    resolve_account_profile_with_client, save_store, token_needs_refresh, update_account_status,
-    RefreshResult,
+    resolve_external_idp_import_profile_with_client, save_store, token_needs_refresh,
+    update_account_status, RefreshResult,
 };
 use crate::core::account::{Account, AccountProxyConfig};
 use crate::state::AppState;
@@ -802,6 +802,14 @@ pub async fn add_account_by_external_idp(
     if !apply_refreshed_account_tokens(&mut account, &refresh) {
         return Err("External IdP 凭据在导入期间已被更新，请重试".to_string());
     }
+    if account
+        .issuer_url
+        .as_deref()
+        .map(str::trim)
+        .is_none_or(|value| value.is_empty())
+    {
+        return Err("External IdP 刷新后仍缺少 issuerUrl，无法用于 Kiro IDE 切号".to_string());
+    }
     account.email = extract_external_idp_email(&refresh.access_token).or(account.email);
     if account
         .machine_id
@@ -813,7 +821,7 @@ pub async fn add_account_by_external_idp(
         ));
     }
     let profile_client = crate::clients::kiro_client::KiroClient::new()?;
-    let profile = resolve_account_profile_with_client(
+    let profile = resolve_external_idp_import_profile_with_client(
         &account,
         account
             .access_token
@@ -821,8 +829,7 @@ pub async fn add_account_by_external_idp(
             .ok_or("External IdP 账号刷新后缺少 accessToken")?,
         &profile_client,
     )
-    .await?
-    .ok_or("External IdP 账号未解析到可用 profile")?;
+    .await?;
     if profile.name.trim().is_empty() {
         return Err("External IdP 账号未解析到 profileName".to_string());
     }

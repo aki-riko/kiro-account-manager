@@ -1,5 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getSupportedProviders, kiroLogin, cancelKiroLogin } from '../../../api/authApi'
+import {
+  getSupportedProviders,
+  kiroLogin,
+  cancelKiroLogin,
+  selectExternalIdpProfile,
+  type ExternalIdpProfileOption,
+} from '../../../api/authApi'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { Loader } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
@@ -88,23 +94,42 @@ function Login({ onLogin }: LoginProps) {
   const [enterpriseRegion, setEnterpriseRegion] = useState('us-east-1')
   const [showWaitingModal, setShowWaitingModal] = useState(false)
   const [waitingProviderName, setWaitingProviderName] = useState('')
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [externalProfiles, setExternalProfiles] = useState<ExternalIdpProfileOption[]>([])
+  const [selectedProfileArn, setSelectedProfileArn] = useState('')
+  const [submittingProfile, setSubmittingProfile] = useState(false)
 
   useEffect(() => {
     let unlistenSuccess: UnlistenFn | undefined
+    let unlistenProfiles: UnlistenFn | undefined
 
     const setupListener = async () => {
       unlistenSuccess = await listen('login-success', () => {
         setLoginPending(false)
         setLoadingProvider(null)
         setShowWaitingModal(false)
+        setShowProfileModal(false)
+        setExternalProfiles([])
         onLogin?.()
       })
+      unlistenProfiles = await listen<ExternalIdpProfileOption[]>(
+        'external-idp-profiles-available',
+        (event) => {
+          const profiles = Array.isArray(event.payload) ? event.payload : []
+          if (profiles.length === 0) return
+          setExternalProfiles(profiles)
+          setSelectedProfileArn(profiles[0].arn)
+          setShowWaitingModal(false)
+          setShowProfileModal(true)
+        },
+      )
     }
 
     setupListener()
 
     return () => {
       if (unlistenSuccess) unlistenSuccess()
+      if (unlistenProfiles) unlistenProfiles()
     }
   }, [onLogin])
 
@@ -153,6 +178,8 @@ function Login({ onLogin }: LoginProps) {
     setLoginPending(true)
     setLoadingProvider(provider)
     setError('')
+    setExternalProfiles([])
+    setSelectedProfileArn('')
 
     try {
       await kiroLogin({ provider })
@@ -165,10 +192,14 @@ function Login({ onLogin }: LoginProps) {
       setLoginPending(false)
       setLoadingProvider(null)
       setShowWaitingModal(false)
+      setShowProfileModal(false)
+      setExternalProfiles([])
     }
   }
 
   const handleCancelLogin = async () => {
+    setShowProfileModal(false)
+    setExternalProfiles([])
     if (!loginPending || canceling) {
       setShowWaitingModal(false)
       return
@@ -180,6 +211,22 @@ function Login({ onLogin }: LoginProps) {
       console.error('Cancel login error:', e)
       setCanceling(false)
       setError(t('login.cancelFailed'))
+    }
+  }
+
+  const handleExternalProfileSelection = async () => {
+    if (!selectedProfileArn || submittingProfile) return
+    setSubmittingProfile(true)
+    setShowProfileModal(false)
+    setShowWaitingModal(true)
+    try {
+      await selectExternalIdpProfile(selectedProfileArn)
+    } catch (e) {
+      setShowWaitingModal(false)
+      setShowProfileModal(true)
+      setError(getLoginErrorMessage(e))
+    } finally {
+      setSubmittingProfile(false)
     }
   }
 
@@ -333,6 +380,57 @@ function Login({ onLogin }: LoginProps) {
               {t('login.cancel')}
             </Button>
             <Button onClick={handleEnterpriseLogin}>{t('common.continue') || '继续'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </DialogRoot>
+
+      {/* External IdP 多 Profile 选择弹窗 */}
+      <DialogRoot
+        open={showProfileModal}
+        onOpenChange={(open: boolean) => !open && handleCancelLogin()}
+      >
+        <DialogContent maxWidth="560px">
+          <DialogHeader>
+            <DialogTitle>{t('login.selectProfileTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('login.selectProfileDescription', { count: externalProfiles.length })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-2 py-2 max-h-[360px] overflow-y-auto">
+            {externalProfiles.map((profile) => {
+              const selected = selectedProfileArn === profile.arn
+              return (
+                <button
+                  key={profile.arn}
+                  type="button"
+                  onClick={() => setSelectedProfileArn(profile.arn)}
+                  className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                    selected
+                      ? 'border-primary bg-primary/10 ring-1 ring-primary/20'
+                      : 'border-border hover:bg-muted/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium text-foreground">{profile.name}</span>
+                    <span className="text-xs text-muted-foreground">{profile.region}</span>
+                  </div>
+                  <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">
+                    {profile.arn}
+                  </p>
+                </button>
+              )
+            })}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="secondary" onClick={handleCancelLogin} disabled={submittingProfile}>
+              {t('login.cancel')}
+            </Button>
+            <Button
+              onClick={handleExternalProfileSelection}
+              disabled={!selectedProfileArn || submittingProfile}
+            >
+              {submittingProfile ? t('login.selectingProfile') : t('login.confirmProfile')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </DialogRoot>

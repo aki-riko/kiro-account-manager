@@ -46,7 +46,7 @@ use commands::app_settings_cmd::{
 //授权相关
 use commands::auth_cmd::{
     cancel_kiro_login, get_current_user, get_supported_providers, handle_kiro_social_callback,
-    kiro_login, logout,
+    kiro_login, logout, select_external_idp_profile,
 };
 use commands::cli_config_cmd::{
     check_claude_code_installed, check_codex_cli_installed, write_claude_code_config,
@@ -499,6 +499,7 @@ fn main() {
             logout,
             cancel_kiro_login,
             kiro_login,
+            select_external_idp_profile,
             get_supported_providers,
             handle_kiro_social_callback,
             check_ide_installation,

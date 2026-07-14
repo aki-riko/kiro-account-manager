@@ -435,6 +435,10 @@
   "login.waitingMessage": "Ожидание завершения авторизации {{provider}} в браузере...",
   "login.waitingHint": "Если браузер не открывается автоматически, пожалуйста, откройте страницу авторизации вручную.",
   "login.waitingCloseHint": "Нажатие отмены прервёт текущий процесс входа, вы можете инициировать вход снова позже.",
+  "login.selectProfileTitle": "Выберите профиль Kiro",
+  "login.selectProfileDescription": "Для этой учётной записи доступно профилей: {{count}}. Выберите один для входа.",
+  "login.confirmProfile": "Использовать профиль",
+  "login.selectingProfile": "Выбор...",
 "login.continue": "Продолжить",
 
   "about.title": "О программе",

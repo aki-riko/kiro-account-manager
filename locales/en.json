@@ -435,6 +435,10 @@
   "login.waitingMessage": "Waiting for you to complete {{provider}} authorization in browser...",
   "login.waitingHint": "If browser doesn't open automatically, please manually open the authorization page.",
   "login.waitingCloseHint": "Clicking cancel will terminate current login process, you can initiate login again later.",
+  "login.selectProfileTitle": "Select Kiro Profile",
+  "login.selectProfileDescription": "This account has {{count}} available profiles. Select one for this login.",
+  "login.confirmProfile": "Use This Profile",
+  "login.selectingProfile": "Selecting...",
 "login.continue": "Continue",
 
   "about.title": "About",

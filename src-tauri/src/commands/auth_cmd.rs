@@ -10,6 +10,7 @@ use crate::auth::providers::{
 };
 use crate::auth::User;
 use crate::clients::kiro_auth_client::KiroAuthServiceClient;
+use crate::clients::kiro_client::KiroProfile;
 use crate::commands::common::{
     extract_user_info, find_existing_account_idx, generate_account_machine_id,
     get_usage_by_provider_with_machine_id, lock_store, save_store, update_account_status,
@@ -17,7 +18,18 @@ use crate::commands::common::{
 use crate::core::account::Account;
 use crate::core::protocol_registry;
 use crate::state::AppState;
+use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, State};
+use tokio::sync::oneshot;
+
+struct PendingExternalIdpProfileSelection {
+    id: String,
+    sender: oneshot::Sender<String>,
+}
+
+static PENDING_EXTERNAL_IDP_PROFILE_SELECTION: OnceLock<
+    Mutex<Option<PendingExternalIdpProfileSelection>>,
+> = OnceLock::new();
 
 fn require_login_email(email: Option<String>) -> Result<String, String> {
     email.ok_or("获取邮箱失败，请检查账号状态".to_string())
@@ -50,6 +62,89 @@ fn prepare_pending_social_login(provider: &str, machineid: String) -> crate::sta
         state: uuid::Uuid::new_v4().to_string(),
         machineid,
     }
+}
+
+fn register_pending_external_idp_profile_selection() -> (String, oneshot::Receiver<String>) {
+    let id = uuid::Uuid::new_v4().to_string();
+    let (sender, receiver) = oneshot::channel();
+    let storage = PENDING_EXTERNAL_IDP_PROFILE_SELECTION.get_or_init(|| Mutex::new(None));
+    let mut guard = storage
+        .lock()
+        .expect("Failed to acquire External IdP profile selection lock");
+    guard.replace(PendingExternalIdpProfileSelection {
+        id: id.clone(),
+        sender,
+    });
+    (id, receiver)
+}
+
+fn clear_pending_external_idp_profile_selection(id: &str) {
+    let Some(storage) = PENDING_EXTERNAL_IDP_PROFILE_SELECTION.get() else {
+        return;
+    };
+    let mut guard = storage
+        .lock()
+        .expect("Failed to acquire External IdP profile selection lock");
+    if guard.as_ref().is_some_and(|pending| pending.id == id) {
+        guard.take();
+    }
+}
+
+fn cancel_pending_external_idp_profile_selection() -> bool {
+    let Some(storage) = PENDING_EXTERNAL_IDP_PROFILE_SELECTION.get() else {
+        return false;
+    };
+    storage
+        .lock()
+        .expect("Failed to acquire External IdP profile selection lock")
+        .take()
+        .is_some()
+}
+
+fn resolve_selected_external_idp_profile(
+    profiles: &[KiroProfile],
+    selected_arn: Option<&str>,
+) -> Result<KiroProfile, String> {
+    if let Some(selected_arn) = selected_arn.map(str::trim).filter(|value| !value.is_empty()) {
+        return profiles
+            .iter()
+            .find(|profile| profile.arn == selected_arn)
+            .cloned()
+            .ok_or_else(|| "选择的 External IdP profile 不在本次登录候选列表中".to_string());
+    }
+    match profiles {
+        [profile] => Ok(profile.clone()),
+        [] => Err("External IdP 登录后未返回可用 profile".to_string()),
+        _ => Err("External IdP 登录返回多个 profile，必须由用户选择".to_string()),
+    }
+}
+
+async fn choose_external_idp_profile(
+    app_handle: &tauri::AppHandle,
+    profiles: &[KiroProfile],
+    timeout_seconds: u64,
+) -> Result<KiroProfile, String> {
+    if profiles.len() == 1 {
+        return resolve_selected_external_idp_profile(profiles, None);
+    }
+
+    let (selection_id, receiver) = register_pending_external_idp_profile_selection();
+    if let Err(error) = app_handle.emit("external-idp-profiles-available", profiles.to_vec()) {
+        clear_pending_external_idp_profile_selection(&selection_id);
+        return Err(format!("通知前端选择 External IdP profile 失败: {error}"));
+    }
+    let selected_arn = match tokio::time::timeout(
+        std::time::Duration::from_secs(timeout_seconds),
+        receiver,
+    )
+    .await
+    {
+        Ok(Ok(profile_arn)) => Ok(profile_arn),
+        Ok(Err(_)) => Err("登录已取消".to_string()),
+        Err(_) => Err("External IdP profile 选择超时".to_string()),
+    };
+    clear_pending_external_idp_profile_selection(&selection_id);
+    resolve_selected_external_idp_profile(profiles, Some(&selected_arn?))
 }
 
 #[tauri::command]
@@ -85,6 +180,7 @@ pub fn cancel_kiro_login(state: State<'_, AppState>) -> bool {
     let cancelled_social = crate::core::deep_link_handler::cancel_waiter();
     let cancelled_idc = cancel_pending_idc_login();
     let cancelled_external_portal = cancel_pending_portal_login();
+    let cancelled_external_profile = cancel_pending_external_idp_profile_selection();
     match lock_store(&state.pending_login, "pending_login") {
         Ok(mut pending_login) => {
             *pending_login = None;
@@ -93,7 +189,27 @@ pub fn cancel_kiro_login(state: State<'_, AppState>) -> bool {
             log::error!("[auth_cmd] Failed to cancel login");
         }
     }
-    cancelled_social || cancelled_idc || cancelled_external_portal
+    cancelled_social || cancelled_idc || cancelled_external_portal || cancelled_external_profile
+}
+
+#[tauri::command]
+pub fn select_external_idp_profile(profile_arn: String) -> Result<(), String> {
+    let profile_arn = profile_arn.trim().to_string();
+    if profile_arn.is_empty() {
+        return Err("请选择 External IdP profile".to_string());
+    }
+    let storage = PENDING_EXTERNAL_IDP_PROFILE_SELECTION
+        .get()
+        .ok_or("当前没有等待选择的 External IdP 登录".to_string())?;
+    let pending = storage
+        .lock()
+        .map_err(|_| "Failed to acquire External IdP profile selection lock".to_string())?
+        .take()
+        .ok_or("当前没有等待选择的 External IdP 登录".to_string())?;
+    pending
+        .sender
+        .send(profile_arn)
+        .map_err(|_| "External IdP 登录已结束，无法提交 profile".to_string())
 }
 
 #[tauri::command]
@@ -128,7 +244,17 @@ async fn login_external_idp(
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let auth_result = authenticate_external_idp().await?;
+    let session = authenticate_external_idp().await?;
+    let profile = choose_external_idp_profile(
+        &app_handle,
+        &session.profiles,
+        session.selection_timeout_seconds,
+    )
+    .await?;
+    let mut auth_result = session.auth_result;
+    auth_result.profile_arn = Some(profile.arn);
+    auth_result.profile_name = Some(profile.name);
+    auth_result.region = Some(profile.region);
     let email = extract_external_idp_email(&auth_result.access_token);
     let mut account = Account::new(
         email
@@ -622,9 +748,13 @@ pub fn get_supported_providers() -> Vec<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{clear_auth_state, require_login_email, resolve_idc_login_email};
+    use super::{
+        clear_auth_state, require_login_email, resolve_idc_login_email,
+        resolve_selected_external_idp_profile,
+    };
     use crate::auth::AuthState;
     use crate::auth::User;
+    use crate::clients::kiro_client::KiroProfile;
 
     #[test]
     fn require_login_email_rejects_missing_email() {
@@ -635,6 +765,30 @@ mod tests {
         assert_eq!(
             require_login_email(None).unwrap_err(),
             "获取邮箱失败，请检查账号状态".to_string()
+        );
+    }
+
+    #[test]
+    fn external_idp_login_requires_selection_for_multiple_profiles() {
+        let profiles = vec![
+            KiroProfile {
+                arn: "arn:aws:codewhisperer:us-east-1:1:profile/first".to_string(),
+                name: "First".to_string(),
+                region: "us-east-1".to_string(),
+            },
+            KiroProfile {
+                arn: "arn:aws:codewhisperer:eu-central-1:1:profile/second".to_string(),
+                name: "Second".to_string(),
+                region: "eu-central-1".to_string(),
+            },
+        ];
+
+        assert!(resolve_selected_external_idp_profile(&profiles, None).is_err());
+        assert_eq!(
+            resolve_selected_external_idp_profile(&profiles, Some(&profiles[1].arn))
+                .unwrap()
+                .name,
+            "Second"
         );
     }
 
