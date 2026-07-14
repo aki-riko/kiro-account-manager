@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - codex/ksk-isolated-ide
     paths:
       - '.github/workflows/desktop-build.yml'
       - 'src/**'
