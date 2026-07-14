@@ -1597,8 +1597,19 @@ pub fn update_account(
     }
 }
 
+fn ensure_remote_delete_supported(account: &Account) -> Result<(), String> {
+    if account.is_external_idp() {
+        return Err("External IdP 账号不支持远程删除".to_string());
+    }
+    match account.provider.as_deref().unwrap_or("Google") {
+        "Enterprise" => Err("Enterprise 账号不支持远程删除".to_string()),
+        "BuilderId" => Err("BuilderId 账号不支持远程删除".to_string()),
+        _ => Ok(()),
+    }
+}
+
 /// 从 AWS 服务端删除账号（注销账号）
-/// 仅支持 Google、Github，不支持 `BuilderId` 和 `Enterprise`
+/// 仅支持 Google、Github，不支持 `BuilderId`、`Enterprise` 和 External IdP。
 #[tauri::command]
 pub async fn delete_account_remote(
     state: State<'_, AppState>,
@@ -1609,6 +1620,7 @@ pub async fn delete_account_remote(
 
     // 获取账号信息
     let mut account = find_account_by_id(&state, &id)?;
+    ensure_remote_delete_supported(&account)?;
     let generated_machine_id = if account
         .machine_id
         .as_ref()
@@ -1631,15 +1643,6 @@ pub async fn delete_account_remote(
                 save_store(&store)?;
             }
         }
-    }
-
-    // 检查 provider
-    let provider = account.provider.as_deref().unwrap_or("Google");
-    if provider == "Enterprise" {
-        return Err("Enterprise 账号不支持远程删除".to_string());
-    }
-    if provider == "BuilderId" {
-        return Err("BuilderId 账号不支持远程删除".to_string());
     }
 
     let access_token = account
@@ -2245,4 +2248,22 @@ pub async fn set_overage_status(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_remote_delete_supported;
+    use crate::core::account::Account;
+
+    #[test]
+    fn remote_delete_rejects_external_idp_before_desktop_api_call() {
+        let mut account = Account::new("azure@example.com".to_string(), "Azure".to_string());
+        account.provider = Some("ExternalIdp".to_string());
+        account.auth_method = Some("external_idp".to_string());
+
+        assert_eq!(
+            ensure_remote_delete_supported(&account).unwrap_err(),
+            "External IdP 账号不支持远程删除"
+        );
+    }
 }

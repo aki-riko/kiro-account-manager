@@ -9,3 +9,13 @@ test('AccountTable avoids dynamic row measurement that triggers virtual flushSyn
   assert.doesNotMatch(source, /measureElement:\s*\(/)
   assert.doesNotMatch(source, /ref=\{rowVirtualizer\.measureElement\}/)
 })
+
+test('AccountTable hides remote deletion for External IdP accounts', async () => {
+  const source = await readFile(new URL('./AccountTable.tsx', import.meta.url), 'utf8')
+
+  assert.match(source, /isExternalIdpAccount\(account\)/)
+  assert.match(
+    source,
+    /!isExternalIdpAccount\(account\)\s*&&\s*account\.provider\s*!==\s*'Enterprise'/,
+  )
+})

@@ -8,6 +8,7 @@ import AccountCard from './AccountCard'
 import ContextMenu from './ContextMenu'
 import React from 'react'
 import { getManagedKskEligibility } from '../../../utils/kskIde'
+import { isExternalIdpAccount } from '../../../utils/accountProvider'
 
 // 根据容器宽度计算列数
 function getColumnCount(width: number) {
@@ -166,7 +167,7 @@ function AccountTable({
       { icon: Trash2, label: t('accountCard.delete'), onClick: () => onDelete(account.id), danger: true },
     ]
 
-    if (account.provider !== 'Enterprise' && !isBanned && onDeleteRemote) {
+    if (!isExternalIdpAccount(account) && account.provider !== 'Enterprise' && !isBanned && onDeleteRemote) {
       items.push({ icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true })
     }
 
