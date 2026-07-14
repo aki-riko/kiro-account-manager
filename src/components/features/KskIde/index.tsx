@@ -115,13 +115,11 @@ function KskIdePage() {
   }, [])
 
   useEffect(() => {
-    if (selectedAccountId && accountOptions.some(item => (
+    if (!selectedAccountId) return
+    if (accountOptions.some(item => (
       item.account.id === selectedAccountId && item.eligibility.eligible
-    ))) {
-      return
-    }
-    const firstEligible = accountOptions.find(item => item.eligibility.eligible)
-    setSelectedAccountId(firstEligible?.account.id || '')
+    ))) return
+    setSelectedAccountId('')
   }, [accountOptions, selectedAccountId])
 
   useEffect(() => {

@@ -16,3 +16,11 @@ test('KSK IDE uses a persistent route and keeps manual KSK behind the page', asy
   assert.doesNotMatch(accountManager, /KskIsolatedIdeModal|showKskIdeModal/)
   assert.match(accountManager, /emit\('accounts-updated'\)/)
 })
+
+test('KSK IDE requires an explicit account selection before managed launch', async () => {
+  const page = await readFile(new URL('./index.tsx', import.meta.url), 'utf8')
+
+  assert.match(page, /if \(!selectedAccountId\) return/)
+  assert.doesNotMatch(page, /const firstEligible/)
+  assert.match(page, /!selectedAccount\s*\|\|\s*!selectedAccount\.eligibility\.eligible/)
+})
