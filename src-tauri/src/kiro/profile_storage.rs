@@ -104,17 +104,22 @@ pub fn read_profile() -> Result<Option<KiroIdeProfile>, String> {
     Ok(Some(profile))
 }
 
-pub fn write_profile(profile: &KiroIdeProfile) -> Result<(), String> {
-    if profile.arn.trim().is_empty() || profile.name.trim().is_empty() {
-        return Err("Kiro profile 的 arn 和 name 不能为空".to_string());
+fn snapshot_profile_at(path: &Path) -> Result<Option<Vec<u8>>, String> {
+    if !path.exists() {
+        return Ok(None);
     }
+    assert_not_symlink(path)?;
+    std::fs::read(path)
+        .map(Some)
+        .map_err(|error| format!("读取 Kiro profile 快照失败: {error}"))
+}
 
-    let path = profile_path()?;
+fn write_profile_bytes_at(path: &Path, content: &[u8]) -> Result<(), String> {
     let parent = path.parent().ok_or("Kiro profile 路径缺少父目录")?;
     std::fs::create_dir_all(parent)
         .map_err(|error| format!("创建 Kiro profile 目录失败: {error}"))?;
     assert_not_symlink(parent)?;
-    assert_not_symlink(&path)?;
+    assert_not_symlink(path)?;
 
     let temp_path = parent.join("profile.json.tmp");
     if temp_path.exists() {
@@ -122,36 +127,65 @@ pub fn write_profile(profile: &KiroIdeProfile) -> Result<(), String> {
         std::fs::remove_file(&temp_path)
             .map_err(|error| format!("清理 Kiro profile 临时文件失败: {error}"))?;
     }
-    let content = serde_json::to_string_pretty(profile)
-        .map_err(|error| format!("序列化 Kiro profile 失败: {error}"))?;
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&temp_path)
         .map_err(|error| format!("创建 Kiro profile 临时文件失败: {error}"))?;
-    file.write_all(content.as_bytes())
+    file.write_all(content)
         .map_err(|error| format!("写入 Kiro profile 临时文件失败: {error}"))?;
     file.sync_all()
         .map_err(|error| format!("同步 Kiro profile 临时文件失败: {error}"))?;
     drop(file);
-    std::fs::rename(&temp_path, &path)
+    std::fs::rename(&temp_path, path)
         .map_err(|error| format!("替换 Kiro profile 失败: {error}"))?;
-    set_file_permissions(&path)?;
+    set_file_permissions(path)?;
     Ok(())
 }
 
-pub fn remove_profile() -> Result<(), String> {
-    let path = profile_path()?;
+fn remove_profile_at(path: &Path) -> Result<(), String> {
     if !path.exists() {
         return Ok(());
     }
-    assert_not_symlink(&path)?;
-    std::fs::remove_file(&path).map_err(|error| format!("删除 Kiro profile 失败: {error}"))
+    assert_not_symlink(path)?;
+    std::fs::remove_file(path).map_err(|error| format!("删除 Kiro profile 失败: {error}"))
+}
+
+fn restore_profile_at(path: &Path, snapshot: Option<&[u8]>) -> Result<(), String> {
+    match snapshot {
+        Some(content) => write_profile_bytes_at(path, content),
+        None => remove_profile_at(path),
+    }
+}
+
+pub fn snapshot_profile() -> Result<Option<Vec<u8>>, String> {
+    snapshot_profile_at(&profile_path()?)
+}
+
+pub fn restore_profile(snapshot: Option<&[u8]>) -> Result<(), String> {
+    restore_profile_at(&profile_path()?, snapshot)
+}
+
+pub fn write_profile(profile: &KiroIdeProfile) -> Result<(), String> {
+    if profile.arn.trim().is_empty() || profile.name.trim().is_empty() {
+        return Err("Kiro profile 的 arn 和 name 不能为空".to_string());
+    }
+
+    let content = serde_json::to_string_pretty(profile)
+        .map_err(|error| format!("序列化 Kiro profile 失败: {error}"))?;
+    write_profile_bytes_at(&profile_path()?, content.as_bytes())
+}
+
+pub fn remove_profile() -> Result<(), String> {
+    remove_profile_at(&profile_path()?)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{profile_path_for_platform, KiroIdeProfile};
+    use super::{
+        profile_path_for_platform, restore_profile_at, snapshot_profile_at,
+        write_profile_bytes_at, KiroIdeProfile,
+    };
     use std::path::Path;
 
     #[test]
@@ -190,5 +224,24 @@ mod tests {
                 "name": "Azure Profile"
             })
         );
+    }
+
+    #[test]
+    fn profile_snapshot_restores_exact_previous_bytes() {
+        let dir = std::env::temp_dir().join(format!(
+            "kiro-profile-transaction-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path = dir.join("profile.json");
+        let previous = br#"{ "arn": "old", "name": "Old Profile" }"#;
+        let replacement = br#"{ "arn": "new", "name": "New Profile" }"#;
+
+        write_profile_bytes_at(&path, previous).unwrap();
+        let snapshot = snapshot_profile_at(&path).unwrap();
+        write_profile_bytes_at(&path, replacement).unwrap();
+        restore_profile_at(&path, snapshot.as_deref()).unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), previous);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

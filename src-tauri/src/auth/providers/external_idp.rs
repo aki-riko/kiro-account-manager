@@ -178,7 +178,9 @@ impl AuthProvider for ExternalIdpProvider {
                     .default_token_lifetime_seconds,
             );
         let expires_at = chrono::Local::now() + chrono::Duration::seconds(expires_in);
-        let issuer_url = non_empty(metadata.issuer_url).or_else(|| self.issuer_url.clone());
+        let issuer_url = non_empty(metadata.issuer_url)
+            .or_else(|| self.issuer_url.clone())
+            .or_else(|| extract_external_idp_issuer(&token.access_token));
         let audience = non_empty(metadata.audience).or_else(|| self.audience.clone());
 
         Ok(AuthResult {
@@ -330,6 +332,17 @@ pub fn extract_external_idp_email(token: &str) -> Option<String> {
         })
 }
 
+pub fn extract_external_idp_issuer(token: &str) -> Option<String> {
+    let payload = decode_jwt_payload(token)?;
+    let issuer = payload
+        .get("iss")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    validate_external_idp_url(issuer, "issuerUrl").ok()?;
+    Some(issuer.to_string())
+}
+
 pub fn derive_external_idp_machine_id(token: &str) -> Option<String> {
     let payload = decode_jwt_payload(token)?;
     let stable_claim = ["oid", "sub"].into_iter().find_map(|key| {
@@ -404,7 +417,8 @@ mod tests {
         let payload = serde_json::json!({
             "oid": "tenant-object-id",
             "sub": "fallback-subject",
-            "preferred_username": "azure@example.com"
+            "preferred_username": "azure@example.com",
+            "iss": "https://login.microsoftonline.com/tenant-id/v2.0"
         });
         let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .encode(serde_json::to_vec(&payload).unwrap());
@@ -431,6 +445,10 @@ mod tests {
             Some("azure@example.com")
         );
         assert_eq!(
+            extract_external_idp_issuer(&token).as_deref(),
+            Some("https://login.microsoftonline.com/tenant-id/v2.0")
+        );
+        assert_eq!(
             derive_external_idp_machine_id(&token).as_deref(),
             Some("95e1975150e65451a877f0e814d5b4aab09cbbac1932ffb3b6dfe2d2a31ad3b9")
         );
@@ -454,6 +472,10 @@ mod tests {
         assert_eq!(result.refresh_token, "rotated-refresh-token");
         assert_eq!(result.expires_in, 7200);
         assert_eq!(result.auth_method, "external_idp");
+        assert_eq!(
+            result.issuer_url.as_deref(),
+            Some("https://login.microsoftonline.com/tenant-id/v2.0")
+        );
         assert_eq!(
             extract_external_idp_email(&result.access_token).as_deref(),
             Some("azure@example.com")

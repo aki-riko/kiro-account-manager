@@ -283,6 +283,8 @@ pub struct SwitchAccountParams {
     pub scopes: Option<String>,
     #[serde(default)]
     pub audience: Option<String>,
+    #[serde(default)]
+    pub expires_at: Option<String>,
     // IdC 专用
     #[serde(default)]
     pub start_url: Option<String>, // Enterprise 必须提供，BuilderId 不需要
@@ -368,6 +370,71 @@ fn build_external_idp_ide_write(
     })
 }
 
+fn normalize_switch_expires_at(
+    expires_at: Option<&str>,
+    is_external_idp: bool,
+) -> Result<String, String> {
+    let parsed = expires_at
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| {
+            chrono::DateTime::parse_from_rfc3339(value)
+                .ok()
+                .map(|date| date.with_timezone(&chrono::Utc))
+                .or_else(|| {
+                    chrono::NaiveDateTime::parse_from_str(value, "%Y/%m/%d %H:%M:%S")
+                        .ok()?
+                        .and_local_timezone(chrono::Local)
+                        .single()
+                        .map(|date| date.with_timezone(&chrono::Utc))
+                })
+        });
+
+    match parsed {
+        Some(date) => Ok(date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+        None if is_external_idp => {
+            Err("External IdP 切号缺少有效 expiresAt，请先刷新账号".to_string())
+        }
+        None => Ok((chrono::Utc::now() + chrono::Duration::hours(1))
+            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+    }
+}
+
+fn write_token_file(
+    dir_path: &std::path::Path,
+    file_path: &std::path::Path,
+    content: &str,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    assert_not_symlink(file_path)?;
+    let temp_file_path = dir_path.join("kiro-auth-token.json.tmp");
+    if temp_file_path.exists() {
+        assert_not_symlink(&temp_file_path)?;
+        std::fs::remove_file(&temp_file_path)
+            .map_err(|e| format!("Failed to remove existing temp file: {e}"))?;
+    }
+
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_file_path)
+        .map_err(|e| format!("Failed to create temp file: {e}"))?;
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write temp file: {e}"))?;
+    drop(file);
+
+    std::fs::rename(&temp_file_path, file_path)
+        .map_err(|e| format!("Failed to rename file: {e}"))?;
+
+    let _ = std::fs::OpenOptions::new()
+        .write(true)
+        .open(file_path)
+        .and_then(|file| file.set_modified(std::time::SystemTime::now()));
+    set_file_permissions(file_path).ok();
+    Ok(())
+}
+
 /// 切换 Kiro 账号（原子写入 Token 文件，无需重启 IDE）
 #[tauri::command]
 pub async fn switch_kiro_account(
@@ -382,9 +449,8 @@ pub async fn switch_kiro_account(
         } else {
             requested_auth_method.to_string()
         };
-        let expires_at = chrono::Utc::now() + chrono::Duration::hours(1);
         let expires_at_text =
-            expires_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            normalize_switch_expires_at(params.expires_at.as_deref(), is_external_idp)?;
         let external_idp_write = if is_external_idp {
             Some(build_external_idp_ide_write(&params, &expires_at_text)?)
         } else {
@@ -504,7 +570,7 @@ pub async fn switch_kiro_account(
             let mut obj = serde_json::json!({
                 "accessToken": access_token,
                 "refreshToken": refresh_token,
-                "expiresAt": expires_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                "expiresAt": expires_at_text,
                 "clientIdHash": hash,
                 "authMethod": "IdC",
                 "provider": provider,
@@ -532,7 +598,7 @@ pub async fn switch_kiro_account(
                 "accessToken": access_token,
                 "refreshToken": refresh_token,
                 "profileArn": arn,
-                "expiresAt": expires_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                "expiresAt": expires_at_text,
                 "authMethod": "social",
                 "provider": provider
             })
@@ -602,53 +668,22 @@ pub async fn switch_kiro_account(
             }
         }
 
+        let previous_profile = crate::kiro::profile_storage::snapshot_profile()?;
         if let Some(write) = external_idp_write.as_ref() {
             crate::kiro::profile_storage::write_profile(&write.profile)?;
+        } else {
+            crate::kiro::profile_storage::remove_profile()?;
         }
 
-        // 第二步：最后写 kiro-auth-token.json（触发器），让 IDE 感知到登录态变化。
-        // 安全检查：确保目标文件不是符号链接
-        assert_not_symlink(&file_path)?;
-
-        // 原子写入：先写临时文件，再 rename
-        let temp_file_path = dir_path.join("kiro-auth-token.json.tmp");
-
-        // 安全检查：如果临时文件已存在，确保不是符号链接后删除
-        if temp_file_path.exists() {
-            assert_not_symlink(&temp_file_path)?;
-            std::fs::remove_file(&temp_file_path)
-                .map_err(|e| format!("Failed to remove existing temp file: {e}"))?;
-        }
-
-        // 使用 OpenOptions 安全写入（create_new 确保不跟随符号链接）
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_file_path)
-            .map_err(|e| format!("Failed to create temp file: {e}"))?;
-        file.write_all(content.as_bytes())
-            .map_err(|e| format!("Failed to write temp file: {e}"))?;
-        drop(file);
-
-        std::fs::rename(&temp_file_path, &file_path)
-            .map_err(|e| format!("Failed to rename file: {e}"))?;
-
-        // 强制更新 mtime，让 IDE 的 fs.watchFile（基于 mtime polling）一定能感知到变化。
-        // Windows 下 rename 有时不会改变 mtime（NTFS 时间戳精度 + 短间隔写入），
-        // 而 Kiro IDE 用 fs.watchFile 以 5 秒 polling 监听 token 文件，mtime 不变就不触发。
-        // 后果：IDE 内存里继续缓存旧账号 token → AWS 返回 401 Invalid token。
-        let _ = std::fs::OpenOptions::new()
-            .write(true)
-            .open(&file_path)
-            .and_then(|f| f.set_modified(std::time::SystemTime::now()));
-
-        // 设置文件权限为 0600（仅 Unix 系统）
-        set_file_permissions(&file_path).ok();
-
-        if !is_external_idp {
-            if let Err(error) = crate::kiro::profile_storage::remove_profile() {
-                log::warn!("[switch] 清理旧 External IdP profile 失败: {error}");
-            }
+        // 最后提交 token 文件作为登录态触发器。失败时恢复切号前的 profile，
+        // 避免留下“新 profile + 旧 token”的跨账号中间态。
+        if let Err(error) = write_token_file(&dir_path, &file_path, &content) {
+            return match crate::kiro::profile_storage::restore_profile(previous_profile.as_deref()) {
+                Ok(()) => Err(error),
+                Err(rollback_error) => Err(format!(
+                    "{error}; 回滚 Kiro profile 失败: {rollback_error}"
+                )),
+            };
         }
 
         // 对齐 IDE：清理「被切走账号」遗留的旧 {clientIdHash}.json，避免客户端注册堆积。
@@ -996,7 +1031,9 @@ pub fn get_kiro_ide_paths() -> Vec<std::path::PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_external_idp_ide_write, SwitchAccountParams};
+    use super::{
+        build_external_idp_ide_write, normalize_switch_expires_at, SwitchAccountParams,
+    };
 
     fn external_params() -> SwitchAccountParams {
         SwitchAccountParams {
@@ -1013,6 +1050,7 @@ mod tests {
             issuer_url: Some("issuer-fixture".to_string()),
             scopes: Some("openid profile offline_access".to_string()),
             audience: Some("audience-fixture".to_string()),
+            expires_at: Some("2026/07/14 23:45:00".to_string()),
             start_url: None,
             client_id_hash: None,
             client_id: Some("client-fixture".to_string()),
@@ -1043,5 +1081,14 @@ mod tests {
         let mut params = external_params();
         params.profile_name = None;
         assert!(build_external_idp_ide_write(&params, "expires-fixture").is_err());
+    }
+
+    #[test]
+    fn external_idp_switch_requires_real_expiry_and_normalizes_it() {
+        assert!(normalize_switch_expires_at(None, true).is_err());
+        assert_eq!(
+            normalize_switch_expires_at(Some("2026-07-14T15:45:00.000Z"), true).unwrap(),
+            "2026-07-14T15:45:00.000Z"
+        );
     }
 }

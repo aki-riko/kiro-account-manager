@@ -51,6 +51,7 @@ export function buildSwitchParams(account) {
     params.profileArn = account.profileArn
     params.profileName = account.profileName
     params.region = account.region
+    params.expiresAt = account.expiresAt
   } else if (isIdC) {
     params.region = account.region || 'us-east-1'
     params.clientId = account.clientId

@@ -17,6 +17,7 @@ test('external IdP switch params preserve OIDC and profile metadata without soci
     profileArn: 'arn:aws:codewhisperer:eu-central-1:123456789012:profile/external',
     profileName: 'Azure Profile',
     region: 'eu-central-1',
+    expiresAt: '2026/07/14 23:45:00',
     email: 'azure@example.test',
   })
 
@@ -34,6 +35,7 @@ test('external IdP switch params preserve OIDC and profile metadata without soci
     profileArn: 'arn:aws:codewhisperer:eu-central-1:123456789012:profile/external',
     profileName: 'Azure Profile',
     region: 'eu-central-1',
+    expiresAt: '2026/07/14 23:45:00',
   })
 })
 

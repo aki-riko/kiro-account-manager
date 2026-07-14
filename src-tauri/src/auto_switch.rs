@@ -422,6 +422,7 @@ fn build_switch_params(account: &Account) -> crate::kiro::ide::SwitchAccountPara
         issuer_url: account.issuer_url.clone(),
         scopes: account.scopes.clone(),
         audience: account.audience.clone(),
+        expires_at: account.expires_at.clone(),
         start_url: account.start_url.clone(),
         client_id: account.client_id.clone(),
         client_secret: account.client_secret.clone(),
