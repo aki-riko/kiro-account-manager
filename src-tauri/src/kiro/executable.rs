@@ -1,10 +1,20 @@
 use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
-use std::path::Path;
+use std::{os::windows::ffi::OsStrExt, path::Path};
 
 #[cfg(target_os = "windows")]
 const KIRO_EXECUTABLE_NAME: &str = "Kiro.exe";
+
+#[cfg(target_os = "windows")]
+const DRIVE_FIXED: u32 = 3;
+
+#[cfg(target_os = "windows")]
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetDriveTypeW(root_path_name: *const u16) -> u32;
+    fn GetLogicalDrives() -> u32;
+}
 
 pub fn resolve_kiro_executable() -> Result<PathBuf, String> {
     discover_kiro_executable().ok_or_else(|| {
@@ -14,6 +24,12 @@ pub fn resolve_kiro_executable() -> Result<PathBuf, String> {
 }
 
 pub fn discover_kiro_executable() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        return discover_windows_kiro_executable();
+    }
+
+    #[cfg(not(target_os = "windows"))]
     kiro_executable_candidates()
         .into_iter()
         .find(|path| is_kiro_install(path))
@@ -53,16 +69,12 @@ pub fn validate_custom_kiro_path(raw_path: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-pub fn kiro_executable_candidates() -> Vec<PathBuf> {
+#[cfg(not(target_os = "windows"))]
+fn kiro_executable_candidates() -> Vec<PathBuf> {
     let configured_path = crate::commands::app_settings_cmd::get_app_settings_inner()
         .ok()
         .and_then(|settings| settings.custom_kiro_path)
         .and_then(|path| normalize_configured_path(&path));
-
-    #[cfg(target_os = "windows")]
-    {
-        return windows_candidates(configured_path);
-    }
 
     #[cfg(target_os = "macos")]
     {
@@ -126,14 +138,28 @@ fn is_kiro_install(path: &PathBuf) -> bool {
 }
 
 #[cfg(target_os = "windows")]
-fn windows_candidates(configured_path: Option<PathBuf>) -> Vec<PathBuf> {
+fn discover_windows_kiro_executable() -> Option<PathBuf> {
+    let configured_path = crate::commands::app_settings_cmd::get_app_settings_inner()
+        .ok()
+        .and_then(|settings| settings.custom_kiro_path)
+        .and_then(|path| normalize_configured_path(&path));
     let local_app_data = std::env::var("LOCALAPPDATA").ok().map(PathBuf::from);
-    windows_candidates_from_parts(
+    let primary_candidates = windows_candidates_from_parts(
         configured_path,
         windows_registry_candidates(),
         local_app_data,
-        existing_windows_drive_roots(),
-    )
+        Vec::new(),
+    );
+    if let Some(executable) = primary_candidates
+        .into_iter()
+        .find(|path| is_kiro_install(path))
+    {
+        return Some(executable);
+    }
+    fixed_windows_drive_roots()
+        .into_iter()
+        .map(|root| root.join("Kiro").join(KIRO_EXECUTABLE_NAME))
+        .find(|path| is_kiro_install(path))
 }
 
 #[cfg(target_os = "windows")]
@@ -169,10 +195,27 @@ fn windows_candidates_from_parts(
 }
 
 #[cfg(target_os = "windows")]
-fn existing_windows_drive_roots() -> Vec<PathBuf> {
-    (b'C'..=b'Z')
-        .map(|letter| PathBuf::from(format!("{}:\\", char::from(letter))))
-        .filter(|root| root.is_dir())
+fn logical_drive_roots(mask: u32) -> Vec<PathBuf> {
+    (b'A'..=b'Z')
+        .enumerate()
+        .filter(|(index, _)| mask & (1 << index) != 0)
+        .map(|(_, letter)| PathBuf::from(format!("{}:\\", char::from(letter))))
+        .collect()
+}
+
+#[cfg(target_os = "windows")]
+fn fixed_windows_drive_roots() -> Vec<PathBuf> {
+    let logical_drives = unsafe { GetLogicalDrives() };
+    logical_drive_roots(logical_drives)
+        .into_iter()
+        .filter(|root| {
+            let wide_root = root
+                .as_os_str()
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect::<Vec<_>>();
+            unsafe { GetDriveTypeW(wide_root.as_ptr()) == DRIVE_FIXED }
+        })
         .collect()
 }
 
@@ -305,6 +348,13 @@ mod tests {
             vec![PathBuf::from(r"D:\")],
         );
         assert!(candidates.contains(&PathBuf::from(r"D:\Kiro\Kiro.exe")));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn logical_drive_mask_includes_fixed_b_drive_candidate() {
+        let roots = super::logical_drive_roots((1 << 1) | (1 << 3));
+        assert_eq!(roots, vec![PathBuf::from(r"B:\"), PathBuf::from(r"D:\")]);
     }
 
     #[cfg(target_os = "windows")]

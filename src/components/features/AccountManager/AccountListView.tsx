@@ -11,6 +11,7 @@ import ContextMenu from './ContextMenu'
 import { buildAccountListMaps } from './utils/accountListMaps'
 import type { Account, TagDefinition, GroupDefinition } from '../../../types/account'
 import { getManagedKskEligibility } from '../../../utils/kskIde'
+import { isKskIdeSupported } from '../../../utils/platform'
 
 const ROW_HEIGHT = 48
 
@@ -105,6 +106,7 @@ const ListRow = memo(function ListRow({
   const isExternalIdp = isExternalIdpAccount(account)
   const statusMeta = getAccountStatusMeta(account, t)
   const kskEligibility = useMemo(() => getManagedKskEligibility(account), [account])
+  const kskIdeSupported = isKskIdeSupported()
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -122,7 +124,9 @@ const ListRow = memo(function ListRow({
     { divider: true },
     { icon: RefreshCw, label: t('accountCard.refresh'), onClick: () => onRefresh(account.id), disabled: isRefreshing },
     { icon: Key, label: t('accountCard.refreshToken'), onClick: () => onRefreshToken?.(account.id), disabled: isRefreshingToken },
-    { icon: Rocket, label: '签发 KSK 并启动隔离 Kiro', onClick: () => onStartKskIde(account), disabled: isStartingKskIde || isUnavailable || !kskEligibility.eligible },
+    ...(kskIdeSupported ? [
+      { icon: Rocket, label: '签发 KSK 并启动隔离 Kiro', onClick: () => onStartKskIde(account), disabled: isStartingKskIde || isUnavailable || !kskEligibility.eligible },
+    ] : []),
     isCurrent
       ? { icon: LogOut, label: t('accountCard.LogOut'), onClick: () => onLogout(account), disabled: isSwitching, danger: true }
       : { icon: LogIn, label: t('accountCard.LogIn'), onClick: () => onLogin(account), disabled: isSwitching || isUnavailable },
@@ -135,7 +139,7 @@ const ListRow = memo(function ListRow({
     ...(!isExternalIdp && account.provider !== 'Enterprise' && !isBanned && onDeleteRemote ? [
       { icon: UserX, label: t('accountCard.deleteRemote'), onClick: () => onDeleteRemote(account), danger: true },
     ] : []),
-  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onStartKskIde, onLogin, onLogout, onDelete, onDeleteRemote, onToggleEnabled, onToggleOverage, isRefreshing, isRefreshingToken, isStartingKskIde, isSwitching, isTogglingOverage, isBanned, isUnavailable, isExternalIdp, isCurrent, kskEligibility, overageCapability, overageStatus])
+  ], [t, account, handleCopyJson, onEdit, onEditLabel, onRefresh, onRefreshToken, onStartKskIde, onLogin, onLogout, onDelete, onDeleteRemote, onToggleEnabled, onToggleOverage, isRefreshing, isRefreshingToken, isStartingKskIde, isSwitching, isTogglingOverage, isBanned, isUnavailable, isExternalIdp, isCurrent, kskEligibility, kskIdeSupported, overageCapability, overageStatus])
 
   const subscriptionTitle = account.usageData?.subscriptionInfo?.subscriptionTitle || ''
   const subscriptionTone: Parameters<typeof Pill>[0]['tone'] =
@@ -310,14 +314,16 @@ const ListRow = memo(function ListRow({
             <LogIn size={13} className={isSwitching ? 'animate-spin' : ''} />
           </button>
         )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onStartKskIde(account) }}
-          disabled={isStartingKskIde || isUnavailable || !kskEligibility.eligible}
-          className="h-7 w-7 rounded-md inline-flex items-center justify-center border border-primary/20 text-primary hover:bg-primary/10 transition-colors disabled:opacity-40"
-          title={kskEligibility.eligible ? '签发 KSK 并启动隔离 Kiro IDE' : kskEligibility.reason}
-        >
-          <Rocket size={13} className={isStartingKskIde ? 'animate-pulse' : ''} />
-        </button>
+        {kskIdeSupported && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onStartKskIde(account) }}
+            disabled={isStartingKskIde || isUnavailable || !kskEligibility.eligible}
+            className="h-7 w-7 rounded-md inline-flex items-center justify-center border border-primary/20 text-primary hover:bg-primary/10 transition-colors disabled:opacity-40"
+            title={kskEligibility.eligible ? '签发 KSK 并启动隔离 Kiro IDE' : kskEligibility.reason}
+          >
+            <Rocket size={13} className={isStartingKskIde ? 'animate-pulse' : ''} />
+          </button>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(account) }}
           className="h-7 w-7 rounded-md inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"

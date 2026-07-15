@@ -25,6 +25,7 @@ import { showSuccess, showError } from '../../../utils/toast'
 import { getAccountDisplayName, calcAccountUsagePercent } from '../../../utils/accountStats'
 import { normalizeAccountStatus } from '../../../utils/accountStatus'
 import { normalizeAccountForUi } from './utils/accountRuntime'
+import { isKskIdeSupported } from '../../../utils/platform'
 import { Account } from '../../../types/account'
 import AccountHeader from './AccountHeader'
 import AccountTable from './AccountTable'
@@ -508,6 +509,11 @@ function AccountManager({ onNavigate }: AccountManagerProps) {
   }, [updateAccountLocally])
 
   const handleStartKskIde = useCallback(async (account: Account) => {
+    if (!isKskIdeSupported()) {
+      showError('KSK 隔离 Kiro IDE 当前仅支持 Windows')
+      return
+    }
+
     setStartingKskIdeId(account.id)
     try {
       await startKskIdeFromAccount({ accountId: account.id })

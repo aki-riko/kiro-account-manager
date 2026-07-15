@@ -9,6 +9,7 @@ import { getAccountStatusMeta, isBannedStatus, isUnavailableStatus } from '../..
 import { getProviderDisplayName, isExternalIdpAccount, isGitHubProvider } from '../../../utils/accountProvider'
 import { Account, TagDefinition, GroupDefinition } from '../../../types/account'
 import { getManagedKskEligibility } from '../../../utils/kskIde'
+import { isKskIdeSupported } from '../../../utils/platform'
 
 interface AccountCardProps {
   account: Account;
@@ -102,6 +103,7 @@ const AccountCard = memo(function AccountCard({
 
   const { quota, used, subPlan, percent, statusMeta, isBanned, isNormal, isUnavailable, breakdown, nextDateReset } = cardData
   const kskEligibility = useMemo(() => getManagedKskEligibility(account), [account])
+  const kskIdeSupported = isKskIdeSupported()
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -346,14 +348,16 @@ const AccountCard = memo(function AccountCard({
 
           {/* 次操作：图标按钮组 */}
           <div className="flex items-center gap-0.5 border-l border-border/50 pl-1 ml-0.5">
-            <button
-              onClick={(e) => { e.stopPropagation(); onStartKskIde?.(account) }}
-              disabled={!onStartKskIde || isStartingKskIde || isUnavailable || !kskEligibility.eligible}
-              className="h-8 w-8 rounded-md inline-flex items-center justify-center hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors disabled:opacity-40"
-              title={kskEligibility.eligible ? '签发 KSK 并启动隔离 Kiro IDE' : kskEligibility.reason}
-            >
-              <Rocket size={14} className={isStartingKskIde ? 'animate-pulse' : ''} />
-            </button>
+            {kskIdeSupported && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartKskIde?.(account) }}
+                disabled={!onStartKskIde || isStartingKskIde || isUnavailable || !kskEligibility.eligible}
+                className="h-8 w-8 rounded-md inline-flex items-center justify-center hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors disabled:opacity-40"
+                title={kskEligibility.eligible ? '签发 KSK 并启动隔离 Kiro IDE' : kskEligibility.reason}
+              >
+                <Rocket size={14} className={isStartingKskIde ? 'animate-pulse' : ''} />
+              </button>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(account) }}
               className="h-8 w-8 rounded-md inline-flex items-center justify-center hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"

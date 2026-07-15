@@ -3,18 +3,30 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 test('KSK IDE uses a persistent route and keeps manual KSK behind the page', async () => {
-  const [routes, page, accountManager] = await Promise.all([
+  const [routes, page, accountManager, accountHeader, accountCard, accountListView, accountTable, app, layout] = await Promise.all([
     readFile(new URL('../../../routes.tsx', import.meta.url), 'utf8'),
     readFile(new URL('./index.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../AccountManager/index.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../AccountManager/AccountHeader.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../AccountManager/AccountCard.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../AccountManager/AccountListView.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../AccountManager/AccountTable.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../../App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../Layout/index.tsx', import.meta.url), 'utf8'),
   ])
 
   assert.match(routes, /id: 'kskIde'/)
+  assert.match(routes, /platforms: \['windows'\]/)
+  assert.match(app, /availableRoutes/)
+  assert.match(layout, /availableRoutes/)
   assert.match(page, /startKskIdeFromAccount/)
   assert.match(page, /高级入口：使用已有 KSK 手工启动/)
   assert.doesNotMatch(page, /DialogRoot/)
   assert.doesNotMatch(accountManager, /KskIsolatedIdeModal|showKskIdeModal/)
   assert.match(accountManager, /emit\('accounts-updated'\)/)
+  for (const source of [accountManager, accountHeader, accountCard, accountListView, accountTable]) {
+    assert.match(source, /isKskIdeSupported/)
+  }
 })
 
 test('KSK IDE requires an explicit account selection before managed launch', async () => {

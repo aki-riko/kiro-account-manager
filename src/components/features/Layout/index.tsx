@@ -7,7 +7,7 @@ import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/tooltip'
 import { cn } from '../../../lib/utils'
 import { useApp } from '../../../hooks/useApp'
-import { routes } from '../../../routes'
+import { availableRoutes } from '../../../routes'
 
 interface SidebarProps {
   activeMenu: string;
@@ -22,7 +22,7 @@ interface LocalToken {
 
 function useMenuItems() {
   const { t } = useApp()
-  return routes.map(r => ({
+  return availableRoutes.map(r => ({
     id: r.id,
     icon: r.icon,
     label: t(r.nameKey),

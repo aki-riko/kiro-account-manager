@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Search, Download, Upload, RefreshCcw, RotateCw, Trash2, ArrowUp, ArrowDown, X, TrendingUp, Clock, Calendar, CheckSquare, Square, Sparkles, LayoutGrid, List, Edit, KeyRound } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
+import { isKskIdeSupported } from '../../../utils/platform'
 import FilterDropdown from './FilterDropdown'
 import { getThemeAccent } from '../KiroConfig/themeAccent'
 
@@ -320,9 +321,11 @@ function AccountHeader({
 
           {/* 通用操作按钮组 */}
           <div className="flex gap-1 ml-1">
-            <IconButton onClick={onKskIde} title="KSK 隔离 Kiro IDE" accent={accent}>
-              <KeyRound size={14} className="text-amber-500" />
-            </IconButton>
+            {isKskIdeSupported() && (
+              <IconButton onClick={onKskIde} title="KSK 隔离 Kiro IDE" accent={accent}>
+                <KeyRound size={14} className="text-amber-500" />
+              </IconButton>
+            )}
             <IconButton onClick={onImport} title={t('accounts.import')} accent={accent}>
               <Upload size={14} className={accent.text} />
             </IconButton>

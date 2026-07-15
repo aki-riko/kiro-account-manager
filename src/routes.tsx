@@ -1,11 +1,13 @@
 import { lazy, LazyExoticComponent, ComponentType } from 'react'
 import { Home, Key, Settings2, LogIn, Settings, Info, Network, MessageSquare, MonitorPlay, LucideIcon } from 'lucide-react'
+import { detectDesktopPlatform, DesktopPlatform } from './utils/platform'
 
 export interface RouteConfig {
   id: string;
   icon: LucideIcon;
   nameKey: string;
   descKey?: string;
+  platforms?: DesktopPlatform[];
   component: LazyExoticComponent<ComponentType<any>>;
 }
 
@@ -13,7 +15,7 @@ export interface RouteConfig {
 export const routes: RouteConfig[] = [
   { id: 'home', icon: Home, nameKey: 'nav.home', component: lazy(() => import('./components/features/Home/index')) },
   { id: 'accounts', icon: Key, nameKey: 'nav.accounts', component: lazy(() => import('./components/features/AccountManager/index')) },
-  { id: 'kskIde', icon: MonitorPlay, nameKey: 'nav.kskIde', component: lazy(() => import('./components/features/KskIde/index')) },
+  { id: 'kskIde', icon: MonitorPlay, nameKey: 'nav.kskIde', platforms: ['windows'], component: lazy(() => import('./components/features/KskIde/index')) },
   { id: 'desktopOAuth', icon: LogIn, nameKey: 'nav.desktopOAuth', descKey: 'nav.socialIdC', component: lazy(() => import('./components/features/Login/index')) },
   { id: 'kiroConfig', icon: Settings2, nameKey: 'nav.kiroConfig', component: lazy(() => import('./components/features/KiroConfig/KiroConfig')) },
   { id: 'sessions', icon: MessageSquare, nameKey: 'nav.sessions', component: lazy(() => import('./components/features/SessionManager/index')) },
@@ -22,6 +24,11 @@ export const routes: RouteConfig[] = [
   { id: 'settings', icon: Settings, nameKey: 'nav.settings', component: lazy(() => import('./components/features/Settings/index')) },
   { id: 'about', icon: Info, nameKey: 'nav.about', component: lazy(() => import('./components/features/About/index')) },
 ]
+
+export const availableRoutes = routes.filter(route => {
+  const platform = detectDesktopPlatform()
+  return !route.platforms || route.platforms.includes(platform)
+})
 
 // 内部路由（不在侧边栏显示）
 export const internalRoutes: Record<string, LazyExoticComponent<ComponentType<any>>> = {

@@ -1,5 +1,5 @@
 use std::{
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, Command},
     thread,
     time::{Duration, Instant},
@@ -37,12 +37,6 @@ pub struct KiroIsolatedProcess {
 }
 
 impl KiroIsolatedProcess {
-    pub fn launch(profile: &IsolatedIdeProfile) -> Result<Self, String> {
-        ensure_isolated_launch_available()?;
-        let executable = discover_kiro_executable()?;
-        Self::launch_with_executable(&executable, profile)
-    }
-
     pub fn launch_with_executable(
         executable: &Path,
         profile: &IsolatedIdeProfile,
@@ -106,17 +100,6 @@ fn validate_no_existing_kiro(kiro_running: bool) -> Result<(), String> {
         );
     }
     Ok(())
-}
-
-pub fn discover_kiro_executable() -> Result<PathBuf, String> {
-    #[cfg(target_os = "windows")]
-    {
-        return crate::kiro::executable::resolve_kiro_executable();
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Err("KSK 隔离 IDE 首版仅支持 Windows".to_string())
-    }
 }
 
 pub fn build_launch_command(executable: &Path, profile: &IsolatedIdeProfile) -> Command {

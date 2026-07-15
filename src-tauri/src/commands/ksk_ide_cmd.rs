@@ -44,6 +44,8 @@ pub async fn start_ksk_ide(
     state: State<'_, AppState>,
     request: StartKskIdeRequest,
 ) -> Result<KskIdeStatus, String> {
+    ensure_runtime_slot_available(&state).await?;
+    let executable = resolve_kiro_executable_for_launch().await?;
     let mut slot = state.ksk_ide.lock().await;
     if slot.is_some() {
         return Err("已有 KSK 隔离 Kiro 实例正在运行".to_string());
@@ -52,11 +54,11 @@ pub async fn start_ksk_ide(
         return Err(format!("KSK 代理不支持区域: {}", request.region.trim()));
     }
     ensure_isolated_launch_available()?;
-    crate::kiro::executable::resolve_kiro_executable()?;
     recover_ksk_ide_settings()?;
     let isolation_root = isolated_ide_root()?;
     let mut runtime = KskIdeRuntime::start(
         &isolation_root,
+        &executable,
         &request.region,
         &request.ksk,
         ChronoDuration::hours(PLACEHOLDER_TTL_HOURS),
@@ -78,12 +80,13 @@ pub async fn start_ksk_ide_from_account(
     state: State<'_, AppState>,
     request: StartKskIdeFromAccountRequest,
 ) -> Result<KskIdeStatus, String> {
+    ensure_runtime_slot_available(&state).await?;
+    let executable = resolve_kiro_executable_for_launch().await?;
     let mut slot = state.ksk_ide.lock().await;
     if slot.is_some() {
         return Err("已有 KSK 隔离 Kiro 实例正在运行".to_string());
     }
     ensure_isolated_launch_available()?;
-    crate::kiro::executable::resolve_kiro_executable()?;
     recover_ksk_ide_settings()?;
 
     let source_account = find_account_by_id(&state, request.account_id.trim())?;
@@ -137,6 +140,7 @@ pub async fn start_ksk_ide_from_account(
     let isolation_root = isolated_ide_root()?;
     let mut runtime = match KskIdeRuntime::start(
         &isolation_root,
+        &executable,
         &runtime_region,
         &issued.raw_key,
         ChronoDuration::hours(ttl_hours),
@@ -176,6 +180,19 @@ pub async fn start_ksk_ide_from_account(
     );
     *slot = Some(runtime);
     Ok(status)
+}
+
+async fn ensure_runtime_slot_available(state: &AppState) -> Result<(), String> {
+    if state.ksk_ide.lock().await.is_some() {
+        return Err("已有 KSK 隔离 Kiro 实例正在运行".to_string());
+    }
+    Ok(())
+}
+
+async fn resolve_kiro_executable_for_launch() -> Result<PathBuf, String> {
+    tokio::task::spawn_blocking(crate::kiro::executable::resolve_kiro_executable)
+        .await
+        .map_err(|error| format!("Kiro IDE 路径检测任务失败: {error}"))?
 }
 
 #[tauri::command]

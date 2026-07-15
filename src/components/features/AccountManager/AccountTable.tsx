@@ -9,6 +9,7 @@ import ContextMenu from './ContextMenu'
 import React from 'react'
 import { getManagedKskEligibility } from '../../../utils/kskIde'
 import { isExternalIdpAccount } from '../../../utils/accountProvider'
+import { isKskIdeSupported } from '../../../utils/platform'
 
 // 根据容器宽度计算列数
 function getColumnCount(width: number) {
@@ -134,6 +135,7 @@ function AccountTable({
   const scrollRef = useRef<HTMLDivElement>(null)
   const [columns, setColumns] = useState(4)
   const [contextMenuState, setContextMenuState] = useState<any>(null) // { accountId, x, y, account }
+  const kskIdeSupported = isKskIdeSupported()
 
   // 打开右键菜单
   const handleContextMenuOpen = useCallback((accountId: string, x: number, y: number, account: any) => {
@@ -160,7 +162,9 @@ function AccountTable({
       { divider: true },
       { icon: Key , label: t('accountCard.refreshQuota'), onClick: () => onRefresh(account.id), disabled: Boolean(rowState.isRefreshing) },
       { icon: KeyRound , label: t('accountCard.refreshToken'), onClick: () => onRefreshToken?.(account.id), disabled: Boolean(rowState.isRefreshingToken) },
-      { icon: Rocket, label: kskEligibility.eligible ? '签发 KSK 并启动隔离 Kiro' : kskEligibility.reason, onClick: () => onStartKskIde?.(account), disabled: Boolean(rowState.isStartingKskIde) || isUnavailable || !kskEligibility.eligible },
+      ...(kskIdeSupported ? [
+        { icon: Rocket, label: kskEligibility.eligible ? '签发 KSK 并启动隔离 Kiro' : kskEligibility.reason, onClick: () => onStartKskIde?.(account), disabled: Boolean(rowState.isStartingKskIde) || isUnavailable || !kskEligibility.eligible },
+      ] : []),
       { icon: LogIn, label: isUnavailable ? `${statusMeta.label}账号不可切换` : t('accountCard.LogIn'), onClick: () => onLogin(account), disabled: Boolean(rowState.isSwitching) || isUnavailable },
       { divider: true },
       { label: account.enabled === false ? '启用账号' : '禁用账号', onClick: () => onToggleEnabled?.(account, account.enabled === false) },
@@ -172,7 +176,7 @@ function AccountTable({
     }
 
     return items
-  }, [t, onEdit, onEditLabel, onCopy, onRefreshToken, onRefresh, onStartKskIde, onLogin, onDelete, onDeleteRemote, accountRowStateById])
+  }, [t, onEdit, onEditLabel, onCopy, onRefreshToken, onRefresh, onStartKskIde, onLogin, onDelete, onDeleteRemote, accountRowStateById, kskIdeSupported])
 
   useEffect(() => {
     if (!containerRef.current) return

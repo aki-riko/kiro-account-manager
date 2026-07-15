@@ -13,12 +13,17 @@ import { useAppSettings } from './contexts/AppSettingsContext'
 import { useDialog } from './contexts/DialogContext'
 import { AccountProvider } from './contexts/AccountContext'
 import { PrivacyProvider } from './contexts/PrivacyContext'
-import { routes, internalRoutes } from './routes'
+import { availableRoutes, internalRoutes } from './routes'
 import { getMountedRouteIds, shouldPersistRoute } from './utils/routePersistence'
 
 // 构建路由映射
-const routeMap = Object.fromEntries(routes.map(r => [r.id, r.component]))
+const routeMap = Object.fromEntries(availableRoutes.map(r => [r.id, r.component]))
 const allRoutes = { ...routeMap, ...internalRoutes }
+
+const resolveInitialRoute = () => {
+  const savedRoute = localStorage.getItem('activeMenu') || 'home'
+  return allRoutes[savedRoute] ? savedRoute : 'home'
+}
 
 // 页面加载骨架屏
 function PageLoading() {
@@ -32,11 +37,9 @@ function PageLoading() {
 
 function App() {
   const [user, setUser] = useState<any>(null)
-  const [activeMenu, setActiveMenu] = useState<string>(() => {
-    return localStorage.getItem('activeMenu') || 'home'
-  })
+  const [activeMenu, setActiveMenu] = useState<string>(resolveInitialRoute)
   const [mountedRouteIds, setMountedRouteIds] = useState<string[]>(() =>
-    getMountedRouteIds([], localStorage.getItem('activeMenu') || 'home')
+    getMountedRouteIds([], resolveInitialRoute())
   )
   const { t } = useApp()
   const { settings: appSettings, loading: settingsLoading } = useAppSettings()

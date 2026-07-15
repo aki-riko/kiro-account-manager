@@ -168,6 +168,7 @@ pub struct KskIdeRuntime {
 impl KskIdeRuntime {
     pub async fn start(
         isolation_root: &Path,
+        executable: &Path,
         region: &str,
         ksk: &str,
         placeholder_ttl: ChronoDuration,
@@ -191,7 +192,7 @@ impl KskIdeRuntime {
             Ok(profile) => profile,
             Err(error) => return Err(proxies.cleanup_start_failure(error).await),
         };
-        let process = match KiroIsolatedProcess::launch(&profile) {
+        let process = match KiroIsolatedProcess::launch_with_executable(executable, &profile) {
             Ok(process) => process,
             Err(error) => return Err(cleanup_launch_failure(error, &profile, &mut proxies).await),
         };

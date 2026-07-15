@@ -35,7 +35,15 @@ async fn installed_kiro_lifecycle_with_fake_ksk() {
     let root = std::env::temp_dir().join(format!("kam-ksk-lifecycle-{}", Uuid::new_v4()));
     let fake_ksk = "ksk_kam-lifecycle-fixture-not-a-real-key";
     let mut observations = subscribe_forwarded_request_observations();
-    let mut runtime = KskIdeRuntime::start(&root, "us-east-1", fake_ksk, ChronoDuration::hours(1))
+    let executable = crate::kiro::executable::resolve_kiro_executable()
+        .expect("discover installed Kiro executable");
+    let mut runtime = KskIdeRuntime::start(
+        &root,
+        &executable,
+        "us-east-1",
+        fake_ksk,
+        ChronoDuration::hours(1),
+    )
         .await
         .expect("start installed Kiro with isolated lifecycle fixture");
 
