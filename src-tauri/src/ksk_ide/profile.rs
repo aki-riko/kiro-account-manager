@@ -164,6 +164,7 @@ impl IsolatedIdeProfile {
         self.session_id
     }
 
+    #[cfg(test)]
     pub fn session_root(&self) -> &Path {
         &self.session_root
     }
@@ -180,10 +181,12 @@ impl IsolatedIdeProfile {
         &self.extensions_dir
     }
 
+    #[cfg(test)]
     pub fn token_path(&self) -> &Path {
         &self.token_path
     }
 
+    #[cfg(test)]
     pub fn settings_path(&self) -> &Path {
         &self.settings_path
     }

@@ -27,6 +27,7 @@ pub struct KskProxyConfig {
 }
 
 impl KskProxyConfig {
+    #[cfg(test)]
     pub fn new(service: KiroService, region: &str, ksk: &str) -> Result<Self, String> {
         Self::from_shared(service, region, Arc::from(ksk.trim()))
     }
@@ -79,6 +80,7 @@ impl KskProxyConfig {
         self.service
     }
 
+    #[cfg(test)]
     pub fn region(&self) -> &str {
         &self.region
     }
