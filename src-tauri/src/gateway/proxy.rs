@@ -265,6 +265,63 @@ struct RequestLogContext<'a> {
     is_stream: Option<bool>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct RequestLogUsage {
+    input_tokens: Option<i32>,
+    output_tokens: Option<i32>,
+    cache_read_input_tokens: Option<i32>,
+    cache_creation_input_tokens: Option<i32>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RequestLogResult<'a> {
+    status: StatusCode,
+    outcome: &'a str,
+    error: Option<&'a str>,
+    error_type: Option<&'a str>,
+    response_body: Option<&'a str>,
+    usage: RequestLogUsage,
+}
+
+struct StreamProxyRequest {
+    state: RouterState,
+    upstream_response: reqwest::Response,
+    format: ResponseFormat,
+    model: String,
+    request_messages: Vec<NormalizedMessage>,
+    request_tools: Option<Vec<Tool>>,
+    request_tool_choice: Option<Value>,
+    previous_response_id: Option<String>,
+    tool_name_map: HashMap<String, String>,
+    include_usage: bool,
+    log_context: RequestLogContext<'static>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct StreamTokenUsage {
+    input_tokens: i32,
+    output_tokens: i32,
+    cache_read_input_tokens: Option<i32>,
+    cache_creation_input_tokens: Option<i32>,
+}
+
+impl From<&stream::AggregatedKiroResponse> for StreamTokenUsage {
+    fn from(response: &stream::AggregatedKiroResponse) -> Self {
+        Self {
+            input_tokens: response.input_tokens,
+            output_tokens: response.output_tokens,
+            cache_read_input_tokens: response.cache_read_input_tokens,
+            cache_creation_input_tokens: response.cache_creation_input_tokens,
+        }
+    }
+}
+
+struct AnthropicMessageStart<'a> {
+    anthropic_id: &'a str,
+    model: &'a str,
+    usage: StreamTokenUsage,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct GatewayErrorDetails<'a> {
     status: StatusCode,
@@ -901,15 +958,14 @@ async fn generate_local_response(
     let serialized = serialize_logged_value(&response_body);
     write_request_log(
         &log_context,
-        StatusCode::OK,
-        "success",
-        None,
-        None, // error_type
-        Some(serialized.as_str()),
-        None, // input_tokens
-        None, // output_tokens
-        None, // cache_read_input_tokens
-        None, // cache_creation_input_tokens
+        RequestLogResult {
+            status: StatusCode::OK,
+            outcome: "success",
+            error: None,
+            error_type: None,
+            response_body: Some(serialized.as_str()),
+            usage: RequestLogUsage::default(),
+        },
         &state,
     );
     Json(response_body).into_response()
@@ -1112,17 +1168,23 @@ fn extract_model_from_payload(payload_str: &str) -> Option<String> {
 
 fn write_request_log(
     context: &RequestLogContext<'_>,
-    status: StatusCode,
-    outcome: &str,
-    error: Option<&str>,
-    error_type: Option<&str>,
-    _response_body: Option<&str>,
-    input_tokens: Option<i32>,
-    output_tokens: Option<i32>,
-    cache_read_input_tokens: Option<i32>,
-    cache_creation_input_tokens: Option<i32>,
+    result: RequestLogResult<'_>,
     state: &RouterState,
 ) {
+    let RequestLogResult {
+        status,
+        outcome,
+        error,
+        error_type,
+        response_body,
+        usage:
+            RequestLogUsage {
+                input_tokens,
+                output_tokens,
+                cache_read_input_tokens,
+                cache_creation_input_tokens,
+            },
+    } = result;
     let duration_ms = context
         .started_at
         .elapsed()
@@ -1167,7 +1229,7 @@ fn write_request_log(
     });
 
     // 生成响应摘要
-    let response_summary = _response_body.and_then(|body| {
+    let response_summary = response_body.and_then(|body| {
         use crate::gateway::ResponseSummary;
         serde_json::from_str::<serde_json::Value>(body)
             .ok()
@@ -1234,7 +1296,7 @@ fn write_request_log(
             .request_body
             .map(str::to_string)
             .or_else(|| context.request_body_hint.clone()),
-        response_body: _response_body.map(str::to_string),
+        response_body: response_body.map(str::to_string),
         input_tokens,
         output_tokens,
         cache_read_input_tokens,
@@ -1355,19 +1417,23 @@ async fn gateway_error_with_log(
 
     write_request_log(
         context,
-        error.status,
-        "error",
-        if error.message.is_empty() {
-            None
-        } else {
-            Some(error.message)
+        RequestLogResult {
+            status: error.status,
+            outcome: "error",
+            error: if error.message.is_empty() {
+                None
+            } else {
+                Some(error.message)
+            },
+            error_type: Some(error.error_type),
+            response_body: logged_response_body.as_deref(),
+            usage: RequestLogUsage {
+                input_tokens,
+                output_tokens,
+                cache_read_input_tokens: cache_read,
+                cache_creation_input_tokens: cache_creation,
+            },
         },
-        Some(error.error_type),
-        logged_response_body.as_deref(),
-        input_tokens,
-        output_tokens,
-        cache_read,
-        cache_creation,
         state,
     );
     gateway_error_response(
@@ -1630,15 +1696,18 @@ pub async fn proxy_handler(
                 };
                 write_request_log(
                     &cache_log_context,
-                    StatusCode::OK,
-                    "success (cached)",
-                    None,
-                    None,
-                    Some(&cached.response),
-                    Some(cached.input_tokens),
-                    Some(cached.output_tokens),
-                    None,
-                    None,
+                    RequestLogResult {
+                        status: StatusCode::OK,
+                        outcome: "success (cached)",
+                        error: None,
+                        error_type: None,
+                        response_body: Some(&cached.response),
+                        usage: RequestLogUsage {
+                            input_tokens: Some(cached.input_tokens),
+                            output_tokens: Some(cached.output_tokens),
+                            ..RequestLogUsage::default()
+                        },
+                    },
                     &state,
                 );
                 return Json(cached_response).into_response();
@@ -2279,19 +2348,19 @@ pub async fn proxy_handler(
             is_stream: Some(true),
         };
 
-        return stream_proxy_response(
-            state.clone(),
-            upstream_resp,
+        return stream_proxy_response(StreamProxyRequest {
+            state: state.clone(),
+            upstream_response: upstream_resp,
             format,
-            request.model.clone(),
-            request.messages.clone(),
-            request.tools.clone(),
-            request.tool_choice.clone(),
-            request.previous_response_id.clone(),
-            request.tool_name_map.clone(),
-            request.include_usage,
-            static_log_context,
-        );
+            model: request.model.clone(),
+            request_messages: request.messages.clone(),
+            request_tools: request.tools.clone(),
+            request_tool_choice: request.tool_choice.clone(),
+            previous_response_id: request.previous_response_id.clone(),
+            tool_name_map: request.tool_name_map.clone(),
+            include_usage: request.include_usage,
+            log_context: static_log_context,
+        });
     }
 
     // 非流式响应也是 EventStream 格式，需要解码
@@ -2582,15 +2651,19 @@ pub async fn proxy_handler(
 
     write_request_log(
         &upstream_payload_log_context,
-        StatusCode::OK,
-        "success",
-        None,
-        None, // error_type
-        Some(body.as_str()),
-        Some(aggregated.input_tokens),
-        Some(aggregated.output_tokens),
-        aggregated.cache_read_input_tokens,
-        aggregated.cache_creation_input_tokens,
+        RequestLogResult {
+            status: StatusCode::OK,
+            outcome: "success",
+            error: None,
+            error_type: None,
+            response_body: Some(body.as_str()),
+            usage: RequestLogUsage {
+                input_tokens: Some(aggregated.input_tokens),
+                output_tokens: Some(aggregated.output_tokens),
+                cache_read_input_tokens: aggregated.cache_read_input_tokens,
+                cache_creation_input_tokens: aggregated.cache_creation_input_tokens,
+            },
+        },
         &state,
     );
     Json(response).into_response()
@@ -3849,19 +3922,20 @@ fn extract_account_id_from_upstream(upstream: &UpstreamCredentials) -> String {
     upstream.account_id.clone()
 }
 
-fn stream_proxy_response(
-    state: RouterState,
-    upstream_resp: reqwest::Response,
-    format: ResponseFormat,
-    model: String,
-    request_messages: Vec<NormalizedMessage>,
-    request_tools: Option<Vec<Tool>>,
-    request_tool_choice: Option<Value>,
-    previous_response_id: Option<String>,
-    tool_name_map: std::collections::HashMap<String, String>,
-    include_usage: bool,
-    log_context: RequestLogContext<'static>,
-) -> Response {
+fn stream_proxy_response(request: StreamProxyRequest) -> Response {
+    let StreamProxyRequest {
+        state,
+        upstream_response,
+        format,
+        model,
+        request_messages,
+        request_tools,
+        request_tool_choice,
+        previous_response_id,
+        tool_name_map,
+        include_usage,
+        log_context,
+    } = request;
     let (tx, rx) = mpsc::channel::<Result<Bytes, Infallible>>(2048);
     tokio::spawn(async move {
         // 辅助函数：还原工具名称（sanitized -> original）
@@ -3871,7 +3945,7 @@ fn stream_proxy_response(
                 .cloned()
                 .unwrap_or_else(|| sanitized.to_string())
         };
-        let mut upstream_stream = upstream_resp.bytes_stream();
+        let mut upstream_stream = upstream_response.bytes_stream();
         let mut raw_buffer = Vec::new();
         let mut parser = ThinkingParser::new();
         let mut aggregated = stream::AggregatedKiroResponse::default();
@@ -4147,12 +4221,11 @@ fn stream_proxy_response(
                                                     ensure_anthropic_message_start(
                                                         &tx,
                                                         &mut message_started,
-                                                        &anthropic_id,
-                                                        &model,
-                                                        aggregated.input_tokens,
-                                                        aggregated.output_tokens,
-                                                        aggregated.cache_read_input_tokens,
-                                                        aggregated.cache_creation_input_tokens,
+                                                        AnthropicMessageStart {
+                                                            anthropic_id: &anthropic_id,
+                                                            model: &model,
+                                                            usage: (&aggregated).into(),
+                                                        },
                                                     )
                                                     .await;
                                                     close_content_block(&tx, &mut text_block_index)
@@ -4282,12 +4355,11 @@ fn stream_proxy_response(
                                                                 ensure_anthropic_message_start(
                                                                     &tx,
                                                                     &mut message_started,
-                                                                    &anthropic_id,
-                                                                    &model,
-                                                                    aggregated.input_tokens,
-                                                                    aggregated.output_tokens,
-                                                                    aggregated.cache_read_input_tokens,
-                                                                    aggregated.cache_creation_input_tokens,
+                                                                    AnthropicMessageStart {
+                                                                        anthropic_id: &anthropic_id,
+                                                                        model: &model,
+                                                                        usage: (&aggregated).into(),
+                                                                    },
                                                                 )
                                                                 .await;
                                                                 close_content_block(
@@ -4542,12 +4614,11 @@ fn stream_proxy_response(
                                                     ensure_anthropic_message_start(
                                                         &tx,
                                                         &mut message_started,
-                                                        &anthropic_id,
-                                                        &model,
-                                                        aggregated.input_tokens,
-                                                        aggregated.output_tokens,
-                                                        aggregated.cache_read_input_tokens,
-                                                        aggregated.cache_creation_input_tokens,
+                                                        AnthropicMessageStart {
+                                                            anthropic_id: &anthropic_id,
+                                                            model: &model,
+                                                            usage: (&aggregated).into(),
+                                                        },
                                                     )
                                                     .await;
                                                     close_content_block(
@@ -5063,15 +5134,19 @@ fn stream_proxy_response(
 
         write_request_log(
             &log_context,
-            StatusCode::OK,
-            "stream",
-            None,
-            None, // error_type
-            response_body_log.as_deref(),
-            Some(aggregated.input_tokens),
-            Some(aggregated.output_tokens),
-            aggregated.cache_read_input_tokens,
-            aggregated.cache_creation_input_tokens,
+            RequestLogResult {
+                status: StatusCode::OK,
+                outcome: "stream",
+                error: None,
+                error_type: None,
+                response_body: response_body_log.as_deref(),
+                usage: RequestLogUsage {
+                    input_tokens: Some(aggregated.input_tokens),
+                    output_tokens: Some(aggregated.output_tokens),
+                    cache_read_input_tokens: aggregated.cache_read_input_tokens,
+                    cache_creation_input_tokens: aggregated.cache_creation_input_tokens,
+                },
+            },
             &state,
         );
     }); // tokio::spawn 闭合
@@ -5117,12 +5192,16 @@ async fn handle_stream_text(
             ensure_anthropic_message_start(
                 tx,
                 message_started,
-                anthropic_id,
-                model,
-                input_tokens,
-                output_tokens,
-                cache_read_input_tokens,
-                cache_creation_input_tokens,
+                AnthropicMessageStart {
+                    anthropic_id,
+                    model,
+                    usage: StreamTokenUsage {
+                        input_tokens,
+                        output_tokens,
+                        cache_read_input_tokens,
+                        cache_creation_input_tokens,
+                    },
+                },
             )
             .await;
 
@@ -5220,16 +5299,23 @@ async fn handle_stream_text(
 async fn ensure_anthropic_message_start(
     tx: &mpsc::Sender<Result<Bytes, Infallible>>,
     message_started: &mut bool,
-    anthropic_id: &str,
-    model: &str,
-    input_tokens: i32,
-    output_tokens: i32,
-    cache_read_input_tokens: Option<i32>,
-    cache_creation_input_tokens: Option<i32>,
+    start: AnthropicMessageStart<'_>,
 ) {
     if *message_started {
         return;
     }
+
+    let AnthropicMessageStart {
+        anthropic_id,
+        model,
+        usage:
+            StreamTokenUsage {
+                input_tokens,
+                output_tokens,
+                cache_read_input_tokens,
+                cache_creation_input_tokens,
+            },
+    } = start;
 
     let mut usage = json!({
         "input_tokens": input_tokens,
