@@ -88,6 +88,10 @@ export function detectInstalledBrowsers<T = any>() {
   return invoke<T[]>('detect_installed_browsers')
 }
 
+export function checkPrivateBrowserSupport() {
+  return invoke<boolean>('check_private_browser_support')
+}
+
 // 检测系统代理
 export function detectSystemProxy<T = any>() {
   return invoke<T>('detect_system_proxy')

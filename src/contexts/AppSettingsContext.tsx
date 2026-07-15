@@ -1,6 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import { getAppSettings, saveAppSettings } from '../api/settingsApi'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
+import { persistAppSettingsUpdate } from './appSettingsState'
+import { DEFAULT_BROWSER_INCOGNITO } from '../utils/browserPreference'
 
 export interface AppSettings {
   lockModel: boolean;
@@ -50,7 +52,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoRefresh: true,
   autoRefreshInterval: 50,
   browserPath: '',
-  browserIncognito: true,
+  browserIncognito: DEFAULT_BROWSER_INCOGNITO,
   privacyMode: true,
   autoSwitchEnabled: false,
   autoSwitchThreshold: 1,
@@ -78,16 +80,22 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const settingsRef = useRef<AppSettings | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const applySettings = (nextSettings: AppSettings) => {
+    settingsRef.current = nextSettings
+    setSettings(nextSettings)
+  }
 
   // 加载设置
   const loadSettings = async () => {
     try {
       const appSettings = await getAppSettings<AppSettings>()
-      setSettings(appSettings || DEFAULT_SETTINGS)
+      applySettings(appSettings || DEFAULT_SETTINGS)
     } catch (err) {
       console.error('[AppSettings] 加载失败:', err)
-      setSettings(DEFAULT_SETTINGS)
+      applySettings(DEFAULT_SETTINGS)
     } finally {
       setLoading(false)
     }
@@ -96,12 +104,13 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   // 更新设置
   const updateSettings = async (updates: Partial<AppSettings>) => {
     try {
-      await saveAppSettings(updates)
-      let nextSettings: AppSettings | null = null
-      setSettings(prev => {
-        nextSettings = { ...(prev || DEFAULT_SETTINGS), ...updates }
-        return nextSettings
-      })
+      const nextSettings = await persistAppSettingsUpdate(
+        settingsRef.current,
+        DEFAULT_SETTINGS,
+        updates,
+        saveAppSettings,
+      )
+      applySettings(nextSettings)
       return nextSettings
     } catch (err) {
       console.error('[AppSettings] 保存失败:', err)
@@ -117,7 +126,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     const setupListener = async () => {
       unlisten = await listen<AppSettings | null>('app-settings-changed', (event) => {
         if (event.payload) {
-          setSettings(event.payload)
+          applySettings(event.payload)
         } else {
           loadSettings()
         }

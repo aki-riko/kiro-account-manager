@@ -25,7 +25,7 @@ use std::sync::Mutex;
 use tauri::{Listener, Manager};
 
 // 导入命令
-use utils::browser::detect_installed_browsers;
+use utils::browser::{check_private_browser_support, detect_installed_browsers};
 
 //账号管理页面
 use commands::account_cmd::{
@@ -553,6 +553,7 @@ fn main() {
             restart_as_admin,
             // 浏览器检测
             detect_installed_browsers,
+            check_private_browser_support,
             // MCP 管理命令
             get_mcp_config,
             save_mcp_server,

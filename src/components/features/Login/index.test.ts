@@ -1,19 +1,43 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import {
+  DEFAULT_BROWSER_INCOGNITO,
+  isPrivateBrowserLoginBlocked,
+  persistBrowserIncognitoPreference,
+} from '../../../utils/browserPreference'
 
-test('login page persists a default-on private browser preference', async () => {
-  const [loginPage, settingsContext, browserSettings] = await Promise.all([
-    readFile(new URL('./index.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../../../contexts/AppSettingsContext.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../Settings/SettingsGeneral.tsx', import.meta.url), 'utf8'),
-  ])
+test('private browser preference defaults to enabled', () => {
+  assert.equal(DEFAULT_BROWSER_INCOGNITO, true)
+})
 
-  assert.match(loginPage, /useAppSettings/)
-  assert.match(loginPage, /browserIncognito/)
-  assert.match(loginPage, /updateSettings\(\{ browserIncognito: checked \}\)/)
-  assert.match(loginPage, /<Switch/)
-  assert.match(settingsContext, /browserIncognito: true/)
-  assert.match(browserSettings, /setBrowserPath\(`"\$\{browser\.path\}"`\)/)
-  assert.doesNotMatch(browserSettings, /setBrowserPath\([^\n]*incognitoArg/)
+test('successful preference save keeps the requested value', async () => {
+  const updates: Array<{ browserIncognito: boolean }> = []
+  const result = await persistBrowserIncognitoPreference(
+    true,
+    false,
+    async (next) => {
+      updates.push(next)
+      return { browserIncognito: false }
+    },
+  )
+
+  assert.deepEqual(updates, [{ browserIncognito: false }])
+  assert.deepEqual(result, { saved: true, value: false })
+})
+
+test('failed preference save rolls back to the previous value', async () => {
+  const result = await persistBrowserIncognitoPreference(
+    true,
+    false,
+    async () => null,
+  )
+
+  assert.deepEqual(result, { saved: false, value: true })
+})
+
+test('private login is blocked while capability is loading or unsupported', () => {
+  assert.equal(isPrivateBrowserLoginBlocked(true, null, true), true)
+  assert.equal(isPrivateBrowserLoginBlocked(true, false, false), true)
+  assert.equal(isPrivateBrowserLoginBlocked(true, true, false), false)
+  assert.equal(isPrivateBrowserLoginBlocked(false, false, false), false)
 })

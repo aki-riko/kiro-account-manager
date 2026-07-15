@@ -6,6 +6,7 @@ import {
   selectExternalIdpProfile,
   type ExternalIdpProfileOption,
 } from '../../../api/authApi'
+import { checkPrivateBrowserSupport } from '../../../api/settingsApi'
 import { listen, UnlistenFn } from '@tauri-apps/api/event'
 import { Loader, ShieldCheck } from 'lucide-react'
 import { useApp } from '../../../hooks/useApp'
@@ -14,6 +15,11 @@ import { Button } from '../../shared/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
+import {
+  DEFAULT_BROWSER_INCOGNITO,
+  isPrivateBrowserLoginBlocked,
+  persistBrowserIncognitoPreference,
+} from '../../../utils/browserPreference'
 import {
   DialogRoot,
   DialogContent,
@@ -105,13 +111,35 @@ function Login({ onLogin }: LoginProps) {
   const [externalProfiles, setExternalProfiles] = useState<ExternalIdpProfileOption[]>([])
   const [selectedProfileArn, setSelectedProfileArn] = useState('')
   const [submittingProfile, setSubmittingProfile] = useState(false)
-  const [browserIncognito, setBrowserIncognito] = useState(true)
+  const [browserIncognito, setBrowserIncognito] = useState(DEFAULT_BROWSER_INCOGNITO)
   const [savingBrowserIncognito, setSavingBrowserIncognito] = useState(false)
+  const [privateBrowserSupported, setPrivateBrowserSupported] = useState<boolean | null>(null)
+  const [checkingPrivateBrowserSupport, setCheckingPrivateBrowserSupport] = useState(true)
 
   useEffect(() => {
     if (settingsLoading) return
-    setBrowserIncognito(appSettings?.browserIncognito ?? true)
+    setBrowserIncognito(appSettings?.browserIncognito ?? DEFAULT_BROWSER_INCOGNITO)
   }, [appSettings?.browserIncognito, settingsLoading])
+
+  useEffect(() => {
+    if (settingsLoading) return
+
+    let mounted = true
+    setCheckingPrivateBrowserSupport(true)
+    checkPrivateBrowserSupport()
+      .then((supported) => {
+        if (mounted) setPrivateBrowserSupported(supported)
+      })
+      .catch((e) => {
+        console.error('Failed to check private browser support:', e)
+        if (mounted) setPrivateBrowserSupported(null)
+      })
+      .finally(() => {
+        if (mounted) setCheckingPrivateBrowserSupport(false)
+      })
+
+    return () => { mounted = false }
+  }, [appSettings?.browserPath, settingsLoading])
 
   useEffect(() => {
     let unlistenSuccess: UnlistenFn | undefined
@@ -178,7 +206,16 @@ function Login({ onLogin }: LoginProps) {
   }
 
   const handleLogin = async (provider: string) => {
-    if (loginPending || settingsLoading || savingBrowserIncognito) return
+    if (
+      loginPending
+      || settingsLoading
+      || savingBrowserIncognito
+      || isPrivateBrowserLoginBlocked(
+        browserIncognito,
+        privateBrowserSupported,
+        checkingPrivateBrowserSupport,
+      )
+    ) return
 
     if (provider === 'Enterprise') {
       setError('')
@@ -217,9 +254,13 @@ function Login({ onLogin }: LoginProps) {
     const previousValue = browserIncognito
     setBrowserIncognito(checked)
     setSavingBrowserIncognito(true)
-    const updatedSettings = await updateSettings({ browserIncognito: checked })
-    if (!updatedSettings) {
-      setBrowserIncognito(previousValue)
+    const result = await persistBrowserIncognitoPreference(
+      previousValue,
+      checked,
+      updateSettings,
+    )
+    setBrowserIncognito(result.value)
+    if (!result.saved) {
       setError(t('login.incognitoSaveFailed'))
     }
     setSavingBrowserIncognito(false)
@@ -300,6 +341,11 @@ function Login({ onLogin }: LoginProps) {
     () => supportedProviders.map((provider) => ({ id: provider, ...getProviderMeta(provider, t) })),
     [supportedProviders, t],
   )
+  const privateBrowserLoginBlocked = isPrivateBrowserLoginBlocked(
+    browserIncognito,
+    privateBrowserSupported,
+    checkingPrivateBrowserSupport,
+  )
 
   return (
     <div className="h-full flex flex-col items-center justify-center glass-main relative overflow-hidden p-6">
@@ -324,17 +370,31 @@ function Login({ onLogin }: LoginProps) {
           </div>
         )}
 
-        <div className="w-full max-w-[360px] mb-5 px-4 py-3 rounded-xl glass-card border border-border flex items-center gap-3">
+        <div className={`w-full max-w-[360px] mb-5 px-4 py-3 rounded-xl glass-card border flex items-center gap-3 ${
+          browserIncognito && privateBrowserSupported === false
+            ? 'border-destructive/40'
+            : 'border-border'
+        }`}>
           <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
             <ShieldCheck size={18} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-foreground flex items-center gap-2">
               {t('login.incognitoBrowser')}
-              {savingBrowserIncognito && <Loader size={13} className="animate-spin text-primary" />}
+              {(savingBrowserIncognito || (browserIncognito && checkingPrivateBrowserSupport)) && (
+                <Loader size={13} className="animate-spin text-primary" />
+              )}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t('login.incognitoBrowserHint')}
+            <p className={`text-xs mt-0.5 ${
+              browserIncognito && privateBrowserSupported === false
+                ? 'text-destructive'
+                : 'text-muted-foreground'
+            }`}>
+              {t(
+                browserIncognito && privateBrowserSupported === false
+                  ? 'login.incognitoBrowserUnavailable'
+                  : 'login.incognitoBrowserHint',
+              )}
             </p>
           </div>
           <Switch
@@ -351,12 +411,18 @@ function Login({ onLogin }: LoginProps) {
             const isLoading = loadingProvider === provider.id
             const isDisabled = settingsLoading
               || savingBrowserIncognito
+              || privateBrowserLoginBlocked
               || (loadingProvider !== null && !isLoading)
             return (
               <button
                 key={provider.id}
                 onClick={() => handleLogin(provider.id)}
-                disabled={loginPending || settingsLoading || savingBrowserIncognito}
+                disabled={
+                  loginPending
+                  || settingsLoading
+                  || savingBrowserIncognito
+                  || privateBrowserLoginBlocked
+                }
                 className={`group relative h-14 px-8 min-w-[280px] rounded-xl glass-card border border-border flex items-center justify-center gap-3 transition-all duration-200 ${
                   isLoading
                     ? 'opacity-60 cursor-not-allowed'

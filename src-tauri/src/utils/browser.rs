@@ -181,13 +181,10 @@ fn open_with_custom_browser(
 }
 
 fn open_with_detected_private_browser(url: &str) -> Result<(), String> {
-    let browser = detect_browsers()
-        .into_iter()
-        .find(|browser| !browser.incognito_arg.trim().is_empty())
-        .ok_or_else(|| {
-            "未找到支持命令行无痕模式的浏览器；请在设置中选择 Chrome、Edge、Firefox 或 Brave，或关闭“使用无痕浏览器”"
-                .to_string()
-        })?;
+    let browser = select_detected_private_browser(detect_browsers()).ok_or_else(|| {
+        "未找到支持命令行无痕模式的浏览器；请在设置中选择 Chrome、Edge、Firefox 或 Brave，或关闭“使用无痕浏览器”"
+            .to_string()
+    })?;
 
     spawn_browser(&browser.path, vec![browser.incognito_arg], url)
 }
@@ -201,6 +198,22 @@ fn spawn_browser(exe_path: &str, mut args: Vec<String>, url: &str) -> Result<(),
         .map_err(|e| format!("打开浏览器失败: {e} (路径: {exe_path})"))?;
 
     Ok(())
+}
+
+fn select_detected_private_browser(browsers: Vec<DetectedBrowser>) -> Option<DetectedBrowser> {
+    browsers
+        .into_iter()
+        .find(|browser| !browser.incognito_arg.trim().is_empty())
+}
+
+fn private_browser_supported() -> bool {
+    let (browser_path, _) = get_browser_launch_preferences();
+    match browser_path {
+        Some(browser_path) => parse_browser_command(&browser_path)
+            .and_then(|(exe_path, args)| prepare_browser_args(&exe_path, args, true))
+            .is_ok(),
+        None => select_detected_private_browser(detect_browsers()).is_some(),
+    }
 }
 
 fn prepare_browser_args(
@@ -320,9 +333,25 @@ pub async fn detect_installed_browsers() -> Vec<DetectedBrowser> {
     detect_browsers()
 }
 
+#[tauri::command]
+pub async fn check_private_browser_support() -> bool {
+    private_browser_supported()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_browser_command, prepare_browser_args, private_arg_for_executable};
+    use super::{
+        parse_browser_command, prepare_browser_args, private_arg_for_executable,
+        select_detected_private_browser, DetectedBrowser,
+    };
+
+    fn detected_browser(name: &str, path: &str, incognito_arg: &str) -> DetectedBrowser {
+        DetectedBrowser {
+            name: name.to_string(),
+            path: path.to_string(),
+            incognito_arg: incognito_arg.to_string(),
+        }
+    }
 
     #[test]
     fn parse_browser_command_keeps_unquoted_windows_path_with_spaces() {
@@ -428,5 +457,36 @@ mod tests {
         let result = prepare_browser_args(r"D:\PortableBrowser\browser.exe", Vec::new(), true);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn safari_only_candidates_do_not_claim_private_browser_support() {
+        let browser = select_detected_private_browser(vec![detected_browser(
+            "Safari",
+            "/Applications/Safari.app/Contents/MacOS/Safari",
+            "",
+        )]);
+
+        assert!(browser.is_none());
+    }
+
+    #[test]
+    fn first_private_capable_candidate_is_selected() {
+        let browser = select_detected_private_browser(vec![
+            detected_browser(
+                "Safari",
+                "/Applications/Safari.app/Contents/MacOS/Safari",
+                "",
+            ),
+            detected_browser(
+                "Chrome",
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                "--incognito",
+            ),
+        ])
+        .expect("Chrome should be selected after unsupported Safari");
+
+        assert_eq!(browser.name, "Chrome");
+        assert_eq!(browser.incognito_arg, "--incognito");
     }
 }
