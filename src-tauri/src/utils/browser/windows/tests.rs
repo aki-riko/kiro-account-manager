@@ -131,13 +131,14 @@ fn live_default_private_capable_browser_is_detected() {
         .find(|browser| browser.path.eq_ignore_ascii_case(&path))
         .unwrap_or_else(|| panic!("default browser should be included: {path}"));
 
-    assert_eq!(browser.incognito_arg, private_arg.unwrap());
-    assert!(browser.command.contains("--incognito"));
+    let private_arg = private_arg.unwrap();
+    assert_eq!(browser.incognito_arg, private_arg);
+    assert!(browser.command.contains(private_arg));
     for arg in expected_args {
         assert!(browser.command.contains(&arg));
     }
     if browser.command.contains("--single-argument") {
-        assert!(browser.command.find("--incognito") < browser.command.find("--single-argument"));
+        assert!(browser.command.find(private_arg) < browser.command.find("--single-argument"));
     }
 }
 
