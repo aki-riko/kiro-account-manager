@@ -6,10 +6,12 @@ import { TFunction } from 'i18next'
 import SectionCard from './SectionCard'
 import SwitchRow from './SwitchRow'
 import { useI18n } from '../../../hooks/useI18n'
+import { resolveBrowserSelectionCommand } from '../../../utils/browserCommand'
 
 interface BrowserInfo {
   name: string;
   path: string;
+  command?: string;
   incognitoArg?: string;
 }
 
@@ -129,7 +131,7 @@ function SettingsGeneral({
   }
 
   const handleSelectBrowser = (browser: BrowserInfo) => {
-    setBrowserPath(`"${browser.path}"`)
+    setBrowserPath(resolveBrowserSelectionCommand(browser))
     setShowBrowserList(false)
   }
 
