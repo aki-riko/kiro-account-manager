@@ -1,16 +1,21 @@
 // 浏览器打开工具
 
-use crate::commands::app_settings_cmd::get_browser_path;
+use crate::commands::app_settings_cmd::get_browser_launch_preferences;
 use serde::Serialize;
+
+const PRIVATE_BROWSER_ARGS: [&str; 3] = ["--incognito", "--inprivate", "-private-window"];
 
 /// 打开浏览器访问指定 URL
 /// 如果用户配置了自定义浏览器路径，则使用自定义浏览器
-/// 否则使用系统默认浏览器
+/// 否则按无痕偏好自动选择受支持的浏览器，或使用系统默认浏览器
 pub fn open_browser(url: &str) -> Result<(), String> {
-    if let Some(browser_path) = get_browser_path() {
-        open_with_custom_browser(&browser_path, url)
-    } else {
-        open_with_default_browser(url)
+    let (browser_path, use_incognito) = get_browser_launch_preferences();
+    match (browser_path, use_incognito) {
+        (Some(browser_path), use_incognito) => {
+            open_with_custom_browser(&browser_path, url, use_incognito)
+        }
+        (None, true) => open_with_detected_private_browser(url),
+        (None, false) => open_with_default_browser(url),
     }
 }
 
@@ -165,16 +170,90 @@ pub fn detect_browsers() -> Vec<DetectedBrowser> {
 /// 使用自定义浏览器打开 URL
 /// `browser_path` 格式: "路径" 参数1 参数2... 或 路径 参数1 参数2...
 /// 例如: "C:\Program Files\Google\Chrome\Application\chrome.exe" --incognito
-fn open_with_custom_browser(browser_path: &str, url: &str) -> Result<(), String> {
-    let (exe_path, mut args) = parse_browser_command(browser_path)?;
+fn open_with_custom_browser(
+    browser_path: &str,
+    url: &str,
+    use_incognito: bool,
+) -> Result<(), String> {
+    let (exe_path, args) = parse_browser_command(browser_path)?;
+    let args = prepare_browser_args(&exe_path, args, use_incognito)?;
+    spawn_browser(&exe_path, args, url)
+}
+
+fn open_with_detected_private_browser(url: &str) -> Result<(), String> {
+    let browser = detect_browsers()
+        .into_iter()
+        .find(|browser| !browser.incognito_arg.trim().is_empty())
+        .ok_or_else(|| {
+            "未找到支持命令行无痕模式的浏览器；请在设置中选择 Chrome、Edge、Firefox 或 Brave，或关闭“使用无痕浏览器”"
+                .to_string()
+        })?;
+
+    spawn_browser(&browser.path, vec![browser.incognito_arg], url)
+}
+
+fn spawn_browser(exe_path: &str, mut args: Vec<String>, url: &str) -> Result<(), String> {
     args.push(url.to_string());
 
-    std::process::Command::new(&exe_path)
+    std::process::Command::new(exe_path)
         .args(&args)
         .spawn()
-        .map_err(|e| format!("打开自定义浏览器失败: {e} (路径: {exe_path})"))?;
+        .map_err(|e| format!("打开浏览器失败: {e} (路径: {exe_path})"))?;
 
     Ok(())
+}
+
+fn prepare_browser_args(
+    exe_path: &str,
+    args: Vec<String>,
+    use_incognito: bool,
+) -> Result<Vec<String>, String> {
+    let existing_private_arg = args.iter().find(|arg| is_private_arg(arg)).cloned();
+    let mut normalized_args = args
+        .into_iter()
+        .filter(|arg| !is_private_arg(arg))
+        .collect::<Vec<_>>();
+
+    if use_incognito {
+        let private_arg = private_arg_for_executable(exe_path)
+            .map(str::to_string)
+            .or(existing_private_arg)
+            .ok_or_else(|| {
+                format!(
+                    "当前浏览器不支持自动无痕启动: {exe_path}；请更换浏览器或关闭“使用无痕浏览器”"
+                )
+            })?;
+        normalized_args.push(private_arg);
+    }
+
+    Ok(normalized_args)
+}
+
+fn is_private_arg(arg: &str) -> bool {
+    PRIVATE_BROWSER_ARGS
+        .iter()
+        .any(|candidate| arg.eq_ignore_ascii_case(candidate))
+}
+
+fn private_arg_for_executable(exe_path: &str) -> Option<&'static str> {
+    let file_name = exe_path
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(exe_path)
+        .to_ascii_lowercase();
+
+    if file_name.contains("firefox") {
+        Some("-private-window")
+    } else if file_name.contains("msedge") || file_name.contains("microsoft-edge") {
+        Some("--inprivate")
+    } else if file_name.contains("chrome")
+        || file_name.contains("chromium")
+        || file_name.contains("brave")
+    {
+        Some("--incognito")
+    } else {
+        None
+    }
 }
 
 fn parse_browser_command(browser_path: &str) -> Result<(String, Vec<String>), String> {
@@ -243,7 +322,7 @@ pub async fn detect_installed_browsers() -> Vec<DetectedBrowser> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_browser_command;
+    use super::{parse_browser_command, prepare_browser_args, private_arg_for_executable};
 
     #[test]
     fn parse_browser_command_keeps_unquoted_windows_path_with_spaces() {
@@ -284,5 +363,70 @@ mod tests {
             r"C:\Program Files\Google\Chrome\Application\chrome.exe"
         );
         assert_eq!(args, vec!["--incognito"]);
+    }
+
+    #[test]
+    fn private_arg_matches_supported_browser_families() {
+        assert_eq!(
+            private_arg_for_executable(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+            Some("--incognito")
+        );
+        assert_eq!(
+            private_arg_for_executable(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+            Some("--inprivate")
+        );
+        assert_eq!(
+            private_arg_for_executable(r"C:\Program Files\Mozilla Firefox\firefox.exe"),
+            Some("-private-window")
+        );
+    }
+
+    #[test]
+    fn enabling_incognito_replaces_stale_private_flags_without_duplication() {
+        let args = prepare_browser_args(
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            vec![
+                "--profile-directory=Default".to_string(),
+                "--inprivate".to_string(),
+            ],
+            true,
+        )
+        .expect("Chrome should support incognito mode");
+
+        assert_eq!(args, vec!["--profile-directory=Default", "--incognito"]);
+    }
+
+    #[test]
+    fn disabling_incognito_removes_known_private_flags() {
+        let args = prepare_browser_args(
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            vec![
+                "--incognito".to_string(),
+                "--profile-directory=Default".to_string(),
+            ],
+            false,
+        )
+        .expect("normal browser launch should be supported");
+
+        assert_eq!(args, vec!["--profile-directory=Default"]);
+    }
+
+    #[test]
+    fn explicit_private_flag_supports_unknown_custom_browser() {
+        let args = prepare_browser_args(
+            r"D:\PortableBrowser\browser.exe",
+            vec!["--incognito".to_string()],
+            true,
+        )
+        .expect("explicit private flag should be preserved");
+
+        assert_eq!(args, vec!["--incognito"]);
+    }
+
+    #[test]
+    fn unknown_browser_without_private_flag_is_rejected_when_enabled() {
+        let result = prepare_browser_args(r"D:\PortableBrowser\browser.exe", Vec::new(), true);
+
+        assert!(result.is_err());
     }
 }

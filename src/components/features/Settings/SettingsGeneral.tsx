@@ -128,11 +128,8 @@ function SettingsGeneral({
     copiedTimerRef.current = setTimeout(() => setCopiedField(null), 1500)
   }
 
-  const handleSelectBrowser = (browser: BrowserInfo, useIncognito = true) => {
-    const path = useIncognito && browser.incognitoArg
-      ? `"${browser.path}" ${browser.incognitoArg}`
-      : `"${browser.path}"`
-    setBrowserPath(path)
+  const handleSelectBrowser = (browser: BrowserInfo) => {
+    setBrowserPath(`"${browser.path}"`)
     setShowBrowserList(false)
   }
 
@@ -284,7 +281,7 @@ function SettingsGeneral({
                     <div className="text-xs font-medium">{browser.name}</div>
                     <div className="text-[10px] text-muted-foreground truncate">{browser.path}</div>
                   </div>
-                  <button onClick={() => handleSelectBrowser(browser, true)} className="ml-2 px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                  <button onClick={() => handleSelectBrowser(browser)} className="ml-2 px-2 py-1 text-[10px] rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
                     {t('settings.selectBrowser')}
                   </button>
                 </div>

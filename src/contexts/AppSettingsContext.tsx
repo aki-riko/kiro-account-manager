@@ -8,6 +8,7 @@ export interface AppSettings {
   autoRefresh: boolean;
   autoRefreshInterval: number;
   browserPath: string;
+  browserIncognito: boolean;
   privacyMode: boolean;
   autoSwitchEnabled: boolean;
   autoSwitchThreshold: number;
@@ -49,6 +50,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoRefresh: true,
   autoRefreshInterval: 50,
   browserPath: '',
+  browserIncognito: true,
   privacyMode: true,
   autoSwitchEnabled: false,
   autoSwitchThreshold: 1,

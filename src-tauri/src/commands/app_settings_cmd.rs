@@ -13,6 +13,8 @@ pub struct AppSettings {
     pub auto_refresh: Option<bool>,
     pub auto_refresh_interval: Option<i32>,
     pub browser_path: Option<String>,
+    // OAuth 登录是否使用浏览器无痕窗口；旧配置缺失时按 true 处理
+    pub browser_incognito: Option<bool>,
     // 隐私模式：脱敏显示邮箱
     pub privacy_mode: Option<bool>,
     // 自动换号设置
@@ -60,6 +62,7 @@ impl Default for AppSettings {
             auto_refresh: Some(true),
             auto_refresh_interval: Some(50),
             browser_path: None,
+            browser_incognito: Some(true),
             privacy_mode: Some(true), // 默认开启
             // 自动换号默认值
             auto_switch_enabled: Some(false),
@@ -106,6 +109,7 @@ impl AppSettings {
         apply_if_some!(auto_refresh);
         apply_if_some!(auto_refresh_interval);
         apply_if_some!(browser_path);
+        apply_if_some!(browser_incognito);
         apply_if_some!(privacy_mode);
         apply_if_some!(auto_switch_enabled);
         apply_if_some!(auto_switch_threshold);
@@ -174,7 +178,15 @@ pub fn get_app_settings_inner() -> Result<AppSettings, String> {
         return Ok(default_settings);
     }
     let content = std::fs::read_to_string(&path).map_err(|e| format!("读取设置失败: {e}"))?;
-    serde_json::from_str(&content).map_err(|e| format!("解析设置失败: {e}"))
+    let settings = serde_json::from_str(&content).map_err(|e| format!("解析设置失败: {e}"))?;
+    Ok(normalize_app_settings(settings))
+}
+
+fn normalize_app_settings(mut settings: AppSettings) -> AppSettings {
+    if settings.browser_incognito.is_none() {
+        settings.browser_incognito = Some(true);
+    }
+    settings
 }
 
 pub fn save_settings_to_file(settings: &AppSettings) -> Result<(), String> {
@@ -202,12 +214,12 @@ pub async fn save_app_settings(settings: AppSettings) -> Result<(), String> {
     run_blocking_io(move || save_app_settings_inner(settings)).await
 }
 
-/// 获取自定义浏览器路径（供打开浏览器时使用）
-pub fn get_browser_path() -> Option<String> {
-    get_app_settings_inner()
-        .ok()
-        .and_then(|s| s.browser_path)
-        .filter(|p| !p.is_empty())
+/// 获取浏览器启动偏好。读取失败或旧配置缺字段时默认启用无痕模式。
+pub fn get_browser_launch_preferences() -> (Option<String>, bool) {
+    let settings = get_app_settings_inner().unwrap_or_default();
+    let browser_path = settings.browser_path.filter(|path| !path.trim().is_empty());
+    let browser_incognito = settings.browser_incognito.unwrap_or(true);
+    (browser_path, browser_incognito)
 }
 
 // ============================================================
@@ -295,10 +307,9 @@ pub async fn get_custom_kiro_path() -> Result<Option<String>, String> {
 pub async fn set_custom_kiro_path(path: String) -> Result<(), String> {
     run_blocking_io(move || {
         let normalized = crate::kiro::executable::validate_custom_kiro_path(&path)?;
-        save_app_settings_inner(AppSettings {
-            custom_kiro_path: Some(normalized.to_string_lossy().to_string()),
-            ..Default::default()
-        })
+        let mut settings = get_app_settings_inner().unwrap_or_default();
+        settings.custom_kiro_path = Some(normalized.to_string_lossy().to_string());
+        save_settings_to_file(&settings)
     })
     .await
 }
@@ -306,10 +317,39 @@ pub async fn set_custom_kiro_path(path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn clear_custom_kiro_path() -> Result<(), String> {
     run_blocking_io(|| {
-        save_app_settings_inner(AppSettings {
-            custom_kiro_path: Some(String::new()),
-            ..Default::default()
-        })
+        let mut settings = get_app_settings_inner().unwrap_or_default();
+        settings.custom_kiro_path = Some(String::new());
+        save_settings_to_file(&settings)
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_app_settings, AppSettings};
+
+    #[test]
+    fn browser_incognito_defaults_to_enabled() {
+        assert_eq!(AppSettings::default().browser_incognito, Some(true));
+    }
+
+    #[test]
+    fn legacy_settings_without_browser_incognito_are_normalized_to_enabled() {
+        let legacy: AppSettings = serde_json::from_str(r#"{"browserPath":null}"#)
+            .expect("legacy settings should deserialize");
+
+        assert_eq!(legacy.browser_incognito, None);
+        assert_eq!(normalize_app_settings(legacy).browser_incognito, Some(true));
+    }
+
+    #[test]
+    fn explicit_browser_incognito_preference_is_preserved() {
+        let settings: AppSettings = serde_json::from_str(r#"{"browserIncognito":false}"#)
+            .expect("settings should deserialize");
+
+        assert_eq!(
+            normalize_app_settings(settings).browser_incognito,
+            Some(false)
+        );
+    }
 }
