@@ -60,6 +60,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
       - name: Run frontend tests
         run: bun test
 
@@ -70,7 +73,7 @@ jobs:
         run: bun run build
 
       - name: Run Rust tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --bin kiro-account-manager
+        run: cargo test --manifest-path src-tauri/Cargo.toml
 
   build:
     name: Build ${{ matrix.display_name }}
