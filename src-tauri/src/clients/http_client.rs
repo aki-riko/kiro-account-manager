@@ -444,7 +444,7 @@ fn resolve_app_proxy_url() -> Option<String> {
             // 代理已禁用（生产环境静默）
             None
         }
-        "followKiro" | _ => {
+        _ => {
             // 优先使用 Kiro IDE 配置的代理
             if let Some(proxy) = get_proxy_from_kiro_settings() {
                 log::debug!("[HttpClient] 使用 Kiro IDE 配置的代理: {}", proxy);

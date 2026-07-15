@@ -1,9 +1,9 @@
-/// Token 估算模块
-///
-/// 由于 Kiro IDE 的响应中不包含实际的 token 统计信息，
-/// 我们使用与 Kiro IDE 相同的估算算法来计算 token 数量。
-///
-/// 参考：Kiro IDE extension.js 中的 token-estimator 模块
+//! Token 估算模块
+//!
+//! 由于 Kiro IDE 的响应中不包含实际的 token 统计信息，
+//! 我们使用与 Kiro IDE 相同的估算算法来计算 token 数量。
+//!
+//! 参考：Kiro IDE extension.js 中的 token-estimator 模块
 
 /// 估算文本的 token 数量（Claude 模型）
 ///

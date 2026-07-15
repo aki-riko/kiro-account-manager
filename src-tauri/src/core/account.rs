@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 // 自定义反序列化：处理 tag_links 的 null 值
@@ -651,11 +651,11 @@ impl AccountStore {
         data_dir.join(".kiro-account-manager").join("accounts.json")
     }
 
-    fn backup_path_for(path: &PathBuf) -> PathBuf {
+    fn backup_path_for(path: &Path) -> PathBuf {
         path.with_extension("json.bak")
     }
 
-    fn backup_candidates_for(path: &PathBuf) -> Vec<PathBuf> {
+    fn backup_candidates_for(path: &Path) -> Vec<PathBuf> {
         let mut candidates = Vec::new();
         let latest_backup = Self::backup_path_for(path);
         if latest_backup.exists() {
@@ -690,12 +690,12 @@ impl AccountStore {
         candidates
     }
 
-    fn parse_accounts_json(path: &PathBuf, content: &str) -> Result<Vec<Account>, String> {
+    fn parse_accounts_json(path: &Path, content: &str) -> Result<Vec<Account>, String> {
         serde_json::from_str::<Vec<Account>>(content)
             .map_err(|e| format!("账号文件解析失败: {}; 错误: {e}", path.display()))
     }
 
-    fn load_backup_or_panic(path: &PathBuf, original_error: String) -> Vec<Account> {
+    fn load_backup_or_panic(path: &Path, original_error: String) -> Vec<Account> {
         let mut backup_errors = Vec::new();
         for backup_path in Self::backup_candidates_for(path) {
             match std::fs::read_to_string(&backup_path)

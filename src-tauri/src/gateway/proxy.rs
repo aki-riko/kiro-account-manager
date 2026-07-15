@@ -683,16 +683,22 @@ async fn get_model_max_input_tokens(model_id: &str) -> usize {
     let model_lower = model_id.to_lowercase();
 
     // 根据模型 ID 返回对应的 token 限制
-    if model_lower == "auto" {
-        1_000_000 // auto 模型支持 1M tokens
-    } else if model_lower.contains("opus-4.8") || model_lower.contains("opus-4-8") {
-        1_000_000 // Claude Opus 4.7: 1M tokens
-    } else if model_lower.contains("opus-4.7") || model_lower.contains("opus-4-7") {
-        1_000_000 // Claude Opus 4.7: 1M tokens
-    } else if model_lower.contains("opus-4.6") || model_lower.contains("opus-4-6") {
-        1_000_000 // Claude Opus 4.6: 1M tokens
-    } else if model_lower.contains("sonnet-4.6") || model_lower.contains("sonnet-4-6") {
-        1_000_000 // Claude Sonnet 4.6: 1M tokens
+    let supports_million_tokens = model_lower == "auto"
+        || [
+            "opus-4.8",
+            "opus-4-8",
+            "opus-4.7",
+            "opus-4-7",
+            "opus-4.6",
+            "opus-4-6",
+            "sonnet-4.6",
+            "sonnet-4-6",
+        ]
+        .iter()
+        .any(|pattern| model_lower.contains(pattern));
+
+    if supports_million_tokens {
+        1_000_000
     } else if model_lower.contains("qwen") {
         256_000 // Qwen3 Coder Next: 256k tokens
     } else if model_lower.contains("llama") || model_lower.contains("deepseek") {
@@ -3206,7 +3212,6 @@ fn persist_account_profile(
 }
 /// 根据账号 provider 返回默认的 profileArn
 /// BuilderId 账号和 Social 账号（Github/Google）使用不同的 profileArn
-
 fn format_managed_upstream_source(config: &GatewayConfig, account: &Account) -> String {
     let account_label = account
         .email

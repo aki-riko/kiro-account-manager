@@ -1,7 +1,7 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[cfg(target_os = "windows")]
-use std::{os::windows::ffi::OsStrExt, path::Path};
+use std::os::windows::ffi::OsStrExt;
 
 #[cfg(target_os = "windows")]
 const KIRO_EXECUTABLE_NAME: &str = "Kiro.exe";
@@ -126,7 +126,7 @@ fn push_unique(paths: &mut Vec<PathBuf>, candidate: Option<PathBuf>) {
     paths.push(candidate);
 }
 
-fn is_kiro_install(path: &PathBuf) -> bool {
+fn is_kiro_install(path: &Path) -> bool {
     #[cfg(target_os = "macos")]
     {
         return path.is_dir();
@@ -150,13 +150,16 @@ fn discover_windows_kiro_executable() -> Option<PathBuf> {
         local_app_data,
         Vec::new(),
     );
-    if let Some(executable) = primary_candidates.into_iter().find(is_kiro_install) {
+    if let Some(executable) = primary_candidates
+        .into_iter()
+        .find(|path| is_kiro_install(path))
+    {
         return Some(executable);
     }
     fixed_windows_drive_roots()
         .into_iter()
         .map(|root| root.join("Kiro").join(KIRO_EXECUTABLE_NAME))
-        .find(is_kiro_install)
+        .find(|path| is_kiro_install(path))
 }
 
 #[cfg(target_os = "windows")]

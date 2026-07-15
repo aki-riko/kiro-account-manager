@@ -91,7 +91,7 @@ impl SessionStorage {
         }
 
         // 按修改时间倒序排序（最近使用的在前）
-        workspace_with_time.sort_by(|a, b| b.1.cmp(&a.1));
+        workspace_with_time.sort_by_key(|entry| std::cmp::Reverse(entry.1));
 
         // 只返回名称
         workspaces = workspace_with_time
@@ -147,7 +147,7 @@ impl SessionStorage {
         }
 
         // 按修改时间倒序排序
-        sessions.sort_by(|a, b| b.modified_at.unwrap_or(0).cmp(&a.modified_at.unwrap_or(0)));
+        sessions.sort_by_key(|session| std::cmp::Reverse(session.modified_at.unwrap_or(0)));
 
         Ok(sessions)
     }

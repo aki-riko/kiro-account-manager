@@ -286,15 +286,21 @@ fn test_account_selection_balanced() {
 fn test_get_model_max_input_tokens() {
     let get_max_tokens = |model_id: &str| -> usize {
         let model_lower = model_id.to_lowercase();
-        if model_lower == "auto" {
-            1_000_000
-        } else if model_lower.contains("opus-4.8") || model_lower.contains("opus-4-8") {
-            1_000_000
-        } else if model_lower.contains("opus-4.7") || model_lower.contains("opus-4-7") {
-            1_000_000
-        } else if model_lower.contains("opus-4.6") || model_lower.contains("opus-4-6") {
-            1_000_000
-        } else if model_lower.contains("sonnet-4.6") || model_lower.contains("sonnet-4-6") {
+        let supports_million_tokens = model_lower == "auto"
+            || [
+                "opus-4.8",
+                "opus-4-8",
+                "opus-4.7",
+                "opus-4-7",
+                "opus-4.6",
+                "opus-4-6",
+                "sonnet-4.6",
+                "sonnet-4-6",
+            ]
+            .iter()
+            .any(|pattern| model_lower.contains(pattern));
+
+        if supports_million_tokens {
             1_000_000
         } else if model_lower.contains("qwen") {
             256_000

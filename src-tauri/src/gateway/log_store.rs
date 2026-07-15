@@ -147,7 +147,7 @@ impl LogStore {
         }
 
         let mut stats: Vec<ModelStat> = model_map.into_values().collect();
-        stats.sort_by(|a, b| b.count.cmp(&a.count));
+        stats.sort_by_key(|stat| std::cmp::Reverse(stat.count));
         stats
     }
 
@@ -177,7 +177,7 @@ impl LogStore {
         }
 
         let mut stats: Vec<EndpointStat> = endpoint_map.into_values().collect();
-        stats.sort_by(|a, b| b.count.cmp(&a.count));
+        stats.sort_by_key(|stat| std::cmp::Reverse(stat.count));
         stats
     }
 }

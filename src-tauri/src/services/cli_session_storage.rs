@@ -67,7 +67,7 @@ impl CliSessionStorage {
         }
 
         // 按修改时间倒序
-        json_files.sort_by(|a, b| b.1.cmp(&a.1));
+        json_files.sort_by_key(|entry| std::cmp::Reverse(entry.1));
 
         for (path, _) in json_files {
             match self.parse_session_summary(&path) {
