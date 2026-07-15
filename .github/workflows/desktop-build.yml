@@ -49,6 +49,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.95.0
+          components: rustfmt
 
       - name: Restore Rust cache
         uses: swatinem/rust-cache@v2
