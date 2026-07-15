@@ -32,9 +32,7 @@ pub async fn search_cli_sessions(
     query: String,
     storage: State<'_, CliSessionStorage>,
 ) -> Result<Vec<CliSessionSummary>, String> {
-    storage
-        .search_sessions(&query)
-        .map_err(|e| e.to_string())
+    storage.search_sessions(&query).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -48,7 +46,9 @@ pub async fn export_cli_session(
             .export_session_markdown(&session_id)
             .map_err(|e| e.to_string()),
         "json" => {
-            let session = storage.load_session(&session_id).map_err(|e| e.to_string())?;
+            let session = storage
+                .load_session(&session_id)
+                .map_err(|e| e.to_string())?;
             serde_json::to_string_pretty(&session).map_err(|e| e.to_string())
         }
         _ => Err("Invalid format, use 'markdown' or 'json'".to_string()),

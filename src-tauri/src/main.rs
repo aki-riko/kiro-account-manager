@@ -29,13 +29,12 @@ use utils::browser::detect_installed_browsers;
 
 //账号管理页面
 use commands::account_cmd::{
-    add_account_by_external_idp, add_account_by_idc, add_account_by_social,
-    add_local_kiro_account, check_all_tokens_status, check_token_status, delete_account,
-    delete_account_remote, delete_accounts, export_accounts, get_account_usage, get_accounts,
-    get_accounts_by_group, get_accounts_by_tag, get_available_accounts, get_usage_limits,
-    import_accounts, list_available_models, refresh_all_expiring_tokens, refresh_token,
-    set_overage_status, sync_account,
-    update_account, verify_account,
+    add_account_by_external_idp, add_account_by_idc, add_account_by_social, add_local_kiro_account,
+    check_all_tokens_status, check_token_status, delete_account, delete_account_remote,
+    delete_accounts, export_accounts, get_account_usage, get_accounts, get_accounts_by_group,
+    get_accounts_by_tag, get_available_accounts, get_usage_limits, import_accounts,
+    list_available_models, refresh_all_expiring_tokens, refresh_token, set_overage_status,
+    sync_account, update_account, verify_account,
 };
 //应用设置
 use commands::app_data_cmd::{get_app_data_dir, open_app_data_dir};
@@ -94,8 +93,8 @@ use commands::kiro_cli_cmd::{
     read_cli_db_snapshot, rollback_cli_switch, switch_to_cli_account,
 };
 use commands::ksk_ide_cmd::{
-    get_ksk_ide_regions, get_ksk_ide_status, recover_ksk_ide_settings,
-    shutdown_ksk_ide_runtime, start_ksk_ide, start_ksk_ide_from_account, stop_ksk_ide,
+    get_ksk_ide_regions, get_ksk_ide_status, recover_ksk_ide_settings, shutdown_ksk_ide_runtime,
+    start_ksk_ide, start_ksk_ide_from_account, stop_ksk_ide,
 };
 //kiroshe
 use commands::kiro_settings_cmd::{
@@ -112,6 +111,10 @@ use commands::mcp_cmd::{
     delete_mcp_server, get_mcp_config, get_mcp_tool_stats, save_mcp_server, toggle_mcp_server,
 };
 
+use commands::cli_session_cmd::{
+    delete_cli_session, export_cli_session, list_cli_sessions, load_cli_session,
+    search_cli_sessions,
+};
 use commands::custom_agents_cmd::{
     create_custom_agent, delete_custom_agent, get_custom_agent, get_custom_agents,
     save_custom_agent,
@@ -120,10 +123,6 @@ use commands::hooks_cmd::{create_hook, delete_hook, get_hook, get_hooks, save_ho
 use commands::session_manager::{
     delete_session, delete_workspace, export_session, list_sessions, list_workspaces, load_session,
     search_sessions,
-};
-use commands::cli_session_cmd::{
-    delete_cli_session, export_cli_session, list_cli_sessions, load_cli_session,
-    search_cli_sessions,
 };
 
 //代理
@@ -442,7 +441,10 @@ fn main() {
             ksk_ide: tokio::sync::Mutex::new(None),
         })
         .manage(SessionStorage::new().expect("Failed to initialize SessionStorage"))
-        .manage(services::cli_session_storage::CliSessionStorage::new().expect("Failed to initialize CliSessionStorage"))
+        .manage(
+            services::cli_session_storage::CliSessionStorage::new()
+                .expect("Failed to initialize CliSessionStorage"),
+        )
         .setup(setup_app)
         .invoke_handler(tauri::generate_handler![
             // 账号命令

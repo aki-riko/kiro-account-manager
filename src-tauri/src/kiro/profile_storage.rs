@@ -183,8 +183,8 @@ pub fn remove_profile() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        profile_path_for_platform, restore_profile_at, snapshot_profile_at,
-        write_profile_bytes_at, KiroIdeProfile,
+        profile_path_for_platform, restore_profile_at, snapshot_profile_at, write_profile_bytes_at,
+        KiroIdeProfile,
     };
     use std::path::Path;
 
@@ -228,10 +228,8 @@ mod tests {
 
     #[test]
     fn profile_snapshot_restores_exact_previous_bytes() {
-        let dir = std::env::temp_dir().join(format!(
-            "kiro-profile-transaction-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("kiro-profile-transaction-{}", uuid::Uuid::new_v4()));
         let path = dir.join("profile.json");
         let previous = br#"{ "arn": "old", "name": "Old Profile" }"#;
         let replacement = br#"{ "arn": "new", "name": "New Profile" }"#;

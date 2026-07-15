@@ -44,8 +44,8 @@ async fn installed_kiro_lifecycle_with_fake_ksk() {
         fake_ksk,
         ChronoDuration::hours(1),
     )
-        .await
-        .expect("start installed Kiro with isolated lifecycle fixture");
+    .await
+    .expect("start installed Kiro with isolated lifecycle fixture");
 
     let verification = verify_running_lifecycle(&mut runtime, fake_ksk, &mut observations).await;
     let process_stop_result = runtime.stop_process(PROCESS_STOP_TIMEOUT);

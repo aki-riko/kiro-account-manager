@@ -277,9 +277,11 @@ pub async fn resolve_available_profile_arn(
     use crate::clients::kiro_client::KiroClient;
 
     let client = KiroClient::new()?;
-    Ok(resolve_account_profile_with_client(account, access_token, &client)
-        .await?
-        .map(|profile| profile.arn))
+    Ok(
+        resolve_account_profile_with_client(account, access_token, &client)
+            .await?
+            .map(|profile| profile.arn),
+    )
 }
 
 /// 获取账号可用模型列表（直接使用 KiroClient，无需重复实现）
@@ -293,7 +295,9 @@ pub async fn fetch_all_available_models(
 
     let resolved_profile =
         resolve_account_profile_with_client(account, access_token, &client).await?;
-    let resolved_profile_arn = resolved_profile.as_ref().map(|profile| profile.arn.as_str());
+    let resolved_profile_arn = resolved_profile
+        .as_ref()
+        .map(|profile| profile.arn.as_str());
     let mut resolved_account = account.clone();
     if let Some(profile) = resolved_profile.as_ref() {
         apply_resolved_profile(&mut resolved_account, profile);

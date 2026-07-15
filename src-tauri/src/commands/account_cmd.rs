@@ -15,11 +15,10 @@ use crate::commands::account_models::{
 use crate::commands::common::{
     account_machine_id_or_new, apply_resolved_profile, calc_expires_at, ensure_account_machine_id,
     extract_user_info, find_account_by_id, find_existing_account_idx, generate_account_machine_id,
-    get_enterprise_usage, get_usage_by_account,
-    get_usage_by_provider_with_machine_id, is_auth_error_message, is_token_expired,
-    is_token_expiring_soon, lock_store, refresh_token_by_provider,
-    resolve_external_idp_import_profile_with_client, save_store, token_needs_refresh,
-    update_account_status, RefreshResult,
+    get_enterprise_usage, get_usage_by_account, get_usage_by_provider_with_machine_id,
+    is_auth_error_message, is_token_expired, is_token_expiring_soon, lock_store,
+    refresh_token_by_provider, resolve_external_idp_import_profile_with_client, save_store,
+    token_needs_refresh, update_account_status, RefreshResult,
 };
 use crate::core::account::{Account, AccountProxyConfig};
 use crate::state::AppState;
@@ -328,7 +327,11 @@ pub async fn get_usage_limits(
             .machine_id
             .as_ref()
             .ok_or("Enterprise account missing machine_id")?;
-        log::info!("[Enterprise] Fetching usage for account {} with machine_id: {}", account.id, machine_id);
+        log::info!(
+            "[Enterprise] Fetching usage for account {} with machine_id: {}",
+            account.id,
+            machine_id
+        );
         get_enterprise_usage(&access_token, machine_id).await
     } else {
         get_usage_by_account(&account, &access_token).await
@@ -394,10 +397,7 @@ pub async fn get_usage_limits(
 /// 只刷新 token，不获取 usage（启动时快速刷新用）
 /// 如果 token 还有 5 分钟以上有效期，跳过刷新直接返回
 #[tauri::command]
-pub async fn refresh_token(
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<Account, String> {
+pub async fn refresh_token(state: State<'_, AppState>, id: String) -> Result<Account, String> {
     refresh_token_inner(&state, &id).await
 }
 
@@ -774,9 +774,7 @@ pub async fn add_account_by_external_idp(
         return Err("External IdP 账号缺少 scopes".to_string());
     }
 
-    let initial_email = access_token
-        .as_deref()
-        .and_then(extract_external_idp_email);
+    let initial_email = access_token.as_deref().and_then(extract_external_idp_email);
     let mut account = Account::new(
         initial_email
             .clone()
@@ -1039,7 +1037,9 @@ pub async fn add_local_kiro_account(
         add_account_by_external_idp(
             state,
             refresh_token,
-            local_token.client_id.ok_or("External IdP 账号缺少 clientId")?,
+            local_token
+                .client_id
+                .ok_or("External IdP 账号缺少 clientId")?,
             local_token.issuer_url,
             local_token.token_endpoint,
             local_token.scopes.ok_or("External IdP 账号缺少 scopes")?,
@@ -1393,8 +1393,10 @@ async fn add_account_by_idc_internal(
             existing.clone()
         } else {
             // 创建新的 Enterprise 账号
-            let mut account =
-                Account::new_enterprise(user_id.clone().unwrap_or_default(), "Kiro Enterprise 账号".to_string());
+            let mut account = Account::new_enterprise(
+                user_id.clone().unwrap_or_default(),
+                "Kiro Enterprise 账号".to_string(),
+            );
             account.access_token = Some(final_access_token);
             account.refresh_token = Some(final_refresh_token);
             account.email = new_email; // 可能是 None

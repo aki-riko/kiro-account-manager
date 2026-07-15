@@ -94,9 +94,8 @@ pub async fn get_kiro_local_token() -> Option<KiroLocalToken> {
                 .is_some_and(|value| value.eq_ignore_ascii_case("ExternalIdp"));
         if is_external {
             if let Ok(Some(profile)) = crate::kiro::profile_storage::read_profile() {
-                token.region = crate::clients::http_client::parse_region_from_profile_arn(Some(
-                    &profile.arn,
-                ));
+                token.region =
+                    crate::clients::http_client::parse_region_from_profile_arn(Some(&profile.arn));
                 token.profile_arn = Some(profile.arn);
                 token.profile_name = Some(profile.name);
             }
@@ -318,16 +317,14 @@ fn build_external_idp_ide_write(
     expires_at: &str,
 ) -> Result<ExternalIdpIdeWrite, String> {
     let client_id = required_switch_value(params.client_id.as_deref(), "clientId")?;
-    let token_endpoint =
-        required_switch_value(params.token_endpoint.as_deref(), "tokenEndpoint")?;
+    let token_endpoint = required_switch_value(params.token_endpoint.as_deref(), "tokenEndpoint")?;
     let issuer_url = required_switch_value(params.issuer_url.as_deref(), "issuerUrl")?;
     let scopes = required_switch_value(params.scopes.as_deref(), "scopes")?;
     let profile_arn = required_switch_value(params.profile_arn.as_deref(), "profileArn")?;
     let profile_name = required_switch_value(params.profile_name.as_deref(), "profileName")?;
-    let profile_region = crate::clients::http_client::parse_region_from_profile_arn(Some(
-        profile_arn,
-    ))
-    .ok_or("External IdP profileArn 缺少受支持的 region")?;
+    let profile_region =
+        crate::clients::http_client::parse_region_from_profile_arn(Some(profile_arn))
+            .ok_or("External IdP profileArn 缺少受支持的 region")?;
     if params
         .region
         .as_deref()
@@ -548,7 +545,7 @@ pub async fn switch_kiro_account(
                         .filter(|s| !s.trim().is_empty())
                         .map(|s| s.as_str())
                         .unwrap_or_else(|| provider.as_str());
-                    
+
                     log::warn!(
                         "[switch_kiro_account] {} 账号 [{}] 的 clientSecret 缺少 REFRESH_TOKEN grant，\
                          IDE token 过期后 refresh 会被 AWS 拒。\
@@ -986,9 +983,7 @@ pub async fn check_kiro_config_files(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_external_idp_ide_write, normalize_switch_expires_at, SwitchAccountParams,
-    };
+    use super::{build_external_idp_ide_write, normalize_switch_expires_at, SwitchAccountParams};
 
     fn external_params() -> SwitchAccountParams {
         SwitchAccountParams {
@@ -997,8 +992,7 @@ mod tests {
             provider: "ExternalIdp".to_string(),
             auth_method: Some("external_idp".to_string()),
             profile_arn: Some(
-                "arn:aws:codewhisperer:eu-central-1:123456789012:profile/external"
-                    .to_string(),
+                "arn:aws:codewhisperer:eu-central-1:123456789012:profile/external".to_string(),
             ),
             profile_name: Some("Azure Profile".to_string()),
             token_endpoint: Some("token-endpoint-fixture".to_string()),
@@ -1017,8 +1011,7 @@ mod tests {
 
     #[test]
     fn external_idp_token_uses_official_split_profile_shape() {
-        let write =
-            build_external_idp_ide_write(&external_params(), "expires-fixture").unwrap();
+        let write = build_external_idp_ide_write(&external_params(), "expires-fixture").unwrap();
 
         assert_eq!(write.token_data["authMethod"], "external_idp");
         assert_eq!(write.token_data["provider"], "ExternalIdp");

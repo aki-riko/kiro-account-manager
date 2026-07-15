@@ -537,7 +537,6 @@ pub struct OpenAIChatRequest {
     pub stream_options: Option<StreamOptions>,
 }
 
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct OpenAIMessage {
     pub role: String,
@@ -734,7 +733,7 @@ pub struct OpenAIDeltaToolCall {
 pub struct AudioOutput {
     pub id: String,
     pub expires_at: i64,
-    pub data: String,        // base64 编码的音频数据
+    pub data: String, // base64 编码的音频数据
     pub transcript: String,
 }
 

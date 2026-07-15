@@ -387,17 +387,16 @@ pub async fn switch_to_cli_account(
                 // External IdP 并发刷新时，旧结果会被拒绝，此处不能再用旧结果覆盖 CLI。
                 let persisted_account = {
                     let mut store = lock_account_store(&state.store)?;
-                    let (persisted, applied) = if let Some(a) =
-                        store.accounts.iter_mut().find(|a| a.id == account_id)
-                    {
-                        let applied = crate::commands::common::apply_refreshed_account_tokens(
-                            a,
-                            &refresh_result,
-                        );
-                        (a.clone(), applied)
-                    } else {
-                        return Err(format!("账号不存在: {account_id}"));
-                    };
+                    let (persisted, applied) =
+                        if let Some(a) = store.accounts.iter_mut().find(|a| a.id == account_id) {
+                            let applied = crate::commands::common::apply_refreshed_account_tokens(
+                                a,
+                                &refresh_result,
+                            );
+                            (a.clone(), applied)
+                        } else {
+                            return Err(format!("账号不存在: {account_id}"));
+                        };
                     if applied {
                         crate::commands::common::save_store(&store)?;
                     }

@@ -239,7 +239,10 @@ impl LoadBalancer {
             .filter(|acc| {
                 // 检查账号是否启用（数据库持久化状态）
                 if !acc.enabled {
-                    log::debug!("[LoadBalancer] 跳过已禁用的账号: {} (enabled=false)", acc.label);
+                    log::debug!(
+                        "[LoadBalancer] 跳过已禁用的账号: {} (enabled=false)",
+                        acc.label
+                    );
                     return false;
                 }
 
@@ -440,8 +443,8 @@ impl LoadBalancer {
 
     /// 持久化封禁状态到数据库
     async fn persist_banned_status(account_id: &str) -> Result<(), String> {
-        use crate::core::account::AccountStore;
         use crate::commands::common::update_account_status;
+        use crate::core::account::AccountStore;
 
         let mut store = AccountStore::new();
 
@@ -473,7 +476,10 @@ impl LoadBalancer {
         // 保存到文件
         store.try_save_to_file()?;
 
-        log::info!("[LoadBalancer] 账号 {} 的封禁状态已持久化到数据库", account_id);
+        log::info!(
+            "[LoadBalancer] 账号 {} 的封禁状态已持久化到数据库",
+            account_id
+        );
         Ok(())
     }
 

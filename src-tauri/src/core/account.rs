@@ -408,8 +408,8 @@ fn infer_auth_method(account: &Account) -> Option<String> {
 fn normalize_account(account: &mut Account) -> bool {
     let mut changed = false;
 
-    let has_external_idp_metadata = has_value(account.token_endpoint.as_ref())
-        || has_value(account.issuer_url.as_ref());
+    let has_external_idp_metadata =
+        has_value(account.token_endpoint.as_ref()) || has_value(account.issuer_url.as_ref());
     if account.is_external_idp() || has_external_idp_metadata {
         if account.auth_method.as_deref() != Some("external_idp") {
             account.auth_method = Some("external_idp".to_string());
@@ -897,7 +897,9 @@ impl AccountStore {
                         } else {
                             "BuilderId".to_string()
                         });
-                    } else if account.provider.is_none() && account.auth_method.as_deref() == Some("social") {
+                    } else if account.provider.is_none()
+                        && account.auth_method.as_deref() == Some("social")
+                    {
                         // Social 账号但 provider 为 null，根据邮箱判断
                         if let Some(ref email) = account.email {
                             if email.contains("gmail") {
@@ -1399,10 +1401,7 @@ mod tests {
         assert!(changed);
         assert_eq!(normalized.len(), 1);
         assert!(normalized[0].is_external_idp());
-        assert_eq!(
-            normalized[0].auth_method.as_deref(),
-            Some("external_idp")
-        );
+        assert_eq!(normalized[0].auth_method.as_deref(), Some("external_idp"));
         assert_eq!(normalized[0].provider.as_deref(), Some("ExternalIdp"));
         assert_eq!(
             normalized[0].token_endpoint.as_deref(),

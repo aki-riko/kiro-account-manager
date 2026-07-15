@@ -556,4 +556,3 @@ pub async fn test_route_config(
 pub fn get_available_models() -> Vec<String> {
     crate::gateway::get_available_models()
 }
-

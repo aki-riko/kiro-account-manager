@@ -1501,11 +1501,18 @@ pub async fn proxy_handler(
     if matches!(format, ResponseFormat::OpenAI | ResponseFormat::Responses) {
         request.model = super::resolve_model_mapping(&state.config, &request.model);
         if request.model != original_model {
-            log::info!("[模型映射] {} → {} (OpenAI 协议)", original_model, request.model);
+            log::info!(
+                "[模型映射] {} → {} (OpenAI 协议)",
+                original_model,
+                request.model
+            );
         }
     } else {
         // Anthropic Messages 协议客户端直接传 Claude 模型名，不做映射
-        log::debug!("[模型映射] 跳过 Anthropic Messages 协议 (model={})", request.model);
+        log::debug!(
+            "[模型映射] 跳过 Anthropic Messages 协议 (model={})",
+            request.model
+        );
     }
 
     // 添加详细的请求日志（参考 Kiro-account-manager 的日志设计）
@@ -1647,7 +1654,10 @@ pub async fn proxy_handler(
         Err(message) => {
             // 如果是 token refresh 429，尝试换一个账号而不是直接返回错误
             if message.contains("429") || message.to_lowercase().contains("too many requests") {
-                log::warn!("[Gateway] Token 刷新被限流，尝试换账号: {}", sanitize_error(&message));
+                log::warn!(
+                    "[Gateway] Token 刷新被限流，尝试换账号: {}",
+                    sanitize_error(&message)
+                );
                 match resolve_upstream_credentials(&state.config, &state).await {
                     Ok(creds) => creds,
                     Err(retry_message) => {
@@ -1892,7 +1902,8 @@ pub async fn proxy_handler(
                 .count(),
             _ => 0,
         }
-    }.max(1); // 至少假设有1个账号
+    }
+    .max(1); // 至少假设有1个账号
 
     log::info!(
         "[Gateway] 开始请求，可用账号数: {}",
@@ -1909,7 +1920,10 @@ pub async fn proxy_handler(
 
             // 如果有可重试错误（429/402/401），等待后重试
             if let Some((status, _, _, _)) = &last_retriable_error {
-                if *status == StatusCode::TOO_MANY_REQUESTS || *status == StatusCode::PAYMENT_REQUIRED || *status == StatusCode::UNAUTHORIZED {
+                if *status == StatusCode::TOO_MANY_REQUESTS
+                    || *status == StatusCode::PAYMENT_REQUIRED
+                    || *status == StatusCode::UNAUTHORIZED
+                {
                     let wait_seconds = 5u64 * retry_round as u64; // 每轮等待时间递增
                     log::warn!(
                         "[Gateway] 所有账号都返回 {} 错误，等{} 秒后重试 (第{} 轮)",
@@ -1928,10 +1942,7 @@ pub async fn proxy_handler(
             // 如果连续多次认证失败（非429/402/401），可能所有账号都不可用
             consecutive_auth_failures += 1;
             if consecutive_auth_failures >= MAX_AUTH_FAILURES {
-                log::error!(
-                    "[Gateway] 连续 {} 轮认证失败，停止重试",
-                    MAX_AUTH_FAILURES
-                );
+                log::error!("[Gateway] 连续 {} 轮认证失败，停止重试", MAX_AUTH_FAILURES);
 
                 // 如果有保存的错误详情，透传；否则返回通用认证错误
                 if let Some((status, error_type, message, response_body)) = last_retriable_error {
@@ -2669,19 +2680,28 @@ async fn call_generate_assistant_response<T: serde::Serialize + ?Sized>(
 
         // 402 配额不足错误不重试，直接返回让外层切换账号
         if mapped_status == StatusCode::PAYMENT_REQUIRED {
-            log::warn!("[网关] 上游 402 配额不足，type={}，交给外层切换账号", error_type);
+            log::warn!(
+                "[网关] 上游 402 配额不足，type={}，交给外层切换账号",
+                error_type
+            );
             return Err((mapped_status, error_type, message, Some(body)));
         }
 
         // 429 限流错误不重试，直接返回让外层切换账号
         if mapped_status == StatusCode::TOO_MANY_REQUESTS {
-            log::warn!("[网关] 上游 429 限流，type={}，交给外层切换账号", error_type);
+            log::warn!(
+                "[网关] 上游 429 限流，type={}，交给外层切换账号",
+                error_type
+            );
             return Err((mapped_status, error_type, message, Some(body)));
         }
 
         // 401 认证错误不在 HTTP 层重试；交给外层刷新当前账号 token 或切换账号。
         if mapped_status == StatusCode::UNAUTHORIZED {
-            log::warn!("[网关] 上游 401 认证错误，type={}，交给外层处理", error_type);
+            log::warn!(
+                "[网关] 上游 401 认证错误，type={}，交给外层处理",
+                error_type
+            );
             return Err((mapped_status, error_type, message, Some(body)));
         }
 
@@ -2955,12 +2975,9 @@ async fn resolve_managed_account_credentials(
                 };
                 let profile_client = KiroClient::from_client(http.clone());
                 let mut resolved_account = account.clone();
-                if let Some(profile) = resolve_account_profile_with_client(
-                    &account,
-                    access_token,
-                    &profile_client,
-                )
-                .await?
+                if let Some(profile) =
+                    resolve_account_profile_with_client(&account, access_token, &profile_client)
+                        .await?
                 {
                     apply_resolved_profile(&mut resolved_account, &profile);
                     persist_account_profile(&account.id, &profile)?;
@@ -2978,10 +2995,7 @@ async fn resolve_managed_account_credentials(
                     available_models_profile_arn,
                     provider: resolved_account.provider.clone(),
                     region: ctx.region,
-                    source_label: format_managed_upstream_source(
-                        &state.config,
-                        &resolved_account,
-                    ),
+                    source_label: format_managed_upstream_source(&state.config, &resolved_account),
                     user_agent: build_kiro_custom_user_agent(&ctx.machine_id),
                     auth_method: resolved_account.auth_method.clone(),
                     send_opt_out: should_send_codewhisperer_optout(),
@@ -3911,8 +3925,8 @@ fn stream_proxy_response(
                 role: Some("assistant".to_string()),
                 content: Some("".to_string()),
                 tool_calls: None,
-audio: None,
-function_call: None,
+                audio: None,
+                function_call: None,
             };
             let chunk =
                 stream::build_openai_chunk(&completion_id, created, &model, delta, None, None);
@@ -5177,8 +5191,8 @@ async fn handle_stream_text(
                 },
                 content: Some(text.to_string()),
                 tool_calls: None,
-audio: None,
-function_call: None,
+                audio: None,
+                function_call: None,
             };
             let chunk = crate::gateway::stream::build_openai_chunk(
                 completion_id,

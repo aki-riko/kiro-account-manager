@@ -262,9 +262,7 @@ async fn get_current_account(accounts: &[Account]) -> Option<Account> {
         }
     }
 
-    log::warn!(
-        "[AutoSwitch] 无法匹配当前账号 (refreshToken/accessToken/clientIdHash 均不匹配)"
-    );
+    log::warn!("[AutoSwitch] 无法匹配当前账号 (refreshToken/accessToken/clientIdHash 均不匹配)");
     None
 }
 
@@ -434,42 +432,41 @@ fn build_switch_params(account: &Account) -> crate::kiro::ide::SwitchAccountPara
 
 /// 查找下一个可用账号（轮换逻辑：从当前账号之后开始找，找到第一个可用的）
 /// 用于一键换号，不检查额度阈值，但跳过额度为0的账号
-fn find_next_available_account(
-    accounts: &[Account],
-    current_account: &Account,
-) -> Option<Account> {
-    let current_index = accounts.iter().position(|acc| acc.id == current_account.id)?;
-    
+fn find_next_available_account(accounts: &[Account], current_account: &Account) -> Option<Account> {
+    let current_index = accounts
+        .iter()
+        .position(|acc| acc.id == current_account.id)?;
+
     // 从当前账号的下一个开始循环查找
     for i in 1..accounts.len() {
         let next_index = (current_index + i) % accounts.len();
         let acc = &accounts[next_index];
-        
+
         // 检查是否可用
         if acc.id == current_account.id {
             continue; // 跳过当前账号
         }
-        
+
         // 跳过禁用的账号
         if !acc.enabled {
             continue;
         }
-        
+
         // 跳过真正不可用的状态（banned/invalid）
         let status = acc.status.to_lowercase();
         if status == "banned" || status == "invalid" {
             continue;
         }
-        
+
         // 跳过额度为0的账号（已经完全用完）
         let remaining = calculate_remaining(acc);
         if remaining <= 0.0 {
             continue;
         }
-        
+
         return Some(acc.clone());
     }
-    
+
     None
 }
 
@@ -516,17 +513,17 @@ pub async fn quick_switch_next(app_handle: AppHandle) -> Result<String, String> 
     };
 
     let next_account = next_account.ok_or("没有可切换的可用账号")?;
-    let email = next_account.email.clone().unwrap_or_else(|| "未知账号".to_string());
+    let email = next_account
+        .email
+        .clone()
+        .unwrap_or_else(|| "未知账号".to_string());
 
     // 执行切换
     switch_account(&app_handle, &next_account).await?;
 
     // 通知前端
     let _ = app_handle.emit("accounts-updated", ());
-    let _ = app_handle.emit(
-        "account-switched",
-        serde_json::json!({ "email": &email }),
-    );
+    let _ = app_handle.emit("account-switched", serde_json::json!({ "email": &email }));
 
     Ok(email)
 }

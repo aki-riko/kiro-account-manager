@@ -1,5 +1,5 @@
 use crate::models::cli_session::{
-    CliSession, CliSessionMeta, CliSessionMessage, CliSessionSummary,
+    CliSession, CliSessionMessage, CliSessionMeta, CliSessionSummary,
 };
 use anyhow::{Context, Result};
 use std::fs;
@@ -21,14 +21,19 @@ impl CliSessionStorage {
         {
             let home = std::env::var("USERPROFILE")
                 .context("Failed to get USERPROFILE environment variable")?;
-            Ok(PathBuf::from(home).join(".kiro").join("sessions").join("cli"))
+            Ok(PathBuf::from(home)
+                .join(".kiro")
+                .join("sessions")
+                .join("cli"))
         }
 
         #[cfg(not(target_os = "windows"))]
         {
-            let home =
-                std::env::var("HOME").context("Failed to get HOME environment variable")?;
-            Ok(PathBuf::from(home).join(".kiro").join("sessions").join("cli"))
+            let home = std::env::var("HOME").context("Failed to get HOME environment variable")?;
+            Ok(PathBuf::from(home)
+                .join(".kiro")
+                .join("sessions")
+                .join("cli"))
         }
     }
 
@@ -42,11 +47,17 @@ impl CliSessionStorage {
 
         // 收集所有 .json 文件（不是 .jsonl）
         let mut json_files: Vec<(PathBuf, std::time::SystemTime)> = Vec::new();
-        for entry in fs::read_dir(&self.base_path).context("Failed to read CLI sessions directory")? {
+        for entry in
+            fs::read_dir(&self.base_path).context("Failed to read CLI sessions directory")?
+        {
             let entry = entry?;
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "json") {
-                let file_name = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+                let file_name = path
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
                 // 排除 .jsonl 文件（file_stem 已经去掉了 .json 后缀）
                 if !file_name.ends_with(".jsonl") {
                     let modified = entry.metadata()?.modified()?;
@@ -72,8 +83,7 @@ impl CliSessionStorage {
 
     /// 解析 session 摘要
     fn parse_session_summary(&self, json_path: &PathBuf) -> Result<CliSessionSummary> {
-        let content = fs::read_to_string(json_path)
-            .context("Failed to read session JSON")?;
+        let content = fs::read_to_string(json_path).context("Failed to read session JSON")?;
         let meta: CliSessionMeta =
             serde_json::from_str(&content).context("Failed to parse session JSON")?;
 
@@ -120,9 +130,13 @@ impl CliSessionStorage {
                 (None, None, None, 0.0)
             };
 
-        let title = meta
-            .title
-            .unwrap_or_else(|| meta.cwd.split(['/', '\\']).last().unwrap_or("untitled").to_string());
+        let title = meta.title.unwrap_or_else(|| {
+            meta.cwd
+                .split(['/', '\\'])
+                .last()
+                .unwrap_or("untitled")
+                .to_string()
+        });
 
         Ok(CliSessionSummary {
             session_id: meta.session_id,
@@ -186,9 +200,13 @@ impl CliSessionStorage {
                 (None, None, None, None)
             };
 
-        let title = meta
-            .title
-            .unwrap_or_else(|| meta.cwd.split(['/', '\\']).last().unwrap_or("untitled").to_string());
+        let title = meta.title.unwrap_or_else(|| {
+            meta.cwd
+                .split(['/', '\\'])
+                .last()
+                .unwrap_or("untitled")
+                .to_string()
+        });
 
         Ok(CliSession {
             session_id: meta.session_id,

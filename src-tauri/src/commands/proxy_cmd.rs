@@ -2,13 +2,13 @@
 
 #![allow(clippy::needless_pass_by_value)] // Tauri 命令需要按值传递参数
 
-#[cfg(target_os = "windows")]
-use crate::utils::cmd_output::decode_cmd_output;
 use crate::clients::{
     http_client::build_http_client_for_proxy_test,
     kiro_client::build_generate_assistant_response_url,
 };
 use crate::core::account::AccountProxyConfig;
+#[cfg(target_os = "windows")]
+use crate::utils::cmd_output::decode_cmd_output;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -402,7 +402,9 @@ pub async fn test_account_proxy(
         success: true,
         latency_ms,
         status: Some(status.as_u16()),
-        message: format!("代理已连通 Kiro runtime 上游，延迟 {latency_ms}ms，上游返回 HTTP {status}"),
+        message: format!(
+            "代理已连通 Kiro runtime 上游，延迟 {latency_ms}ms，上游返回 HTTP {status}"
+        ),
     })
 }
 

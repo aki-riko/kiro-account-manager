@@ -45,7 +45,9 @@ fn resolve_idc_login_email(
         Ok(email.or(user_id))
     } else if provider_id == "BuilderId" {
         // BuilderId 允许没有 email/userId
-        Ok(email.or(user_id).or_else(|| Some("builderid_unknown".to_string())))
+        Ok(email
+            .or(user_id)
+            .or_else(|| Some("builderid_unknown".to_string())))
     } else {
         require_login_email(email).map(Some)
     }
@@ -105,7 +107,10 @@ fn resolve_selected_external_idp_profile(
     profiles: &[KiroProfile],
     selected_arn: Option<&str>,
 ) -> Result<KiroProfile, String> {
-    if let Some(selected_arn) = selected_arn.map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(selected_arn) = selected_arn
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         return profiles
             .iter()
             .find(|profile| profile.arn == selected_arn)
@@ -133,16 +138,13 @@ async fn choose_external_idp_profile(
         clear_pending_external_idp_profile_selection(&selection_id);
         return Err(format!("通知前端选择 External IdP profile 失败: {error}"));
     }
-    let selected_arn = match tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_seconds),
-        receiver,
-    )
-    .await
-    {
-        Ok(Ok(profile_arn)) => Ok(profile_arn),
-        Ok(Err(_)) => Err("登录已取消".to_string()),
-        Err(_) => Err("External IdP profile 选择超时".to_string()),
-    };
+    let selected_arn =
+        match tokio::time::timeout(std::time::Duration::from_secs(timeout_seconds), receiver).await
+        {
+            Ok(Ok(profile_arn)) => Ok(profile_arn),
+            Ok(Err(_)) => Err("登录已取消".to_string()),
+            Err(_) => Err("External IdP profile 选择超时".to_string()),
+        };
     clear_pending_external_idp_profile_selection(&selection_id);
     resolve_selected_external_idp_profile(profiles, Some(&selected_arn?))
 }
@@ -257,9 +259,7 @@ async fn login_external_idp(
     auth_result.region = Some(profile.region);
     let email = extract_external_idp_email(&auth_result.access_token);
     let mut account = Account::new(
-        email
-            .clone()
-            .unwrap_or_else(|| "external-idp".to_string()),
+        email.clone().unwrap_or_else(|| "external-idp".to_string()),
         "Kiro Azure / Entra 账号".to_string(),
     );
     account.email = email;
@@ -453,21 +453,33 @@ async fn login_idc(
     // 先查找已存在账号，优先使用已有的 machine_id
     let existing_machine_id = {
         let store = lock_store(&state.store, "store")?;
-        store.accounts.iter().find(|acc| {
-            // 通过 start_url + client_id_hash 匹配 Enterprise 账号
-            if provider_id == "Enterprise" {
-                if let (Some(ref acc_start_url), Some(ref acc_hash), Some(ref auth_start_url), Some(ref auth_hash)) =
-                    (&acc.start_url, &acc.client_id_hash, &auth_result.start_url, &auth_result.client_id_hash)
-                {
-                    return acc_start_url == auth_start_url && acc_hash == auth_hash;
+        store
+            .accounts
+            .iter()
+            .find(|acc| {
+                // 通过 start_url + client_id_hash 匹配 Enterprise 账号
+                if provider_id == "Enterprise" {
+                    if let (
+                        Some(ref acc_start_url),
+                        Some(ref acc_hash),
+                        Some(ref auth_start_url),
+                        Some(ref auth_hash),
+                    ) = (
+                        &acc.start_url,
+                        &acc.client_id_hash,
+                        &auth_result.start_url,
+                        &auth_result.client_id_hash,
+                    ) {
+                        return acc_start_url == auth_start_url && acc_hash == auth_hash;
+                    }
                 }
-            }
-            // BuilderId 通过 refresh_token 匹配
-            if let Some(ref acc_rt) = acc.refresh_token {
-                return acc_rt == &auth_result.refresh_token;
-            }
-            false
-        }).and_then(|acc| acc.machine_id.clone())
+                // BuilderId 通过 refresh_token 匹配
+                if let Some(ref acc_rt) = acc.refresh_token {
+                    return acc_rt == &auth_result.refresh_token;
+                }
+                false
+            })
+            .and_then(|acc| acc.machine_id.clone())
     }; // store 在此作用域结束时自动释放
 
     let account_machine_id = existing_machine_id
@@ -502,7 +514,13 @@ async fn login_idc(
 
     // 调试：输出 Enterprise 账号的 userInfo 对象
     if provider_id == "Enterprise" {
-        log::info!("Enterprise userInfo: {}", usage_result.usage_data.get("userInfo").unwrap_or(&serde_json::json!(null)));
+        log::info!(
+            "Enterprise userInfo: {}",
+            usage_result
+                .usage_data
+                .get("userInfo")
+                .unwrap_or(&serde_json::json!(null))
+        );
         log::info!("Extracted email: {:?}, user_id: {:?}", new_email, user_id);
     }
 
@@ -518,7 +536,11 @@ async fn login_idc(
         &auth_result.refresh_token,
         user_id.as_ref(),
     );
-    log::info!("existing_idx: {:?}, will create new account: {}", existing_idx, existing_idx.is_none());
+    log::info!(
+        "existing_idx: {:?}, will create new account: {}",
+        existing_idx,
+        existing_idx.is_none()
+    );
 
     let account = if let Some(idx) = existing_idx {
         log::info!("Updating existing account at index {}", idx);
@@ -539,14 +561,20 @@ async fn login_idc(
         existing.profile_arn = auth_result.profile_arn;
         existing.usage_data = Some(usage_result.usage_data);
         // machine_id 应该已经存在且被复用了，这里仅作兜底
-        if existing.machine_id.as_ref().is_none_or(|id| id.trim().is_empty()) {
+        if existing
+            .machine_id
+            .as_ref()
+            .is_none_or(|id| id.trim().is_empty())
+        {
             existing.machine_id = Some(account_machine_id.clone());
         }
         update_account_status(existing, usage_result.is_banned, usage_result.is_auth_error);
         existing.clone()
     } else {
         let mut account = Account::new(
-            final_email.clone().unwrap_or_else(|| format!("{provider_id}_account")),
+            final_email
+                .clone()
+                .unwrap_or_else(|| format!("{provider_id}_account")),
             format!("Kiro {provider_id} 账号"),
         );
         // 如果 Enterprise 账号没有 email，设回 None

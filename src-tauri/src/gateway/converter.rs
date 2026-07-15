@@ -165,7 +165,9 @@ pub fn normalize_openai_chat_payload(payload: &Value) -> Result<NormalizedReques
     ))
 }
 
-pub fn normalize_openai_chat_request(request: &OpenAIChatRequest) -> Result<NormalizedRequest, String> {
+pub fn normalize_openai_chat_request(
+    request: &OpenAIChatRequest,
+) -> Result<NormalizedRequest, String> {
     reject_unsupported_openai_chat_request(request)?;
 
     let mut messages = Vec::new();
@@ -302,9 +304,7 @@ fn reject_unsupported_openai_chat_fields(payload: &Value) -> Result<(), String> 
         for modality in modalities {
             let name = modality.as_str().unwrap_or_default();
             if name != "text" {
-                return Err(format!(
-                    "不支持的 modalities 值: {name}（当前仅支持 text）"
-                ));
+                return Err(format!("不支持的 modalities 值: {name}（当前仅支持 text）"));
             }
         }
     }
@@ -1016,9 +1016,10 @@ pub async fn build_kiro_payload(
             );
 
             // 判断降级后的模型是否支持 Adaptive Thinking
-            let supports_adaptive =
-                (model_id.contains("opus") && (model_id.contains("4.7") || model_id.contains("4-7")))
-                || (model_id.contains("sonnet") && (model_id.contains("4.6") || model_id.contains("4-6")));
+            let supports_adaptive = (model_id.contains("opus")
+                && (model_id.contains("4.7") || model_id.contains("4-7")))
+                || (model_id.contains("sonnet")
+                    && (model_id.contains("4.6") || model_id.contains("4-6")));
 
             let thinking_type = if supports_adaptive {
                 "adaptive"
@@ -2767,9 +2768,7 @@ fn normalize_tool_choice(
                 })
                 .unwrap_or(false);
             if !tool_exists {
-                return Err(format!(
-                    "tool_choice 指定的工具不存在: {requested_name}"
-                ));
+                return Err(format!("tool_choice 指定的工具不存在: {requested_name}"));
             }
 
             Ok(Some(json!({
@@ -3445,7 +3444,10 @@ mod tests {
             Some("searchDocs")
         );
         assert_eq!(
-            converted.tool_name_map.get("searchDocs").map(String::as_str),
+            converted
+                .tool_name_map
+                .get("searchDocs")
+                .map(String::as_str),
             Some("search_docs")
         );
         assert_eq!(converted.messages.len(), 3);

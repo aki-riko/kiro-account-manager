@@ -118,8 +118,8 @@ impl AuthProvider for ExternalIdpProvider {
             return Err("External IdP 刷新缺少 refreshToken".to_string());
         }
 
-        let client_id = non_empty(metadata.client_id.clone())
-            .unwrap_or_else(|| self.client_id.clone());
+        let client_id =
+            non_empty(metadata.client_id.clone()).unwrap_or_else(|| self.client_id.clone());
         if client_id.trim().is_empty() {
             return Err("External IdP 刷新缺少 clientId".to_string());
         }
@@ -170,13 +170,10 @@ impl AuthProvider for ExternalIdpProvider {
             return Err("External IdP token 响应缺少 access_token".to_string());
         }
 
-        let expires_in = token
-            .expires_in
-            .filter(|seconds| *seconds > 0)
-            .unwrap_or(
-                super::external_idp_portal::ExternalIdpAuthConfig::load()?
-                    .default_token_lifetime_seconds,
-            );
+        let expires_in = token.expires_in.filter(|seconds| *seconds > 0).unwrap_or(
+            super::external_idp_portal::ExternalIdpAuthConfig::load()?
+                .default_token_lifetime_seconds,
+        );
         let expires_at = chrono::Local::now() + chrono::Duration::seconds(expires_in);
         let issuer_url = non_empty(metadata.issuer_url)
             .or_else(|| self.issuer_url.clone())
@@ -233,10 +230,7 @@ pub async fn discover_oidc(
         )?
     } else {
         let config = super::external_idp_portal::ExternalIdpAuthConfig::load()?;
-        build_http_client_with_timeout(
-            config.http_timeout_seconds,
-            config.connect_timeout_seconds,
-        )?
+        build_http_client_with_timeout(config.http_timeout_seconds, config.connect_timeout_seconds)?
     };
     discover_oidc_with_client(&client, issuer_url).await
 }
@@ -254,10 +248,7 @@ async fn discover_oidc_with_client(
         .map_err(|error| format!("OIDC Discovery 请求失败: {error}"))?;
     let status = response.status();
     if !status.is_success() {
-        return Err(format!(
-            "OIDC Discovery 失败（HTTP {}）",
-            status.as_u16()
-        ));
+        return Err(format!("OIDC Discovery 失败（HTTP {}）", status.as_u16()));
     }
 
     let document = response
@@ -282,9 +273,12 @@ fn validate_external_idp_url(value: &str, field: &str) -> Result<Url, String> {
     let url = Url::parse(value).map_err(|_| format!("{field} 不是有效 URL"))?;
     let is_https = url.scheme() == "https";
     let is_loopback_http = url.scheme() == "http"
-        && url
-            .host_str()
-            .is_some_and(|host| host == "localhost" || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback()));
+        && url.host_str().is_some_and(|host| {
+            host == "localhost"
+                || host
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|ip| ip.is_loopback())
+        });
     if !is_https && !is_loopback_http {
         return Err(format!("{field} 必须使用 HTTPS"));
     }
@@ -484,8 +478,14 @@ mod tests {
         let headers = captured.headers.lock().await.clone().unwrap();
         assert!(headers.get("TokenType").is_none());
         let form = captured.form.lock().await.clone().unwrap();
-        assert_eq!(form.get("grant_type").map(String::as_str), Some("refresh_token"));
-        assert_eq!(form.get("client_id").map(String::as_str), Some("public-client"));
+        assert_eq!(
+            form.get("grant_type").map(String::as_str),
+            Some("refresh_token")
+        );
+        assert_eq!(
+            form.get("client_id").map(String::as_str),
+            Some("public-client")
+        );
         assert_eq!(
             form.get("scope").map(String::as_str),
             Some("openid profile offline_access")

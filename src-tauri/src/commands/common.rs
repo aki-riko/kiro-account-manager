@@ -920,15 +920,14 @@ pub fn find_existing_account_idx(
 mod tests {
     use super::{
         apply_refreshed_account_tokens, apply_resolved_profile, extract_user_info,
-        find_existing_account_idx,
-        parse_usage_result, resolve_account_profile_with_client,
-        resolve_external_idp_import_profile_candidate, RefreshResult, resolve_kiro_call_context,
-        resolve_profile_arn_with_fallback,
+        find_existing_account_idx, parse_usage_result, resolve_account_profile_with_client,
+        resolve_external_idp_import_profile_candidate, resolve_kiro_call_context,
+        resolve_profile_arn_with_fallback, RefreshResult,
     };
     use super::{is_client_registration_expiring, is_token_expired, is_token_expiring_soon};
     use crate::clients::kiro_client::KiroClient;
-    use crate::core::account::Account;
     use crate::clients::kiro_client::KiroProfile;
+    use crate::core::account::Account;
 
     fn external_refresh_result(source: &str, rotated: &str) -> RefreshResult {
         RefreshResult {
@@ -1168,11 +1167,7 @@ mod tests {
     #[test]
     fn external_idp_profile_never_falls_back_to_placeholder_arn() {
         assert_eq!(
-            resolve_profile_arn_with_fallback(
-                None,
-                Some("external_idp"),
-                Some("ExternalIdp")
-            ),
+            resolve_profile_arn_with_fallback(None, Some("external_idp"), Some("ExternalIdp")),
             None
         );
     }
@@ -1189,10 +1184,8 @@ mod tests {
                 .build()
                 .unwrap(),
         );
-        let account = Account::new_enterprise(
-            "enterprise-user".to_string(),
-            "Enterprise".to_string(),
-        );
+        let account =
+            Account::new_enterprise("enterprise-user".to_string(), "Enterprise".to_string());
 
         assert_eq!(
             resolve_account_profile_with_client(&account, "token", &client)
@@ -1204,8 +1197,7 @@ mod tests {
 
     #[test]
     fn external_idp_import_matches_requested_arn_exactly() {
-        let requested_arn =
-            "arn:aws:codewhisperer:eu-central-1:1:profile/second".to_string();
+        let requested_arn = "arn:aws:codewhisperer:eu-central-1:1:profile/second".to_string();
         let profiles = vec![
             KiroProfile {
                 arn: "arn:aws:codewhisperer:us-east-1:1:profile/first".to_string(),
@@ -1248,8 +1240,7 @@ mod tests {
         apply_resolved_profile(
             &mut account,
             &KiroProfile {
-                arn: "arn:aws:codewhisperer:eu-central-1:123456789012:profile/EXTERNAL"
-                    .to_string(),
+                arn: "arn:aws:codewhisperer:eu-central-1:123456789012:profile/EXTERNAL".to_string(),
                 name: "Azure Profile".to_string(),
                 region: "eu-central-1".to_string(),
             },

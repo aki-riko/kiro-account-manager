@@ -395,24 +395,36 @@ fn get_proxy_from_env() -> Option<String> {
     // 2. https_proxy (小写版本)
     // 3. HTTP_PROXY (通用代理)
     // 4. http_proxy (小写版本)
-    
+
     log::debug!("[HttpClient] 尝试读取系统环境变量代理...");
-    log::debug!("[HttpClient]   HTTPS_PROXY = {:?}", std::env::var("HTTPS_PROXY").ok());
-    log::debug!("[HttpClient]   https_proxy = {:?}", std::env::var("https_proxy").ok());
-    log::debug!("[HttpClient]   HTTP_PROXY = {:?}", std::env::var("HTTP_PROXY").ok());
-    log::debug!("[HttpClient]   http_proxy = {:?}", std::env::var("http_proxy").ok());
-    
+    log::debug!(
+        "[HttpClient]   HTTPS_PROXY = {:?}",
+        std::env::var("HTTPS_PROXY").ok()
+    );
+    log::debug!(
+        "[HttpClient]   https_proxy = {:?}",
+        std::env::var("https_proxy").ok()
+    );
+    log::debug!(
+        "[HttpClient]   HTTP_PROXY = {:?}",
+        std::env::var("HTTP_PROXY").ok()
+    );
+    log::debug!(
+        "[HttpClient]   http_proxy = {:?}",
+        std::env::var("http_proxy").ok()
+    );
+
     let proxy = std::env::var("HTTPS_PROXY")
         .or_else(|_| std::env::var("https_proxy"))
         .or_else(|_| std::env::var("HTTP_PROXY"))
         .or_else(|_| std::env::var("http_proxy"))
         .ok()?;
-    
+
     if proxy.trim().is_empty() {
         log::warn!("[HttpClient] 环境变量代理为空字符串");
         return None;
     }
-    
+
     log::info!("[HttpClient] 使用系统环境变量代理: {}", proxy);
     normalize_proxy_url(&proxy)
 }
@@ -452,8 +464,7 @@ pub fn apply_app_proxy(builder: ClientBuilder) -> Result<ClientBuilder, String> 
             log::info!("[HttpClient] 应用代理: {}", proxy_url);
 
             // 使用 Proxy::all 同时设置 HTTP 和 HTTPS 代理
-            let proxy = Proxy::all(&proxy_url)
-                .map_err(|e| format!("应用接口代理配置错误: {e}"))?;
+            let proxy = Proxy::all(&proxy_url).map_err(|e| format!("应用接口代理配置错误: {e}"))?;
 
             // 先禁用系统代理,再应用自定义代理
             Ok(builder.no_proxy().proxy(proxy))
@@ -500,7 +511,10 @@ fn account_proxy_config(account: &Account) -> Option<&AccountProxyConfig> {
         .filter(|proxy_config| proxy_config.enabled)
 }
 
-fn apply_account_or_app_proxy(builder: ClientBuilder, account: &Account) -> Result<ClientBuilder, String> {
+fn apply_account_or_app_proxy(
+    builder: ClientBuilder,
+    account: &Account,
+) -> Result<ClientBuilder, String> {
     if let Some(proxy_config) = account_proxy_config(account) {
         apply_account_proxy(builder, proxy_config)
     } else {
@@ -659,7 +673,9 @@ mod tests {
         let regions = supported_kiro_regions();
         assert!(regions.contains(&"us-east-1".to_string()));
         assert!(regions.contains(&"eu-central-1".to_string()));
-        assert!(regions.iter().all(|region| is_supported_kiro_region(region)));
+        assert!(regions
+            .iter()
+            .all(|region| is_supported_kiro_region(region)));
     }
 
     #[test]
