@@ -2,8 +2,13 @@
 
 use crate::commands::app_settings_cmd::get_browser_launch_preferences;
 use serde::Serialize;
+use std::path::Path;
 
-const PRIVATE_BROWSER_ARGS: [&str; 3] = ["--incognito", "--inprivate", "-private-window"];
+#[cfg(target_os = "windows")]
+mod windows;
+
+const PRIVATE_BROWSER_ARGS: [&str; 4] =
+    ["--incognito", "--inprivate", "--private", "-private-window"];
 
 /// 打开浏览器访问指定 URL
 /// 如果用户配置了自定义浏览器路径，则使用自定义浏览器
@@ -30,62 +35,7 @@ pub struct DetectedBrowser {
 /// 检测系统中安装的浏览器
 #[cfg(target_os = "windows")]
 pub fn detect_browsers() -> Vec<DetectedBrowser> {
-    use std::path::Path;
-
-    let browsers = vec![
-        (
-            "Chrome",
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            "--incognito",
-        ),
-        (
-            "Chrome (x86)",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-            "--incognito",
-        ),
-        (
-            "Edge",
-            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            "--inprivate",
-        ),
-        (
-            "Edge",
-            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-            "--inprivate",
-        ),
-        (
-            "Firefox",
-            r"C:\Program Files\Mozilla Firefox\firefox.exe",
-            "-private-window",
-        ),
-        (
-            "Firefox (x86)",
-            r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe",
-            "-private-window",
-        ),
-        (
-            "Brave",
-            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
-            "--incognito",
-        ),
-        (
-            "Brave (x86)",
-            r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
-            "--incognito",
-        ),
-    ];
-
-    let mut detected = Vec::new();
-    for (name, path, incognito_arg) in browsers {
-        if Path::new(path).exists() {
-            detected.push(DetectedBrowser {
-                name: name.to_string(),
-                path: path.to_string(),
-                incognito_arg: incognito_arg.to_string(),
-            });
-        }
-    }
-    detected
+    windows::detect_browsers()
 }
 
 #[cfg(target_os = "macos")]
@@ -182,7 +132,7 @@ fn open_with_custom_browser(
 
 fn open_with_detected_private_browser(url: &str) -> Result<(), String> {
     let browser = select_detected_private_browser(detect_browsers()).ok_or_else(|| {
-        "未找到支持命令行无痕模式的浏览器；请在设置中选择 Chrome、Edge、Firefox 或 Brave，或关闭“使用无痕浏览器”"
+        "未找到支持命令行隐私窗口的浏览器；请在设置中选择受支持的浏览器，或关闭“使用无痕浏览器”"
             .to_string()
     })?;
 
@@ -259,14 +209,43 @@ fn private_arg_for_executable(exe_path: &str) -> Option<&'static str> {
         Some("-private-window")
     } else if file_name.contains("msedge") || file_name.contains("microsoft-edge") {
         Some("--inprivate")
+    } else if file_name.contains("opera") {
+        Some("--private")
     } else if file_name.contains("chrome")
         || file_name.contains("chromium")
         || file_name.contains("brave")
+        || has_chromium_runtime_markers(Path::new(exe_path))
     {
         Some("--incognito")
     } else {
         None
     }
+}
+
+fn has_chromium_runtime_markers(exe_path: &Path) -> bool {
+    let Some(application_dir) = exe_path.parent() else {
+        return false;
+    };
+
+    if directory_has_chromium_runtime_markers(application_dir) {
+        return true;
+    }
+
+    let Ok(entries) = std::fs::read_dir(application_dir) else {
+        return false;
+    };
+
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .any(|path| directory_has_chromium_runtime_markers(&path))
+}
+
+fn directory_has_chromium_runtime_markers(directory: &Path) -> bool {
+    directory.join("chrome_elf.dll").is_file()
+        && directory.join("icudtl.dat").is_file()
+        && (directory.join("chrome.dll").is_file() || directory.join("resources.pak").is_file())
 }
 
 fn parse_browser_command(browser_path: &str) -> Result<(String, Vec<String>), String> {
@@ -407,6 +386,10 @@ mod tests {
         assert_eq!(
             private_arg_for_executable(r"C:\Program Files\Mozilla Firefox\firefox.exe"),
             Some("-private-window")
+        );
+        assert_eq!(
+            private_arg_for_executable(r"C:\Users\Example\AppData\Local\Programs\Opera\opera.exe"),
+            Some("--private")
         );
     }
 
