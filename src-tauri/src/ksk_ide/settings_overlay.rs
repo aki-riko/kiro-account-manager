@@ -42,6 +42,8 @@ struct SettingsSnapshot {
     object: Map<String, Value>,
 }
 
+type PreparedSettingsOverlay = (SettingsSnapshot, Vec<u8>, BTreeMap<String, OriginalSetting>);
+
 pub(super) fn apply_settings_overlay(
     session_root: &Path,
     session_id: Uuid,
@@ -71,7 +73,7 @@ pub(super) fn apply_settings_overlay(
 fn prepare_settings_overlay(
     settings_path: &Path,
     overlay: &Value,
-) -> Result<(SettingsSnapshot, Vec<u8>, BTreeMap<String, OriginalSetting>), String> {
+) -> Result<PreparedSettingsOverlay, String> {
     let snapshot = read_settings_snapshot(settings_path)?;
     let overlay_object = overlay
         .as_object()

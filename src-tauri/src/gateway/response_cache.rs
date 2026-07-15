@@ -61,6 +61,15 @@ pub struct CacheEntry {
     pub total_chars: usize,
 }
 
+/// 写入缓存时需要的响应与统计信息
+pub struct CacheInsert {
+    pub response: String,
+    pub input_tokens: i32,
+    pub output_tokens: i32,
+    pub message_count: usize,
+    pub total_chars: usize,
+}
+
 impl CacheEntry {
     /// 检查缓存是否过期
     pub fn is_expired(&self) -> bool {
@@ -173,16 +182,14 @@ impl ResponseCache {
     }
 
     /// 保存缓存（三层写入）
-    pub fn put(
-        &mut self,
-        session_id: &str,
-        messages_hash: &str,
-        response: String,
-        input_tokens: i32,
-        output_tokens: i32,
-        message_count: usize,
-        total_chars: usize,
-    ) {
+    pub fn put(&mut self, session_id: &str, messages_hash: &str, insert: CacheInsert) {
+        let CacheInsert {
+            response,
+            input_tokens,
+            output_tokens,
+            message_count,
+            total_chars,
+        } = insert;
         let key = Self::cache_key(session_id, messages_hash);
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -402,11 +409,13 @@ mod tests {
         cache.put(
             "session1",
             "hash1",
-            "response1".to_string(),
-            100,
-            50,
-            5,
-            1000,
+            CacheInsert {
+                response: "response1".to_string(),
+                input_tokens: 100,
+                output_tokens: 50,
+                message_count: 5,
+                total_chars: 1000,
+            },
         );
 
         // 获取缓存
@@ -424,11 +433,13 @@ mod tests {
         cache.put(
             "session1",
             "hash1",
-            "response1".to_string(),
-            100,
-            50,
-            5,
-            1000,
+            CacheInsert {
+                response: "response1".to_string(),
+                input_tokens: 100,
+                output_tokens: 50,
+                message_count: 5,
+                total_chars: 1000,
+            },
         );
 
         // 小增量查询，应该命中增量缓存
@@ -449,9 +460,21 @@ mod tests {
         let mut cache = ResponseCache::new(config, None);
 
         // 添加 3 个条目
-        cache.put("s1", "h1", "r1".to_string(), 100, 50, 5, 1000);
-        cache.put("s2", "h2", "r2".to_string(), 100, 50, 5, 1000);
-        cache.put("s3", "h3", "r3".to_string(), 100, 50, 5, 1000);
+        for (session_id, hash, response) in
+            [("s1", "h1", "r1"), ("s2", "h2", "r2"), ("s3", "h3", "r3")]
+        {
+            cache.put(
+                session_id,
+                hash,
+                CacheInsert {
+                    response: response.to_string(),
+                    input_tokens: 100,
+                    output_tokens: 50,
+                    message_count: 5,
+                    total_chars: 1000,
+                },
+            );
+        }
 
         // 第一个应该被驱逐
         let result = cache.get("s1", "h1", 5, 1000);

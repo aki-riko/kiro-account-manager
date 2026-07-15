@@ -336,9 +336,11 @@ mod tests {
     use super::{KskProxyRuntime, KskProxySet};
     use crate::ksk_ide::config::{KiroService, KskProxyConfig};
 
+    type CapturedRequest = (Method, Uri, HeaderMap, Bytes);
+
     #[derive(Clone, Default)]
     struct CaptureState {
-        request: Arc<Mutex<Option<(Method, Uri, HeaderMap, Bytes)>>>,
+        request: Arc<Mutex<Option<CapturedRequest>>>,
     }
 
     async fn capture_request(

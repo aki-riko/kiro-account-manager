@@ -4,7 +4,7 @@ use crate::clients::kiro_client::build_generate_assistant_response_url;
 use crate::gateway::converter::build_kiro_payload;
 use crate::gateway::eventstream::decode_message;
 use crate::gateway::models::NormalizedMessage;
-use crate::gateway::response_cache::ResponseCache;
+use crate::gateway::response_cache::{CacheInsert, ResponseCache};
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -16,16 +16,28 @@ use std::hash::{Hash, Hasher};
 /// 2. 将中间的历史对话发送给 LLM 生成摘要（支持三层缓存）
 /// 3. 用摘要替换中间的历史消息
 /// 4. 返回：[系统消息] + [摘要] + [最近2轮对话]
+pub struct CompressionContext<'a> {
+    pub http: &'a reqwest::Client,
+    pub access_token: &'a str,
+    pub region: &'a str,
+    pub model_id: &'a str,
+    pub max_input_tokens: usize,
+}
+
 pub async fn compress_conversation_history(
-    http: &reqwest::Client,
-    access_token: &str,
-    region: &str,
+    context: CompressionContext<'_>,
     messages: &mut Vec<NormalizedMessage>,
-    model_id: &str,
-    _max_input_tokens: usize,
     mut cache: Option<&mut ResponseCache>,
     session_id: Option<&str>,
 ) -> Result<bool, String> {
+    let CompressionContext {
+        http,
+        access_token,
+        region,
+        model_id,
+        max_input_tokens: _,
+    } = context;
+
     // 至少需要 5 条消息才值得压缩
     if messages.len() < 5 {
         log::info!("[压缩] 消息数量不足 5 条，跳过压缩");
@@ -100,11 +112,13 @@ pub async fn compress_conversation_history(
                 cache_ref.put(
                     sid,
                     &messages_hash,
-                    summary.clone(),
-                    input_tokens,
-                    output_tokens,
-                    message_count,
-                    total_chars,
+                    CacheInsert {
+                        response: summary.clone(),
+                        input_tokens,
+                        output_tokens,
+                        message_count,
+                        total_chars,
+                    },
                 );
                 log::info!(
                     "[压缩] 摘要已保存到缓存（输入 {} tokens，输出 {} tokens）",

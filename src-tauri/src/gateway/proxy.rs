@@ -55,6 +55,7 @@ use super::{
         ModelsResponse, NormalizedMessage, NormalizedRequest, OpenAIChatRequest, Tool, ToolCall,
         ToolCallFunction,
     },
+    response_cache::CacheInsert,
     stream::{self, parse_kiro_event_full, KiroEvent},
     thinking_parser::{SegmentType, ThinkingParser},
     GatewayConfig, GatewayRequestLogEntry, ResponseFormat, ResponsesSessionEntry, RouterState,
@@ -2563,11 +2564,13 @@ pub async fn proxy_handler(
         cache_guard.put(
             &cache_session_id,
             &messages_hash,
-            response_json,
-            aggregated.input_tokens,
-            aggregated.output_tokens,
-            cache_message_count,
-            cache_total_chars,
+            CacheInsert {
+                response: response_json,
+                input_tokens: aggregated.input_tokens,
+                output_tokens: aggregated.output_tokens,
+                message_count: cache_message_count,
+                total_chars: cache_total_chars,
+            },
         );
         drop(cache_guard);
         log::debug!(
