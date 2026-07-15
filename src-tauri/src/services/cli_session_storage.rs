@@ -133,7 +133,7 @@ impl CliSessionStorage {
         let title = meta.title.unwrap_or_else(|| {
             meta.cwd
                 .split(['/', '\\'])
-                .last()
+                .next_back()
                 .unwrap_or("untitled")
                 .to_string()
         });
@@ -203,7 +203,7 @@ impl CliSessionStorage {
         let title = meta.title.unwrap_or_else(|| {
             meta.cwd
                 .split(['/', '\\'])
-                .last()
+                .next_back()
                 .unwrap_or("untitled")
                 .to_string()
         });

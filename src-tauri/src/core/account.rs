@@ -92,15 +92,11 @@ pub struct AvailableModelsCacheEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum AccountProxyProtocol {
+    #[default]
     Http,
     Socks5,
-}
-
-impl Default for AccountProxyProtocol {
-    fn default() -> Self {
-        Self::Http
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]

@@ -26,7 +26,7 @@ pub fn resolve_kiro_executable() -> Result<PathBuf, String> {
 pub fn discover_kiro_executable() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
-        return discover_windows_kiro_executable();
+        discover_windows_kiro_executable()
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -150,16 +150,13 @@ fn discover_windows_kiro_executable() -> Option<PathBuf> {
         local_app_data,
         Vec::new(),
     );
-    if let Some(executable) = primary_candidates
-        .into_iter()
-        .find(|path| is_kiro_install(path))
-    {
+    if let Some(executable) = primary_candidates.into_iter().find(is_kiro_install) {
         return Some(executable);
     }
     fixed_windows_drive_roots()
         .into_iter()
         .map(|root| root.join("Kiro").join(KIRO_EXECUTABLE_NAME))
-        .find(|path| is_kiro_install(path))
+        .find(is_kiro_install)
 }
 
 #[cfg(target_os = "windows")]

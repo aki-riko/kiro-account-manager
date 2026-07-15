@@ -27,7 +27,7 @@ fn test_trim_payload_basic() {
 
 #[test]
 fn test_account_selection_round_robin() {
-    let accounts = vec!["acc1", "acc2", "acc3"];
+    let accounts = ["acc1", "acc2", "acc3"];
     for i in 0..6 {
         let idx = i % accounts.len();
         println!("Round {} -> {}", i, accounts[idx]);

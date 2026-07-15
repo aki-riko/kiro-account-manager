@@ -20,11 +20,7 @@ pub async fn get_cache_stats(state: State<'_, AppState>) -> Result<CacheStats, S
             .lock()
             .map_err(|_| "获取 gateway 状态失败".to_string())?;
 
-        if let Some(runtime) = guard.as_ref() {
-            Some(runtime.response_cache.clone())
-        } else {
-            None
-        }
+        guard.as_ref().map(|runtime| runtime.response_cache.clone())
     };
 
     if let Some(cache_arc) = response_cache {

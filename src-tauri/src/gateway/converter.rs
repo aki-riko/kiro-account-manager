@@ -483,10 +483,7 @@ pub fn convert_openai_chat_tools(
 /// 将分隔符（_、-、多下划线命名空间前缀）转换为 camelCase 边界
 fn sanitize_tool_name(name: &str) -> String {
     // 按下划线和横杠分割
-    let parts: Vec<&str> = name
-        .split(|c| c == '_' || c == '-')
-        .filter(|s| !s.is_empty())
-        .collect();
+    let parts: Vec<&str> = name.split(['_', '-']).filter(|s| !s.is_empty()).collect();
 
     if parts.is_empty() {
         return "tool".to_string();
@@ -1217,7 +1214,7 @@ pub async fn build_kiro_payload(
                         git_state: None,
                         shell_state: None,
                         tool_results: Some(current_tool_results_for_history),
-                        tools: Some(convert_tools(&processed_tools).unwrap_or_else(|| vec![])),
+                        tools: Some(convert_tools(&processed_tools).unwrap_or_default()),
                         user_settings: None,
                     })
                 },

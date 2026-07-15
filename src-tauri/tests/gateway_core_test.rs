@@ -205,7 +205,7 @@ fn test_account_selection_skips_failed_accounts() {
         failure_count: u32,
     }
 
-    let accounts = vec![
+    let accounts = [
         Account {
             id: "acc1".to_string(),
             failure_count: 5,
@@ -326,10 +326,10 @@ fn test_token_threshold_calculation() {
 
     assert_eq!(threshold_tokens, 160_000);
 
-    let opus_threshold = (1_000_000 as f64 * threshold_percent) as usize;
+    let opus_threshold = (1_000_000_f64 * threshold_percent) as usize;
     assert_eq!(opus_threshold, 800_000);
 
-    let llama_threshold = (128_000 as f64 * threshold_percent) as usize;
+    let llama_threshold = (128_000_f64 * threshold_percent) as usize;
     assert_eq!(llama_threshold, 102_400);
 
     println!("✓ Token threshold calculation is correct");

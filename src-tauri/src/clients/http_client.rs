@@ -239,7 +239,7 @@ fn detect_os_release_for_user_agent() -> String {
             Some(format!("{major}.{minor}.{build}"))
         })();
 
-        return release.unwrap_or_else(|| "10.0.0".to_string());
+        release.unwrap_or_else(|| "10.0.0".to_string())
     }
 
     #[cfg(not(target_os = "windows"))]

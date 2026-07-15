@@ -125,7 +125,7 @@ pub async fn configure_proxy_clients(
         results.push(ProxyClientConfigResult {
             client: client.clone(),
             success: result.is_ok(),
-            paths: result.as_ref().map(|p| p.clone()).unwrap_or_default(),
+            paths: result.clone().unwrap_or_default(),
             error: result.err(),
         });
     }
@@ -187,7 +187,7 @@ fn configure_claude_code(proxy_origin: &str, api_key: &str) -> Result<Vec<String
     };
 
     // 确保 env 字段存在
-    if !config.get("env").is_some() {
+    if config.get("env").is_none() {
         config["env"] = serde_json::json!({});
     }
 

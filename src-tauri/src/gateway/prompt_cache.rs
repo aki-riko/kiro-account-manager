@@ -401,7 +401,7 @@ impl PromptCacheTracker {
 
 /// 估算 token 数（字符数 / 4）
 fn estimate_tokens(text: &str) -> usize {
-    (text.len() + 3) / 4
+    text.len().div_ceil(4)
 }
 
 // 全局单例

@@ -294,11 +294,11 @@ fn non_empty(value: Option<String>) -> Option<String> {
 pub fn normalize_external_idp_scopes(scopes: &str) -> String {
     let mut normalized = Vec::new();
     for scope in scopes.split_whitespace() {
-        if !normalized.iter().any(|item| *item == scope) {
+        if !normalized.contains(&scope) {
             normalized.push(scope);
         }
     }
-    if !normalized.iter().any(|scope| *scope == "offline_access") {
+    if !normalized.contains(&"offline_access") {
         normalized.push("offline_access");
     }
     normalized.join(" ")

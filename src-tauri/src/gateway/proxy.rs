@@ -3264,7 +3264,7 @@ fn persist_account_refresh(
         .find(|candidate| candidate.id == account.id)
     {
         // 应用 token 字段更新（Option 字段仅在新值存在时覆盖，避免清空已有值）
-        crate::commands::common::apply_refreshed_account_tokens(target, &refresh);
+        crate::commands::common::apply_refreshed_account_tokens(target, refresh);
         if let Some(data) = usage_data {
             target.usage_data = Some(data);
         }
@@ -5597,7 +5597,7 @@ mod tests {
     fn test_estimate_text_tokens_claude() {
         let text = "Hello, world!";
         let tokens = estimate_text_tokens(text, TokenizerType::Claude);
-        assert_eq!(tokens, (text.len() + 3) / 4);
+        assert_eq!(tokens, text.len().div_ceil(4));
     }
 
     #[test]
@@ -5612,9 +5612,9 @@ mod tests {
         let text = "Hello\nWorld\n```rust\nfn main() {}\n```";
         let tokens = estimate_text_tokens(text, TokenizerType::Generic);
 
-        let base_tokens = (text.len() + 3) / 4;
+        let base_tokens = text.len().div_ceil(4);
         let lines = text.lines().count();
-        let newline_tokens = (lines + 1) / 2;
+        let newline_tokens = lines.div_ceil(2);
         let code_blocks = text.matches("```").count();
         let code_block_tokens = code_blocks * 2;
         let expected = base_tokens + newline_tokens + code_block_tokens;
