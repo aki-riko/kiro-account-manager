@@ -18,6 +18,7 @@ use crate::commands::common::{
 use crate::core::account::Account;
 use crate::core::protocol_registry;
 use crate::state::AppState;
+use std::fmt::Display;
 use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, State};
 use tokio::sync::oneshot;
@@ -64,6 +65,49 @@ fn prepare_pending_social_login(provider: &str, machineid: String) -> crate::sta
         state: uuid::Uuid::new_v4().to_string(),
         machineid,
     }
+}
+
+fn social_stage_error(stage: &str, error: impl Display) -> String {
+    format!("SOCIAL_LOGIN_FAILED stage={stage}: {error}")
+}
+
+fn summarize_social_error(error: &str) -> String {
+    let summary = error
+        .lines()
+        .next()
+        .unwrap_or(error)
+        .split(" - ")
+        .next()
+        .unwrap_or(error)
+        .trim();
+    let mut summary = summary.to_string();
+    if summary.chars().count() > 240 {
+        summary = summary.chars().take(240).collect::<String>() + "...";
+    }
+    summary
+}
+
+fn clear_pending_social_login_if_matches(
+    pending_login: &Mutex<Option<crate::state::PendingLogin>>,
+    expected_state: &str,
+) {
+    match lock_store(pending_login, "pending_login cleanup") {
+        Ok(mut pending) => {
+            if pending
+                .as_ref()
+                .is_some_and(|current| current.state == expected_state)
+            {
+                *pending = None;
+            }
+        }
+        Err(error) => {
+            log::error!("[auth_cmd][social] Failed to clean up pending login: {error}");
+        }
+    }
+}
+
+fn apply_social_token_expiry(account: &mut Account, expires_in: i64) {
+    account.expires_at = Some(crate::commands::common::calc_expires_at(expires_in));
 }
 
 fn register_pending_external_idp_profile_selection() -> (String, oneshot::Receiver<String>) {
@@ -302,141 +346,183 @@ async fn login_social(
     state: State<'_, AppState>,
     config: &crate::auth::providers::ProviderConfig,
 ) -> Result<String, String> {
-    // 确保协议注册指向当前应用（解决多版本/移动应用的问题）
-    protocol_registry::ensure_protocol_registration()?;
-
     let provider_id = config.provider_id.clone();
     let pending = prepare_pending_social_login(&provider_id, generate_account_machine_id());
-    let redirect_uri = social_callback_redirect_uri();
-    let code_challenge = auth_social::generate_code_challenge_social(&pending.code_verifier);
-    let client = KiroAuthServiceClient::new(&pending.machineid)?;
+    let login_id = pending.state[..8].to_string();
+    let pending_state = pending.state.clone();
+    let result = async {
+        // 确保协议注册指向当前应用（解决多版本/移动应用的问题）
+        protocol_registry::ensure_protocol_registration()
+            .map_err(|error| social_stage_error("protocol_registration", error))?;
 
-    *lock_store(&state.pending_login, "pending_login")? = Some(pending.clone());
+        let redirect_uri = social_callback_redirect_uri();
+        let code_challenge = auth_social::generate_code_challenge_social(&pending.code_verifier);
+        let client = KiroAuthServiceClient::new(&pending.machineid)
+            .map_err(|error| social_stage_error("client_init", error))?;
 
-    // 1. 注册 deep link 回调等待器
-    let waiter = crate::core::deep_link_handler::register_waiter(
-        crate::core::deep_link_handler::CallbackRoute::Social,
-        &pending.state,
-    );
+        *lock_store(&state.pending_login, "pending_login")? = Some(pending.clone());
+        log::info!("[auth_cmd][social][{login_id}] login started provider={provider_id}");
 
-    // 2. 打开浏览器授权
-    if let Err(err) = client
-        .login(&provider_id, &redirect_uri, &code_challenge, &pending.state)
-        .await
-    {
-        *lock_store(&state.pending_login, "pending_login")? = None;
-        return Err(err);
-    }
-
-    println!("\n[social] LOGIN STARTED: {provider_id}");
-
-    // 3. 等待回调（阻塞直到用户完成授权或超时）
-    let callback_result = waiter.wait_for_callback()?;
-
-    // 4. 用 code 换 token
-    let token_result: crate::auth::providers::SocialTokenResponse = client
-        .create_token(
-            &callback_result.code,
-            &pending.code_verifier,
-            &redirect_uri,
-            None, // invitation_code
-        )
-        .await?;
-
-    // 5. 获取配额信息
-    let usage_result = get_usage_by_provider_with_machine_id(
-        &provider_id,
-        &token_result.access_token,
-        &pending.machineid,
-    )
-    .await?;
-
-    // 封禁账号直接报错
-    if usage_result.is_banned {
-        *lock_store(&state.pending_login, "pending_login")? = None;
-        return Err("BANNED: 账号已被封禁".to_string());
-    }
-
-    let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
-    let final_email = new_email.or(user_id.clone()).unwrap_or_else(|| {
-        format!(
-            "{}_{}",
-            provider_id.to_lowercase(),
-            &token_result.refresh_token[..8]
-        )
-    });
-
-    // 6. 保存账号
-    let mut store = lock_store(&state.store, "store")?;
-    let existing_idx = find_existing_account_idx(
-        &store.accounts,
-        Some(&final_email),
-        &provider_id,
-        &token_result.refresh_token,
-        user_id.as_ref(),
-    );
-
-    let account = if let Some(idx) = existing_idx {
-        let existing = &mut store.accounts[idx];
-        existing.access_token = Some(token_result.access_token.clone());
-        existing.refresh_token = Some(token_result.refresh_token.clone());
-        existing.profile_arn = token_result.profile_arn.clone();
-        existing.user_id = user_id;
-        existing.usage_data = Some(usage_result.usage_data);
-        if existing
-            .machine_id
-            .as_ref()
-            .is_none_or(|id| id.trim().is_empty())
-        {
-            existing.machine_id = Some(pending.machineid.clone());
-        }
-        update_account_status(existing, usage_result.is_banned, usage_result.is_auth_error);
-        existing.clone()
-    } else {
-        let mut account = Account::new(final_email.clone(), format!("Kiro {provider_id} 账号"));
-        account.access_token = Some(token_result.access_token.clone());
-        account.refresh_token = Some(token_result.refresh_token.clone());
-        account.profile_arn = token_result.profile_arn.clone();
-        account.provider = Some(provider_id.clone());
-        account.auth_method = Some("social".to_string());
-        account.user_id = user_id;
-        account.usage_data = Some(usage_result.usage_data);
-        update_account_status(
-            &mut account,
-            usage_result.is_banned,
-            usage_result.is_auth_error,
+        // 1. 注册 deep link 回调等待器
+        let waiter = crate::core::deep_link_handler::register_waiter(
+            crate::core::deep_link_handler::CallbackRoute::Social,
+            &pending.state,
         );
-        account.machine_id = Some(pending.machineid.clone());
-        store.accounts.insert(0, account.clone());
-        account
-    };
 
-    save_store(&store)?;
-    drop(store);
+        // 2. 打开浏览器授权
+        client
+            .login(&provider_id, &redirect_uri, &code_challenge, &pending.state)
+            .await
+            .map_err(|error| social_stage_error("browser_authorization", error))?;
+        log::info!("[auth_cmd][social][{login_id}] browser authorization opened");
 
-    // 7. 更新认证状态（失败不影响账号已保存）
-    let user = crate::auth::User {
-        id: uuid::Uuid::new_v4().to_string(),
-        email: account.email.clone(),
-        name: account
-            .email
-            .as_ref()
-            .and_then(|e| e.split('@').next())
-            .unwrap_or("User")
-            .to_string(),
-        avatar: None,
-        provider: provider_id.clone(),
-    };
-    let _ = lock_store(&state.auth.user, "auth user").map(|mut u| *u = Some(user));
-    let _ = lock_store(&state.auth.access_token, "auth access_token")
-        .map(|mut t| *t = Some(token_result.access_token));
+        // 3. 等待回调（阻塞直到用户完成授权或超时）
+        let callback_result = waiter
+            .wait_for_callback()
+            .map_err(|error| social_stage_error("oauth_callback", error))?;
+        log::info!("[auth_cmd][social][{login_id}] oauth callback accepted");
 
-    *lock_store(&state.pending_login, "pending_login")? = None;
+        // 4. 用 code 换 token
+        let token_result: crate::auth::providers::SocialTokenResponse = client
+            .create_token(
+                &callback_result.code,
+                &pending.code_verifier,
+                &redirect_uri,
+                None, // invitation_code
+            )
+            .await
+            .map_err(|error| social_stage_error("token_exchange", error))?;
+        log::info!(
+            "[auth_cmd][social][{login_id}] token exchange succeeded expires_in={}",
+            token_result.expires_in
+        );
 
-    println!("\n[social] LOGIN SUCCESS: {}", account.get_display_id());
-    let _ = app_handle.emit("login-success", account.id.clone());
+        // 5. 获取配额信息
+        let usage_result = get_usage_by_provider_with_machine_id(
+            &provider_id,
+            &token_result.access_token,
+            &pending.machineid,
+        )
+        .await
+        .map_err(|error| social_stage_error("usage_limits", error))?;
+        log::info!(
+            "[auth_cmd][social][{login_id}] usage loaded banned={} auth_error={}",
+            usage_result.is_banned,
+            usage_result.is_auth_error
+        );
 
-    Ok(format!("Successfully logged in with {provider_id}"))
+        // 封禁账号直接报错
+        if usage_result.is_banned {
+            return Err("BANNED: 账号已被封禁".to_string());
+        }
+
+        let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
+        let has_email = new_email.is_some();
+        let has_user_id = user_id.is_some();
+        let final_email = new_email.or(user_id.clone()).unwrap_or_else(|| {
+            format!(
+                "{}_{}",
+                provider_id.to_lowercase(),
+                &token_result.refresh_token[..8]
+            )
+        });
+        log::info!(
+            "[auth_cmd][social][{login_id}] identity resolved has_email={} has_user_id={}",
+            has_email,
+            has_user_id
+        );
+
+        // 6. 保存账号
+        let mut store = lock_store(&state.store, "store")?;
+        let existing_idx = find_existing_account_idx(
+            &store.accounts,
+            Some(&final_email),
+            &provider_id,
+            &token_result.refresh_token,
+            user_id.as_ref(),
+        );
+
+        let account = if let Some(idx) = existing_idx {
+            let existing = &mut store.accounts[idx];
+            existing.access_token = Some(token_result.access_token.clone());
+            existing.refresh_token = Some(token_result.refresh_token.clone());
+            existing.profile_arn = token_result.profile_arn.clone();
+            existing.user_id = user_id;
+            existing.usage_data = Some(usage_result.usage_data);
+            if existing
+                .machine_id
+                .as_ref()
+                .is_none_or(|id| id.trim().is_empty())
+            {
+                existing.machine_id = Some(pending.machineid.clone());
+            }
+            apply_social_token_expiry(existing, token_result.expires_in);
+            update_account_status(existing, usage_result.is_banned, usage_result.is_auth_error);
+            existing.clone()
+        } else {
+            let mut account = Account::new(final_email.clone(), format!("Kiro {provider_id} 账号"));
+            account.access_token = Some(token_result.access_token.clone());
+            account.refresh_token = Some(token_result.refresh_token.clone());
+            account.profile_arn = token_result.profile_arn.clone();
+            account.provider = Some(provider_id.clone());
+            account.auth_method = Some("social".to_string());
+            account.user_id = user_id;
+            account.usage_data = Some(usage_result.usage_data);
+            update_account_status(
+                &mut account,
+                usage_result.is_banned,
+                usage_result.is_auth_error,
+            );
+            account.machine_id = Some(pending.machineid.clone());
+            apply_social_token_expiry(&mut account, token_result.expires_in);
+            store.accounts.insert(0, account.clone());
+            account
+        };
+
+        save_store(&store).map_err(|error| social_stage_error("save_account", error))?;
+        log::info!(
+            "[auth_cmd][social][{login_id}] account saved account_count={}",
+            store.accounts.len()
+        );
+        drop(store);
+
+        // 7. 更新认证状态（失败不影响账号已保存）
+        let user = crate::auth::User {
+            id: uuid::Uuid::new_v4().to_string(),
+            email: account.email.clone(),
+            name: account
+                .email
+                .as_ref()
+                .and_then(|e| e.split('@').next())
+                .unwrap_or("User")
+                .to_string(),
+            avatar: None,
+            provider: provider_id.clone(),
+        };
+        lock_store(&state.auth.user, "auth user")
+            .map(|mut u| *u = Some(user))
+            .map_err(|error| social_stage_error("auth_state", error))?;
+        lock_store(&state.auth.access_token, "auth access_token")
+            .map(|mut t| *t = Some(token_result.access_token))
+            .map_err(|error| social_stage_error("auth_state", error))?;
+
+        *lock_store(&state.pending_login, "pending_login")? = None;
+        let _ = app_handle.emit("login-success", account.id.clone());
+        log::info!("[auth_cmd][social][{login_id}] login succeeded");
+
+        Ok(format!("Successfully logged in with {provider_id}"))
+    }
+    .await;
+
+    if let Err(error) = &result {
+        clear_pending_social_login_if_matches(&state.pending_login, &pending_state);
+        log::error!(
+            "[auth_cmd][social][{login_id}] login failed: {}",
+            summarize_social_error(error)
+        );
+    }
+
+    result
 }
 
 async fn login_idc(
@@ -777,12 +863,13 @@ pub fn get_supported_providers() -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{
-        clear_auth_state, require_login_email, resolve_idc_login_email,
-        resolve_selected_external_idp_profile,
+        apply_social_token_expiry, clear_auth_state, require_login_email, resolve_idc_login_email,
+        resolve_selected_external_idp_profile, social_stage_error, summarize_social_error,
     };
     use crate::auth::AuthState;
     use crate::auth::User;
     use crate::clients::kiro_client::KiroProfile;
+    use crate::core::account::Account;
 
     #[test]
     fn require_login_email_rejects_missing_email() {
@@ -870,5 +957,31 @@ mod tests {
             .lock()
             .expect("refresh_token lock should work")
             .is_none());
+    }
+
+    #[test]
+    fn social_stage_error_keeps_failure_stage() {
+        assert_eq!(
+            social_stage_error("token_exchange", "HTTP 400"),
+            "SOCIAL_LOGIN_FAILED stage=token_exchange: HTTP 400"
+        );
+    }
+
+    #[test]
+    fn social_error_summary_drops_response_body() {
+        let summary = summarize_social_error(
+            "Kiro Auth Service token creation failed: HTTP 400 - {\"refreshToken\":\"secret\"}",
+        );
+        assert_eq!(summary, "Kiro Auth Service token creation failed: HTTP 400");
+        assert!(!summary.contains("secret"));
+    }
+
+    #[test]
+    fn social_token_expiry_is_written_to_account() {
+        let mut account = Account::new("user@example.com".to_string(), "Google".to_string());
+
+        apply_social_token_expiry(&mut account, 3600);
+
+        assert!(account.expires_at.is_some());
     }
 }

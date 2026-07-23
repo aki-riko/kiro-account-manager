@@ -204,14 +204,17 @@ fn setup_log_plugin() -> tauri_plugin_log::Builder {
 /// 配置单实例插件回调
 #[allow(clippy::needless_pass_by_value)] // Tauri 框架要求回调签名为 Vec<String>
 fn setup_single_instance_callback(app: &tauri::AppHandle, argv: Vec<String>, _cwd: String) {
-    // 当第二个实例尝试启动时，处理传入的参数（deep-link 回调）
+    // tauri-plugin-single-instance 的 deep-link feature 已经会把 argv 转成
+    // deep-link://new-url 事件；这里仅唤醒主窗口，避免再次消费同一个 OAuth waiter。
     let protocol_prefix = format!(
         "{}://",
         core::deep_link_handler::DeepLinkCallbackWaiter::get_protocol_scheme()
     );
     for arg in &argv {
         if arg.starts_with(&protocol_prefix) {
-            auth::handle_incoming_deep_link(app, arg);
+            log::debug!("[deep_link] single-instance deep link handed off to event listener");
+            show_main_window(app.clone());
+            break;
         }
     }
 }

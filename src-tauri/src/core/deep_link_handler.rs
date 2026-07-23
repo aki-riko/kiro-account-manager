@@ -222,6 +222,7 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
 
     // 检查错误
     if let Some(error) = params.get("error") {
+        log::warn!("[deep_link] OAuth callback returned error={error}");
         let desc = params.get("error_description").map_or_else(
             || "Unknown error".to_string(),
             std::string::ToString::to_string,
@@ -231,12 +232,14 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
     }
 
     let Some(code) = params.get("code") else {
+        log::warn!("[deep_link] OAuth callback missing code parameter");
         let _ = tx.send(Err("Missing code parameter".to_string()));
         return (true, true);
     };
     let code = code.to_string();
 
     let Some(state) = params.get("state") else {
+        log::warn!("[deep_link] OAuth callback missing state parameter");
         let _ = tx.send(Err("Missing state parameter".to_string()));
         return (true, true);
     };
@@ -244,6 +247,7 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
 
     // 验证 state
     if state != expected_state {
+        log::warn!("[deep_link] OAuth callback state mismatch");
         let _ = tx.send(Err("State mismatch - possible CSRF attack".to_string()));
         return (true, true);
     }
@@ -369,5 +373,16 @@ mod tests {
             callback.iss.as_deref(),
             Some("https://login.example.test/tenant/v2.0")
         );
+    }
+
+    #[test]
+    fn duplicate_callback_is_ignored_after_waiter_is_consumed() {
+        let _test_guard = lock_deep_link_test();
+        let waiter = register_waiter(CallbackRoute::Social, "expected-state");
+        let callback = "kiro://kiro.kiroAgent/authenticate-success?code=ok&state=expected-state";
+
+        assert!(handle_deep_link(callback).0);
+        assert!(!handle_deep_link(callback).0);
+        assert_eq!(waiter.wait_for_callback().unwrap().code, "ok");
     }
 }
