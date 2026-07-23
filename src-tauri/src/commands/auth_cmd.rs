@@ -18,6 +18,7 @@ use crate::commands::common::{
 use crate::core::account::Account;
 use crate::core::protocol_registry;
 use crate::state::AppState;
+use sha2::{Digest, Sha256};
 use std::fmt::Display;
 use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, State};
@@ -108,6 +109,15 @@ fn clear_pending_social_login_if_matches(
 
 fn apply_social_token_expiry(account: &mut Account, expires_in: i64) {
     account.expires_at = Some(crate::commands::common::calc_expires_at(expires_in));
+}
+
+fn social_fallback_account_id(provider_id: &str, refresh_token: &str) -> String {
+    let digest = Sha256::digest(refresh_token.as_bytes());
+    format!(
+        "{}_{}",
+        provider_id.to_lowercase(),
+        hex::encode(&digest[..8])
+    )
 }
 
 fn register_pending_external_idp_profile_selection() -> (String, oneshot::Receiver<String>) {
@@ -360,7 +370,9 @@ async fn login_social(
         let client = KiroAuthServiceClient::new(&pending.machineid)
             .map_err(|error| social_stage_error("client_init", error))?;
 
-        *lock_store(&state.pending_login, "pending_login")? = Some(pending.clone());
+        lock_store(&state.pending_login, "pending_login")
+            .map(|mut pending_login| *pending_login = Some(pending.clone()))
+            .map_err(|error| social_stage_error("pending_state", error))?;
         log::info!("[auth_cmd][social][{login_id}] login started provider={provider_id}");
 
         // 1. 注册 deep link 回调等待器
@@ -413,18 +425,14 @@ async fn login_social(
 
         // 封禁账号直接报错
         if usage_result.is_banned {
-            return Err("BANNED: 账号已被封禁".to_string());
+            return Err(social_stage_error("usage_limits", "BANNED: 账号已被封禁"));
         }
 
         let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
         let has_email = new_email.is_some();
         let has_user_id = user_id.is_some();
-        let final_email = new_email.or(user_id.clone()).unwrap_or_else(|| {
-            format!(
-                "{}_{}",
-                provider_id.to_lowercase(),
-                &token_result.refresh_token[..8]
-            )
+        let final_email = new_email.clone().or(user_id.clone()).unwrap_or_else(|| {
+            social_fallback_account_id(&provider_id, &token_result.refresh_token)
         });
         log::info!(
             "[auth_cmd][social][{login_id}] identity resolved has_email={} has_user_id={}",
@@ -433,7 +441,8 @@ async fn login_social(
         );
 
         // 6. 保存账号
-        let mut store = lock_store(&state.store, "store")?;
+        let mut store = lock_store(&state.store, "store")
+            .map_err(|error| social_stage_error("account_store", error))?;
         let existing_idx = find_existing_account_idx(
             &store.accounts,
             Some(&final_email),
@@ -447,6 +456,9 @@ async fn login_social(
             existing.access_token = Some(token_result.access_token.clone());
             existing.refresh_token = Some(token_result.refresh_token.clone());
             existing.profile_arn = token_result.profile_arn.clone();
+            if new_email.is_some() {
+                existing.email = new_email.clone();
+            }
             existing.user_id = user_id;
             existing.usage_data = Some(usage_result.usage_data);
             if existing
@@ -505,8 +517,13 @@ async fn login_social(
         lock_store(&state.auth.access_token, "auth access_token")
             .map(|mut t| *t = Some(token_result.access_token))
             .map_err(|error| social_stage_error("auth_state", error))?;
+        lock_store(&state.auth.refresh_token, "auth refresh_token")
+            .map(|mut t| *t = Some(token_result.refresh_token))
+            .map_err(|error| social_stage_error("auth_state", error))?;
 
-        *lock_store(&state.pending_login, "pending_login")? = None;
+        lock_store(&state.pending_login, "pending_login")
+            .map(|mut pending_login| *pending_login = None)
+            .map_err(|error| social_stage_error("pending_state", error))?;
         let _ = app_handle.emit("login-success", account.id.clone());
         log::info!("[auth_cmd][social][{login_id}] login succeeded");
 
@@ -515,6 +532,10 @@ async fn login_social(
     .await;
 
     if let Err(error) = &result {
+        crate::core::deep_link_handler::cancel_waiter_if_matches(
+            crate::core::deep_link_handler::CallbackRoute::Social,
+            &pending_state,
+        );
         clear_pending_social_login_if_matches(&state.pending_login, &pending_state);
         log::error!(
             "[auth_cmd][social][{login_id}] login failed: {}",
@@ -784,7 +805,9 @@ pub async fn handle_kiro_social_callback(
     }
 
     let (new_email, user_id) = extract_user_info(&usage_result.usage_data);
-    let final_email = require_login_email(new_email.clone())?;
+    let final_email = new_email.clone().or(user_id.clone()).unwrap_or_else(|| {
+        social_fallback_account_id(&pending.provider, &token_response.refresh_token)
+    });
 
     let mut store = lock_store(&state.store, "store")?;
     let existing_idx = find_existing_account_idx(
@@ -799,7 +822,15 @@ pub async fn handle_kiro_social_callback(
         let existing = &mut store.accounts[idx];
         existing.access_token = Some(token_response.access_token.clone());
         existing.refresh_token = Some(token_response.refresh_token.clone());
-        existing.email.clone_from(&new_email);
+        if new_email.is_some() {
+            existing.email.clone_from(&new_email);
+        } else if existing
+            .email
+            .as_ref()
+            .is_none_or(|email| email.trim().is_empty())
+        {
+            existing.email = Some(final_email.clone());
+        }
         existing.user_id.clone_from(&user_id);
         existing.usage_data = Some(usage_result.usage_data);
         if existing
@@ -809,6 +840,7 @@ pub async fn handle_kiro_social_callback(
         {
             existing.machine_id = Some(pending.machineid.clone());
         }
+        apply_social_token_expiry(existing, token_response.expires_in);
         update_account_status(existing, usage_result.is_banned, usage_result.is_auth_error);
         existing.clone()
     } else {
@@ -822,6 +854,7 @@ pub async fn handle_kiro_social_callback(
         account.auth_method = Some("social".to_string());
         account.user_id = user_id;
         account.usage_data = Some(usage_result.usage_data);
+        apply_social_token_expiry(&mut account, token_response.expires_in);
         update_account_status(
             &mut account,
             usage_result.is_banned,
@@ -864,7 +897,8 @@ pub fn get_supported_providers() -> Vec<&'static str> {
 mod tests {
     use super::{
         apply_social_token_expiry, clear_auth_state, require_login_email, resolve_idc_login_email,
-        resolve_selected_external_idp_profile, social_stage_error, summarize_social_error,
+        resolve_selected_external_idp_profile, social_fallback_account_id, social_stage_error,
+        summarize_social_error,
     };
     use crate::auth::AuthState;
     use crate::auth::User;
@@ -983,5 +1017,16 @@ mod tests {
         apply_social_token_expiry(&mut account, 3600);
 
         assert!(account.expires_at.is_some());
+    }
+
+    #[test]
+    fn social_fallback_account_id_is_stable_without_exposing_token_prefix() {
+        let first = social_fallback_account_id("Google", "short-token");
+        let second = social_fallback_account_id("Google", "short-token");
+
+        assert_eq!(first, second);
+        assert!(first.starts_with("google_"));
+        assert!(!first.contains("short-token"));
+        assert_eq!(first.len(), "google_".len() + 16);
     }
 }

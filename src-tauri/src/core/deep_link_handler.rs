@@ -1,7 +1,7 @@
 // Deep Link 回调处理
 // 处理 kiro-account-manager://kiro.kiroAgent/authenticate-success?code=xxx&state=xxx 格式的 OAuth 回调
 
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -63,6 +63,8 @@ type PendingSender = Mutex<Option<(CallbackRoute, String, Sender<CallbackResult>
 pub struct DeepLinkCallbackWaiter {
     result_rx: CallbackReceiver,
     timeout: Duration,
+    route: CallbackRoute,
+    state: String,
 }
 
 impl DeepLinkCallbackWaiter {
@@ -96,7 +98,14 @@ impl DeepLinkCallbackWaiter {
 
         match rx.recv_timeout(self.timeout) {
             Ok(result) => result,
-            Err(_) => Err("OAuth callback timeout (5 minutes)".to_string()),
+            Err(RecvTimeoutError::Timeout) => {
+                cancel_waiter_if_matches(self.route, &self.state);
+                Err("OAuth callback timeout (5 minutes)".to_string())
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                cancel_waiter_if_matches(self.route, &self.state);
+                Err("OAuth callback channel disconnected".to_string())
+            }
         }
     }
 }
@@ -133,6 +142,8 @@ pub fn register_waiter_with_timeout(
     DeepLinkCallbackWaiter {
         result_rx: Arc::new(Mutex::new(Some(rx))),
         timeout,
+        route,
+        state: state.to_string(),
     }
 }
 /// 取消当前等待中的 deep link 登录
@@ -145,6 +156,31 @@ pub fn cancel_waiter() -> bool {
         .lock()
         .expect("Failed to acquire pending sender lock");
     let Some((_route, _state, tx)) = guard.take() else {
+        return false;
+    };
+    let _ = tx.send(Err("登录已取消".to_string()));
+    true
+}
+
+/// 仅取消仍属于指定 OAuth state 的等待器，避免旧登录清理时误伤新登录。
+pub fn cancel_waiter_if_matches(route: CallbackRoute, state: &str) -> bool {
+    let Some(storage) = PENDING_SENDER.get() else {
+        return false;
+    };
+
+    let mut guard = storage
+        .lock()
+        .expect("Failed to acquire pending sender lock");
+    let matches = guard
+        .as_ref()
+        .is_some_and(|(pending_route, pending_state, _)| {
+            *pending_route == route && pending_state == state
+        });
+    if !matches {
+        return false;
+    }
+
+    let Some((_pending_route, _pending_state, tx)) = guard.take() else {
         return false;
     };
     let _ = tx.send(Err("登录已取消".to_string()));
@@ -203,7 +239,7 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
     let mut guard = storage
         .lock()
         .expect("Failed to acquire pending sender lock");
-    let Some((expected_route, _, _)) = guard.as_ref() else {
+    let Some((expected_route, expected_state, _)) = guard.as_ref() else {
         log::warn!("[deep_link] No pending login waiter");
         return (false, false);
     };
@@ -211,14 +247,25 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
         log::debug!("[deep_link] Callback route does not match pending login");
         return (false, false);
     }
-    let Some((_expected_route, expected_state, tx)) = guard.take() else {
+    // 提取参数
+    let params: std::collections::HashMap<_, _> = parsed.query_pairs().collect();
+
+    let Some(state) = params.get("state") else {
+        log::warn!("[deep_link] OAuth callback missing state parameter");
+        return (true, true);
+    };
+
+    // 在消费 waiter 之前校验 state，避免错误或过期回调取消当前登录。
+    if state != expected_state {
+        log::warn!("[deep_link] OAuth callback state mismatch");
+        return (true, true);
+    }
+
+    let Some((_expected_route, _expected_state, tx)) = guard.take() else {
         return (false, false);
     };
 
     log::info!("[deep_link] Processing matched OAuth callback");
-
-    // 提取参数
-    let params: std::collections::HashMap<_, _> = parsed.query_pairs().collect();
 
     // 检查错误
     if let Some(error) = params.get("error") {
@@ -237,20 +284,6 @@ pub fn handle_deep_link(url: &str) -> (bool, bool) {
         return (true, true);
     };
     let code = code.to_string();
-
-    let Some(state) = params.get("state") else {
-        log::warn!("[deep_link] OAuth callback missing state parameter");
-        let _ = tx.send(Err("Missing state parameter".to_string()));
-        return (true, true);
-    };
-    let state = state.to_string();
-
-    // 验证 state
-    if state != expected_state {
-        log::warn!("[deep_link] OAuth callback state mismatch");
-        let _ = tx.send(Err("State mismatch - possible CSRF attack".to_string()));
-        return (true, true);
-    }
 
     let iss = params
         .get("iss")
@@ -384,5 +417,43 @@ mod tests {
         assert!(handle_deep_link(callback).0);
         assert!(!handle_deep_link(callback).0);
         assert_eq!(waiter.wait_for_callback().unwrap().code, "ok");
+    }
+
+    #[test]
+    fn state_mismatch_does_not_consume_waiter() {
+        let _test_guard = lock_deep_link_test();
+        let waiter = register_waiter(CallbackRoute::Social, "expected-state");
+
+        assert!(
+            handle_deep_link(
+                "kiro://kiro.kiroAgent/authenticate-success?code=wrong&state=wrong-state"
+            )
+            .0
+        );
+        assert!(
+            handle_deep_link(
+                "kiro://kiro.kiroAgent/authenticate-success?code=ok&state=expected-state"
+            )
+            .0
+        );
+        assert_eq!(waiter.wait_for_callback().unwrap().code, "ok");
+    }
+
+    #[test]
+    fn timeout_cleans_up_matching_waiter() {
+        let _test_guard = lock_deep_link_test();
+        let waiter = register_waiter_with_timeout(
+            CallbackRoute::Social,
+            "expected-state",
+            Duration::from_millis(1),
+        );
+
+        assert!(waiter.wait_for_callback().is_err());
+        assert!(
+            !handle_deep_link(
+                "kiro://kiro.kiroAgent/authenticate-success?code=late&state=expected-state"
+            )
+            .0
+        );
     }
 }
