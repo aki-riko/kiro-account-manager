@@ -83,8 +83,12 @@ fn effective_profile_arn(
     }
     if is_external_idp_auth_method(auth_method)
         || provider.is_some_and(|value| value.eq_ignore_ascii_case("ExternalIdp"))
+        || provider.is_some_and(|value| value.eq_ignore_ascii_case("Enterprise"))
     {
-        return Err("External IdP 请求缺少已解析的 profileArn".to_string());
+        return Err(format!(
+            "{} 请求缺少已解析的 profileArn",
+            provider.unwrap_or("External IdP")
+        ));
     }
     Ok(resolve_default_profile_arn(provider).to_string())
 }
@@ -250,50 +254,6 @@ impl KiroClient {
             .json()
             .await
             .map_err(|e| format!("Failed to parse JSON: {e}"))
-    }
-
-    /// 获取企业账号的 usage 数据（简化版，直接使用 us-east-1）
-    /// 获取 Enterprise 账号的 usage limits（自动获取 profileArn）
-    pub async fn get_enterprise_usage_limits(
-        &self,
-        access_token: &str,
-        machine_id: &str,
-    ) -> Result<serde_json::Value, String> {
-        let region = "us-east-1";
-
-        // Enterprise 账号需要先调用 ListAvailableProfiles 获取动态 profileArn
-        let profile_arn = match self
-            .list_available_profiles(access_token, region, Some("IdC"))
-            .await
-        {
-            Ok(response) => {
-                // 从响应中提取 profiles[0].arn
-                response
-                    .get("profiles")
-                    .and_then(|profiles| profiles.as_array())
-                    .and_then(|arr| arr.first())
-                    .and_then(|profile| profile.get("arn"))
-                    .and_then(|arn| arn.as_str())
-                    .map(|s| s.to_string())
-            }
-            Err(e) => {
-                log::warn!(
-                    "[get_enterprise_usage_limits] ListAvailableProfiles 失败: {}",
-                    e
-                );
-                None
-            }
-        };
-
-        self.get_usage_limits(
-            access_token,
-            machine_id,
-            region,
-            profile_arn.as_deref(),
-            None,
-            Some("Enterprise"),
-        )
-        .await
     }
 
     /// ListAvailableModels 接口
@@ -533,6 +493,7 @@ mod tests {
             effective_profile_arn(None, Some("social"), Some("Github")),
             Ok(crate::commands::common::KIRO_SOCIAL_PROFILE_ARN.to_string())
         );
+        assert!(effective_profile_arn(None, Some("IdC"), Some("Enterprise")).is_err());
         assert!(effective_profile_arn(None, Some("external_idp"), Some("ExternalIdp")).is_err());
     }
 

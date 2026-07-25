@@ -2,7 +2,7 @@
 
 use crate::commands::common::{
     ensure_account_machine_id, extract_user_info, generate_account_machine_id,
-    get_usage_by_account, get_usage_by_provider_with_machine_id,
+    get_usage_by_account, resolve_enterprise_profile_for_account,
 };
 use crate::core::account::Account;
 use crate::kiro::cli::read_kiro_cli_accounts;
@@ -192,12 +192,20 @@ pub async fn import_from_kiro_cli(
             })
             .unwrap_or_else(generate_account_machine_id)
     };
-    let usage_result = get_usage_by_provider_with_machine_id(
-        &provider,
-        &cli_account.access_token,
-        &account_machine_id,
-    )
-    .await;
+    let mut usage_account = Account::new(String::new(), String::new());
+    usage_account.provider = Some(provider.clone());
+    usage_account.auth_method = Some(cli_account.auth_method.clone());
+    usage_account.machine_id = Some(account_machine_id.clone());
+    usage_account.region = Some(cli_account.region.clone());
+    usage_account
+        .profile_arn
+        .clone_from(&cli_account.profile_arn);
+    let profile_result =
+        resolve_enterprise_profile_for_account(&mut usage_account, &cli_account.access_token).await;
+    let usage_result = match profile_result {
+        Ok(_) => get_usage_by_account(&usage_account, &cli_account.access_token).await,
+        Err(error) => Err(error),
+    };
 
     let (email, user_id, usage_data, is_banned, is_auth_error) = match usage_result {
         Ok(result) => {
@@ -249,7 +257,8 @@ pub async fn import_from_kiro_cli(
     account.expires_at.clone_from(&cli_account.expires_at);
     account.provider = Some(provider.clone());
     account.user_id = user_id;
-    account.region = Some(cli_account.region.clone());
+    account.region.clone_from(&usage_account.region);
+    account.profile_name.clone_from(&usage_account.profile_name);
     account.usage_data = usage_data;
 
     // 更新账号状态（包括封禁检测）
@@ -258,9 +267,10 @@ pub async fn import_from_kiro_cli(
     // 6. 根据认证类型填充字段
     if cli_account.auth_method == "social" {
         account.auth_method = Some("social".to_string());
-        account.profile_arn.clone_from(&cli_account.profile_arn);
+        account.profile_arn.clone_from(&usage_account.profile_arn);
     } else {
         account.auth_method = Some("IdC".to_string());
+        account.profile_arn.clone_from(&usage_account.profile_arn);
         account.client_id.clone_from(&cli_account.client_id);
         account.client_secret.clone_from(&cli_account.client_secret);
 

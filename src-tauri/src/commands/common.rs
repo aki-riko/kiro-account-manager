@@ -157,7 +157,7 @@ pub fn ensure_account_machine_id(account: &mut Account) -> String {
 /// 因此这里对空 profileArn 降级到默认值（根据 provider）。
 ///
 /// ## 降级策略
-/// - Enterprise: 保持 None（Enterprise 不需要 profileArn）
+/// - Enterprise: 仅使用账号已发现的 profileArn，禁止回退到 BuilderId
 /// - 其他 provider: 账号 profileArn → 默认 profileArn（根据 provider）
 pub fn resolve_profile_arn_with_fallback(
     account_profile_arn: Option<&str>,
@@ -176,7 +176,7 @@ pub fn resolve_profile_arn_with_fallback(
     }
 
     match provider {
-        Some("Enterprise") => None,
+        Some("Enterprise") => account_profile_arn.map(String::from),
         provider => account_profile_arn
             .map(String::from)
             .or_else(|| Some(resolve_default_profile_arn(provider).to_string())),
@@ -212,7 +212,7 @@ pub fn find_account_by_id(
 ///
 /// 解析规则：
 /// - machine_id：账号自带（非空）→ 否则生成账号独立 ID
-/// - profile_arn：Enterprise → None；其他账号自带 → 否则 provider 默认 ARN
+/// - profile_arn：Enterprise 仅使用已发现值；其他账号自带 → 否则 provider 默认 ARN
 /// - region：profile_arn 解析出来的 region 优先 → 账号 region → fallback
 pub struct KiroCallContext {
     pub machine_id: String,
@@ -267,6 +267,20 @@ pub async fn resolve_account_profile_with_client(
         region: ctx.region.clone(),
     });
 
+    if account.is_enterprise() {
+        if existing.is_some() {
+            return Ok(existing);
+        }
+        let profiles = client
+            .discover_available_profiles(
+                access_token,
+                account.auth_method.as_deref(),
+                &[ctx.region],
+            )
+            .await?;
+        return resolve_enterprise_profile_candidate(profiles);
+    }
+
     if !account.is_external_idp() {
         return Ok(existing);
     }
@@ -294,6 +308,32 @@ pub async fn resolve_account_profile_with_client(
             }
             None => Err(error),
         },
+    }
+}
+
+pub async fn resolve_enterprise_profile_for_account(
+    account: &mut Account,
+    access_token: &str,
+) -> Result<Option<KiroProfile>, String> {
+    if !account.is_enterprise() {
+        return Ok(None);
+    }
+
+    let client = KiroClient::new()?;
+    let profile = resolve_account_profile_with_client(account, access_token, &client)
+        .await?
+        .ok_or("Enterprise 账号缺少可用 profile".to_string())?;
+    apply_resolved_profile(account, &profile);
+    Ok(Some(profile))
+}
+
+fn resolve_enterprise_profile_candidate(
+    profiles: Vec<KiroProfile>,
+) -> Result<Option<KiroProfile>, String> {
+    match profiles.as_slice() {
+        [profile] => Ok(Some(profile.clone())),
+        [] => Err("Enterprise 账号在指定 region 未返回可用 profile".to_string()),
+        _ => Err("Enterprise 账号返回多个 profile，请重新登录并选择 profile".to_string()),
     }
 }
 
@@ -738,10 +778,22 @@ pub async fn get_usage_by_provider_with_machine_id(
     access_token: &str,
     machine_id: &str,
 ) -> Result<UsageResult, String> {
+    get_usage_by_provider_context(provider, access_token, machine_id, None, None).await
+}
+
+pub async fn get_usage_by_provider_context(
+    provider: &str,
+    access_token: &str,
+    machine_id: &str,
+    region: Option<&str>,
+    profile_arn: Option<&str>,
+) -> Result<UsageResult, String> {
     // 为了兼容旧调用，创建一个临时账号对象
     let mut temp_account = crate::core::account::Account::new(String::new(), String::new());
     temp_account.provider = Some(provider.to_string());
     temp_account.machine_id = Some(machine_id.to_string());
+    temp_account.region = region.map(str::to_string);
+    temp_account.profile_arn = profile_arn.map(str::to_string);
 
     // 根据 provider 设置 auth_method（profile_arn 由 get_usage_by_account 统一处理）
     if provider == "BuilderId" || provider == "Enterprise" {
@@ -751,38 +803,6 @@ pub async fn get_usage_by_provider_with_machine_id(
     }
 
     get_usage_by_account(&temp_account, access_token).await
-}
-
-/// 为企业账号获取 usage 数据
-pub async fn get_enterprise_usage(
-    access_token: &str,
-    machine_id: &str,
-) -> Result<UsageResult, String> {
-    use crate::clients::kiro_client::KiroClient;
-
-    let client = KiroClient::new()?;
-    let result = client
-        .get_enterprise_usage_limits(access_token, machine_id)
-        .await;
-
-    match result {
-        Ok(usage_data) => Ok(UsageResult {
-            usage_data,
-            is_banned: false,
-            is_auth_error: false,
-        }),
-        Err(e) if e.starts_with("BANNED:") => Ok(UsageResult {
-            usage_data: serde_json::Value::Null,
-            is_banned: true,
-            is_auth_error: false,
-        }),
-        Err(e) if is_auth_error_message(&e) => Ok(UsageResult {
-            usage_data: serde_json::Value::Null,
-            is_banned: false,
-            is_auth_error: true,
-        }),
-        Err(e) => Err(e),
-    }
 }
 
 /// 解析 usage 结果，提取封禁状态和认证错误
@@ -920,12 +940,11 @@ pub fn find_existing_account_idx(
 mod tests {
     use super::{
         apply_refreshed_account_tokens, apply_resolved_profile, extract_user_info,
-        find_existing_account_idx, parse_usage_result, resolve_account_profile_with_client,
-        resolve_external_idp_import_profile_candidate, resolve_kiro_call_context,
-        resolve_profile_arn_with_fallback, RefreshResult,
+        find_existing_account_idx, parse_usage_result, resolve_enterprise_profile_candidate,
+        resolve_enterprise_profile_for_account, resolve_external_idp_import_profile_candidate,
+        resolve_kiro_call_context, resolve_profile_arn_with_fallback, RefreshResult,
     };
     use super::{is_client_registration_expiring, is_token_expired, is_token_expiring_soon};
-    use crate::clients::kiro_client::KiroClient;
     use crate::clients::kiro_client::KiroProfile;
     use crate::core::account::Account;
 
@@ -1153,13 +1172,15 @@ mod tests {
     }
 
     #[test]
-    fn resolve_profile_arn_with_fallback_omits_enterprise_profile_arn() {
+    fn resolve_profile_arn_with_fallback_preserves_enterprise_profile_without_defaulting() {
+        let profile_arn = "arn:aws:codewhisperer:eu-central-1:123456789012:profile/ENTERPRISE";
         assert_eq!(
-            resolve_profile_arn_with_fallback(
-                Some("arn:aws:codewhisperer:us-east-1:123456789012:profile/IGNORED"),
-                Some("IdC"),
-                Some("Enterprise"),
-            ),
+            resolve_profile_arn_with_fallback(Some(profile_arn), Some("IdC"), Some("Enterprise"),)
+                .as_deref(),
+            Some(profile_arn)
+        );
+        assert_eq!(
+            resolve_profile_arn_with_fallback(None, Some("IdC"), Some("Enterprise")),
             None
         );
     }
@@ -1172,27 +1193,20 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn enterprise_profile_resolution_never_calls_list_available_profiles() {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let unavailable_proxy = format!("http://{}", listener.local_addr().unwrap());
-        drop(listener);
-        let client = KiroClient::from_client(
-            reqwest::Client::builder()
-                .proxy(reqwest::Proxy::all(unavailable_proxy).unwrap())
-                .timeout(std::time::Duration::from_millis(250))
-                .build()
-                .unwrap(),
-        );
-        let account =
-            Account::new_enterprise("enterprise-user".to_string(), "Enterprise".to_string());
+    #[test]
+    fn enterprise_profile_candidate_requires_exactly_one_profile() {
+        let profile = KiroProfile {
+            arn: "arn:aws:codewhisperer:eu-central-1:1:profile/enterprise".to_string(),
+            name: "Enterprise".to_string(),
+            region: "eu-central-1".to_string(),
+        };
 
         assert_eq!(
-            resolve_account_profile_with_client(&account, "token", &client)
-                .await
-                .unwrap(),
-            None
+            resolve_enterprise_profile_candidate(vec![profile.clone()]).unwrap(),
+            Some(profile.clone())
         );
+        assert!(resolve_enterprise_profile_candidate(Vec::new()).is_err());
+        assert!(resolve_enterprise_profile_candidate(vec![profile.clone(), profile]).is_err());
     }
 
     #[test]
@@ -1268,6 +1282,42 @@ mod tests {
             ctx.profile_arn.as_deref(),
             Some(super::KIRO_BUILDER_ID_PROFILE_ARN)
         );
+    }
+
+    #[test]
+    fn resolve_kiro_call_context_preserves_enterprise_profile_and_region() {
+        // 2026-07-25 真实失败场景的脱敏回归样本：Enterprise 登录区域为
+        // eu-central-1，不能丢弃已发现的 profileArn 并回退到 BuilderId。
+        let mut account = Account::new(String::new(), "enterprise".to_string());
+        account.provider = Some("Enterprise".to_string());
+        account.auth_method = Some("IdC".to_string());
+        account.region = Some("eu-central-1".to_string());
+        account.profile_arn =
+            Some("arn:aws:codewhisperer:eu-central-1:123456789012:profile/ENTERPRISE".to_string());
+
+        let ctx = resolve_kiro_call_context(&account, "us-east-1");
+
+        assert_eq!(ctx.region, "eu-central-1");
+        assert_eq!(ctx.profile_arn, account.profile_arn);
+    }
+
+    #[tokio::test]
+    async fn enterprise_profile_resolution_normalizes_region_from_profile_arn() {
+        let mut account =
+            Account::new_enterprise("enterprise-user".to_string(), "Enterprise".to_string());
+        account.region = Some("us-east-1".to_string());
+        account.profile_arn =
+            Some("arn:aws:codewhisperer:eu-central-1:123456789012:profile/ENTERPRISE".to_string());
+        account.profile_name = Some("Enterprise Profile".to_string());
+
+        let profile = resolve_enterprise_profile_for_account(&mut account, "unused-token")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(profile.region, "eu-central-1");
+        assert_eq!(account.region.as_deref(), Some("eu-central-1"));
+        assert_eq!(account.profile_arn.as_deref(), Some(profile.arn.as_str()));
     }
 
     #[test]

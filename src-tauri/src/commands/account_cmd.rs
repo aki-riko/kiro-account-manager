@@ -15,10 +15,11 @@ use crate::commands::account_models::{
 use crate::commands::common::{
     account_machine_id_or_new, apply_resolved_profile, calc_expires_at, ensure_account_machine_id,
     extract_user_info, find_account_by_id, find_existing_account_idx, generate_account_machine_id,
-    get_enterprise_usage, get_usage_by_account, get_usage_by_provider_with_machine_id,
+    get_usage_by_account, get_usage_by_provider_context, get_usage_by_provider_with_machine_id,
     is_auth_error_message, is_token_expired, is_token_expiring_soon, lock_store,
-    refresh_token_by_provider, resolve_external_idp_import_profile_with_client, save_store,
-    token_needs_refresh, update_account_status, RefreshResult,
+    refresh_token_by_provider, resolve_enterprise_profile_for_account,
+    resolve_external_idp_import_profile_with_client, save_store, token_needs_refresh,
+    update_account_status, RefreshResult,
 };
 use crate::core::account::{Account, AccountProxyConfig};
 use crate::state::AppState;
@@ -142,9 +143,7 @@ pub async fn sync_account(
 ) -> Result<SyncAccountResult, String> {
     let mut account = find_account_by_id(&state, &id)?;
 
-    let provider_str = account.provider.as_deref().unwrap_or("Google");
     let access_token = account.access_token.clone().ok_or("No access token")?;
-    let is_enterprise = provider_str == "Enterprise";
 
     // 如果账号缺少 machine_id，自动生成账号独立 ID（所有账号都需要）
     if account
@@ -159,37 +158,27 @@ pub async fn sync_account(
         );
     }
 
-    // 先尝试用现有 token 获取配额
-    let mut usage_result = if is_enterprise {
-        let machine_id = account
-            .machine_id
-            .as_ref()
-            .ok_or("Enterprise account missing machine_id")?;
-        get_enterprise_usage(&access_token, machine_id).await
-    } else {
-        get_usage_by_account(&account, &access_token).await
-    };
+    // 先用真实 region 补全 Enterprise profile，再获取配额。
+    let mut usage_result =
+        match resolve_enterprise_profile_for_account(&mut account, &access_token).await {
+            Ok(_) => get_usage_by_account(&account, &access_token).await,
+            Err(error) => Err(error),
+        };
 
     let mut refresh_result: Option<RefreshResult> = None;
 
     // 如果是认证错误，刷新 token 后重试
     let needs_refresh = match &usage_result {
         Ok(r) => r.is_auth_error,
-        Err(_) => false,
+        Err(error) => is_auth_error_message(error),
     };
 
     if needs_refresh {
         match refresh_token_by_provider(&account).await {
             Ok(refreshed) => {
-                usage_result = if is_enterprise {
-                    let machine_id = account
-                        .machine_id
-                        .as_ref()
-                        .ok_or("Enterprise account missing machine_id")?;
-                    get_enterprise_usage(&refreshed.access_token, machine_id).await
-                } else {
-                    get_usage_by_account(&account, &refreshed.access_token).await
-                };
+                resolve_enterprise_profile_for_account(&mut account, &refreshed.access_token)
+                    .await?;
+                usage_result = get_usage_by_account(&account, &refreshed.access_token).await;
                 refresh_result = Some(refreshed);
             }
             Err(e) => {
@@ -227,6 +216,11 @@ pub async fn sync_account(
         {
             a.machine_id = account.machine_id.clone();
             log::info!("Saved account-scoped machine_id for account: {}", a.id);
+        }
+        if account.profile_arn.is_some() {
+            a.profile_arn.clone_from(&account.profile_arn);
+            a.profile_name.clone_from(&account.profile_name);
+            a.region.clone_from(&account.region);
         }
 
         // 如果刷新了 token，更新 token 相关字段
@@ -304,9 +298,7 @@ pub async fn get_usage_limits(
 ) -> Result<SyncAccountResult, String> {
     let mut account = find_account_by_id(&state, &id)?;
 
-    let provider_str = account.provider.as_deref().unwrap_or("Google");
     let access_token = account.access_token.clone().ok_or("No access token")?;
-    let is_enterprise = provider_str == "Enterprise";
 
     // 如果账号缺少 machine_id，自动生成账号独立 ID（所有账号都需要）
     if account
@@ -321,21 +313,9 @@ pub async fn get_usage_limits(
         );
     }
 
-    // 直接获取配额，不自动刷新 token
-    let usage_result = if is_enterprise {
-        let machine_id = account
-            .machine_id
-            .as_ref()
-            .ok_or("Enterprise account missing machine_id")?;
-        log::info!(
-            "[Enterprise] Fetching usage for account {} with machine_id: {}",
-            account.id,
-            machine_id
-        );
-        get_enterprise_usage(&access_token, machine_id).await
-    } else {
-        get_usage_by_account(&account, &access_token).await
-    };
+    // 直接获取配额，不自动刷新 token；Enterprise 先按账号 region 补全 profile。
+    resolve_enterprise_profile_for_account(&mut account, &access_token).await?;
+    let usage_result = get_usage_by_account(&account, &access_token).await;
 
     // 如果是认证错误，直接返回错误，不刷新 token
     let usage = match usage_result {
@@ -358,6 +338,11 @@ pub async fn get_usage_limits(
         {
             a.machine_id = account.machine_id.clone();
             log::info!("Saved account-scoped machine_id for account: {}", a.id);
+        }
+        if account.profile_arn.is_some() {
+            a.profile_arn.clone_from(&account.profile_arn);
+            a.profile_name.clone_from(&account.profile_name);
+            a.region.clone_from(&account.region);
         }
 
         // 更新 usage_data 和 status
@@ -1184,6 +1169,7 @@ async fn add_account_by_idc_internal(
         expires_at,
         id_token,
         sso_session_id,
+        resolved_profile,
     ) = if is_enterprise || params.access_token.is_none() {
         // 企业账号或没有 access_token 时，直接刷新
         let metadata = RefreshMetadata {
@@ -1197,25 +1183,27 @@ async fn add_account_by_idc_internal(
             .refresh_token(&params.refresh_token, metadata)
             .await?;
 
-        // 使用用户选择的 region，不再进行探测
-        let usage_result = match get_usage_by_provider_with_machine_id(
-            &params.provider_id,
-            &auth_result.access_token,
-            &machine_id,
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(e) => {
-                log::warn!("Failed to get usage in add_account_by_idc: {}", e);
-                // 即使 getUsageLimits 失败，也能保存账号
-                crate::commands::common::UsageResult {
-                    usage_data: serde_json::json!({}),
-                    is_banned: false,
-                    is_auth_error: false,
+        let mut usage_account = Account::new(String::new(), String::new());
+        usage_account.provider = Some(params.provider_id.clone());
+        usage_account.auth_method = Some("IdC".to_string());
+        usage_account.machine_id = Some(machine_id.clone());
+        usage_account.region = Some(region.clone());
+        let resolved_profile =
+            resolve_enterprise_profile_for_account(&mut usage_account, &auth_result.access_token)
+                .await?;
+        let usage_result =
+            match get_usage_by_account(&usage_account, &auth_result.access_token).await {
+                Ok(result) => result,
+                Err(e) => {
+                    log::warn!("Failed to get usage in add_account_by_idc: {}", e);
+                    // 即使 getUsageLimits 失败，也能保存账号
+                    crate::commands::common::UsageResult {
+                        usage_data: serde_json::json!({}),
+                        is_banned: false,
+                        is_auth_error: false,
+                    }
                 }
-            }
-        };
+            };
 
         let expires_at = calc_expires_at(auth_result.expires_in);
         (
@@ -1225,11 +1213,20 @@ async fn add_account_by_idc_internal(
             expires_at,
             auth_result.id_token,
             auth_result.sso_session_id,
+            resolved_profile,
         )
     } else if let Some(at) = params.access_token {
         // BuilderId 且有 access_token 时，先尝试使用
         // BuilderId 使用原有逻辑
-        match get_usage_by_provider_with_machine_id(&params.provider_id, &at, &machine_id).await {
+        match get_usage_by_provider_context(
+            &params.provider_id,
+            &at,
+            &machine_id,
+            Some(region.as_str()),
+            None,
+        )
+        .await
+        {
             Ok(result) if result.is_auth_error => {
                 // 401 了，刷新 token
                 let metadata = RefreshMetadata {
@@ -1243,10 +1240,12 @@ async fn add_account_by_idc_internal(
                 let auth_result = idc_provider
                     .refresh_token(&params.refresh_token, metadata)
                     .await?;
-                let new_usage = match get_usage_by_provider_with_machine_id(
+                let new_usage = match get_usage_by_provider_context(
                     &params.provider_id,
                     &auth_result.access_token,
                     &machine_id,
+                    Some(region.as_str()),
+                    None,
                 )
                 .await
                 {
@@ -1269,6 +1268,7 @@ async fn add_account_by_idc_internal(
                     expires_at,
                     auth_result.id_token,
                     auth_result.sso_session_id,
+                    None,
                 )
             }
             Ok(result) => {
@@ -1278,6 +1278,7 @@ async fn add_account_by_idc_internal(
                     params.refresh_token.clone(),
                     result,
                     String::new(),
+                    None,
                     None,
                     None,
                 )
@@ -1298,10 +1299,12 @@ async fn add_account_by_idc_internal(
             .await?;
 
         // 使用用户选择的 region，不再进行探测
-        let usage_result = match get_usage_by_provider_with_machine_id(
+        let usage_result = match get_usage_by_provider_context(
             &params.provider_id,
             &auth_result.access_token,
             &machine_id,
+            Some(region.as_str()),
+            None,
         )
         .await
         {
@@ -1325,6 +1328,7 @@ async fn add_account_by_idc_internal(
             expires_at,
             auth_result.id_token,
             auth_result.sso_session_id,
+            None,
         )
     };
 
@@ -1373,6 +1377,9 @@ async fn add_account_by_idc_internal(
             existing.client_id = Some(params.client_id.clone());
             existing.client_secret = Some(params.client_secret.clone());
             existing.region = Some(region.clone());
+            if let Some(ref profile) = resolved_profile {
+                apply_resolved_profile(existing, profile);
+            }
             existing.client_id_hash = client_id_hash.clone(); // 可能是 None
             existing.start_url = start_url.clone();
             if existing
@@ -1406,6 +1413,9 @@ async fn add_account_by_idc_internal(
             account.client_id = Some(params.client_id.clone());
             account.client_secret = Some(params.client_secret.clone());
             account.region = Some(region.clone());
+            if let Some(ref profile) = resolved_profile {
+                apply_resolved_profile(&mut account, profile);
+            }
             account.client_id_hash = client_id_hash; // 可能是 None
             account.start_url = start_url.clone();
             account.id_token = id_token;
@@ -1727,12 +1737,19 @@ pub async fn get_account_usage(
     access_token: String,
     provider: Option<String>,
     machine_id: Option<String>,
+    region: Option<String>,
+    profile_arn: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let provider_str = provider.as_deref().unwrap_or("Google");
     let account_machine_id = account_machine_id_or_new(&machine_id);
-    let usage_result =
-        get_usage_by_provider_with_machine_id(provider_str, &access_token, &account_machine_id)
-            .await?;
+    let usage_result = get_usage_by_provider_context(
+        provider_str,
+        &access_token,
+        &account_machine_id,
+        region.as_deref(),
+        profile_arn.as_deref(),
+    )
+    .await?;
     Ok(usage_result.usage_data)
 }
 
